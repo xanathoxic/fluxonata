@@ -3,11 +3,7 @@
   --syn-keyword: #6a1b9a; --syn-string: #1b5e20; --syn-number: #0d47a1; --syn-comment: #4d5b66; --syn-func: #8a3b00; --syn-prop: #004d73;
   --err: #a4161a; --ok: #146c2e; --warn-bg: #fff3cd; --card: #f6f8fa;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #14181d; --fg: #e8ecf0; --muted: #aab4be; --border: #3b4652; --accent: #6db3ff; --accent-fg: #07121f;
-          --syn-keyword: #d7a8ff; --syn-string: #9be29f; --syn-number: #8ec5ff; --syn-comment: #a9b4be; --syn-func: #ffc58a; --syn-prop: #7fd4ff;
-          --err: #ff8a8d; --ok: #6fd88b; --warn-bg: #4d3d00; --card: #1c2229; }
+  color-scheme: light; /* thème clair uniquement : l'apparence ne suit pas le mode sombre du système */
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); }

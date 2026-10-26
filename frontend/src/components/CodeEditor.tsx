@@ -19,7 +19,7 @@ interface Props {
   minHeight?: string;
 }
 
-// Token colours come from CSS variables so that light and dark themes both keep WCAG AA contrast (see styles.css).
+// Token colours come from CSS variables so that the light theme keeps WCAG AA contrast (see styles.css).
 const highlight = HighlightStyle.define([
   { tag: [t.keyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.moduleKeyword], color: "var(--syn-keyword)" },
   { tag: [t.string, t.special(t.string)], color: "var(--syn-string)" },
