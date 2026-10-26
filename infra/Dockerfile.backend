@@ -1,0 +1,15 @@
+# Fluxonata backend image: API (gunicorn), orchestrator and worker use the same image with different commands.
+FROM python:3.13-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# docker CLI: only the worker needs it (to start isolated action containers on the host daemon).
+RUN apt-get update && apt-get install -y --no-install-recommends docker-cli ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend /app/backend
+COPY workers /app/workers
+RUN useradd --system --uid 10001 --home /nonexistent fluxonata && mkdir -p /app/var /keys && chown -R fluxonata /app/var /keys
+USER fluxonata
+WORKDIR /app/backend
+ENV DJANGO_SETTINGS_MODULE=fluxonata.settings ORCH_KEY_DIR=/keys ORCH_ARTIFACTS_DIR=/app/var/artifacts
+CMD ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]

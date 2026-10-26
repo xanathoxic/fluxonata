@@ -1,0 +1,21 @@
+from django.urls import path
+
+from . import skills, views
+
+urlpatterns = [
+    path("workspaces/<slug:workspace>/ai/skills/", skills.SkillsView.as_view()),
+    path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/", skills.SkillDetailView.as_view()),
+    path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/versions/", skills.SkillVersionsView.as_view()),
+    path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/deprecate/", skills.SkillDeprecateView.as_view()),
+    path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/dependents/", skills.SkillDependentsView.as_view()),
+    path("workspaces/<slug:workspace>/ai/policy/", views.PolicyView.as_view()),
+    path("workspaces/<slug:workspace>/ai/providers/", views.ProviderListView.as_view()),
+    path("workspaces/<slug:workspace>/ai/providers/<slug:name>/", views.ProviderDetailView.as_view()),
+    path("workspaces/<slug:workspace>/ai/providers/<slug:name>/capabilities/", views.CapabilitiesView.as_view()),
+    path("workspaces/<slug:workspace>/ai/usage/", views.UsageView.as_view()),
+    path("workspaces/<slug:workspace>/ai/catalog-search/", views.CatalogSearchView.as_view()),
+    path("workspaces/<slug:workspace>/ai/explain-error/", views.ExplainErrorView.as_view()),
+    path("workspaces/<slug:workspace>/ai/draft-workflow/", views.DraftWorkflowView.as_view()),
+    path("workspaces/<slug:workspace>/ai/propose-action/", views.ProposeActionView.as_view()),
+    path("workspaces/<slug:workspace>/actions/<slug:slug>/ai/suggest-tests/", views.SuggestTestsView.as_view()),
+]

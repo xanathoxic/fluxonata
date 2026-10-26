@@ -1,0 +1,41 @@
+# Dev services only. Credentials here are throwaway development values (no real secret).
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fluxonata
+      POSTGRES_USER: fluxonata
+      POSTGRES_PASSWORD: fluxonata-dev
+    ports:
+      - "127.0.0.1:${ORCH_DB_PORT:-5433}:5432"
+    volumes:
+      - fluxonata-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fluxonata -d fluxonata"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  # Local target for the demo HTTP connector. Reachable only from the internal egress network below.
+  testsvc:
+    image: python:3.13-slim
+    command: ["python", "/srv/server.py"]
+    volumes:
+      - ./testsvc/server.py:/srv/server.py:ro
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      egress_test:
+        aliases: [testsvc]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 20
+volumes:
+  fluxonata-pgdata:
+networks:
+  egress_test:
+    name: fluxonata-egress-test
+    internal: true   # no route to the Internet nor to the host: egress policy "test-service"

@@ -1,0 +1,239 @@
+"""Provider interface + implementations. Providers only turn text into text (+ token counts): no tools, no actions."""
+
+import json
+import re
+import time
+from dataclasses import dataclass, field
+
+from core import netsec
+
+
+class ProviderError(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+@dataclass
+class Completion:
+    text: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    raw_model: str = ""
+    extra: dict = field(default_factory=dict)
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+class BaseProvider:
+    kind = "base"
+    is_cloud = False
+
+    def capabilities(self) -> dict:
+        return {"structured_output": "prompted", "max_context_tokens": 8000, "cloud": self.is_cloud}
+
+    def complete(self, system: str, user: str, *, max_tokens: int, timeout: float) -> Completion:  # pragma: no cover
+        raise NotImplementedError
+
+
+class OpenAICompatProvider(BaseProvider):
+    """Self-hosted servers exposing /v1/chat/completions (llama.cpp server, Ollama, vLLM). JSON mode is requested;
+    the response is still validated by the caller. Local hosts must be allowlisted (ORCH_EGRESS_ALLOWLIST)."""
+
+    kind = "local"
+
+    def __init__(self, base_url: str, model: str, api_key: str | None = None):
+        # the path /v1/chat/completions is added below: tolerate a base URL already ending with /v1 (Ollama docs show it)
+        self.base_url, self.model, self.api_key = base_url.rstrip("/").removesuffix("/v1"), model, api_key
+
+    def capabilities(self):
+        return {"structured_output": "json_mode", "max_context_tokens": 8000, "cloud": False}
+
+    def complete(self, system, user, *, max_tokens, timeout):
+        body = json.dumps(
+            {
+                "model": self.model,
+                "temperature": 0,
+                "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"},
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            }
+        ).encode()
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        t0 = time.monotonic()
+        try:
+            status, _, raw = netsec.safe_request(
+                "POST",
+                f"{self.base_url}/v1/chat/completions",
+                headers=headers,
+                body=body,
+                timeout=timeout,
+                max_bytes=1 << 20,
+            )
+        except netsec.UnsafeURL as exc:
+            raise ProviderError("PROVIDER_URL_REFUSED", f"Adresse du modèle refusée : {exc}") from None
+        except OSError:
+            raise ProviderError("PROVIDER_UNREACHABLE", "Le serveur de modèle local n'est pas joignable.") from None
+        if status != 200:
+            raise ProviderError("PROVIDER_ERROR", f"Le serveur de modèle a répondu HTTP {status}.")
+        try:
+            data = json.loads(raw)
+            text = data["choices"][0]["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            raise ProviderError("PROVIDER_BAD_RESPONSE", "Réponse du serveur de modèle illisible.") from None
+        usage = data.get("usage") or {}
+        return Completion(
+            text,
+            usage.get("prompt_tokens") or estimate_tokens(system + user),
+            usage.get("completion_tokens") or estimate_tokens(text),
+            int((time.monotonic() - t0) * 1000),
+            str(data.get("model", self.model)),
+        )
+
+
+class AnthropicProvider(BaseProvider):
+    """Optional cloud provider: Anthropic Messages API (POST /v1/messages, x-api-key, anthropic-version header)."""
+
+    kind = "cloud"
+    is_cloud = True
+    VERSION = "2023-06-01"
+
+    def __init__(self, model: str, api_key: str, base_url: str = "https://api.anthropic.com"):
+        self.model, self.api_key, self.base_url = model, api_key, base_url.rstrip("/")
+
+    def capabilities(self):
+        return {"structured_output": "prompted", "max_context_tokens": 200000, "cloud": True}
+
+    def complete(self, system, user, *, max_tokens, timeout):
+        body = json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "system": system,
+                "messages": [{"role": "user", "content": user}],
+            }
+        ).encode()
+        headers = {"x-api-key": self.api_key, "anthropic-version": self.VERSION, "content-type": "application/json"}
+        t0 = time.monotonic()
+        try:
+            status, _, raw = netsec.safe_request(
+                "POST", f"{self.base_url}/v1/messages", headers=headers, body=body, timeout=timeout, max_bytes=1 << 20
+            )
+        except netsec.UnsafeURL as exc:
+            raise ProviderError("PROVIDER_URL_REFUSED", f"Adresse refusée : {exc}") from None
+        except OSError:
+            raise ProviderError("PROVIDER_UNREACHABLE", "Le fournisseur cloud n'est pas joignable.") from None
+        if status != 200:
+            raise ProviderError("PROVIDER_ERROR", f"Le fournisseur cloud a répondu HTTP {status}.")
+        try:
+            data = json.loads(raw)
+            text = "".join(b["text"] for b in data["content"] if b.get("type") == "text")
+        except (ValueError, KeyError, TypeError):
+            raise ProviderError("PROVIDER_BAD_RESPONSE", "Réponse du fournisseur illisible.") from None
+        usage = data.get("usage") or {}
+        return Completion(
+            text,
+            usage.get("input_tokens") or estimate_tokens(system + user),
+            usage.get("output_tokens") or estimate_tokens(text),
+            int((time.monotonic() - t0) * 1000),
+            str(data.get("model", self.model)),
+        )
+
+
+class FakeProvider(BaseProvider):
+    """Deterministic provider for tests/evaluations: no network, no randomness. `script` may override the answer."""
+
+    kind = "fake"
+
+    def __init__(self, script=None):
+        self.script = script
+        self.calls = []
+
+    def complete(self, system, user, *, max_tokens, timeout):
+        self.calls.append((system, user))
+        if callable(self.script):
+            text = self.script(system, user)
+        elif isinstance(self.script, str):
+            text = self.script
+        else:
+            text = json.dumps(_heuristic(user))
+        return Completion(text, estimate_tokens(system + user), estimate_tokens(text), 1, "fake-1")
+
+
+def _placeholder(type_: str):
+    return {"string": "{{ inputs.texte }}", "integer": 1, "number": 1, "boolean": True, "array": [], "object": {}}.get(
+        type_, "{{ inputs.texte }}"
+    )
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-zàâçéèêëîïôûùüÿ0-9]{3,}", text.lower())}
+
+
+def _heuristic(user: str) -> dict:
+    """Keyword-overlap 'model': good enough to make the whole pipeline testable and deterministic."""
+    m = re.search(r"<task>(.*?)</task>", user, re.S)
+    task = m.group(1).strip() if m else ""
+    ctx = json.loads(re.search(r"<context>(.*?)</context>", user, re.S).group(1)) if "<context>" in user else {}
+    data = (re.search(r"<data>(.*?)</data>", user, re.S) or [None, ""])[1]
+    if task == "catalog_search":
+        q = _words(data)
+        scored = sorted(
+            (
+                (len(q & _words(f"{a['name']} {a['description']} {' '.join(a.get('tags', []))}")), a)
+                for a in ctx["catalog"]
+            ),
+            key=lambda t: (-t[0], t[1]["slug"]),
+        )
+        return {
+            "matches": [
+                {"slug": a["slug"], "reason": f"{s} mot(s) en commun avec votre demande"} for s, a in scored if s > 0
+            ][:5]
+        }
+    if task == "explain_error":
+        return {
+            "summary": f"L'étape a échoué ({ctx.get('code', 'erreur')}).",
+            "likely_causes": ["Entrées inattendues ou service indisponible."],
+            "next_steps": ["Vérifiez les entrées puis relancez.", "Consultez les journaux de l'étape."],
+        }
+    if task == "draft_workflow":
+        q = _words(data)
+        best = sorted(
+            ((len(q & _words(f"{a['name']} {a['description']}")), a) for a in ctx["catalog"]),
+            key=lambda t: (-t[0], t[1]["slug"]),
+        )
+        picked_actions = [a for score, a in best if score > 0][:2] or [best[0][1]]
+        nodes, edges = [], []
+        for i, a in enumerate(picked_actions):
+            props = a["inputs"]
+            nodes.append(
+                {
+                    "id": f"etape_{i + 1}",
+                    "type": "action",
+                    "name": a["name"],
+                    "action": a["slug"],
+                    "inputs": {k: _placeholder(t) for k, t in props.items() if k in a["required"]},
+                }
+            )
+            if i:
+                edges.append({"from": f"etape_{i}", "to": f"etape_{i + 1}"})
+        return {
+            "inputs": {
+                "type": "object",
+                "required": ["texte"],
+                "properties": {"texte": {"type": "string", "title": "Texte"}},
+            },
+            "nodes": nodes,
+            "edges": edges,
+            "outputs": {},
+        }
+    if task == "suggest_tests":
+        return {"tests": [{"name": "Cas nominal", "inputs": ctx.get("example", {})}]}
+    if task == "ai_step":
+        return {"result": "ok"}
+    return {}
