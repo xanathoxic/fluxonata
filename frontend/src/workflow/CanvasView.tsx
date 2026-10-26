@@ -5,7 +5,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Action } from "../api";
-import { wouldCreateCycle } from "./graphOps";
+import { placeNewNodes, wouldCreateCycle } from "./graphOps";
 import { NodeIcon } from "./icons";
 import { DRAG_MIME, type PaletteItem } from "./Palette";
 import { EDGE_LABELS, NODE_LABELS, type EdgeLabel, type Graph, type GraphNode, type Issue } from "./types";
@@ -68,22 +68,24 @@ interface Props {
 function Inner({ graph, issues, selectedId, onSelect, onOpen, readOnly, statuses, counts, onMove, onConnect, onDeleteNodes, onDeleteEdges, onDropItem }: Props) {
   const { screenToFlowPosition } = useReactFlow();
   const { nodes: graphNodes, edges } = useMemo(() => {
-    const ui = graph.nodes.map((n) => n.ui ?? { x: 0, y: 0 });
+    // a draft written by the AI (or imported) may have no positions: lay them out for display, the saved graph is untouched
+    const shown = placeNewNodes(graph);
+    const ui = shown.nodes.map((n) => n.ui ?? { x: 0, y: 0 });
     const minX = Math.min(0, ...ui.map((p) => p.x));
     const maxX = Math.max(0, ...ui.map((p) => p.x));
     const hasIn = new Set(graph.edges.map((e) => e.to));
     const hasOut = new Set(graph.edges.map((e) => e.from));
     const entries = graph.nodes.filter((n) => !hasIn.has(n.id));
     const sinks = graph.nodes.filter((n) => !hasOut.has(n.id));
-    const startY = entries[0]?.ui?.y ?? 0;
+    const startY = shown.nodes.find((n) => n.id === entries[0]?.id)?.ui?.y ?? 0;
     const rfNodes: Node[] = [
       { id: "__start__", type: "start", position: { x: minX - 120, y: startY + 6 }, draggable: false, selectable: false, data: {} },
-      ...graph.nodes.map((n) => ({
+      ...shown.nodes.map((n) => ({
         id: n.id, type: "step", position: n.ui ?? { x: 0, y: 0 }, selected: n.id === selectedId, draggable: !readOnly,
         data: { node: n, errors: issues.filter((i) => i.node === n.id && i.level === "error").length, warnings: issues.filter((i) => i.node === n.id && i.level === "warning").length, runStatus: statuses?.[n.id], runCount: counts?.[n.id] } as StepData,
       })),
-      ...(graph.notes ?? []).map((n) => ({ id: n.id, type: "note", position: n.ui, selected: n.id === selectedId, draggable: !readOnly, data: { text: n.text } as NoteData })),
-      { id: "__end__", type: "end", position: { x: maxX + 220, y: (sinks[0]?.ui?.y ?? 0) + 6 }, draggable: false, selectable: false, data: {} },
+      ...(shown.notes ?? []).map((n) => ({ id: n.id, type: "note", position: n.ui ?? { x: 0, y: -140 }, selected: n.id === selectedId, draggable: !readOnly, data: { text: n.text } as NoteData })),
+      { id: "__end__", type: "end", position: { x: maxX + 220, y: (shown.nodes.find((n) => n.id === sinks[0]?.id)?.ui?.y ?? 0) + 6 }, draggable: false, selectable: false, data: {} },
     ];
     const mark = { type: MarkerType.ArrowClosed };
     const rfEdges: Edge[] = [

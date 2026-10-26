@@ -6,3 +6,4 @@ select = ["E", "F", "I", "B", "UP", "S"]
 ignore = ["S101", "S603", "S607", "UP017", "E501"]
 [lint.per-file-ignores]
 "tests/*" = ["S", "B"]
+"tests/test_ai_edit.py" = ["S", "B", "F811", "F401"]  # reuses the ai_ws fixture of test_ai.py

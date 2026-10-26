@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { useAiMode } from "../../components/AiBox";
+import { AiChat } from "../AiChat";
 import { CanvasView } from "../CanvasView";
 import { useDraft } from "../DraftContext";
 import { addNode, autoLayout, connect, defaultNode, disconnect, duplicateNode, moveNode, relabel, removeNode, updateNode } from "../graphOps";
 import { ListView } from "../ListView";
 import { NodePanel } from "../NodePanel";
 import { PaneResizer } from "../PaneResizer";
-import { DEFAULT_LAYOUT, LIMITS, gridColumns, loadLayout, saveLayout } from "../paneLayout";
+import { DEFAULT_LAYOUT, HANDLE, LIMITS, gridColumns, loadLayout, saveLayout } from "../paneLayout";
 import { Palette, type PaletteItem } from "../Palette";
 import { ScriptEditorDialog } from "../ScriptEditorDialog";
 import type { Graph, Note } from "../types";
 
+const CHAT_W = 380; // px, colonne de l'assistant IA (à droite des propriétés)
 const VIEW_KEY = "orch.schema.view";
 const readView = (): "canvas" | "list" => { try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "canvas"; } catch { return "canvas"; } };
 
@@ -28,6 +31,9 @@ export function SchemaTab() {
   const [scriptOpen, setScriptOpen] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
   const [layout, setLayout] = useState(loadLayout);
+  const ai = useAiMode();
+  const [chatOpen, setChatOpen] = useState(false);
+  const showChat = chatOpen && ai.enabled && editable;
   useEffect(() => saveLayout(layout), [layout]);
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view); } catch { /* preference only */ } }, [view]);
 
@@ -79,12 +85,13 @@ export function SchemaTab() {
           </select></label>
         <button type="button" aria-pressed={layout.palOpen} onClick={() => setLayout({ ...layout, palOpen: !layout.palOpen })} title="Afficher ou masquer la palette d'éléments">Palette</button>
         <button type="button" aria-pressed={layout.panOpen} onClick={() => setLayout({ ...layout, panOpen: !layout.panOpen })} title="Afficher ou masquer les propriétés de l'élément sélectionné">Propriétés</button>
+        {ai.enabled && editable && <button type="button" aria-pressed={chatOpen} onClick={() => setChatOpen(!chatOpen)} title="Demander des modifications du workflow à l'assistant IA">Assistant IA</button>}
         <button type="button" onClick={() => setView(view === "canvas" ? "list" : "canvas")} aria-pressed={view === "list"}>{view === "canvas" ? "Vue liste" : "Vue schéma"}</button>
         <button type="button" className={`chip ${errors ? "chip-bad" : "chip-ok"}`} aria-expanded={showIssues} onClick={() => setShowIssues(!showIssues)}>
           {errors ? `✖ ${errors} problème(s) bloquant(s)` : warnings ? `✔ Valide · ${warnings} avertissement(s)` : "✔ Valide"}
         </button>
       </div>
-      <div className={`schema-grid custom-cols${hasSelection ? " with-panel" : ""}`} style={{ gridTemplateColumns: gridColumns(layout, hasSelection) }}>
+      <div className={`schema-grid custom-cols${hasSelection ? " with-panel" : ""}`} style={{ gridTemplateColumns: gridColumns(layout, hasSelection) + (showChat ? ` ${HANDLE}px ${CHAT_W}px` : "") }}>
         {layout.palOpen && (
           <>
             <aside className="schema-palette" aria-label="Palette d'éléments">{editable ? <Palette actions={actions} selectedName={selected?.name ?? null} onAdd={(i) => add(i)} /> : <p className="hint">Lecture seule.</p>}</aside>
@@ -130,6 +137,7 @@ export function SchemaTab() {
             </section>
           </aside>
         )}
+        {showChat && (<><div aria-hidden="true" /><AiChat onClose={() => setChatOpen(false)} /></>)}
       </div>
       {showIssues && (
         <section aria-label="Validation" className="schema-issues">

@@ -125,4 +125,31 @@ test("capture du guide utilisateur", async ({ browser }) => {
   await shot(admin, "15-administration-sante", true);
   await admin.getByLabel("Environnement").selectOption("prod");
   await shot(admin, "16-environnement-production");
+
+  // Assistant IA de l'éditeur (faux fournisseur déterministe : la capture montre le fonctionnement, pas un vrai modèle)
+  await admin.getByRole("tab", { name: "Assistant IA" }).click();
+  try {
+    await admin.getByLabel("Mode").selectOption({ label: "Local strict (aucun envoi cloud, aucun repli externe)" });
+    await admin.getByRole("button", { name: "Enregistrer", exact: true }).click();
+    await expect(admin.getByText("Enregistré.")).toBeVisible();
+    if ((await admin.getByText(/^fake — /).count()) === 0) {
+      await admin.getByLabel("Nom", { exact: true }).fill("fake");
+      await admin.getByLabel("Type").selectOption("fake");
+      await admin.getByRole("button", { name: "Ajouter" }).click();
+      await expect(admin.getByText(/^fake — /)).toBeVisible();
+    }
+    await page.goto("/workflows/analyse-validee/schema");
+    await page.evaluate(() => localStorage.setItem("orch.schema.view", "canvas"));
+    await page.reload();
+    await page.getByRole("button", { name: "Assistant IA" }).click();
+    const chat = page.getByRole("region", { name: "Assistant IA" });
+    await chat.getByLabel("Votre demande à l'assistant").fill("Ajoute un script à la fin du workflow");
+    await chat.getByRole("button", { name: "Envoyer" }).click();
+    await expect(chat.getByText("Modifications proposées")).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Palette", exact: true }).click(); // plus de place pour le schéma sur la capture
+    await shot(page, "31-assistant-ia-editeur");
+  } finally {
+    await admin.getByLabel("Mode").selectOption({ label: "IA désactivée" });
+    await admin.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  }
 });

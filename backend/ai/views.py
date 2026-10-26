@@ -1,3 +1,5 @@
+import json
+
 from django.http import Http404
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -10,6 +12,7 @@ from core import netsec
 from runs.models import StepRun, WorkflowRun
 from tenancy.permissions import ADMINISTER, EDIT, PUBLISH, VIEW, get_workspace
 from vault.models import Secret
+from workflows.models import Workflow
 
 from . import service
 from .models import AiCall, AiPolicy, AiProvider
@@ -221,12 +224,48 @@ class DraftWorkflowView(AiView):
             raise serializers.ValidationError(
                 {"request": "Demande, nom et identifiant (lettres, chiffres, tirets) requis."}
             )
+        if len(text) > service.MAX_REQUEST:
+            raise serializers.ValidationError(
+                {"request": f"Demande trop longue ({service.MAX_REQUEST} caractères au plus) : découpez-la."}
+            )
         try:
             return Response(
                 service.draft_workflow(
                     ws, request.user, text, slug.lower(), name[:160], provider_name=request.data.get("provider")
                 ),
                 status=201,
+            )
+        except AiRefused as exc:
+            return _refuse(exc)
+
+
+class EditWorkflowView(AiView):
+    """Conversation turn of the editor's assistant: proposes changes to the draft ; stores nothing."""
+
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, EDIT)
+        wf = Workflow.objects.filter(workspace=ws, slug=slug).first()
+        if wf is None:
+            raise Http404()
+        message = str(request.data.get("message", "")).strip()
+        graph = request.data.get("graph")
+        if not message or len(message) > service.MAX_REQUEST:
+            raise serializers.ValidationError(
+                {"message": f"Écrivez une demande ({service.MAX_REQUEST} caractères au plus)."}
+            )
+        if not isinstance(graph, dict) or len(json.dumps(graph)) > 512 * 1024:
+            raise serializers.ValidationError({"graph": "Workflow manquant ou trop volumineux."})
+        try:
+            return Response(
+                service.edit_workflow(
+                    ws,
+                    request.user,
+                    wf,
+                    message,
+                    request.data.get("history"),
+                    graph,
+                    provider_name=request.data.get("provider"),
+                )
             )
         except AiRefused as exc:
             return _refuse(exc)

@@ -4881,6 +4881,43 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/ai/edit/": {
+            "post": {
+                "operationId": "workspaces_workflows_ai_edit_create",
+                "description": "Conversation turn of the editor's assistant: proposes changes to the draft ; stores nothing.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/workflows/{slug}/audit/": {
             "get": {
                 "operationId": "workspaces_workflows_audit_retrieve",

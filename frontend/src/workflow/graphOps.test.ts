@@ -1,5 +1,5 @@
 import type { Action } from "../api";
-import { addNode, allVariables, ancestors, autoLayout, availableVariables, clientValidate, connect, defaultNode, duplicateNode, emptyGraph, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { addNode, allVariables, ancestors, autoLayout, availableVariables, clientValidate, connect, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -99,6 +99,28 @@ describe("script tasks, variables and horizontal layout", () => {
     expect(vars.find((v) => v.path.endsWith(".total"))?.type).toBe("integer");
     expect(availableVariables(g, s.id, [echo]).some((v) => v.path.endsWith(".total"))).toBe(false); // not before it runs
     expect(allVariables(g, [echo]).some((v) => v.path === `steps.${s.id}.output.total`)).toBe(true);
+  });
+
+  it("positions the steps proposed by the assistant right of their predecessor without moving anything else", () => {
+    let g = emptyGraph();
+    g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
+    const before = g.nodes[0]!.ui;
+    const proposed = { ...g, nodes: [...g.nodes, { id: "b", type: "wait" as const, name: "B" }, { id: "c", type: "wait" as const, name: "C" }], edges: [{ from: "a", to: "b" }, { from: "a", to: "c" }] };
+    const out = placeNewNodes(proposed);
+    expect(out.nodes[0]!.ui).toEqual(before);
+    const [b, c] = [out.nodes[1]!.ui!, out.nodes[2]!.ui!];
+    expect(b.x).toBe(before!.x + 200);
+    expect(`${c.x}:${c.y}`).not.toBe(`${b.x}:${b.y}`); // two branches do not overlap
+  });
+
+  it("places notes proposed without a position above the schema, side by side", () => {
+    let g = emptyGraph();
+    g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
+    const out = placeNewNodes({ ...g, notes: [{ id: "note_1", text: "a", ui: { x: 5, y: 5 } }, { id: "note_2", text: "b" } as never, { id: "note_3", text: "c" } as never] });
+    expect(out.notes![0]!.ui).toEqual({ x: 5, y: 5 }); // existing note untouched
+    const [n2, n3] = [out.notes![1]!.ui!, out.notes![2]!.ui!];
+    expect(n2.y).toBeLessThan(g.nodes[0]!.ui!.y);
+    expect(n3.x).toBeGreaterThan(n2.x);
   });
 
   it("blocks a script written by the AI until a person has confirmed reading it", () => {

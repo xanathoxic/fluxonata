@@ -148,6 +148,19 @@ def ancestors_map(nodes, edges, order):
     return anc
 
 
+def always_run_map(nodes, edges, order):
+    """For each step, the steps that run on EVERY path leading to it (its dominators, itself included). A step that only
+    runs on one branch of a decision is upstream of what follows the join, yet its output may not exist."""
+    parents = defaultdict(set)
+    for e in edges:
+        parents[e["to"]].add(e["from"])
+    dom = {}
+    for nid in order:
+        ps = [dom[p] for p in parents[nid]]
+        dom[nid] = {nid} | (set.intersection(*ps) if ps else set())
+    return dom
+
+
 def resolve_action_version(workspace, slug, wanted=None):
     action = Action.objects.filter(workspace=workspace, slug=slug).first()
     if action is None:
@@ -232,6 +245,7 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
         )
         return issues
     anc = ancestors_map(nodes, clean_edges, order)
+    dom = always_run_map(nodes, clean_edges, order)
     incoming = defaultdict(list)
     outgoing = defaultdict(list)
     for e in clean_edges:
@@ -271,7 +285,9 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
             if not str(n.get("expr", "")).strip():
                 issues.append(issue(nid, "missing_expr", "La condition est vide."))
             else:
-                _check_expr(n["expr"], nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                _check_expr(
+                    n["expr"], nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid]
+                )
             out_types[nid] = STATIC_OUTPUTS["condition"]
         elif ntype == "wait":
             s = n.get("seconds")
@@ -285,15 +301,15 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
         elif ntype == "script":
             out_types[nid] = _validate_script(n, issues)
             for src in template_expressions(n.get("bindings", {})):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
         elif ntype == "throw":
             out_types[nid] = {}
             for src in template_expressions(n.get("message", "")):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
         elif ntype == "ai":
             out_types[nid] = _validate_ai(n, workspace, issues, out_types, declared_inputs)
             for src in template_expressions([n.get("prompt", ""), n.get("inputs", {})]):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
         elif ntype == "join":
             out_types[nid] = {}
         elif ntype in ("subworkflow", "foreach"):
@@ -304,18 +320,20 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
                 if not isinstance(items, str) or not items.strip():
                     issues.append(issue(nid, "missing_items", "Indiquez la liste à parcourir."))
                 else:
-                    _check_expr(items, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                    _check_expr(
+                        items, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid]
+                    )
         # template references in inputs of any node
         if ntype in ("action", "subworkflow", "foreach"):
             for src in template_expressions(n.get("inputs", {})):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars)
+                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
 
     for src in template_expressions(graph.get("outputs", {})):
         _check_expr(src, None, set(by_id), by_id, declared_inputs, out_types, issues, declared_vars)
     return issues
 
 
-def _check_expr(src, nid, allowed_steps, by_id, declared_inputs, out_types, issues, declared_vars):
+def _check_expr(src, nid, allowed_steps, by_id, declared_inputs, out_types, issues, declared_vars, must_run=None):
     try:
         tree = parse(src)
     except ExpressionError as exc:
@@ -335,11 +353,31 @@ def _check_expr(src, nid, allowed_steps, by_id, declared_inputs, out_types, issu
             elif path[1] not in by_id:
                 issues.append(issue(nid, "unknown_step", f"Étape inconnue : {path[1]}."))
             elif path[1] not in allowed_steps:
-                issues.append(issue(nid, "not_upstream", f"L'étape « {path[1]} » n'est pas en amont de celle-ci."))
+                issues.append(
+                    issue(
+                        nid,
+                        "not_upstream",
+                        f"L'étape « {by_id[path[1]].get('name') or path[1]} » n'est pas en amont de celle-ci : "
+                        "reliez-la avant cette étape.",
+                    )
+                )
             else:
                 fields = out_types.get(path[1])
                 if fields is not None and len(path) > 3 and path[3] not in fields:
                     issues.append(issue(nid, "unknown_output", f"« {path[1]} » ne produit pas de champ « {path[3]} »."))
+                if must_run is not None and path[1] not in must_run:
+                    issues.append(
+                        issue(
+                            nid,
+                            "maybe_skipped",
+                            f"L'étape « {by_id[path[1]].get('name') or path[1]} » n'est pas sur tous les chemins qui "
+                            "mènent ici (branche d'une décision, par exemple) : sa sortie peut ne pas exister à "
+                            "mènent ici (branche d'une décision, par exemple) : sa sortie peut ne pas exister à "
+                            "l'exécution. Lisez une valeur produite avant la décision, calculez-la sur chaque "
+                            "branche, ou ne la transmettez pas si elle est facultative.",
+                            "warning",
+                        )
+                    )
         else:
             issues.append(issue(nid, "bad_reference", f"Racine inconnue : {root} (utilisez inputs ou steps)."))
 
@@ -434,7 +472,13 @@ def _check_type(nid, key, target_schema, src, declared_inputs, out_types, issues
                 nid,
                 "type_mismatch",
                 f"« {target_schema.get('title', key)} » attend {target_schema.get('type')}, "
-                f"mais la variable fournit {src_type}.",
+                f"mais la variable fournit {src_type}."
+                + (
+                    " Pour la passer comme texte, intégrez-la dans une phrase (ex. « Machines : {{ … }} »), "
+                    "ou calculez un texte dans un script."
+                    if target_schema.get("type") == "string" and src_type in ("array", "object")
+                    else ""
+                ),
             )
         )
 
@@ -490,6 +534,82 @@ def _validate_form(form, declared_inputs) -> list[dict]:
     return out
 
 
+CONTEXT_ROOTS = {"steps"}  # a script gets `inputs` and `vars`, but never the outputs of other steps
+
+
+def _script_reads_context(nid, used, issues):
+    """A script sees `inputs`, `vars` and its bindings, not `steps`: reading it directly fails at run time."""
+    for root in sorted(used):
+        issues.append(
+            issue(
+                nid,
+                "script_reads_context",
+                f"Le script lit « {root} » directement, mais un script ne voit pas les sorties des autres étapes : "
+                "il ne reçoit que inputs, vars et ses liaisons. Ajoutez une liaison (ex. resultats = {{ steps.etape.output.champ }}) et utilisez cette variable.",
+            )
+        )
+
+
+def _python_names(tree) -> tuple[set, set]:
+    """(names the code may read, names it assigns) — deliberately generous (any scope) so a hit is a real mistake."""
+    import builtins
+
+    stored, defined = set(), set(dir(builtins))
+    for x in ast.walk(tree):
+        if isinstance(x, ast.Name) and isinstance(x.ctx, (ast.Store, ast.Del)):
+            stored.add(x.id)
+        elif isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined.add(x.name)
+        elif isinstance(x, ast.arg):
+            defined.add(x.arg)
+        elif isinstance(x, (ast.Import, ast.ImportFrom)):
+            defined.update((a.asname or a.name).split(".")[0] for a in x.names)
+        elif isinstance(x, ast.ExceptHandler) and x.name:
+            defined.add(x.name)
+        elif isinstance(x, ast.MatchAs) and x.name:
+            defined.add(x.name)
+        elif isinstance(x, ast.MatchStar) and x.name:
+            defined.add(x.name)
+    return defined | stored, stored
+
+
+def _script_static_checks(nid, lang, code, tree, bound, outputs, issues):
+    """Mistakes a model (or a hurried person) makes in scripts, found without running anything: names that exist
+    nowhere, declared outputs the code never sets."""
+    if tree is not None:
+        known, stored = _python_names(tree)
+        known |= bound | {"System", "inputs", "vars"} | CONTEXT_ROOTS  # `steps` has its own, clearer message
+        loaded = {x.id for x in ast.walk(tree) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
+        for name in sorted(loaded - known):
+            issues.append(
+                issue(
+                    nid,
+                    "script_undefined_name",
+                    f"Le script utilise « {name} » qui n'est défini nulle part : déclarez-le dans les liaisons "
+                    "(entrées) ou affectez-le avant de l'utiliser.",
+                )
+            )
+        assigned = stored
+    elif lang == "javascript":
+        assigned = {
+            o
+            for o in outputs
+            if re.search(rf"(?<![\w.$])(?:(?:let|const|var)\s+)?{re.escape(o)}\s*(?:[-+*/]?=)(?!=)", code)
+            or re.search(rf"\b(?:let|const|var)\s+{re.escape(o)}\b", code)
+        }
+    else:
+        return
+    for o in outputs:
+        if o not in assigned:
+            issues.append(
+                issue(
+                    nid,
+                    "script_output_not_set",
+                    f"La sortie « {o} » est déclarée mais le script ne l'affecte jamais : écrivez {o} = … dans le code.",
+                )
+            )
+
+
 def _validate_script(n, issues):
     """A script task: language, code, bound variables and typed outputs. Returns {output: schema} for downstream checks."""
     nid = n["id"]
@@ -502,6 +622,7 @@ def _validate_script(n, issues):
             )
         )
     lang, code = n.get("language"), n.get("script", "")
+    tree = None
     if lang not in SCRIPT_LANGUAGES:
         issues.append(issue(nid, "bad_language", "Langage de script inconnu (python ou javascript)."))
     if not isinstance(code, str) or not code.strip():
@@ -510,9 +631,49 @@ def _validate_script(n, issues):
         issues.append(issue(nid, "script_too_large", "Le script dépasse 100 Ko."))
     elif lang == "python":
         try:
-            ast.parse(code)  # syntax only: never executed here
+            tree = ast.parse(code)  # syntax only: never executed here
         except SyntaxError as exc:
+            tree = None
             issues.append(issue(nid, "script_syntax", f"Erreur de syntaxe ligne {exc.lineno} : {exc.msg}."))
+        else:
+            used = {x.id for x in ast.walk(tree) if isinstance(x, ast.Name) and x.id in CONTEXT_ROOTS}
+            _script_reads_context(nid, used, issues)
+            dotted = {
+                x.value.id
+                for x in ast.walk(tree)
+                if isinstance(x, ast.Attribute)
+                and isinstance(x.ctx, ast.Load)
+                and isinstance(x.value, ast.Name)
+                and x.value.id in ("inputs", "vars")
+            }
+            writes = {
+                x.value.id
+                for x in ast.walk(tree)
+                if isinstance(x, (ast.Attribute, ast.Subscript))
+                and isinstance(x.ctx, (ast.Store, ast.Del))
+                and isinstance(x.value, ast.Name)
+                and x.value.id in ("inputs", "vars")
+            }
+            for root in sorted(writes):
+                issues.append(
+                    issue(
+                        nid,
+                        "script_writes_context",
+                        f"Le script écrit dans « {root} » : sans effet (lecture seule). Pour transmettre une valeur, "
+                        "déclarez-la dans les sorties du script et affectez-la.",
+                    )
+                )
+            for root in sorted(dotted):  # in Python they are dictionaries: inputs.x raises AttributeError
+                issues.append(
+                    issue(
+                        nid,
+                        "script_dict_access",
+                        f"En Python, « {root} » est un dictionnaire : écrivez {root}['nom'] (ou {root}.get('nom')), "
+                        f"pas {root}.nom.",
+                    )
+                )
+    elif lang == "javascript":
+        _script_reads_context(nid, set(re.findall(r"\bsteps\s*[.\[]", code)), issues)
     names = set()
     for k in n.get("bindings") or {}:
         if (
@@ -535,6 +696,13 @@ def _validate_script(n, issues):
             issues.append(issue(nid, "bad_output", f"Type de sortie inconnu pour {name} : {t}."))
         else:
             outs[name] = {"type": t}
+    if (
+        isinstance(code, str)
+        and code.strip()
+        and len(code) <= MAX_SCRIPT
+        and (tree is not None or lang == "javascript")
+    ):
+        _script_static_checks(nid, lang, code, tree, names, list(outs), issues)
     t = n.get("timeout_seconds", 60)
     if not isinstance(t, int) or not 1 <= t <= 600:
         issues.append(issue(nid, "bad_timeout", "Délai du script : 1 à 600 secondes."))

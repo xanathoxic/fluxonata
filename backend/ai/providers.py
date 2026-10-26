@@ -175,6 +175,75 @@ def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-zàâçéèêëîïôûùüÿ0-9]{3,}", text.lower())}
 
 
+def _heuristic_edit(data: str, ctx: dict) -> dict:
+    """Deterministic stand-in for the editor's assistant: « script » adds a script step, « décision/condition » a decision."""
+    try:
+        message = str(json.loads(data).get("message", "")).lower()
+    except ValueError:
+        message = ""
+    g = ctx.get("graph") or {"inputs": {}, "nodes": [], "edges": [], "outputs": {}}
+    nodes, edges = list(g["nodes"]), list(g["edges"])
+    used = {n["id"] for n in nodes}
+    i = len(nodes) + 1
+    while f"etape_{i}" in used:
+        i += 1
+    nid = f"etape_{i}"
+    if "note" in message:
+        notes = list(g.get("notes") or [])
+        notes.append({"id": "note_new", "text": "Note ajoutée par l'assistant"})
+        return {"reply": "J'ai ajouté une note.", "graph": {**g, "nodes": nodes, "edges": edges, "notes": notes}}
+    if "pour chaque" in message or "boucle" in message:
+        flows = ctx.get("workflows") or []
+        if not flows:
+            return {"reply": "Aucun workflow publié n'est disponible pour une boucle.", "graph": None}
+        new = {
+            "id": nid,
+            "type": "foreach",
+            "name": "Boucle ajoutée",
+            "workflow": flows[0]["slug"],
+            "items": "inputs.liste",
+            "item_input": next(iter(flows[0]["inputs"]), "item"),
+            "max_iterations": 10,
+        }
+        reply = "J'ai ajouté une boucle « pour chaque » à la fin du workflow."
+    elif "attente" in message or "pause" in message:
+        new = {"id": nid, "type": "wait", "name": "Attente ajoutée", "seconds": 30}
+        reply = "J'ai ajouté une attente de 30 secondes."
+    elif "approb" in message:
+        new = {"id": nid, "type": "approval", "name": "Approbation ajoutée", "title": "Valider la suite du workflow"}
+        reply = "J'ai ajouté une approbation."
+    elif "exception" in message:
+        new = {"id": nid, "type": "throw", "name": "Exception ajoutée", "message": "Arrêt demandé"}
+        reply = "J'ai ajouté une exception."
+    elif "script" in message:
+        new = {
+            "id": nid,
+            "type": "script",
+            "name": "Script ajouté",
+            "language": "python",
+            "script": "resultat = 'ok'\nSystem.log(resultat)",
+            "bindings": {},
+            "outputs": [{"name": "resultat", "type": "string"}],
+        }
+        reply = "J'ai ajouté une étape script à la fin du workflow."
+    elif "décision" in message or "decision" in message or "condition" in message:
+        new = {"id": nid, "type": "condition", "name": "Décision ajoutée", "expr": "1 == 1"}
+        reply = "J'ai ajouté une décision à la fin du workflow."
+    else:
+        return {
+            "reply": "Je n'ai rien modifié : dites-moi quelle étape ajouter (script, décision, attente, approbation…).",
+            "graph": None,
+        }
+    leaves = [n["id"] for n in nodes if not any(e["from"] == n["id"] for e in edges)]
+    nodes.append(new)
+    if leaves:
+        edges.append({"from": leaves[-1], "to": nid})
+    return {
+        "reply": reply,
+        "graph": {"inputs": g.get("inputs", {}), "nodes": nodes, "edges": edges, "outputs": g.get("outputs", {})},
+    }
+
+
 def _heuristic(user: str) -> dict:
     """Keyword-overlap 'model': good enough to make the whole pipeline testable and deterministic."""
     m = re.search(r"<task>(.*?)</task>", user, re.S)
@@ -201,6 +270,8 @@ def _heuristic(user: str) -> dict:
             "likely_causes": ["Entrées inattendues ou service indisponible."],
             "next_steps": ["Vérifiez les entrées puis relancez.", "Consultez les journaux de l'étape."],
         }
+    if task == "edit_workflow":
+        return _heuristic_edit(data, ctx)
     if task == "draft_workflow":
         q = _words(data)
         best = sorted(

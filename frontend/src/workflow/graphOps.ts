@@ -48,6 +48,24 @@ function placeNext(graph: Graph, afterId?: string): { x: number; y: number } {
   return pos;
 }
 
+/** Gives a position to the nodes that have none (steps proposed by the AI assistant): right of their first predecessor,
+ *  on a free slot. Existing nodes never move. */
+export function placeNewNodes(graph: Graph): Graph {
+  const placed: GraphNode[] = graph.nodes.filter((n) => n.ui);
+  for (const n of graph.nodes.filter((x) => !x.ui)) {
+    const pred = graph.edges.find((e) => e.to === n.id && placed.some((p) => p.id === e.from))?.from;
+    placed.push({ ...n, ui: placeNext({ ...graph, nodes: placed }, pred) });
+  }
+  const byId = new Map(placed.map((n) => [n.id, n]));
+  const nodes = graph.nodes.map((n) => byId.get(n.id) ?? n);
+  // notes without a position go above the schema, side by side
+  const top = Math.min(0, ...nodes.map((n) => n.ui?.y ?? 0)) - 140;
+  const left = Math.min(0, ...nodes.map((n) => n.ui?.x ?? 0));
+  const loose = (graph.notes ?? []).filter((n) => !n.ui);
+  const notes = (graph.notes ?? []).map((n) => (n.ui ? n : { ...n, ui: { x: left + loose.indexOf(n) * 220, y: top } }));
+  return { ...graph, nodes, ...(graph.notes ? { notes } : {}) };
+}
+
 /** Adds a node; when `afterId` is given it is connected from that node with the proper label. */
 export function addNode(graph: Graph, node: GraphNode, afterId?: string): Graph {
   const withUi = { ...node, ui: node.ui ?? placeNext(graph, afterId) };

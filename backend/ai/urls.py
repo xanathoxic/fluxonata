@@ -16,6 +16,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/ai/catalog-search/", views.CatalogSearchView.as_view()),
     path("workspaces/<slug:workspace>/ai/explain-error/", views.ExplainErrorView.as_view()),
     path("workspaces/<slug:workspace>/ai/draft-workflow/", views.DraftWorkflowView.as_view()),
+    path("workspaces/<slug:workspace>/workflows/<slug:slug>/ai/edit/", views.EditWorkflowView.as_view()),
     path("workspaces/<slug:workspace>/ai/propose-action/", views.ProposeActionView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/ai/suggest-tests/", views.SuggestTestsView.as_view()),
 ]

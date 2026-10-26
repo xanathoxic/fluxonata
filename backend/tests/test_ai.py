@@ -207,7 +207,8 @@ def test_draft_gets_enough_tokens_whatever_the_provider_cap(ai_ws, world):
     )
     cfg = AiProvider.objects.get(workspace=ws, name="fake")
     service.draft_workflow(ws, world["designer"], DRAFT_CASES[0]["request"], "draft-cap", "B", cfg=cfg, provider=prov)
-    assert seen == [service.PROMPTS["draft_workflow"]["min_tokens"]]
+    # the draft, then its check: each call gets at least the room its own prompt needs
+    assert seen == [service.PROMPTS[k]["min_tokens"] for k in ("draft_workflow", "review_workflow")]
 
 
 def test_a_cut_off_answer_is_reported_as_truncated_not_as_garbage(ai_ws, world):
@@ -281,7 +282,7 @@ HOSTILE = [
         "nodes": [{"id": f"n{i}", "type": "action", "action": "text-stats", "inputs": {}} for i in range(500)],
         "edges": [],
     },  # too many
-    {"nodes": [{"id": "a", "type": "approval", "title": "x"}], "edges": []},  # forbidden type
+    {"nodes": [{"id": "a", "type": "shell", "title": "x"}], "edges": []},  # forbidden type
     {"nodes": [{"id": "a", "type": "foreach", "workflow": "x"}], "edges": []},
     {"nodes": [{"id": "a", "type": "action", "action": "does-not-exist", "inputs": {}}], "edges": []},  # unknown action
     {
@@ -595,3 +596,82 @@ def test_a_model_script_with_a_syntax_error_is_reported_like_a_human_one(ai_ws):
     raw = {"nodes": [{"id": "a", "type": "script", "script": "def (:", "outputs": []}], "edges": []}
     _, issues = service.sanitize_draft(raw, ws, "broken")
     assert {"ai_review_required", "script_syntax"} <= {i["code"] for i in issues}
+
+
+def test_a_draft_may_use_every_step_type_and_the_validator_still_has_the_last_word(ai_ws, world):
+    ws, _ = ai_ws
+    raw = {
+        "inputs": {"type": "object", "properties": {"liste": {"type": "array"}}, "required": ["liste"]},
+        "nodes": [
+            {"id": "a", "type": "approval", "name": "", "title": "Valider", "allow_self_approval": True},
+            {"id": "w", "type": "wait", "seconds": 5},
+            {"id": "l", "type": "foreach", "workflow": "n-existe-pas", "items": "{{ inputs.liste }}"},
+            {"id": "e", "type": "throw", "message": "stop"},
+        ],
+        "edges": [
+            {"from": "a", "to": "w"},
+            {"from": "w", "to": "l"},
+            {"from": "l", "to": "e", "label": "error"},
+            {"from": "l", "to": "zzz"},
+        ],
+        "variables": [{"name": "essais", "type": "integer", "value": 0}],
+    }
+    graph, issues = service.sanitize_draft(raw, ws, "tous-types")
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    assert nodes["a"]["name"] == "Approbation" and "allow_self_approval" not in nodes["a"]
+    assert nodes["l"]["items"] == "inputs.liste" and "max_iterations" not in nodes["l"]
+    assert len(graph["edges"]) == 3 and graph["variables"] == [{"name": "essais", "type": "integer", "value": 0}]
+    codes = {i["code"] for i in issues}
+    assert "unknown_workflow" in codes  # nothing guessed: the person is told
+
+
+def test_a_long_request_is_given_whole_to_the_model_or_refused_never_cut_silently(ai_ws, world):
+    ws, _ = ai_ws
+    long_request = "étape " * 400 + "FIN-DE-LA-DEMANDE"  # ≈ 2400 characters: well past the old 1500 cut
+    prov = FakeProvider()
+    service.draft_workflow(ws, world["designer"], long_request, "demande-longue", "L", cfg=cfg(ws), provider=prov)
+    first_user_message = prov.calls[0][1]
+    assert "FIN-DE-LA-DEMANDE" in first_user_message
+    too_long = "x" * (service.MAX_REQUEST + 1)
+    r = client_for(world["designer"]).post(
+        f"{BASE}/ai/draft-workflow/",
+        {"request": too_long, "name": "N", "slug": "trop-long", "provider": "fake"},
+        format="json",
+    )
+    assert r.status_code == 400 and "trop longue" in json.dumps(r.json(), ensure_ascii=False)
+
+
+def test_the_generation_benchmark_runs_and_its_checks_recognise_a_correct_graph(ai_ws, world):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from ai.evals.cases import WORKFLOW_CASES
+
+    good = {
+        "inputs": {"type": "object", "properties": {"valeurs": {"type": "array"}, "plafond": {"type": "number"}}},
+        "variables": [],
+        "notes": [],
+        "nodes": [
+            {
+                "id": "s",
+                "type": "script",
+                "outputs": [{"name": "moyenne", "type": "number"}, {"name": "maximum", "type": "number"}],
+            },
+            {"id": "c", "type": "condition", "expr": "steps.s.output.moyenne > inputs.plafond"},
+            {"id": "e", "type": "throw", "message": "Moyenne trop élevée"},
+            {"id": "w", "type": "wait", "seconds": 30},
+            {"id": "a", "type": "approval", "title": "Valider la moyenne"},
+        ],
+        "edges": [],
+    }
+    case = next(c for c in WORKFLOW_CASES if c["id"] == "moyenne")
+    assert all(fn(good) for _, fn in case["checks"])
+    off_by_one = {
+        **good,
+        "nodes": [dict(n, expr=n["expr"].replace(">", ">=")) if n["id"] == "c" else n for n in good["nodes"]],
+    }
+    assert [label for label, fn in case["checks"] if not fn(off_by_one)] == ["décision moyenne > plafond (pas >=)"]
+    out = StringIO()
+    call_command("ai_eval", "team-a", "--provider", "fake", "--workflows", "--case", "moyenne", stdout=out)
+    assert "[moyenne #1]" in out.getvalue() and "Total :" in out.getvalue()

@@ -96,7 +96,14 @@ def test_script_output_contract_is_enforced_without_echoing_values(world):
     )
     run = drain(launch(ws, v, world["designer"]))
     assert run.status == "failed" and run.error["code"] == "OUTPUT_INVALID" and "TOP-SECRET" not in run.error["message"]
-    v2 = publish(ws, "missing-out", [script(code="y = 1", outputs=(("x", "integer"),))], [], user=world["designer"])
+    # a never-assigned output is refused at validation; one assigned only on a path not taken is caught at run time
+    v2 = publish(
+        ws,
+        "missing-out",
+        [script(code="if False:\n    x = 1", outputs=(("x", "integer"),))],
+        [],
+        user=world["designer"],
+    )
     run2 = drain(launch(ws, v2, world["designer"]))
     assert run2.status == "failed" and "x" in run2.error["message"]
     v3 = publish(ws, "bool-int", [script(code="x = True", outputs=(("x", "integer"),))], [], user=world["designer"])
