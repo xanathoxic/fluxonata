@@ -51,7 +51,8 @@ class Target:
     host: str
     port: int
     path: str
-    ip: str
+    ip: str  # the preferred address (IPv4 first)
+    ips: tuple[str, ...] = ()  # every validated address, in connection order
 
 
 def _allowlist() -> set[str]:
@@ -65,11 +66,31 @@ def is_public(ip: str) -> bool:
     return not any(addr in net for net in BLOCKED)
 
 
+def _order(ip: str) -> tuple[int, str]:
+    """IPv4 before IPv6: containers usually have no IPv6 route, and a name's answers come in any order."""
+    try:
+        return (ipaddress.ip_address(ip.split("%")[0]).version, ip)
+    except ValueError:
+        return (9, ip)
+
+
 def resolve(host: str) -> list[str]:
     try:
-        return sorted({info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)})
+        return sorted({info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)}, key=_order)
     except socket.gaierror:
         raise UnsafeURL("Nom d'hôte introuvable.") from None
+
+
+def open_connection(target: "Target", timeout: float) -> socket.socket:
+    """TCP connection to the validated addresses of `target` (pinned: the name is never resolved again), one after
+    the other until one answers. Every address was checked by `validate_url`, so the SSRF guard covers all of them."""
+    last: OSError | None = None
+    for ip in target.ips or (target.ip,):
+        try:
+            return socket.create_connection((ip, target.port), timeout)
+        except OSError as exc:
+            last = exc
+    raise last or OSError("Aucune adresse à joindre.")
 
 
 def is_allowlisted(host: str) -> bool:
@@ -96,7 +117,7 @@ def validate_url(url: str) -> Target:
         if bad:
             raise UnsafeURL("Cette adresse est interne ou réservée : elle n'est pas autorisée (SSRF).")
     path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
-    return Target(parts.scheme, host, port, path, ips[0])
+    return Target(parts.scheme, host, port, path, ips[0], tuple(ips))
 
 
 def _is_ip(host: str) -> bool:
@@ -110,19 +131,19 @@ def _is_ip(host: str) -> bool:
 class _PinnedHTTP(http.client.HTTPConnection):
     def __init__(self, target: Target, timeout: float):
         super().__init__(target.host, target.port, timeout=timeout)
-        self._ip = target.ip
+        self._target = target
 
     def connect(self):
-        self.sock = socket.create_connection((self._ip, self.port), self.timeout)
+        self.sock = open_connection(self._target, self.timeout)
 
 
 class _PinnedHTTPS(http.client.HTTPSConnection):
     def __init__(self, target: Target, timeout: float, context: ssl.SSLContext | None = None):
         super().__init__(target.host, target.port, timeout=timeout, context=context or ssl.create_default_context())
-        self._ip = target.ip
+        self._target = target
 
     def connect(self):
-        raw = socket.create_connection((self._ip, self.port), self.timeout)
+        raw = open_connection(self._target, self.timeout)
         self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
 
 

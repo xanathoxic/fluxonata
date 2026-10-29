@@ -186,6 +186,7 @@ Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.pro
 - Un conteneur partage le noyau de l'hôte : une faille du noyau ou de Docker permettrait une évasion. Pour du code hostile en multi-tenant, utilisez un runtime à noyau isolé
   (gVisor, Kata, micro-VM : `ORCH_DOCKER_RUNTIME`) ou des hôtes dédiés par équipe. `ORCH_HARDENED=1` active un profil renforcé (seccomp, capacités retirées).
 - Le worker (et l'agent runner) doivent pouvoir lancer des conteneurs : ne les exposez jamais aux actions ; isolez-les (utilisateur et hôte dédiés, ou Docker rootless).
+- **L'API n'exécute jamais de code** : tout ce qui lance un conteneur (actions, scripts, et l'**essai à blanc** de l'assistant IA) passe par le worker, seul composant à monter le socket Docker et `ORCH_WORK_DIR`. N'ajoutez pas ces montages au conteneur `api` : une API exposée au web avec le socket Docker aurait un accès root à l'hôte. Conséquence : sans worker actif, l'assistant IA de l'éditeur reste « en attente d'un travailleur ».
 - Référencez les images d'exécution par digest pour les publications. Les dépendances ne s'installent pas à l'exécution : construisez des images dédiées pour les actions qui en ont besoin.
 - Livraison des tâches **au moins une fois** ; les actions à effet externe non idempotentes ne sont jamais rejouées automatiquement (voir [docs/ACTION_SDK.md](ACTION_SDK.md)).
 
@@ -196,6 +197,8 @@ Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.pro
 | Une action reste « en file » | aucun worker actif (Administration → Santé), plafond de l'espace atteint, ou espace réservé à des runners dédiés sans runner en ligne |
 | Une action échoue au démarrage du conteneur | Docker inaccessible au worker, image absente (`docker pull`), `ORCH_WORK_DIR` différent entre hôte et conteneur |
 | Erreur CSRF / cookie refusé derrière un proxy | `ORCH_TRUSTED_ORIGINS`, `ORCH_BEHIND_TLS_PROXY`, en-tête `Host` transmis |
+| « Essai à blanc non effectué (bac à sable indisponible : …) » | le texte après les deux-points donne la cause, relevée par le **worker** (journal : `docker compose logs worker`). Vérifier dans le worker : `docker compose … exec worker sh -c 'docker run --rm --network none -v "$ORCH_WORK_DIR":/work python:3.13-slim python -c "print(1)"'` ; causes fréquentes : image `python:3.13-slim` absente (serveur sans accès Internet : `docker pull` ou `docker load`), `ORCH_WORK_DIR` inexistant ou sans droit de lecture (`755`) sur l'hôte, socket Docker inaccessible au worker |
+| Connexion à une boîte e-mail (IMAP) en échec | le message distingue : identifiant refusé, certificat refusé, serveur injoignable (avec le type d'erreur) et erreur interne (voir `docker compose logs worker`). Le serveur doit répondre en TLS (port 993) ; les adresses IPv4 sont essayées avant les IPv6, une par une |
 | Appels sortants refusés (SSRF) | l'hôte est privé : ajoutez-le explicitement à `ORCH_EGRESS_ALLOWLIST` |
 | Secrets illisibles après restauration | clés de chiffrement absentes : restaurez `ORCH_KEY_DIR` d'origine |
 

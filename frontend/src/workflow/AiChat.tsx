@@ -10,6 +10,9 @@ interface Proposal { graph: Graph; changes: string[]; issues: Issue[]; base: str
 interface Usage { tokens: number; today: number; budget: number }
 interface Msg { id: number; role: "user" | "assistant"; text: string; error?: boolean; proposal?: Proposal; usage?: Usage }
 interface Reply { reply: string; graph: Graph | null; changes: string[]; issues: Issue[]; usage?: Usage }
+interface JobEvent { label: string; detail: string; state: string }
+interface JobState { status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; progress: number; events: JobEvent[]; result: Reply | null; error: { code: string; message: string } | null }
+const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 // The conversation survives tab switches (not a page reload): it is a working session, not a record.
 const sessions = new Map<string, Msg[]>();
@@ -24,6 +27,10 @@ export function AiChat({ onClose, initialMessage }: { onClose: () => void; initi
   const [msgs, setMsgs] = useState<Msg[]>(() => sessions.get(key) ?? []);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState("");
+  const jobId = useRef<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const log = useRef<HTMLDivElement>(null);
   const next = useRef(msgs.length + 1);
   useEffect(() => { sessions.set(key, msgs); log.current?.scrollTo({ top: log.current.scrollHeight }); }, [key, msgs]);
@@ -38,12 +45,27 @@ export function AiChat({ onClose, initialMessage }: { onClose: () => void; initi
     setText("");
     setBusy(true);
     try {
-      const r = await api<Reply>(`/workspaces/${workspace.slug}/workflows/${d.slug}/ai/edit/`, { json: { message: clean, history, graph: d.graph } });
+      // The turn is a job run by the worker (its dry run executes scripts in the sandbox, which the web process never does).
+      const job = await api<{ id: string }>(`/workspaces/${workspace.slug}/workflows/${d.slug}/ai/edit-jobs/`, { json: { message: clean, history, graph: d.graph } });
+      jobId.current = job.id;
+      setPhase("En attente d'un travailleur");
+      let state: JobState;
+      for (let waited = 0; ; waited += 1) {
+        await sleep(1000);
+        if (!alive.current) return;
+        try { state = await api<JobState>(`/workspaces/${workspace.slug}/ai/draft-jobs/${job.id}/`); } catch (e) { if ((e as ApiError).status === 429) continue; throw e; } // slowed down: try again on the next tick
+        const last = state.events[state.events.length - 1];
+        setPhase(last ? `${last.label}${last.detail ? ` : ${last.detail}` : ""} (${state.progress} %)` : "");
+        if (state.status === "succeeded" || state.status === "failed" || state.status === "cancelled") break;
+        if (waited > 900) throw Object.assign(new Error("L'assistant ne répond pas : le travailleur est-il démarré ?"), { status: 504 });
+      }
+      if (state.status !== "succeeded" || !state.result) throw Object.assign(new Error(state.status === "cancelled" ? "Demande annulée." : state.error?.message ?? "Erreur interne."), { status: 500 });
+      const r = state.result;
       setMsgs((all) => [...all, { id: next.current++, role: "assistant", text: r.reply, usage: r.usage, proposal: r.graph ? { graph: r.graph, changes: r.changes, issues: r.issues, base, status: "pending" } : undefined }]);
     } catch (e) {
       const err = e as ApiError;
       setMsgs((all) => [...all, { id: next.current++, role: "assistant", error: true, text: err.status === 403 ? `L'assistant n'est pas disponible : ${err.message}` : `Erreur : ${errorText(err)}` }]);
-    } finally { setBusy(false); }
+    } finally { jobId.current = null; setPhase(""); if (alive.current) setBusy(false); }
   };
   const started = useRef(false);
   useEffect(() => { if (initialMessage && !started.current && msgs.length === 0) { started.current = true; void send(initialMessage); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,7 +102,10 @@ export function AiChat({ onClose, initialMessage }: { onClose: () => void; initi
             {m.proposal && <ProposalView m={m} stale={stale(m.proposal)} onApply={() => apply(m)} onIgnore={() => patch(m.id, (x) => ({ ...x, proposal: { ...(x.proposal as Proposal), status: "ignored" } }))} canUndo={d.canUndo} onUndo={d.undo} />}
           </div>
         ))}
-        {busy && <p role="status" className="hint">L'assistant réfléchit… (cela peut prendre une minute avec un modèle local)</p>}
+        {busy && (
+          <p role="status" className="hint">{phase || "L'assistant réfléchit…"} <small>(cela peut prendre une minute avec un modèle local)</small>{" "}
+            <button type="button" className="linklike" onClick={() => { if (jobId.current) void api(`/workspaces/${workspace.slug}/ai/draft-jobs/${jobId.current}/cancel/`, { json: {} }); }}>Annuler</button></p>
+        )}
       </div>
       <form className="ai-chat-form" onSubmit={submit}>
         <label htmlFor={`${id}-q`} className="sr-only">Votre demande à l'assistant</label>

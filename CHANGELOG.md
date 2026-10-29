@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.3 — 2026-10-29
+
+**Fluxonata 0.4.3 : correctifs IMAP et réseau (IPv4 d'abord), essai à blanc de l'assistant d'édition exécuté par le worker, suivi des jobs IA sans limitation**
+
+- Issues : IMAP (attribut ssl_context, erreurs distinguées, serveur TLS de test), adresses IPv4 d'abord et essayées une à une, essai à blanc de l'assistant d'édition exécuté par le worker (job), cause du bac à sable indisponible affichée
+- Assistant IA : le suivi d'un job n'est plus limité comme un appel au modèle (message « Requête ralentie » pendant une modification)
+
 ## 2026-10-29
 
 **Documentation : mise à niveau d'une installation de production (Docker Compose) pas à pas**

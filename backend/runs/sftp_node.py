@@ -11,7 +11,6 @@ import hashlib
 import io
 import logging
 import posixpath
-import socket
 import time
 
 from audit.models import record
@@ -149,7 +148,7 @@ def execute_spec(
     started = time.monotonic()
     transport = None
     try:
-        sock = socket.create_connection((target.ip, target.port), 10)
+        sock = netsec.open_connection(target, 10)
         sock.settimeout(spec["timeout"])
         transport = paramiko.Transport(sock)
         transport.start_client(timeout=10)

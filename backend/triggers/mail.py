@@ -6,13 +6,14 @@ allowlisted by the administrator) and the connection is pinned to the validated 
 
 import email
 import imaplib
-import socket
+import logging
 import ssl
 from email import policy
 from email.utils import parseaddr
 
 from core import netsec
 
+log = logging.getLogger("fluxonata.mail")
 MAX_FETCH = 50
 MAX_TEXT = 20000
 TIMEOUT = 20
@@ -23,16 +24,20 @@ class MailError(Exception):
 
 
 class _PinnedIMAP(imaplib.IMAP4_SSL):
-    def __init__(self, target, timeout):
+    def __init__(self, target, timeout, context=None):
         self._target = target
-        super().__init__(host=target.host, port=target.port, timeout=timeout, ssl_context=ssl.create_default_context())
+        super().__init__(
+            host=target.host, port=target.port, timeout=timeout, ssl_context=context or ssl.create_default_context()
+        )
 
     def _create_socket(self, timeout):
-        raw = socket.create_connection((self._target.ip, self._target.port), timeout)
-        return self._ssl_context.wrap_socket(raw, server_hostname=self._target.host)
+        raw = netsec.open_connection(
+            self._target, timeout
+        )  # the validated addresses only, IPv4 first, one after the other
+        return self.ssl_context.wrap_socket(raw, server_hostname=self._target.host)
 
 
-def connect(config: dict, password: str):
+def connect(config: dict, password: str, ssl_context: ssl.SSLContext | None = None):
     """Logged-in IMAP session. Raises MailError (French message, no secret)."""
     host = str(config.get("host", "")).strip()
     port = int(config.get("port") or 993)
@@ -41,12 +46,21 @@ def connect(config: dict, password: str):
     except netsec.UnsafeURL as exc:
         raise MailError(f"Serveur refusé : {exc}") from None
     try:
-        conn = _PinnedIMAP(target, TIMEOUT)
+        conn = _PinnedIMAP(target, TIMEOUT, ssl_context)
         conn.login(config.get("username", ""), password)
     except imaplib.IMAP4.error:
         raise MailError("Connexion refusée par le serveur (identifiant ou mot de passe).") from None
-    except (OSError, ssl.SSLError):
-        raise MailError("Le serveur de messagerie n'a pas répondu (réseau, délai ou certificat refusé).") from None
+    except ssl.SSLError as exc:
+        raise MailError(
+            f"Connexion sécurisée refusée (certificat ou protocole) : {exc.reason or type(exc).__name__}."
+        ) from None
+    except OSError as exc:
+        raise MailError(f"Le serveur de messagerie n'a pas répondu ({type(exc).__name__} : réseau ou délai).") from None
+    except Exception as exc:  # noqa: BLE001 - a bug in the client must not look like a network problem
+        log.exception("Erreur interne du client IMAP")
+        raise MailError(
+            f"Erreur interne du client de messagerie ({type(exc).__name__}) : voir le journal du worker."
+        ) from None
     return conn
 
 

@@ -73,6 +73,27 @@ def enqueue_outline(workspace, user, request_text: str, previous, feedback, prov
     )
 
 
+def enqueue_edit(workspace, user, slug: str, message: str, history, graph: dict, provider_name: str | None) -> AiJob:
+    """One turn of the editor's assistant, run by the worker: its dry run executes scripts in the sandbox, which the
+    web process never does (the API container has neither the Docker socket nor the work directory)."""
+    return AiJob.objects.create(
+        workspace=workspace,
+        user=user,
+        kind="edit",
+        payload={"slug": slug, "message": message, "history": history, "graph": graph, "provider": provider_name},
+        events=[
+            {
+                "t": round(time.time(), 1),
+                "phase": "queued",
+                "label": "En attente d'un travailleur",
+                "state": "running",
+                "detail": "",
+                "pct": 0,
+            }
+        ],
+    )
+
+
 def claim_next(worker_id: str) -> AiJob | None:
     with transaction.atomic():
         job = (
@@ -132,6 +153,22 @@ def process(job: AiJob) -> None:
             result = {"outline": outline, "usage": service.usage_since(job.workspace, before)}
             outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
             progress.report("done", "Le plan est prêt : relisez-le.", state="done", pct=100)
+            raise _Finished(outcome)
+        if job.kind == "edit":
+            from workflows.models import Workflow
+
+            workflow = Workflow.objects.get(workspace=job.workspace, slug=payload["slug"])
+            result = service.edit_workflow(
+                job.workspace,
+                job.user,
+                workflow,
+                payload["message"],
+                payload.get("history"),
+                payload["graph"],
+                provider_name=payload.get("provider"),
+            )
+            outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
+            progress.report("done", "La proposition est prête : relisez-la.", state="done", pct=100)
             raise _Finished(outcome)
         result = service.draft_workflow(
             job.workspace,

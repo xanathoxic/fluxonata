@@ -25,8 +25,15 @@ def _refuse(exc: AiRefused):
 
 
 class AiView(APIView):
+    """Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE)."""
+
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "ai"
+
+
+class AiStatusView(APIView):
+    """Reading or cancelling a job never calls the model: the editor polls it every second, which the « ai » scope
+    (meant for model calls, 30 per minute) would refuse after half a minute. The usual per-user limit applies."""
 
 
 class PolicyView(APIView):
@@ -284,12 +291,17 @@ class DraftJobView(AiView):
         job = jobs.enqueue_draft(ws, request.user, text, slug, name[:160], request.data.get("provider"))
         return Response({"id": str(job.id), "status": job.status}, status=202)
 
+    def get_throttles(self):
+        if self.request.method == "GET":  # the tray's list is a read: not a model call
+            return [t() for t in AiStatusView.throttle_classes]
+        return super().get_throttles()
+
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, EDIT)
         return Response({"results": jobs.recent_for(request.user, ws)})
 
 
-class DraftJobCancelView(AiView):
+class DraftJobCancelView(AiStatusView):
     """Cancel one of one's own generations: it stops at its next phase and nothing is saved."""
 
     def post(self, request, workspace, job_id):
@@ -324,7 +336,7 @@ class OutlineJobView(AiView):
         return Response({"id": str(job.id), "status": job.status}, status=202)
 
 
-class DraftJobDetailView(AiView):
+class DraftJobDetailView(AiStatusView):
     """Live state of a draft job: progress, log of the phases, then the result or the error."""
 
     def get(self, request, workspace, job_id):
@@ -342,6 +354,31 @@ class DraftJobDetailView(AiView):
                 "error": job.error,
             }
         )
+
+
+class EditWorkflowJobView(AiView):
+    """The same turn as a job the worker runs (so its dry run can use the sandbox); followed through the draft-job
+    endpoint (progress, then the proposal as `result`)."""
+
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, EDIT)
+        access.workflow_or_404(request.user, ws, slug, EDIT)
+        message = str(request.data.get("message", "")).strip()
+        graph = request.data.get("graph")
+        if not message or len(message) > service.MAX_REQUEST:
+            raise serializers.ValidationError(
+                {"message": f"Écrivez une demande ({service.MAX_REQUEST} caractères au plus)."}
+            )
+        if not isinstance(graph, dict) or len(json.dumps(graph)) > 512 * 1024:
+            raise serializers.ValidationError({"graph": "Workflow manquant ou trop volumineux."})
+        try:  # policy and provider are checked now: a refusal is immediate, not a failed job
+            service.select_provider(ws, request.data.get("provider"))
+        except AiRefused as exc:
+            return _refuse(exc)
+        job = jobs.enqueue_edit(
+            ws, request.user, slug, message, request.data.get("history"), graph, request.data.get("provider")
+        )
+        return Response({"id": str(job.id), "status": job.status}, status=202)
 
 
 class EditWorkflowView(AiView):
@@ -367,6 +404,7 @@ class EditWorkflowView(AiView):
                     message,
                     request.data.get("history"),
                     graph,
+                    dry_run=False,  # never in the web process: the editor uses the job below, run by the worker
                     provider_name=request.data.get("provider"),
                 )
             )

@@ -13,6 +13,7 @@ workflow is right: only that it holds on the samples given, and that the results
 out. Nothing here is published, stored or sent anywhere; the web process never calls it (the generation job does)."""
 
 import json
+import logging
 import re
 import threading
 import time
@@ -37,6 +38,7 @@ MAX_FAILURE_SCENARIOS = 2
 MAX_PARALLEL = 3
 SCRIPT_TIMEOUT = 20  # seconds per script: an essay must stay short
 TOTAL_BUDGET = 150  # seconds for the whole dry run
+log = logging.getLogger("fluxonata.ai.dryrun")
 MAX_STEPS = 80
 STATUS_NAMES = {"etat", "status", "statut", "state", "resultat", "result"}
 INFRA_CODES = {"RUNNER_ERROR", "PROVIDER_UNREACHABLE"}
@@ -298,7 +300,8 @@ def run_scenario(  # noqa: C901
                     try:
                         res = _run_script(runner, helpers, node, payload)
                     except Exception as exc:  # noqa: BLE001  (the runner itself is unavailable: not the script's fault)
-                        raise _Fatal(f"__infra__:{exc}") from None
+                        log.exception("essai à blanc : le lanceur d'actions est indisponible")
+                        raise _Fatal(f"__infra__:{type(exc).__name__} : {exc}"[:300]) from None
                     if (res.error or {}).get("code") in INFRA_CODES:
                         raise _Fatal(f"__infra__:{res.error.get('message')}")
                     if not res.ok:

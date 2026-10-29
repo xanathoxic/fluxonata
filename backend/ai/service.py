@@ -1437,7 +1437,8 @@ def check_sentence(summary: dict) -> str:
             f"{dry['problems']} problème(s)"
         )
     elif dry:
-        parts.append("essai à blanc non effectué (bac à sable indisponible)")
+        why = str(dry.get("reason") or "").strip()[:200]
+        parts.append(f"essai à blanc non effectué (bac à sable indisponible{' : ' + why if why else ''})")
     if summary["fixed"]:
         passes = f" en {summary['rounds']} passe(s)" if summary.get("rounds") else ""
         parts.append(f"{summary['fixed']} problème(s) corrigé(s) automatiquement{passes}")
@@ -2290,10 +2291,14 @@ def _current_issues(graph: dict, workspace, slug: str) -> list[dict]:
     return [{"step": i["node"], "level": i["level"], "code": i["code"], "message": i["message"]} for i in rows[:20]]
 
 
-def edit_workflow(workspace, user, workflow: Workflow, message: str, history, graph: dict, **kw):
+def edit_workflow(
+    workspace, user, workflow: Workflow, message: str, history, graph: dict, *, dry_run: bool = True, **kw
+):
     """One conversation turn: the model proposes a modified draft. Nothing is stored here: the person reviews the
     summary and applies it in the editor (undoable); publication stays a separate, human act. What the reply says is
-    checked against what the graph really changes: a claimed change that is not there is retried, then dropped."""
+    checked against what the graph really changes: a claimed change that is not there is retried, then dropped.
+    `dry_run=False` is for callers inside the web process, which never executes anything: the dry run (scripts run in the
+    sandbox) belongs to the worker (`ai.jobs`, kind « edit »)."""
     if kw.get("cfg") is None:
         _, kw["cfg"] = select_provider(workspace, kw.pop("provider_name", None))
     mark = _mark(workspace)
@@ -2349,11 +2354,18 @@ def edit_workflow(workspace, user, workflow: Workflow, message: str, history, gr
                 kw,
                 base=graph,
                 deep_review=deep,
-                dry=deep,
+                dry=deep and dry_run,
             )
             changes = describe_changes(graph, new_graph)
+            if deep and not dry_run:
+                result["dryrun"] = "skipped"
         if check is not None:
             result.update(reply=(reply + " " if reply else "") + check_sentence(check), check=check)
+        if result.get("dryrun") == "skipped":
+            result["reply"] += (
+                " Essai à blanc non effectué : il est exécuté par le travailleur, pas par l'API "
+                "(utilisez l'assistant de l'éditeur)."
+            )
         result.update(graph=new_graph, changes=changes, issues=issues)
         if op_errors:  # applied in part: the person is told what was not done (a claim of success is not repeated)
             said = "" if _claims_change(reply) else (reply + " " if reply else "")
