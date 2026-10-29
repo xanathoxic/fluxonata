@@ -29,10 +29,37 @@ protections de la plate-forme.
 | Prérequis | Comment |
 |---|---|
 | Pile de développement lancée | `scripts/dev-up.sh` puis `scripts/doctor.sh` (le service de test local `testsvc` fait partie de la pile) |
-| Données de démonstration | créées par `dev-up.sh` : espace `demo`, utilisateurs `alice` (concepteur), `bob` (lecteur), `claire` (approbatrice), `admin` ; mot de passe `demo-fluxonata` |
+| Utilisateurs | en démonstration (`dev-up.sh`) : espace `demo`, `alice` (concepteur), `bob` (lecteur), `claire` (approbatrice), `admin` ; mot de passe `demo-fluxonata`. **Sur une plate-forme vierge** : créer ces rôles à la main (concepteur, lecteur, approbatrice) dans l'espace de recette |
+| Actions et skills | **à installer sur une plate-forme vierge** (voir §2 bis) : les scénarios appellent des actions du catalogue et deux skills IA qui n'existent pas encore |
 | Espace de recette | Créer l'espace `tests-auto` (Plate-forme → Espaces) et y ajouter alice (concepteur) et claire (approbatrice), ou utiliser l'espace `demo` **tant que ce n'est pas une instance partagée** |
 | Assistant IA activé | Administration → Assistant IA, avec un fournisseur configuré. **Modèle local recommandé** (mode *local strict* : aucune donnée ne quitte l'infrastructure). Budget quotidien suffisant (1 000 000 jetons par jour par défaut, modifiable dans Administration → Assistant IA) |
 | Docker | pour les tests T05 et T06 (bases jetables) |
+
+## 2 bis. Installer les actions et les skills (plate-forme vierge)
+
+Sur la démonstration les actions existent déjà ; sur une plate-forme vierge, les importer **avant** de générer quoi que ce soit
+(l'assistant ne réutilise que ce qui existe dans l'espace). Tout est dans [`ressources/`](ressources/) :
+
+| Ressource | Contenu | Utilisée par |
+|---|---|---|
+| `ressources/paquet/` — paquet d'actions `tests-automatisation` 1.0.0 | `Statistiques de texte`, `Attente simulée`, `Envoyer une notification (simulé)`, `Transformation JSON`, `Créer un rapport (artefact)`, `Appel HTTP (service de test local)` — **aucun effet réel**, aucun secret, non signé | T01 à T09 |
+| `ressources/skills/classer-message.json` | skill IA : classe un message, estime l'urgence, propose une réponse | T01 (variante IA), T10 |
+| `ressources/skills/resumer-alerte.json` | skill IA : résume une alerte pour l'approbateur | T02 (variante IA) |
+
+**Par le script** (jeton de service de l'espace de recette, droit de publier ; rien n'est publié ni lancé, relançable sans danger) :
+```bash
+export FLUXONATA_TOKEN='…'     # jamais en argument
+python3 outils/installer_ressources.py --url http://127.0.0.1:5173 --workspace tests-auto --dry-run   # voir ce qui serait installé
+python3 outils/installer_ressources.py --url http://127.0.0.1:5173 --workspace tests-auto
+```
+**Sans le script** : `python3 outils/construire_paquet.py` écrit l'archive ; importez-la dans Bibliothèques → Actions → **Paquets**
+(aperçu, puis import) ; créez les skills dans Bibliothèques → **Skills IA** → Nouveau skill (contenu des fichiers `.json`).
+Les skills n'appellent aucun modèle par eux-mêmes : ils servent quand un workflow a une **étape IA**, avec le fournisseur par défaut de l'espace.
+
+L'action `Appel HTTP (service de test local)` suppose que le service de test (`testsvc`, présent dans les piles de développement et de production fournies) est démarré : `scripts/doctor.sh` le vérifie. Sinon T03 et T09 ne sont pas jouables (les autres tests le restent).
+
+Vérification : les actions apparaissent dans Bibliothèques → Actions (contrat « ✔ Complet »), les skills dans Skills IA ; l'import est
+couvert par un test automatique du dépôt (`backend/tests/test_examples_resources.py`).
 
 ## 3. Comment dérouler un test
 
@@ -82,5 +109,5 @@ Les scénarios réutilisent ces valeurs, toutes inventées :
 
 ## 7. État de vérification de ces scénarios
 
-- **Vérifié à l'écriture** : les actions citées existent dans la démonstration (`Statistiques de texte`, `Attente simulée`, `Envoyer une notification (simulé)`, `Transformation JSON`, `Créer un rapport (artefact)`, `Appel HTTP (service de test local)`), le comportement du service de test (`/health`, `/echo`, 404), la signature de l'outil `envoyer_webhook.py` (même calcul que `docs/API.md`) et les valeurs attendues des requêtes de T05.
+- **Vérifié à l'écriture** : le paquet d'actions et les skills s'installent sur un espace **vierge** (test automatique) ; les actions citées existent dans la démonstration (`Statistiques de texte`, `Attente simulée`, `Envoyer une notification (simulé)`, `Transformation JSON`, `Créer un rapport (artefact)`, `Appel HTTP (service de test local)`), le comportement du service de test (`/health`, `/echo`, 404), la signature de l'outil `envoyer_webhook.py` (même calcul que `docs/API.md`) et les valeurs attendues des requêtes de T05.
 - **Non exécuté** : les prompts n'ont **pas** été rejoués de bout en bout avec un modèle lors de la rédaction. Les plans et les résultats attendus décrivent ce qu'une génération correcte doit produire ; un écart est une information (prompt à préciser ou défaut à corriger), à noter dans la fiche du test.

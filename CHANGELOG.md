@@ -4,6 +4,12 @@ Changements notables de Fluxonata, du plus récent au plus ancien.
 
 ## 2026-10-29
 
+**Tests d'automatisation : actions et skills à importer sur une plate-forme vierge (paquet, 2 skills, installateur)**
+
+- Tests d'automatisation : actions et skills à importer sur une plate-forme vierge (paquet, 2 skills, installateur, test)
+
+## 2026-10-29
+
 **Exemples : tests d'automatisation encadrés (plan, 10 scénarios avec prompts, outil de webhook signé)**
 
 - Exemples : tests d'automatisation encadrés (plan, 10 scénarios avec prompts, outil de webhook signé)

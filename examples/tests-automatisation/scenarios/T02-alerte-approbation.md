@@ -22,6 +22,13 @@ Ne contacte aucun service externe.
 - Une étape **Approbation** avec le texte demandé ; sa branche « refusé » aboutit à une **exception** (étape d'échec) avec le message demandé, pas à un silence.
 - Le rapport est produit dans les trois branches.
 
+## Variante IA : un résumé pour l'approbateur
+Prérequis : le skill `resumer-alerte` (voir le [plan](../01-plan-de-tests.md), §2 bis). Demander à l'assistant (bouton **Assistant IA** du workflow) :
+```text
+Avant la demande d'approbation, ajoute une étape IA qui utilise le skill « Résumer une alerte » (entrées : hote, gravite, message) et mets son résumé, l'action proposée et le risque dans le texte de l'approbation.
+```
+**Attendu** : proposition (rien d'appliqué avant votre accord) ; l'approbateur voit le résumé dans la demande ; le texte reste lisible sur téléphone ; la décision reste **humaine** (l'étape IA ne décide rien).
+
 ## Données d'essai
 | Cas | `hote` | `gravite` | `message` | Attendu |
 |---|---|---|---|---|

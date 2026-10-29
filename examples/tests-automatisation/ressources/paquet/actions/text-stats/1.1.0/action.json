@@ -1,0 +1,87 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Compte les caractères et les mots d'un texte et trouve le mot le plus long.",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "shout": true,
+      "text": "Bonjour le monde orchestré"
+    }
+  ],
+  "idempotent": true,
+  "input_schema": {
+    "properties": {
+      "shout": {
+        "default": false,
+        "description": "Renvoyer aussi le texte en majuscules.",
+        "title": "Majuscules",
+        "type": "boolean"
+      },
+      "text": {
+        "description": "Le texte à analyser.",
+        "examples": [
+          "Bonjour le monde orchestré"
+        ],
+        "maxLength": 10000,
+        "minLength": 1,
+        "title": "Texte",
+        "type": "string"
+      }
+    },
+    "required": [
+      "text"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 128,
+    "timeout_seconds": 20
+  },
+  "name": "Statistiques de texte",
+  "network_policy": "none",
+  "output_schema": {
+    "properties": {
+      "characters": {
+        "description": "Nombre de caractères du texte, espaces compris.",
+        "title": "Caractères",
+        "type": "integer"
+      },
+      "longest_word": {
+        "description": "Le mot le plus long du texte ; vide si le texte ne contient aucun mot.",
+        "title": "Mot le plus long",
+        "type": "string"
+      },
+      "uppercase": {
+        "description": "Le texte converti en majuscules si « Majuscules » est activé, sinon vide (null).",
+        "title": "Texte en majuscules",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "words": {
+        "description": "Nombre de mots (suites de caractères séparées par des espaces).",
+        "title": "Mots",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "characters",
+      "words",
+      "longest_word"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "none",
+  "slug": "text-stats",
+  "tags": [
+    "texte",
+    "démo"
+  ],
+  "version": "1.1.0"
+}

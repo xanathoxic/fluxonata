@@ -46,6 +46,19 @@ Envoyées par webhook : `python3 ../outils/envoyer_webhook.py <url-du-webhook> @
 - [ ] Rejouer le cas A avec la même livraison (`X-Fluxonata-Delivery` identique) : réponse `duplicate`, **pas** de seconde exécution.
 - [ ] Aucune étape n'a contacté un service réel (les sorties « simulé » le disent).
 
+## Variante IA : classement par un skill
+Prérequis : le skill `classer-message` (voir le [plan](../01-plan-de-tests.md), §2 bis) et un fournisseur IA ; l'étape IA reste en **mode test** tant qu'on ne la passe pas en réel.
+```text
+Crée un workflow « Analyse d'un e-mail par IA ».
+Informations demandées au lancement : « objet » et « corps ».
+Ce qu'il doit faire : classer le message avec une étape IA qui utilise le skill « Classer un message » (entrées : l'objet et le corps), puis produire un rapport « Courriel classé par IA » avec l'action « Créer un rapport (artefact) » contenant la catégorie, l'urgence, le résumé et la réponse proposée.
+Si l'urgence est 4 ou plus, envoyer en plus une notification « Courriel urgent » à « equipe-support@exemple.test » avec l'action « Envoyer une notification (simulé) ».
+Sorties : « categorie » et « urgence ».
+```
+**Attendu** : l'étape IA désigne bien le skill de la bibliothèque (pas une instruction libre recopiée) ; en mode réel, les cas A, B et C du tableau
+ci-dessus donnent respectivement `reclamation`, `question` et `autre` (le modèle peut hésiter sur C : rejouer deux fois), l'urgence de A est élevée, la réponse proposée
+n'invente ni numéro ni promesse. Les sorties de l'étape IA sont traitées comme des données non fiables : aucune ne déclenche seule une action externe.
+
 ## Variante : boîte e-mail réelle de recette (facultatif)
 Remplace le webhook par un déclencheur **Interrogation → boîte e-mail (IMAP)** sur une **boîte dédiée aux tests** (jamais une boîte
 de production ni personnelle). IMAP exige TLS avec un certificat valide. Utiliser « Essayer » (montre ce qui serait lancé **sans rien lancer**) avant d'activer ;

@@ -1,0 +1,62 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Appelle le service HTTP de test fourni avec la plate-forme. Politique réseau : service de test uniquement, jamais Internet.",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "path": "/echo?x=1"
+    }
+  ],
+  "idempotent": true,
+  "input_schema": {
+    "properties": {
+      "path": {
+        "default": "/echo?x=1",
+        "description": "Chemin sur le service de test (ex. /echo?x=1).",
+        "title": "Chemin",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 64,
+    "timeout_seconds": 20
+  },
+  "name": "Appel HTTP (service de test local)",
+  "network_policy": "test-service",
+  "output_schema": {
+    "properties": {
+      "body": {
+        "description": "Contenu de la réponse du service, décodé en objet JSON.",
+        "title": "Réponse",
+        "type": "object"
+      },
+      "status": {
+        "description": "Code de réponse du service (200 = succès).",
+        "title": "Code HTTP",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "status"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "none",
+  "slug": "http-test-service",
+  "tags": [
+    "http",
+    "connecteur",
+    "démo"
+  ],
+  "version": "1.1.0"
+}

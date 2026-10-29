@@ -1,0 +1,83 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Ne garde que certains champs d'un objet JSON (connecteur de démonstration local).",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "data": {
+        "a": 1,
+        "b": 2,
+        "c": 3
+      },
+      "fields": [
+        "a",
+        "c"
+      ]
+    }
+  ],
+  "idempotent": true,
+  "input_schema": {
+    "properties": {
+      "data": {
+        "description": "L'objet JSON à filtrer : ses champs sont examinés un à un.",
+        "title": "Objet source",
+        "type": "object"
+      },
+      "fields": {
+        "description": "Noms des champs à conserver ; les autres champs de l'objet source sont écartés.",
+        "items": {
+          "type": "string"
+        },
+        "title": "Champs à conserver",
+        "type": "array"
+      }
+    },
+    "required": [
+      "data",
+      "fields"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 64,
+    "timeout_seconds": 20
+  },
+  "name": "Transformation JSON",
+  "network_policy": "none",
+  "output_schema": {
+    "properties": {
+      "dropped": {
+        "description": "Nombre de champs de l'objet source qui n'ont pas été gardés.",
+        "title": "Champs écartés",
+        "type": "integer"
+      },
+      "kept": {
+        "description": "Nombre de champs gardés dans l'objet filtré.",
+        "title": "Champs conservés",
+        "type": "integer"
+      },
+      "result": {
+        "description": "Un nouvel objet qui ne contient que les champs demandés présents dans l'objet source.",
+        "title": "Objet filtré",
+        "type": "object"
+      }
+    },
+    "required": [
+      "result"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "none",
+  "slug": "json-transform",
+  "tags": [
+    "json",
+    "connecteur",
+    "démo"
+  ],
+  "version": "1.1.0"
+}

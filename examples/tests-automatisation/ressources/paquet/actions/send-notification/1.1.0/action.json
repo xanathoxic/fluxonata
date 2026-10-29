@@ -1,0 +1,71 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Simule l'envoi d'un message : action à effet externe NON idempotente (ne sera jamais relancée à l'aveugle).",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "recipient": "equipe@example.org",
+      "seconds": 2
+    }
+  ],
+  "idempotent": false,
+  "input_schema": {
+    "properties": {
+      "recipient": {
+        "description": "Personne ou adresse à prévenir (texte libre, 100 caractères au plus).",
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Destinataire",
+        "type": "string"
+      },
+      "seconds": {
+        "default": 2,
+        "description": "Temps que dure l'envoi simulé, en secondes (0 à 60 ; 2 par défaut).",
+        "maximum": 60,
+        "minimum": 0,
+        "title": "Durée simulée (s)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "recipient"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 64,
+    "timeout_seconds": 90
+  },
+  "name": "Envoyer une notification (simulé)",
+  "network_policy": "none",
+  "output_schema": {
+    "properties": {
+      "delivered": {
+        "description": "Vrai quand l'envoi simulé est terminé.",
+        "title": "Remis",
+        "type": "boolean"
+      },
+      "recipient": {
+        "description": "Le destinataire à qui le message a été « remis » (repris de l'entrée).",
+        "title": "Destinataire",
+        "type": "string"
+      }
+    },
+    "required": [
+      "delivered"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "external",
+  "slug": "send-notification",
+  "tags": [
+    "effet externe",
+    "démo"
+  ],
+  "version": "1.1.0"
+}

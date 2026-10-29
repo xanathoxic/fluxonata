@@ -1,0 +1,66 @@
+{
+  "checksums": {
+    "actions/http-test-service/1.1.0/action.json": "sha256:66aafae88f2a354ae3d5a4fcf9327ac4745155b4694774cce475f42f91656d86",
+    "actions/http-test-service/1.1.0/source.py": "sha256:caccda33ea2508ac82810db67a54da599925b9cc4278dda3a2bbc87dbd2634cc",
+    "actions/json-transform/1.1.0/action.json": "sha256:89313bbea6216c3cb3e144c689b16bb57070fc66500b8a35e6fbdb822bd740b4",
+    "actions/json-transform/1.1.0/source.py": "sha256:a94f449039ad02398a38626bb60470be30ebfca3467d186fd64b84329c089eb2",
+    "actions/make-report/1.1.0/action.json": "sha256:2318ef2f9f5046f76d0b0637246484427029287f1427cd977229860f2ad11d48",
+    "actions/make-report/1.1.0/source.py": "sha256:de3477d817ae00e1ff2455baa5fbb0a3d3f27a9b6a68754b191eb02778d2b36b",
+    "actions/send-notification/1.1.0/action.json": "sha256:1d32382b783ee4a22a5cb039103d5f4260e2555eca81c1e78dfe2ea39aebf413",
+    "actions/send-notification/1.1.0/source.py": "sha256:6596299b0ebde9c5e7aed1ff98c1981dfd4c067decc7bc943ed4b66d5d7f664b",
+    "actions/slow-wait/1.1.0/action.json": "sha256:c16beec7b655732c7bc5a2e9e7d1b2c8a4837e2ba806f31afe92064d87ee9d7f",
+    "actions/slow-wait/1.1.0/source.py": "sha256:81edf950ac279370582afb4d14386768c62f02e42d054fd7f37a81d73ced2b37",
+    "actions/text-stats/1.1.0/action.json": "sha256:b4931e2c5979d42bbe3ff168d5c9c27c1f2a103e05de7d113010aa326e1e1a3a",
+    "actions/text-stats/1.1.0/source.py": "sha256:a28e383b612e3e16e1a88a7eb30781b9817243872728bdaeb5e7df94dc5969dc",
+    "docs/README.md": "sha256:5aca4b4d6928dcc418115fce590949de3575c79cc23e855e8c549ff3870a8f15"
+  },
+  "contents": {
+    "actions": [
+      {
+        "path": "actions/text-stats/1.1.0/action.json",
+        "slug": "text-stats",
+        "source": "actions/text-stats/1.1.0/source.py",
+        "version": "1.1.0"
+      },
+      {
+        "path": "actions/slow-wait/1.1.0/action.json",
+        "slug": "slow-wait",
+        "source": "actions/slow-wait/1.1.0/source.py",
+        "version": "1.1.0"
+      },
+      {
+        "path": "actions/send-notification/1.1.0/action.json",
+        "slug": "send-notification",
+        "source": "actions/send-notification/1.1.0/source.py",
+        "version": "1.1.0"
+      },
+      {
+        "path": "actions/json-transform/1.1.0/action.json",
+        "slug": "json-transform",
+        "source": "actions/json-transform/1.1.0/source.py",
+        "version": "1.1.0"
+      },
+      {
+        "path": "actions/make-report/1.1.0/action.json",
+        "slug": "make-report",
+        "source": "actions/make-report/1.1.0/source.py",
+        "version": "1.1.0"
+      },
+      {
+        "path": "actions/http-test-service/1.1.0/action.json",
+        "slug": "http-test-service",
+        "source": "actions/http-test-service/1.1.0/source.py",
+        "version": "1.1.0"
+      }
+    ],
+    "workflows": []
+  },
+  "created_at": "2026-10-29T11:00:11.837153+00:00",
+  "description": "Actions de démonstration sans effet réel (notification simulée, rapport, statistiques de texte, appel du service de test local…), nécessaires aux scénarios de tests d'automatisation.",
+  "format": "fluxonata-package/1",
+  "license": "Apache-2.0",
+  "name": "Actions des tests d'automatisation",
+  "notice": "Ce paquet ne contient aucun secret. L'import ne lance aucun code.",
+  "slug": "tests-automatisation",
+  "version": "1.0.0"
+}

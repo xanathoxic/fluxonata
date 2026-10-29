@@ -1,0 +1,72 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Produit un fichier Markdown téléchargeable à partir d'un titre et de lignes de texte.",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "lines": [
+        "premier point",
+        "second point"
+      ],
+      "title": "Bilan"
+    }
+  ],
+  "idempotent": true,
+  "input_schema": {
+    "properties": {
+      "lines": {
+        "description": "Le contenu du rapport : une ligne de texte par élément de la liste (100 lignes au plus).",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 100,
+        "title": "Lignes",
+        "type": "array"
+      },
+      "title": {
+        "description": "Titre du rapport, affiché en tête du fichier (100 caractères au plus).",
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Titre",
+        "type": "string"
+      }
+    },
+    "required": [
+      "title",
+      "lines"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 64,
+    "timeout_seconds": 20
+  },
+  "name": "Créer un rapport (artefact)",
+  "network_policy": "none",
+  "output_schema": {
+    "properties": {
+      "lines": {
+        "description": "Nombre de lignes écrites dans le fichier du rapport. Le fichier lui-même est l'artefact de l'exécution.",
+        "title": "Lignes écrites",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "lines"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "none",
+  "slug": "make-report",
+  "tags": [
+    "artefact",
+    "connecteur",
+    "démo"
+  ],
+  "version": "1.1.0"
+}

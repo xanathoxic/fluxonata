@@ -1,0 +1,57 @@
+{
+  "changelog": "Contrat documenté (entrées et sorties décrites)",
+  "description": "Attend quelques secondes puis se termine ; utile pour observer une exécution en cours.",
+  "domain": "Démonstration",
+  "entrypoint": "run",
+  "examples": [
+    {
+      "seconds": 3
+    }
+  ],
+  "idempotent": true,
+  "input_schema": {
+    "properties": {
+      "seconds": {
+        "default": 3,
+        "description": "Durée d'attente.",
+        "maximum": 10,
+        "minimum": 1,
+        "title": "Secondes",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "seconds"
+    ],
+    "type": "object"
+  },
+  "license": "Apache-2.0",
+  "limits": {
+    "memory_mb": 64,
+    "timeout_seconds": 30
+  },
+  "name": "Attente simulée",
+  "network_policy": "none",
+  "output_schema": {
+    "properties": {
+      "slept": {
+        "description": "Durée réellement attendue, en secondes (égale à l'entrée « Secondes »).",
+        "title": "Secondes attendues",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "slept"
+    ],
+    "type": "object"
+  },
+  "required_tags": [],
+  "runtime": "python",
+  "secrets_required": [],
+  "side_effects": "none",
+  "slug": "slow-wait",
+  "tags": [
+    "démo"
+  ],
+  "version": "1.1.0"
+}
