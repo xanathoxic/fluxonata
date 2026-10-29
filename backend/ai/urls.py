@@ -24,5 +24,6 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/ai/evals/", views.EvalRunsView.as_view()),
     path("workspaces/<slug:workspace>/ai/evals/<int:pk>/", views.EvalRunDetailView.as_view()),
     path("workspaces/<slug:workspace>/ai/propose-action/", views.ProposeActionView.as_view()),
+    path("workspaces/<slug:workspace>/ai/propose-skill/", views.ProposeSkillView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/ai/suggest-tests/", views.SuggestTestsView.as_view()),
 ]

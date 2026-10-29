@@ -213,7 +213,9 @@ test("déclencheurs et bibliothèque : écrans accessibles", async ({ page }) =>
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByLabel("Rechercher une action").fill("Statistiques de texte");
   await page.getByRole("link", { name: "Statistiques de texte" }).click();
-  await expect(page.getByRole("heading", { name: "Versions", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Contrat", selected: true })).toBeVisible();
+  await page.getByRole("tab", { name: /^Versions/ }).click();
+  await expect(page.getByRole("table", { name: "Versions de l'action" })).toBeVisible();
   await expectNoA11yViolations(page);
 });
 

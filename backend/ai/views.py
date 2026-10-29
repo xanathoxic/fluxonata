@@ -392,8 +392,43 @@ class ProposeActionView(AiView):
         need = str(request.data.get("need", "")).strip()
         if not need:
             raise serializers.ValidationError({"need": "Décrivez le besoin."})
+        if len(need) > service.MAX_NEED:
+            raise serializers.ValidationError({"need": f"{service.MAX_NEED} caractères au maximum."})
         try:
-            return Response(service.propose_action(ws, request.user, need, provider_name=request.data.get("provider")))
+            return Response(
+                service.propose_action(
+                    ws,
+                    request.user,
+                    need,
+                    runtime=str(request.data.get("runtime") or "python"),
+                    previous=request.data.get("previous"),
+                    instruction=str(request.data.get("instruction") or ""),
+                    provider_name=request.data.get("provider"),
+                )
+            )
+        except AiRefused as exc:
+            return _refuse(exc)
+
+
+class ProposeSkillView(AiView):
+    def post(self, request, workspace):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        need = str(request.data.get("need", "")).strip()
+        if not need:
+            raise serializers.ValidationError({"need": "Décrivez le besoin."})
+        if len(need) > service.MAX_NEED:
+            raise serializers.ValidationError({"need": f"{service.MAX_NEED} caractères au maximum."})
+        try:
+            return Response(
+                service.propose_skill(
+                    ws,
+                    request.user,
+                    need,
+                    previous=request.data.get("previous"),
+                    instruction=str(request.data.get("instruction") or ""),
+                    provider_name=request.data.get("provider"),
+                )
+            )
         except AiRefused as exc:
             return _refuse(exc)
 

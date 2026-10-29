@@ -10,6 +10,8 @@ import { PageHeader } from "../components/PageHeader";
 import { RowIcon } from "../components/RowIcon";
 import { Tabs } from "../components/Tabs";
 import { useApp } from "../context";
+import { useAiMode } from "../components/AiBox";
+import { ActionAssistant, type ActionProposal } from "./library/ActionAssistant";
 import { NewActionForm } from "./library/NewActionForm";
 import { PackagesTab } from "./library/PackagesTab";
 import { HelpTip } from "../components/HelpTip";
@@ -19,7 +21,10 @@ function ActionsTab() {
   const { can, workspace } = useApp();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["actions-lib", workspace.slug], queryFn: () => apiAll<Action>(`/workspaces/${workspace.slug}/actions/`) });
+  const ai = useAiMode();
   const [creating, setCreating] = useState(false);
+  const [assisting, setAssisting] = useState(false);
+  const [draft, setDraft] = useState<ActionProposal | undefined>(undefined);
   const [folder, setFolder] = useState("");
   const [search, setSearch] = useState("");
   const [tagF, setTagF] = useState("");
@@ -43,7 +48,8 @@ function ActionsTab() {
             <TagFilter lists={all.map((a) => a.tags)} value={tagF} onChange={setTagF} />
           <span className="lst-count" role="status">{shown.length} action(s)</span>
           <span style={{ flex: 1 }} />
-          {can("publish") && <button type="button" className="primary" onClick={() => setCreating(true)}>Nouvelle action</button>}
+          {ai.enabled && can("publish") && <button type="button" aria-haspopup="dialog" onClick={() => setAssisting(true)}>✨ Générer avec l'IA</button>}
+          {can("publish") && <button type="button" className="primary" onClick={() => { setDraft(undefined); setCreating(true); }}>Nouvelle action</button>}
         </div>
         <p className="help-row"><HelpTip caption="À savoir">Les actions sont les briques exécutables : chaque version publiée est immuable.</HelpTip></p>
         <div className="table-wrap">
@@ -63,7 +69,8 @@ function ActionsTab() {
         </div>
         {paged.pager("Pagination des actions")}
       </section>
-      {creating && <Overlay wide title="Nouvelle action" description="Code, contrat d'entrées et de sorties : la version 1.0.0 est publiée et immuable." onClose={() => setCreating(false)}><NewActionForm folder={folder} onDone={() => setCreating(false)} /></Overlay>}
+      {assisting && <Overlay wide title="Générer une action avec l'IA" description="L'assistant propose le code et le contrat ; rien n'est enregistré avant votre relecture." onClose={() => setAssisting(false)}><ActionAssistant onClose={() => setAssisting(false)} onUse={(p) => { setAssisting(false); setDraft(p); setCreating(true); }} /></Overlay>}
+      {creating && <Overlay wide title={draft ? "Nouvelle action proposée par l'IA" : "Nouvelle action"} description="Code, contrat d'entrées et de sorties : la version 1.0.0 est publiée et immuable." onClose={() => setCreating(false)}><NewActionForm folder={folder} initial={draft} onDone={() => setCreating(false)} /></Overlay>}
       {moving && <MoveFolderOverlay title={`Déplacer « ${moving.name} »`} current={moving.folder} folders={[...folders, ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate({ slug: moving.slug, folder: f })} onClose={() => setMoving(null)} />}
     </div>
   );

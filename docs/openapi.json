@@ -2294,6 +2294,34 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/ai/propose-skill/": {
+            "post": {
+                "operationId": "workspaces_ai_propose_skill_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/ai/providers/": {
             "get": {
                 "operationId": "workspaces_ai_providers_retrieve",
@@ -8472,6 +8500,14 @@
                     },
                     "version": {
                         "$ref": "#/components/schemas/VersionInput"
+                    },
+                    "ai_generated": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "reviewed": {
+                        "type": "boolean",
+                        "default": false
                     }
                 },
                 "required": [
@@ -10391,6 +10427,14 @@
                     },
                     "version": {
                         "$ref": "#/components/schemas/VersionInput"
+                    },
+                    "ai_generated": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "reviewed": {
+                        "type": "boolean",
+                        "default": false
                     }
                 },
                 "required": [

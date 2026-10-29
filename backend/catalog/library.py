@@ -160,6 +160,8 @@ class ActionCreateSerializer(serializers.Serializer):
         child=serializers.CharField(max_length=30), required=False, default=list, max_length=10
     )
     version = VersionInput()
+    ai_generated = serializers.BooleanField(required=False, default=False)
+    reviewed = serializers.BooleanField(required=False, default=False)
 
 
 class ActionCreateView(APIView):
@@ -173,6 +175,10 @@ class ActionCreateView(APIView):
         d = ser.validated_data
         if Action.objects.filter(workspace=ws, slug=d["slug"]).exists():
             raise serializers.ValidationError({"slug": "Cet identifiant existe déjà dans l'espace."})
+        if d["ai_generated"] and not d["reviewed"]:
+            raise serializers.ValidationError(
+                {"reviewed": "Relisez le code proposé par l'assistant, puis confirmez-le."}
+            )
         require_contract(d["description"], d["version"])
         action = Action.objects.create(
             workspace=ws,
@@ -185,7 +191,14 @@ class ActionCreateView(APIView):
             tags=clean_tags(d["tags"]),
         )
         v = _create_version(action, {**d["version"], "version": d["version"].get("version", "1.0.0")}, request.user)
-        record("action.create", actor=request.user, workspace=ws, target=action, version=v.version)
+        record(
+            "action.create",
+            actor=request.user,
+            workspace=ws,
+            target=action,
+            version=v.version,
+            ai_generated=d["ai_generated"],
+        )
         return Response(ActionSerializer(action).data, status=201)
 
 

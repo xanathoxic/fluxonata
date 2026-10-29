@@ -697,3 +697,12 @@ button.tagchip, .tagchip button { min-height: 24px; }
 .json-field .cm-scroller { max-height: 40vh; overflow: auto; } .json-invalid .cm-editor { border-color: var(--err); }
 .json-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 4px; } .json-state { font-size: .82rem; color: var(--muted); } .json-state.err { color: var(--err); }
 .json-bar button { white-space: nowrap; padding: 4px 10px; font-size: .85rem; }
+
+/* Assistants de création (actions, skills IA) */
+.asst h3 { margin: 12px 0 4px; } .asst h4 { margin: 14px 0 6px; font-size: .92rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.asst-ex { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; }
+.chip-btn { border-radius: 999px; padding: 4px 12px; font-size: .84rem; background: var(--accent-soft); border: 1px solid var(--border); color: var(--fg); text-align: left; }
+.asst-result { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.asst-state { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.asst .inline-form .grow { flex: 1 1 280px; }
+.asst .adm-table th[scope=row] { text-transform: none; letter-spacing: 0; font-size: .88rem; }

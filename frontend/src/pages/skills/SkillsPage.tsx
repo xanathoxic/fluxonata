@@ -9,7 +9,9 @@ import { MoveFolderOverlay } from "../../components/MoveFolderOverlay";
 import { PageHeader } from "../../components/PageHeader";
 import { RowIcon } from "../../components/RowIcon";
 import { useApp } from "../../context";
+import { SkillAssistant, type SkillProposal } from "./SkillAssistant";
 import { SkillForm } from "./SkillForm";
+import { Overlay } from "../../components/Overlay";
 import { TagFilter, TagList } from "../../components/Tags";
 
 export function useSkills() {
@@ -24,6 +26,8 @@ export function SkillsPage() {
   const ai = useAiMode();
   const q = useSkills();
   const [creating, setCreating] = useState(false);
+  const [assisting, setAssisting] = useState(false);
+  const [draft, setDraft] = useState<SkillProposal | undefined>(undefined);
   const [folder, setFolder] = useState("");
   const [search, setSearch] = useState("");
   const [tagF, setTagF] = useState("");
@@ -41,7 +45,7 @@ export function SkillsPage() {
   return (
     <>
       <PageHeader title="Skills IA" description="Compétences IA réutilisables : des instructions, des entrées typées et le format de la réponse. Elles se choisissent dans l'« Étape IA » d'un workflow."
-        actions={can("publish") && <button type="button" className="primary" onClick={() => setCreating(true)}>Nouveau skill</button>} />
+        actions={can("publish") && <>{ai.enabled && <button type="button" aria-haspopup="dialog" onClick={() => setAssisting(true)}>✨ Générer avec l'IA</button>}<button type="button" className="primary" onClick={() => { setDraft(undefined); setCreating(true); }}>Nouveau skill</button></>} />
       {!ai.enabled && <p role="note" className="notice">L'IA est désactivée pour cet espace : vous pouvez préparer des skills, mais aucune étape IA ne s'exécutera tant qu'un administrateur n'a pas activé l'IA (Administration → Assistant IA).</p>}
       {ai.enabled && <AiNotice mode={ai.mode} />}
       <div className="wf-list-layout">
@@ -78,7 +82,8 @@ export function SkillsPage() {
           {paged.pager("Pagination des skills")}
         </section>
       </div>
-      {creating && <SkillForm folder={folder} onClose={() => setCreating(false)} />}
+      {assisting && <Overlay wide title="Générer un skill avec l'IA" description="L'assistant propose les instructions et le format de réponse ; rien n'est enregistré avant votre relecture." onClose={() => setAssisting(false)}><SkillAssistant onClose={() => setAssisting(false)} onUse={(p) => { setAssisting(false); setDraft(p); setCreating(true); }} /></Overlay>}
+      {creating && <SkillForm folder={folder} initial={draft} onClose={() => setCreating(false)} />}
       {moving && <MoveFolderOverlay title={`Déplacer « ${moving.name} »`} current={moving.folder} folders={[...folders, ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate({ slug: moving.slug, folder: f })} onClose={() => setMoving(null)} />}
     </>
   );

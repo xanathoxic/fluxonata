@@ -148,6 +148,8 @@ class SkillCreateSerializer(serializers.Serializer):
         child=serializers.CharField(max_length=60), required=False, default=list, max_length=20
     )
     version = VersionInput()
+    ai_generated = serializers.BooleanField(required=False, default=False)
+    reviewed = serializers.BooleanField(required=False, default=False)
 
 
 def _skill(ws, slug) -> AiSkill:
@@ -196,6 +198,10 @@ class SkillsView(APIView):
         ser = SkillCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+        if d["ai_generated"] and not d["reviewed"]:
+            raise serializers.ValidationError(
+                {"reviewed": "Relisez les instructions proposées par l'assistant, puis confirmez-les."}
+            )
         if AiSkill.objects.filter(workspace=ws, slug=d["slug"]).exists():
             raise serializers.ValidationError({"slug": "Cet identifiant existe déjà dans l'espace."})
         skill = AiSkill.objects.create(
@@ -208,7 +214,14 @@ class SkillsView(APIView):
             tags=clean_tags(d["tags"]),
         )
         v = _create_version(skill, {**d["version"], "version": d["version"].get("version", "1.0.0")}, request.user)
-        record("ai_skill.create", actor=request.user, workspace=ws, target=skill, version=v.version)
+        record(
+            "ai_skill.create",
+            actor=request.user,
+            workspace=ws,
+            target=skill,
+            version=v.version,
+            ai_generated=d["ai_generated"],
+        )
         return Response(SkillSerializer(skill).data, status=201)
 
 

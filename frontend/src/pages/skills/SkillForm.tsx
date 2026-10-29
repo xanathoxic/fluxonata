@@ -8,26 +8,28 @@ import { errorText, useWsQuery } from "../../lib";
 import { FieldsEditor } from "./FieldsEditor";
 import { fieldsToSchema, schemaToFields, slugifyName, type Field } from "./fields";
 import { TagInput } from "../../components/Tags";
+import type { SkillProposal } from "./SkillAssistant";
 
 const EXAMPLE = "Tu es un assistant d'exploitation. Résume ce texte en une phrase, puis donne un niveau de gravité.\n\nTexte : {{ inputs.texte }}";
 
 /** Create a skill (first version) or publish a new version of an existing one. Versions are immutable once published. */
-export function SkillForm({ skill, folder = "", onClose }: { skill?: AiSkill; folder?: string; onClose: () => void }) {
+export function SkillForm({ skill, folder = "", onClose, initial }: { skill?: AiSkill; folder?: string; onClose: () => void; initial?: SkillProposal }) {
   const { workspace } = useApp();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const id = useId();
   const latest = skill?.latest_version ?? null;
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [slugTouched, setSlugTouched] = useState(!!initial);
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [dir, setDir] = useState(folder);
-  const [tags, setTags] = useState<string[]>(skill?.tags ?? []);
+  const [tags, setTags] = useState<string[]>(skill?.tags ?? initial?.tags ?? []);
+  const [reviewed, setReviewed] = useState(false);
   const known = useWsQuery<{ results: AiSkill[] }>("ai-skills-tags", "/ai/skills/");
-  const [instructions, setInstructions] = useState(latest?.instructions ?? EXAMPLE);
-  const [inputs, setInputs] = useState<Field[]>(latest ? schemaToFields(latest.input_schema) : [{ name: "texte", type: "string", required: true, description: "Le texte à analyser" }]);
-  const [outputs, setOutputs] = useState<Field[]>(latest ? schemaToFields(latest.output_schema) : [{ name: "resume", type: "string", required: true, description: "" }, { name: "gravite", type: "string", required: true, description: "" }]);
+  const [instructions, setInstructions] = useState(latest?.instructions ?? initial?.instructions ?? EXAMPLE);
+  const [inputs, setInputs] = useState<Field[]>(latest ? schemaToFields(latest.input_schema) : initial ? schemaToFields(initial.input_schema) : [{ name: "texte", type: "string", required: true, description: "Le texte à analyser" }]);
+  const [outputs, setOutputs] = useState<Field[]>(latest ? schemaToFields(latest.output_schema) : initial ? schemaToFields(initial.output_schema) : [{ name: "resume", type: "string", required: true, description: "" }, { name: "gravite", type: "string", required: true, description: "" }]);
   const [provider, setProvider] = useState(latest?.default_provider ?? "");
   const [bump, setBump] = useState("minor");
   const [changelog, setChangelog] = useState("");
@@ -38,7 +40,7 @@ export function SkillForm({ skill, folder = "", onClose }: { skill?: AiSkill; fo
   const save = useMutation<AiSkill | unknown, ApiError>({
     mutationFn: () => skill
       ? api(`/workspaces/${workspace.slug}/ai/skills/${skill.slug}/versions/`, { json: version })
-      : api<AiSkill>(`/workspaces/${workspace.slug}/ai/skills/`, { json: { slug, name, description, folder: dir, tags, version } }),
+      : api<AiSkill>(`/workspaces/${workspace.slug}/ai/skills/`, { json: { slug, name, description, folder: dir, tags, version, ...(initial ? { ai_generated: true, reviewed } : {}) } }),
     onSuccess: (r) => { void qc.invalidateQueries({ queryKey: ["ai-skills"] }); void qc.invalidateQueries({ queryKey: ["ai-skill"] }); onClose(); if (!skill) navigate(`/library/skills/${(r as AiSkill).slug}`); },
   });
   const insert = (n: string) => {
@@ -51,8 +53,9 @@ export function SkillForm({ skill, folder = "", onClose }: { skill?: AiSkill; fo
   return (
     <Overlay wide title={skill ? `Nouvelle version de « ${skill.name} »` : "Nouveau skill IA"} onClose={onClose}
       description={skill ? "Une version publiée est immuable : les workflows déjà publiés gardent la version qu'ils utilisent." : "Un skill décrit une compétence IA réutilisable : instructions, entrées et format de la réponse. Il n'appelle aucun modèle tant qu'un workflow ne l'exécute pas."}
-      footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form={`${id}-f`} className="primary" disabled={save.isPending}>{skill ? "Publier la version" : "Créer le skill (1.0.0)"}</button></>}>
+      footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form={`${id}-f`} className="primary" disabled={save.isPending || (!!initial && !reviewed)}>{skill ? "Publier la version" : "Créer le skill (1.0.0)"}</button></>}>
       <form id={`${id}-f`} onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+        {initial && <p role="note" className="notice">✨ Proposé par l'assistant IA : relisez les instructions et le format de réponse, corrigez ce qui doit l'être, puis confirmez la relecture pour créer le skill.</p>}
         {!skill && (
           <>
             <div className="field"><label htmlFor={`${id}-n`}>Nom</label><input id={`${id}-n`} value={name} required maxLength={160} onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(slugifyName(e.target.value)); }} /></div>
@@ -81,6 +84,7 @@ export function SkillForm({ skill, folder = "", onClose }: { skill?: AiSkill; fo
             <div className="field"><label htmlFor={`${id}-c`}>Note de version</label><input id={`${id}-c`} value={changelog} maxLength={300} onChange={(e) => setChangelog(e.target.value)} /></div>
           </div>
         )}
+        {initial && <div className="field field-inline"><input id={`${id}-rev`} type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} /><label htmlFor={`${id}-rev`}>J'ai relu ces instructions</label></div>}
         {save.error && <p role="alert" className="field-error">Erreur : {errorText(save.error)}</p>}
       </form>
     </Overlay>

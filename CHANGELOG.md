@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.2 — 2026-10-29
+
+**Fluxonata 0.4.2 : assistants IA de création d'actions et de skills, tests d'automatisation encadrés**
+
+- Assistants IA de création d'actions et de skills : proposition contrôlée, révision, relecture obligatoire côté serveur
+- E2E : la fiche d'une action a des onglets (Versions)
+
 ## 2026-10-29
 
 **Tests d'automatisation : actions et skills à importer sur une plate-forme vierge (paquet, 2 skills, installateur)**

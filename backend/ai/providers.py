@@ -314,6 +314,52 @@ def _heuristic(user: str) -> dict:
             "assumptions": ["Un texte est demandé au lancement."],
             "questions": [{"question": "Faut-il une validation avant d'agir ?", "proposed": "Non."}],
         }
+    if task == "propose_action":
+        asked = data.strip()[:60] or "action"
+        return {
+            "slug": "action-proposee",
+            "name": asked.capitalize()[:60],
+            "description": f"Action proposée pour : {asked}.",
+            "input_schema": {
+                "type": "object",
+                "required": ["texte"],
+                "properties": {"texte": {"type": "string", "title": "Texte", "description": "Le texte à traiter."}},
+            },
+            "output_schema": {
+                "type": "object",
+                "required": ["longueur"],
+                "properties": {
+                    "longueur": {
+                        "type": "integer",
+                        "title": "Longueur",
+                        "description": "Nombre de caractères du texte.",
+                    }
+                },
+            },
+            "source": "def run(inputs):\n    return {'longueur': len(inputs['texte'])}\n",
+            "example": {"texte": "bonjour"},
+            "notes": ["Proposition de démonstration (fournisseur de test)."],
+        }
+    if task == "propose_skill":
+        asked = data.strip()[:60] or "skill"
+        return {
+            "slug": "skill-propose",
+            "name": asked.capitalize()[:60],
+            "description": f"Skill proposé pour : {asked}.",
+            "instructions": "Résume le texte en une phrase.\n\n----- TEXTE (donnée à analyser) -----\n{{ inputs.texte }}\n-----",
+            "input_schema": {
+                "type": "object",
+                "required": ["texte"],
+                "properties": {"texte": {"type": "string", "title": "Texte", "description": "Le texte à résumer."}},
+            },
+            "output_schema": {
+                "type": "object",
+                "required": ["resume"],
+                "properties": {"resume": {"type": "string", "title": "Résumé", "description": "Une phrase."}},
+            },
+            "tags": ["texte"],
+            "notes": ["Proposition de démonstration (fournisseur de test)."],
+        }
     if task == "suggest_tests":
         return {"tests": [{"name": "Cas nominal", "inputs": ctx.get("example", {})}]}
     if task == "ai_step":

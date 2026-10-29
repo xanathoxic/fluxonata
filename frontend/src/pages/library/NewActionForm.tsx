@@ -3,16 +3,20 @@ import { useNavigate } from "react-router-dom";
 import type { ApiError } from "../../api";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { TagInput } from "../../components/Tags";
+import type { ActionProposal } from "./ActionAssistant";
 
 const EXAMPLE_IN = '{"type":"object","required":["n"],"properties":{"n":{"type":"integer","title":"Nombre","description":"Le nombre à doubler."}}}';
 const EXAMPLE_OUT = '{"type":"object","required":["double"],"properties":{"double":{"type":"integer","title":"Double","description":"Le nombre reçu multiplié par deux."}}}';
 const EXAMPLE_SRC = "def run(inputs):\n    return {\"double\": inputs[\"n\"] * 2}\n";
 
 /** Advanced form (developers/admins): code + JSON Schemas. Validation is done by the server. */
-export function NewActionForm({ onDone, folder = "" }: { onDone: () => void; folder?: string }) {
+export function NewActionForm({ onDone, folder = "", initial }: { onDone: () => void; folder?: string; initial?: ActionProposal }) {
   const navigate = useNavigate();
   const create = useWsMutation<Record<string, unknown>, { slug: string }>("POST", "/library/actions/", ["actions-lib", "actions"]);
-  const [f, setF] = useState({ slug: "", name: "", description: "", folder, runtime: "python", source: EXAMPLE_SRC, input: EXAMPLE_IN, output: EXAMPLE_OUT, side: "none", network: "none" });
+  const [f, setF] = useState(initial
+    ? { slug: initial.slug, name: initial.name, description: initial.description, folder, runtime: initial.runtime, source: initial.source, input: JSON.stringify(initial.input_schema, null, 2), output: JSON.stringify(initial.output_schema, null, 2), side: initial.side_effects, network: initial.network_policy }
+    : { slug: "", name: "", description: "", folder, runtime: "python", source: EXAMPLE_SRC, input: EXAMPLE_IN, output: EXAMPLE_OUT, side: "none", network: "none" });
+  const [reviewed, setReviewed] = useState(false);
   const [jsonError, setJsonError] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const known = useWsQuery<{ results: { tags?: string[] }[] }>("actions-tags", "/actions/");
@@ -20,12 +24,13 @@ export function NewActionForm({ onDone, folder = "" }: { onDone: () => void; fol
     e.preventDefault();
     let input_schema, output_schema;
     try { input_schema = JSON.parse(f.input); output_schema = JSON.parse(f.output); setJsonError(""); } catch { setJsonError("Un des schémas n'est pas du JSON valide."); return; }
-    create.mutate({ slug: f.slug, name: f.name, description: f.description, folder: f.folder, tags, version: { runtime: f.runtime, source: f.source, input_schema, output_schema, side_effects: f.side, network_policy: f.network } },
+    create.mutate({ slug: f.slug, name: f.name, description: f.description, folder: f.folder, tags, version: { runtime: f.runtime, source: f.source, input_schema, output_schema, side_effects: f.side, network_policy: f.network, ...(initial?.examples?.length ? { examples: initial.examples } : {}) }, ...(initial ? { ai_generated: true, reviewed } : {}) },
       { onSuccess: (a) => { onDone(); navigate(`/library/actions/${a.slug}`); } });
   };
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
     <form onSubmit={submit} aria-label="Nouvelle action">
+      {initial && <p role="note" className="notice">✨ Proposée par l'assistant IA : relisez le code et le contrat, corrigez ce qui doit l'être, puis confirmez la relecture pour publier.</p>}
       <div className="field"><label htmlFor="na-s">Identifiant (lettres, chiffres, tirets)</label><input id="na-s" value={f.slug} onChange={set("slug")} pattern="[A-Za-z0-9_-]+" required /></div>
       <div className="field"><label htmlFor="na-n">Nom</label><input id="na-n" value={f.name} onChange={set("name")} required /></div>
       <div className="field"><label htmlFor="na-d">Ce que fait l'action (une ou deux phrases)</label><input id="na-d" value={f.description} onChange={set("description")} aria-describedby="na-contract" /></div>
@@ -45,7 +50,8 @@ export function NewActionForm({ onDone, folder = "" }: { onDone: () => void; fol
       {contractProblems(create.error) ? (
         <div role="alert" className="field-error">Le contrat n'est pas complet :<ul>{contractProblems(create.error)?.map((p) => <li key={p}>{p}</li>)}</ul></div>
       ) : create.error && <p role="alert" className="field-error">Erreur : {errorText(create.error)}</p>}
-      <button type="submit" className="primary" disabled={create.isPending}>Publier la version 1.0.0</button>
+      {initial && <div className="field field-inline"><input id="na-rev" type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} /><label htmlFor="na-rev">J'ai relu ce code et ce contrat</label></div>}
+      <button type="submit" className="primary" disabled={create.isPending || (!!initial && !reviewed)}>Publier la version 1.0.0</button>
     </form>
   );
 }
