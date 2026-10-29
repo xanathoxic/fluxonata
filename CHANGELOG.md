@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-10-29
+
+**Documentation : mise à niveau d'une installation de production (Docker Compose) pas à pas**
+
+- Documentation : mise à niveau d'une installation de production (Docker Compose) pas à pas, sauvegarde, vérification, retour arrière
+
 ## v0.4.2 — 2026-10-29
 
 **Fluxonata 0.4.2 : assistants IA de création d'actions et de skills, tests d'automatisation encadrés**

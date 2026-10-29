@@ -116,14 +116,71 @@ Après vérification : `ORCH_DB_NAME=fluxonata_restore`, `cd backend && ../.venv
 Conservation : `manage.py prune_data --days 90` (simulation) puis `--apply` supprime les exécutions anciennes et leurs artefacts ; l'audit n'est supprimé qu'après export (`--audit-days N --audit-export fichier`).
 
 ## 7. Mise à niveau
-1. **Sauvegardez** (§6, y compris les clés).
-2. Arrêtez les services (ou mettez l'API en maintenance).
-3. Récupérez la nouvelle version, puis `pip install -r backend/requirements.txt` et `cd frontend && npm ci && npm run build` (avec Docker : reconstruisez les images).
-4. `cd backend && ../.venv/bin/python manage.py migrate` — les migrations sont conçues pour être **additives**.
-5. Relancez orchestrateur, workers puis API. Les exécutions en cours ne sont pas touchées : leur définition est figée au lancement et leur état est en base.
-6. Vérifiez : `scripts/doctor.sh`, `scripts/smoke.sh`, Administration → Santé.
+Principe : **sauvegarder, récupérer la nouvelle version, reconstruire, vérifier**. Les migrations de base sont conçues pour être **additives**, et les exécutions en cours ne sont pas touchées (leur définition est figée au lancement, leur état est en base).
 
-**Retour arrière** : revenir au code précédent ne défait pas les migrations. En cas de problème, restaurez la sauvegarde de l'étape 1 dans une base neuve et pointez l'application dessus.
+### 7.1 Installation de type développement
+1. **Sauvegardez** (§6, y compris les clés).
+2. `scripts/dev-down.sh`, récupérez la nouvelle version (§7.3), puis `scripts/dev-up.sh` : dépendances, migrations et processus sont refaits.
+3. Vérifiez : `scripts/doctor.sh`, `scripts/smoke.sh`, Administration → Santé.
+
+### 7.2 Production sur un hôte (Docker Compose)
+Les commandes s'exécutent dans le dossier du dépôt. Le projet Compose s'appelle `fluxonata-prod` : ses volumes sont `fluxonata-prod_pgdata`, `fluxonata-prod_keys` et `fluxonata-prod_artifacts`.
+`scripts/backup.sh` vise la pile de développement : en production, sauvegardez ainsi.
+
+**1. Sauvegarder** (à copier ensuite **hors du serveur** ; gardez `keys.tar.gz` séparé du reste : sans les clés, secrets et webhooks sont irrécupérables)
+```bash
+git rev-parse HEAD > /tmp/fluxonata-avant-maj.txt        # commit actuellement déployé, pour un retour arrière
+TS=$(date -u +%Y%m%dT%H%M%SZ); mkdir -p backups/$TS && chmod 700 backups/$TS
+C="docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod"
+$C exec -T db pg_dump -U fluxonata -Fc fluxonata > backups/$TS/db.dump
+docker run --rm -v fluxonata-prod_keys:/d:ro -v "$PWD/backups/$TS":/out alpine tar -C /d -czf /out/keys.tar.gz .
+docker run --rm -v fluxonata-prod_artifacts:/d:ro -v "$PWD/backups/$TS":/out alpine tar -C /d -czf /out/artifacts.tar.gz .
+ls -lh backups/$TS
+```
+
+**2. Récupérer la nouvelle version** (§7.3).
+
+**3. Reconstruire et redémarrer**
+```bash
+$C up -d --build
+```
+Le service `migrate` applique les migrations avant le démarrage de l'API, de l'orchestrateur et du worker. **Ne relancez pas `bootstrap`** (il sert à la première installation). Comptez quelques minutes d'indisponibilité pendant la reconstruction.
+
+**4. Vérifier**
+```bash
+$C ps                                           # tout « running » ; migrate « exited (0) »
+$C logs migrate | tail -15                      # aucune erreur
+$C exec api python manage.py showmigrations | grep -c "\[ \]"    # 0 : toutes les migrations sont appliquées
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/   # 200 (ou l'adresse de votre proxy)
+```
+Connectez-vous, puis Administration → **Santé**. Un nouveau réglage éventuel se trouve dans `infra/.env.prod` (fichier non suivi par Git : il est conservé d'une version à l'autre) ; après toute modification, relancez l'étape 3.
+
+**Retour arrière.** Revenir au code précédent **n'annule pas** les migrations : en cas de problème, restaurez la sauvegarde de l'étape 1.
+```bash
+$C stop api orchestrator worker web
+$C exec -T db dropdb -U fluxonata fluxonata && $C exec -T db createdb -U fluxonata fluxonata
+$C exec -T db pg_restore -U fluxonata -d fluxonata --no-owner < backups/$TS/db.dump
+git reset --hard $(cat /tmp/fluxonata-avant-maj.txt)
+$C up -d --build
+```
+Si l'installation est importante, **essayez d'abord la restauration** sur une base jetable (`scripts/restore-test.sh` fait cette vérification pour la pile de développement).
+
+### 7.3 Récupérer la nouvelle version
+```bash
+git fetch origin
+git status                     # des modifications locales à conserver ? sauvegardez-les d'abord
+git pull --ff-only             # cas normal
+```
+Si `git pull` signale que les historiques ont divergé (cas d'une installation antérieure à la v0.4.0, dont l'historique du dépôt a été reconstruit), alignez le dépôt local sur la version publiée :
+```bash
+git reset --hard origin/main   # remplace les fichiers suivis par Git ; .env, infra/.env.prod, var/ et backups/ ne sont pas touchés
+```
+Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.prod.yml`), refaites ces modifications ensuite. Un `git clone` neuf avec recopie de `infra/.env.prod` convient aussi : les volumes Docker sont conservés tant que le nom de projet reste `fluxonata-prod`.
+
+### 7.4 À savoir pour la v0.4
+- Trois migrations **additives** (jeux de test des actions, secret de signature des webhooks, coffre externe) : rien n'est supprimé.
+- Le **coffre externe** (HashiCorp Vault) est désactivé tant qu'il n'est pas configuré (Plate-forme → Coffre externe). Pour un Vault du réseau interne, ajoutez son adresse à `ORCH_EGRESS_ALLOWLIST` dans `infra/.env.prod`.
+- Les boutons « Générer avec l'IA » (workflows, actions, skills) n'apparaissent que si l'assistant IA est activé (Administration → Assistant IA).
 
 ## 8. Durcissement et limites
 - Un conteneur partage le noyau de l'hôte : une faille du noyau ou de Docker permettrait une évasion. Pour du code hostile en multi-tenant, utilisez un runtime à noyau isolé
