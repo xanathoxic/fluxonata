@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-10-29
+
+**Exemples : tests d'automatisation encadrés (plan, 10 scénarios avec prompts, outil de webhook signé)**
+
+- Exemples : tests d'automatisation encadrés (plan, 10 scénarios avec prompts, outil de webhook signé)
+
 ## v0.4.1 — 2026-10-29
 
 **Fluxonata 0.4.1 : jeux de test des actions, fiche d'action à onglets, code en lecture seule, saisie JSON des objets et listes**

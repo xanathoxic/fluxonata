@@ -71,6 +71,7 @@ Ouvrez <http://127.0.0.1:5173> et connectez-vous avec un compte de démonstratio
 | `admin` | administrateur (de l'espace et de la plateforme) |
 
 Pour arrêter : `scripts/dev-down.sh`. Puis suivez le [premier workflow en 5 minutes](docs/FIRST_WORKFLOW.md).
+Pour essayer l'automatisation et l'assistant IA sur des scénarios réalistes sans toucher à la production, voir les [tests d'automatisation encadrés](examples/tests-automatisation/README.md).
 
 Pour un déploiement sur un hôte (Docker Compose, TLS, sauvegardes, runners), voir le [guide d'installation](docs/INSTALL.md).
 
