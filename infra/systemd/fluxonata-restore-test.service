@@ -1,0 +1,7 @@
+[Unit]
+Description=Essai de restauration de la dernière sauvegarde Fluxonata (dans une base jetable)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fluxonata
+ExecStart=/opt/fluxonata/scripts/restore-test.sh

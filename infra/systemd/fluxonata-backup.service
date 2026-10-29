@@ -1,0 +1,9 @@
+[Unit]
+Description=Sauvegarde planifiée de Fluxonata (base + artefacts, avec rotation)
+After=docker.service
+
+[Service]
+Type=oneshot
+# adaptez le chemin du dépôt et l'utilisateur ; --keep = nombre de sauvegardes conservées
+WorkingDirectory=/opt/fluxonata
+ExecStart=/opt/fluxonata/scripts/backup-rotate.sh --keep 14 --dir /var/backups/fluxonata

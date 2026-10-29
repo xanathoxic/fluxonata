@@ -1,0 +1,5 @@
+pytest==9.1.1
+pytest-django==4.14.0
+ruff==0.17.2
+cyclonedx-bom==7.5.0
+pip-audit==2.10.1

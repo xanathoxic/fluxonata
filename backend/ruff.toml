@@ -1,0 +1,16 @@
+line-length = 120
+target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+[lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "S603", "S607", "UP017", "E501"]
+[lint.per-file-ignores]
+"tests/*" = ["S", "B"]
+"tests/test_ai_edit.py" = ["S", "B", "F811", "F401"]
+"tests/test_ai_service_ops.py" = ["S", "B", "F811", "F401"]
+"tests/test_ai_plan.py" = ["S", "B", "F811", "F401"]
+"tests/test_ai_dryrun.py" = ["S", "B", "F811", "F401", "E501"]
+"tests/test_ai_jobs.py" = ["S", "B", "F811", "F401", "E501"]
+"tests/test_ai_outline.py" = ["S", "B", "F811", "F401", "E501"]
+"tests/test_action_contract.py" = ["S", "B", "E501"]
+"tests/test_validation_subworkflow.py" = ["S", "B", "F811", "F401", "E501"]  # reuses the ai_ws fixture of test_ai.py

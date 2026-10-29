@@ -1,0 +1,13 @@
+Fluxonata
+Copyright 2026 The Fluxonata contributors
+Licensed under the Apache License, Version 2.0.
+
+Third-party components (details and versions: docs/DECISIONS/0002-licences.md):
+Django, Django REST framework, drf-spectacular (BSD-3-Clause); psycopg 3 (LGPL-3.0, unmodified, dynamically linked);
+jsonschema, gunicorn (MIT); cryptography (Apache-2.0 OR BSD-3-Clause); joserfc (BSD-3-Clause);
+React, React DOM, React Router, TanStack Query, @xyflow/react, Vite (MIT); TypeScript (Apache-2.0);
+PostgreSQL (PostgreSQL License); nginx (BSD-2-Clause); Python and Node.js runtime images (PSF / MIT / Debian licenses).
+Test-only tooling is not distributed (see the ADR; @axe-core/playwright is MPL-2.0).
+
+
+Logos des services : les pictogrammes des intégrations (frontend/src/components/brandIconData.ts) proviennent de Simple Icons (https://simpleicons.org, licence CC0-1.0), régénérés par scripts/brand-icons.py. Les noms et logos de marque appartiennent à leurs propriétaires et ne servent qu'à identifier le service ciblé ; les services absents de Simple Icons (Slack, ServiceNow, Zabbix, Twilio, SendGrid, Microsoft 365, S3) sont représentés par un monogramme.
