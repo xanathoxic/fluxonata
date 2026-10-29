@@ -2,6 +2,17 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.1 — 2026-10-29
+
+**Fluxonata 0.4.1 : jeux de test des actions, fiche d'action à onglets, code en lecture seule, saisie JSON des objets et listes**
+
+- Fiche d'une action : onglets Contrat, Code, Versions, Utilisée par, Gestion ; code en lecture seule dans l'éditeur, différences colorées
+- Fiche d'une action : onglets Gestion et Utilisée par habillés (doublon supprimé)
+- Jeux de test d'une action : enregistrer, modifier, supprimer, proposés au lancement d'un essai
+- Jeux de test : lint
+- Formulaires : objets et listes saisis en JSON (jeux de test, lancement d'un essai, lancement d'un workflow)
+- Formulaires : objets et listes dans un éditeur JSON (coloration, erreurs en ligne, mise en forme)
+
 ## v0.4.0 — 2026-10-29
 
 **Fluxonata 0.4.0 : coffre externe HashiCorp Vault, tags, refonte de l'interface, aide en bulles, éditeur de script**

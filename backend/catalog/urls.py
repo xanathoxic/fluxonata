@@ -11,6 +11,8 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/actions/<slug:slug>/deprecate/", lib.ActionDeprecateView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/rollback/", lib.ActionRollbackView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/compare/", lib.ActionCompareView.as_view()),
+    path("workspaces/<slug:workspace>/actions/<slug:slug>/tests/", lib.ActionTestCasesView.as_view()),
+    path("workspaces/<slug:workspace>/actions/<slug:slug>/tests/<int:pk>/", lib.ActionTestCaseView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/dependents/", lib.ActionDependentsView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/rollback/", lib.WorkflowRollbackView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/compare/", lib.WorkflowCompareView.as_view()),

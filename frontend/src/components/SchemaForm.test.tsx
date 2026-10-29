@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { defaultsFor, SchemaForm, validateValues } from "./SchemaForm";
@@ -54,5 +55,47 @@ describe("validateValues", () => {
     expect(validateValues(schema, { text: "ok", n: 9 }).n).toMatch(/Maximum/);
     expect(validateValues(schema, { text: "ok", n: 2.5 }).n).toMatch(/entier/);
     expect(validateValues(schema, { text: "ok", n: 2 })).toEqual({});
+  });
+});
+
+const structured: JsonSchema = {
+  type: "object", required: ["data", "fields"],
+  properties: { data: { type: "object", title: "Objet source" }, fields: { type: "array", title: "Champs à conserver" } },
+};
+
+let latest: Record<string, unknown> = {};
+function JsonHarness({ initial }: { initial: Record<string, unknown> }) {
+  const [v, setV] = useState(initial);
+  latest = v;
+  return <SchemaForm schema={structured} values={v} onChange={setV} />;
+}
+
+function typeInto(container: HTMLElement, index: number, text: string) {
+  const view = EditorView.findFromDOM(container.querySelectorAll<HTMLElement>(".cm-editor")[index] as HTMLElement);
+  if (!view) throw new Error("éditeur introuvable");
+  act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+}
+
+describe("SchemaForm : objets et listes", () => {
+  it("affiche le JSON dans un éditeur (pas « [object Object] ») et renvoie des valeurs structurées", () => {
+    const { container } = render(<JsonHarness initial={{ data: { a: 1 }, fields: ["a"] }} />);
+    expect(screen.getByLabelText(/Objet source \(JSON objet\)/)).toHaveTextContent('"a": 1');
+    expect(container).not.toHaveTextContent("[object Object]");
+    typeInto(container, 0, '{"x": 10, "y": [1, 2]}');
+    expect(latest.data).toEqual({ x: 10, y: [1, 2] });
+    typeInto(container, 1, '["x", "y"]');
+    expect(latest.fields).toEqual(["x", "y"]);
+  });
+
+  it("garde le texte tant que le JSON est invalide, le signale, puis se met en forme", async () => {
+    const { container } = render(<JsonHarness initial={{ data: {}, fields: [] }} />);
+    typeInto(container, 0, "{ pas du json");
+    expect(latest.data).toBe("{ pas du json");
+    expect(validateValues(structured, latest).data).toMatch(/^JSON invalide/);
+    expect(screen.getByText(/^JSON invalide/)).toBeInTheDocument();
+    typeInto(container, 0, '{"b":2}');
+    expect(latest.data).toEqual({ b: 2 });
+    await userEvent.click(screen.getAllByRole("button", { name: "Mettre en forme" })[0] as HTMLElement);
+    expect(screen.getByLabelText(/Objet source/)).toHaveTextContent('"b": 2');
   });
 });

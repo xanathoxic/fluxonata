@@ -69,3 +69,18 @@ class ActionVersion(models.Model):
 
     def delete(self, *args, **kwargs):
         raise PermissionError("ActionVersion is immutable once published")
+
+
+class ActionTestCase(models.Model):
+    """A saved set of inputs for an action ("test set"): offered when running a trial. Never holds secrets."""
+
+    action = models.ForeignKey(Action, on_delete=models.CASCADE, related_name="test_cases")
+    name = models.CharField(max_length=100)
+    inputs = models.JSONField(default=dict)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["action", "name"], name="uniq_action_testcase_name")]
+        ordering = ["name", "id"]

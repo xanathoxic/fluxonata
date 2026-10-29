@@ -7,6 +7,7 @@ import { api, type Action, type ApiError, type Execution } from "../api";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { defaultsFor, SchemaForm, validateValues } from "../components/SchemaForm";
 import { useApp } from "../context";
+import { useTestCases } from "./library/TestCases";
 import { t } from "../i18n";
 
 export function ActionDetailPage() {
@@ -21,6 +22,8 @@ export function ActionDetailPage() {
     queryKey: ["action", workspace.slug, slug],
     queryFn: () => api<Action>(`/workspaces/${workspace.slug}/actions/${slug}/`),
   });
+  const cases = useTestCases(slug);
+  const [chosen, setChosen] = useState("");
   const version = action?.latest_version ?? null;
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -67,6 +70,20 @@ export function ActionDetailPage() {
         <section className="card" aria-labelledby="act-in">
           <h2 id="act-in">{t("action.inputs")}</h2>
           <form onSubmit={submit} noValidate>
+            {(cases.data?.results.length ?? 0) > 0 && (
+              <div className="field tc-pick">
+                <label htmlFor="tc-pick">Jeux de test</label>
+                <select id="tc-pick" value={chosen} onChange={(e) => {
+                  const c = cases.data?.results.find((x) => String(x.id) === e.target.value);
+                  setChosen(e.target.value);
+                  if (c) { setValues(c.inputs); setErrors({}); }
+                }}>
+                  <option value="">Choisir un jeu de test…</option>
+                  {cases.data?.results.map((c) => <option key={c.id} value={c.id}>{c.name}{c.valid ? "" : " (contrat modifié)"}</option>)}
+                </select>
+                <p className="hint">Remplit le formulaire avec des entrées enregistrées ; vous pouvez ensuite les modifier avant de lancer.</p>
+              </div>
+            )}
             <SchemaForm schema={version.input_schema} values={values} onChange={setValues} errors={errors} disabled={!allowed} />
             {errors._ && <p role="alert" className="field-error">Erreur : {errors._}</p>}
             <div className="actions">

@@ -2,6 +2,7 @@
 
 import ast
 import difflib
+import json
 import re
 
 import jsonschema
@@ -20,7 +21,7 @@ from workflows import access
 from workflows.models import Workflow, WorkflowVersion
 
 from . import contract
-from .models import Action, ActionVersion
+from .models import Action, ActionTestCase, ActionVersion
 from .serializers import ActionSerializer, ActionVersionSerializer
 
 TAG_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,29}")
@@ -470,3 +471,117 @@ class WorkflowDeprecateView(APIView):
         wf.save()
         record("workflow.reinstate" if reinstate else "workflow.deprecate", actor=request.user, workspace=ws, target=wf)
         return Response({"deprecated": wf.deprecated, "reason": wf.deprecation_reason})
+
+
+MAX_TEST_CASES = 50
+MAX_TEST_BYTES = 20 * 1024
+
+
+def _case_row(case: ActionTestCase, schema: dict | None) -> dict:
+    ok = True
+    if schema is not None:
+        try:
+            jsonschema.validate(case.inputs, schema)
+        except jsonschema.ValidationError:
+            ok = False  # the contract changed since: the set is kept but flagged
+    return {
+        "id": case.pk,
+        "name": case.name,
+        "inputs": case.inputs,
+        "valid": ok,
+        "created_by": getattr(case.created_by, "username", None),
+        "updated_at": case.updated_at,
+    }
+
+
+class TestCaseInput(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+    inputs = serializers.JSONField()
+
+    def validate_name(self, v):
+        v = v.strip()
+        if not v:
+            raise serializers.ValidationError("Nom requis.")
+        return v
+
+    def validate_inputs(self, v):
+        if not isinstance(v, dict):
+            raise serializers.ValidationError("Les entrées doivent être un objet.")
+        raw = json.dumps(v)
+        if len(raw) > MAX_TEST_BYTES:
+            raise serializers.ValidationError("Jeu de test trop volumineux (20 Ko maximum).")
+        if SECRET_LIKE.search(raw):
+            raise serializers.ValidationError(
+                "Cela ressemble à un secret : utilisez une connexion plutôt qu'une valeur saisie."
+            )
+        return v
+
+
+def _validated(action: Action, data, partial=False) -> dict:
+    s = TestCaseInput(data=data, partial=partial)
+    s.is_valid(raise_exception=True)
+    out = s.validated_data
+    version = action.latest_version()
+    if "inputs" in out and version is not None:
+        try:
+            jsonschema.validate(out["inputs"], version.input_schema)
+        except jsonschema.ValidationError as exc:
+            raise serializers.ValidationError(
+                {"inputs": f"Ne respecte pas le contrat de l'action : {exc.message[:200]}"}
+            ) from None
+    return out
+
+
+class ActionTestCasesView(APIView):
+    """Saved test sets of an action: everyone who can see the action reads them, designers manage them."""
+
+    def get(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, VIEW)
+        a = _action(ws, slug)
+        v = a.latest_version()
+        schema = v.input_schema if v else None
+        return Response({"results": [_case_row(c, schema) for c in a.test_cases.select_related("created_by")]})
+
+    @transaction.atomic
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        a = Action.objects.select_for_update().filter(workspace=ws, slug=slug).first()
+        if a is None:
+            raise Http404()
+        data = _validated(a, request.data)
+        if a.test_cases.count() >= MAX_TEST_CASES:
+            raise serializers.ValidationError({"name": f"{MAX_TEST_CASES} jeux de test au maximum par action."})
+        if a.test_cases.filter(name=data["name"]).exists():
+            raise serializers.ValidationError({"name": "Un jeu de test porte déjà ce nom."})
+        case = ActionTestCase.objects.create(action=a, created_by=request.user, **data)
+        record("action.testcase_create", actor=request.user, workspace=ws, target=a, name=case.name)
+        v = a.latest_version()
+        return Response(_case_row(case, v.input_schema if v else None), status=201)
+
+
+class ActionTestCaseView(APIView):
+    def _get(self, request, workspace, slug, pk):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        a = _action(ws, slug)
+        case = a.test_cases.filter(pk=pk).first()
+        if case is None:
+            raise Http404()
+        return ws, a, case
+
+    def patch(self, request, workspace, slug, pk):
+        ws, a, case = self._get(request, workspace, slug, pk)
+        data = _validated(a, {"name": case.name, "inputs": case.inputs, **request.data})
+        if a.test_cases.filter(name=data["name"]).exclude(pk=case.pk).exists():
+            raise serializers.ValidationError({"name": "Un jeu de test porte déjà ce nom."})
+        case.name, case.inputs = data["name"], data["inputs"]
+        case.save()
+        record("action.testcase_update", actor=request.user, workspace=ws, target=a, name=case.name)
+        v = a.latest_version()
+        return Response(_case_row(case, v.input_schema if v else None))
+
+    def delete(self, request, workspace, slug, pk):
+        ws, a, case = self._get(request, workspace, slug, pk)
+        name = case.name
+        case.delete()
+        record("action.testcase_delete", actor=request.user, workspace=ws, target=a, name=name)
+        return Response(status=204)

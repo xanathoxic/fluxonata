@@ -1,7 +1,9 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, type CompletionContext } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
+import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
+import { linter, lintGutter } from "@codemirror/lint";
 import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { Compartment, EditorState } from "@codemirror/state";
@@ -13,7 +15,7 @@ export interface Completion { label: string; detail?: string }
 interface Props {
   value: string;
   onChange: (value: string) => void;
-  language: "python" | "javascript";
+  language: "python" | "javascript" | "json" | "text";
   completions?: Completion[];
   ariaLabel: string;
   readOnly?: boolean;
@@ -22,6 +24,8 @@ interface Props {
   fill?: boolean;
   onCursor?: (pos: { line: number; col: number; lines: number }) => void;
 }
+
+const languageSupport = (language: Props["language"]) => (language === "python" ? python() : language === "javascript" ? javascript() : language === "json" ? [json(), linter(jsonParseLinter()), lintGutter()] : []);
 
 export interface CodeEditorHandle { insert: (text: string) => void; focus: () => void }
 
@@ -88,7 +92,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
           { key: "Escape", run: () => { exit.current?.focus(); return true; } },
           ...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap, indentWithTab,
         ]),
-        lang.current.of(language === "python" ? python() : javascript()),
+        lang.current.of(languageSupport(language)),
         ro.current.of(EditorState.readOnly.of(readOnly)),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel, "aria-multiline": "true", tabindex: "0" }),
         EditorView.updateListener.of((u) => {
@@ -108,7 +112,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
     if (v && v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
   useEffect(() => {
-    view.current?.dispatch({ effects: lang.current.reconfigure(language === "python" ? python() : javascript()) });
+    view.current?.dispatch({ effects: lang.current.reconfigure(languageSupport(language)) });
   }, [language]);
   useEffect(() => {
     view.current?.dispatch({ effects: ro.current.reconfigure(EditorState.readOnly.of(readOnly)) });
@@ -118,7 +122,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
     <div className={`code-editor${fill ? " fill" : ""}`} style={{ ["--editor-min" as string]: minHeight }}>
       <div ref={host} />
       <span ref={exit} tabIndex={-1} className="editor-exit">Fin de l'éditeur de code</span>
-      <p className="help-row"><HelpTip caption="À savoir">Touche Tab : indente. Échap : quitte l'éditeur pour continuer la navigation au clavier. Ctrl+Espace : suggestions de variables.</HelpTip></p>
+      {!readOnly && <p className="help-row"><HelpTip caption="À savoir">Touche Tab : indente. Échap : quitte l'éditeur pour continuer la navigation au clavier. Ctrl+Espace : suggestions de variables.</HelpTip></p>}
     </div>
   );
 });

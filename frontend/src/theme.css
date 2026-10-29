@@ -662,3 +662,38 @@ button.tagchip, .tagchip button { min-height: 24px; }
 .vt-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; } .vt-steps li { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
 .vt-grant { display: flex; gap: 10px; align-items: end; margin-bottom: 8px; } .vt-grant .field { flex: 1; margin: 0; } .vt-grant > button { min-height: 40px; }
 .vt-head { display: flex; gap: 10px; align-items: center; }
+
+/* Fiche d'une action : onglets, code en lecture seule, différences */
+.action-tabs > .tabs { gap: 2px; margin: 18px 0 0; padding: 0; border-bottom: 1px solid var(--border); overflow-x: auto; flex-wrap: nowrap; }
+.action-tabs > .tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 10px 16px; color: var(--muted); white-space: nowrap; }
+.action-tabs > .tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+.action-tabs > .tabs button:hover:not([aria-selected=true]) { background: var(--accent-soft); color: var(--fg); }
+.action-tabs > .tabpanel { padding-top: 16px; }
+.src-pick { max-width: 320px; margin-bottom: 10px; }
+.src-view { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+.src-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--border); }
+.src-file { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }
+.src-meta { color: var(--muted); font-size: .85rem; flex: 1 1 auto; }
+.src-ro { color: var(--muted); font-size: .8rem; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+.src-view .code-editor .cm-editor { border: 0; border-radius: 0; }
+.src-view .code-editor .cm-scroller { max-height: 65vh; overflow: auto; }
+.diff-view { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 65vh; background: var(--bg); }
+.diff-view table { border-collapse: collapse; width: 100%; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.diff-view td { padding: 0 8px; border: 0; vertical-align: top; }
+.diff-view .df-n { width: 1%; min-width: 3.2ch; text-align: right; color: var(--muted); user-select: none; background: var(--card); }
+.diff-view .df-t { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-view .df-add { background: color-mix(in srgb, #2e7d32 18%, transparent); }
+.diff-view .df-del { background: color-mix(in srgb, #c62828 16%, transparent); }
+.diff-view .df-hunk, .diff-view .df-file { background: var(--accent-soft); color: var(--muted); }
+.action-tabs section.card[aria-label="Comparer deux versions"] { margin-bottom: 16px; }
+.inline-form .field.grow { flex: 1 1 280px; } .inline-form .field.grow input { width: 100%; }
+
+/* Jeux de test d'une action */
+.tc-sum { max-width: 38ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.tc-proposals { margin-top: 14px; } .tc-proposals h3 { font-size: .95rem; margin: 0 0 8px; }
+.tc-proposal { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.tc-pick { margin-bottom: 14px; } .tc-pick select { max-width: 100%; }
+.json-field .cm-scroller { max-height: 40vh; overflow: auto; } .json-invalid .cm-editor { border-color: var(--err); }
+.json-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 4px; } .json-state { font-size: .82rem; color: var(--muted); } .json-state.err { color: var(--err); }
+.json-bar button { white-space: nowrap; padding: 4px 10px; font-size: .85rem; }

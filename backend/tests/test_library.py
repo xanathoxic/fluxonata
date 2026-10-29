@@ -191,3 +191,59 @@ def test_action_list_does_not_query_per_action(world, django_assert_max_num_quer
     with django_assert_max_num_queries(15):
         r = c.get(f"{BASE}/actions/")
     assert r.status_code == 200 and len(r.json()["results"]) >= 8
+
+
+def test_saved_test_sets_crud_rights_validation_and_audit(world):
+    c = client_for(world["designer"])
+    new_action(c)
+    url = f"{BASE}/actions/dbl/tests/"
+    assert c.get(url).json() == {"results": []}
+
+    r = c.post(url, {"name": "Petit nombre", "inputs": {"n": 2}}, format="json")
+    assert r.status_code == 201 and r.json()["valid"] is True and r.json()["created_by"] == "dana"
+    case = r.json()["id"]
+    assert AuditEvent.objects.filter(action="action.testcase_create").exists()
+
+    # le contrat est appliqué, les doublons et les secrets sont refusés
+    assert c.post(url, {"name": "Mauvais", "inputs": {"n": "deux"}}, format="json").status_code == 400
+    assert c.post(url, {"name": "Petit nombre", "inputs": {"n": 3}}, format="json").status_code == 400
+    assert c.post(url, {"name": " ", "inputs": {"n": 3}}, format="json").status_code == 400
+    leak = "AKIA" + "A" * 16
+    assert c.post(url, {"name": "Clé", "inputs": {"n": 1, "x": leak}}, format="json").status_code == 400
+
+    # modifier (nom seul, puis entrées)
+    r = c.patch(f"{url}{case}/", {"inputs": {"n": 10}}, format="json")
+    assert r.status_code == 200 and r.json()["inputs"] == {"n": 10} and r.json()["name"] == "Petit nombre"
+    assert c.patch(f"{url}{case}/", {"name": "Grand"}, format="json").json()["name"] == "Grand"
+    assert c.patch(f"{url}{case}/", {"inputs": {"n": "x"}}, format="json").status_code == 400
+
+    # un lecteur voit les jeux, ne les gère pas ; un autre espace n'y accède pas
+    viewer, outsider = client_for(world["viewer"]), client_for(world["outsider"])
+    assert [t["name"] for t in viewer.get(url).json()["results"]] == ["Grand"]
+    assert viewer.post(url, {"name": "X", "inputs": {"n": 1}}, format="json").status_code == 403
+    assert viewer.patch(f"{url}{case}/", {"name": "Y"}, format="json").status_code == 403
+    assert viewer.delete(f"{url}{case}/").status_code == 403
+    assert outsider.get(url).status_code in (403, 404)
+    assert outsider.delete(f"{url}{case}/").status_code in (403, 404)
+
+    # nouvelle version au contrat incompatible : le jeu est conservé mais signalé
+    new_version = {
+        "source": "def run(i):\n    return {'double': 1}\n",
+        "input_schema": {
+            **SCHEMA_IN,
+            "required": ["n", "m"],
+            "properties": {
+                **SCHEMA_IN["properties"],
+                "m": {"type": "integer", "title": "M", "description": "Le second nombre à additionner."},
+            },
+        },
+        "output_schema": SCHEMA_OUT,
+        "bump": "major",
+    }
+    r = c.post(f"{BASE}/actions/dbl/versions/", new_version, format="json")
+    assert r.status_code == 201, r.json()
+    assert c.get(url).json()["results"][0]["valid"] is False
+
+    assert c.delete(f"{url}{case}/").status_code == 204
+    assert c.get(url).json() == {"results": []}
+    assert AuditEvent.objects.filter(action="action.testcase_delete").exists()
