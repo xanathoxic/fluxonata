@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { JsonSchema } from "../api";
 import { typeCompatible, type OutputField } from "./graphOps";
 import { HelpTip } from "../components/HelpTip";
+import { JsonField } from "../components/SchemaForm";
 
 const isTemplate = (v: unknown): v is string => typeof v === "string" && /^\s*\{\{.*\}\}\s*$/.test(v);
 
@@ -40,6 +41,9 @@ export function ParamEditor({ name, schema, required, value, variables, onChange
   } else if (schema.type === "integer" || schema.type === "number") {
     control = <input id={id} type="number" value={typeof value === "number" ? value : ""} min={schema.minimum} max={schema.maximum}
       onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))} />;
+  } else if (schema.type === "array" || schema.type === "object") {
+    // a list / an object is edited as JSON and stored as a real list / object ({{ … }} inside the text is resolved at run time)
+    control = <JsonField prop={{ ...schema, title: label }} value={value} describedBy={undefined} invalid={false} onChange={onChange} />;
   } else {
     control = <input id={id} type="text" value={typeof value === "string" ? value : JSON.stringify(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }

@@ -28,7 +28,7 @@ from audit.models import record
 from catalog.models import ActionVersion
 from tenancy import governance
 from workflows import transforms
-from workflows.expressions import ExpressionError, evaluate, resolve
+from workflows.expressions import ExpressionError, coerce_inputs, evaluate, resolve
 from workflows.validation import explain_validation_error, topo_order
 
 from . import agent, alerts, http_node, ldap_node, services, sftp_node, sql_node
@@ -634,7 +634,7 @@ class _StepError(Exception):
 def _dispatch_action(run, node, sr, ctx):
     pin = run.definition["actions"][node["id"]]
     av = ActionVersion.objects.select_related("action").get(pk=pin["action_version_id"])
-    inputs = resolve(node.get("inputs", {}), ctx)
+    inputs = resolve(coerce_inputs(node.get("inputs", {}), av.input_schema), ctx)
     try:
         jsonschema.validate(inputs, av.input_schema)
     except jsonschema.ValidationError as exc:

@@ -16,7 +16,7 @@ from catalog.models import Action
 from vault.models import Connection
 
 from . import debug, transforms
-from .expressions import WHOLE_RE, ExpressionError, parse, paths_in, template_expressions
+from .expressions import WHOLE_RE, ExpressionError, coerce_structured, parse, paths_in, template_expressions
 
 MAX_NODES = 200
 MAX_SCRIPT = 100 * 1024
@@ -1082,6 +1082,17 @@ def _validate_params(nid, schema, given, label, issues, out_types, declared_inpu
             )
     for key, value in given.items():
         if key not in props or value in (None, ""):
+            continue
+        value = coerce_structured(value, props[key])  # JSON text typed for a list/object parameter is that list/object
+        if isinstance(value, str) and props[key].get("type") in ("array", "object") and not WHOLE_RE.match(value):
+            issues.append(
+                issue(
+                    nid,
+                    "bad_param_value",
+                    f"{props[key].get('title', key)} : une {'liste' if props[key]['type'] == 'array' else 'structure'} "
+                    "(JSON) est attendue, ou une variable entre accolades ; ce texte n'est pas du JSON valide.",
+                )
+            )
             continue
         exprs = template_expressions(value)
         if not exprs and isinstance(value, str) and LOOSE_REFERENCE.match(value.strip()):

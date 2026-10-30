@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.4 — 2026-10-30
+
+**Fluxonata 0.4.4 : paramètres liste et objet saisis en JSON dans l'éditeur, texte JSON déjà enregistré interprété comme liste**
+
+- Paramètres liste/objet d'une action : saisis en JSON dans l'éditeur, texte JSON déjà enregistré interprété comme liste, erreur claire à la validation
+
 ## v0.4.3 — 2026-10-29
 
 **Fluxonata 0.4.3 : correctifs IMAP et réseau (IPv4 d'abord), essai à blanc de l'assistant d'édition exécuté par le worker, suivi des jobs IA sans limitation**

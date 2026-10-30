@@ -21,7 +21,7 @@ const jsonProblem = (text: string) => { try { JSON.parse(text); return ""; } cat
  * Objects and arrays are edited as JSON. The parsed value goes into the form values as soon as the text is valid; while it is not,
  * the raw text is kept (and reported by validateValues) so that nothing the user typed is lost or silently replaced.
  */
-function JsonField({ prop, value, disabled, describedBy, invalid, onChange }: {
+export function JsonField({ prop, value, disabled, describedBy, invalid, onChange }: {
   prop: JsonSchema; value: unknown; disabled?: boolean; describedBy?: string; invalid: boolean; onChange: (v: unknown) => void;
 }) {
   const [text, setText] = useState(() => pretty(value));

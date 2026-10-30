@@ -8,6 +8,7 @@ keys unique sort date_add date_diff date_format, and default(valeur, repli). Roo
 Templates: "{{ expr }}" inside strings (whole-string template keeps the value's type).
 """
 
+import json
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -369,6 +370,25 @@ def evaluate_ast(node, ctx):
 
 def evaluate(src: str, ctx: dict):
     return evaluate_ast(parse(src), ctx)
+
+
+def coerce_structured(value, schema: dict):
+    """A parameter typed array/object that holds JSON text (typed in a text box, or saved so by an older editor) is that
+    structure: the templates inside it are resolved afterwards, element by element, and never spliced into JSON text."""
+    want = (schema or {}).get("type")
+    if isinstance(value, str) and want in ("array", "object") and not WHOLE_RE.match(value):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return value
+        if isinstance(parsed, list if want == "array" else dict):
+            return parsed
+    return value
+
+
+def coerce_inputs(inputs: dict, schema: dict) -> dict:
+    props = (schema or {}).get("properties", {})
+    return {k: coerce_structured(v, props.get(k, {})) for k, v in (inputs or {}).items()}
 
 
 def resolve(value, ctx: dict):

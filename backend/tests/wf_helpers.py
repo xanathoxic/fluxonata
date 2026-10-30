@@ -28,6 +28,11 @@ ACTIONS = {
         schema(["a", "b"], a={"type": "integer"}, b={"type": "integer"}),
         schema(["sum"], sum={"type": "integer"}),
     ),
+    "lines": (
+        "def run(i):\n    return {'n': len(i['lines']), 'joined': ' | '.join(i['lines'])}\n",
+        schema(["lines"], lines={"type": "array", "items": STR}),
+        schema(["n", "joined"], n={"type": "integer"}, joined=STR),
+    ),
     "boom": ("def run(i):\n    raise RuntimeError('boom')\n", schema(), schema()),
     "flaky": (
         "import os\n"
