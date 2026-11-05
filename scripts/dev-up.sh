@@ -22,5 +22,6 @@ start() { # name, command...
 start api bash -c "cd '$ROOT/backend' && exec $ROOT/.venv/bin/python manage.py runserver 127.0.0.1:${ORCH_API_PORT:-8100} --noreload"
 start orchestrator bash -c "cd '$ROOT/backend' && exec \"$ROOT\"/.venv/bin/python manage.py run_orchestrator"
 start worker bash -c "cd '$ROOT/backend' && exec $ROOT/.venv/bin/python manage.py run_worker"
+start demo-api python3 "$ROOT/scripts/demo-api.py" 8765
 start web bash -c "cd '$ROOT/frontend' && exec npm run dev -- --host 127.0.0.1"
 echo "Interface : http://127.0.0.1:${ORCH_WEB_PORT:-5173}  (démo : alice / demo-fluxonata)"

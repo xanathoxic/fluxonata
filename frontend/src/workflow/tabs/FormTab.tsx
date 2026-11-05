@@ -4,6 +4,9 @@ import { useDraft } from "../DraftContext";
 import type { FormStep } from "../types";
 import { WizardForm } from "../WizardForm";
 import { HelpTip } from "../../components/HelpTip";
+import { LibraryPicker } from "./LibraryPicker";
+import { ModeSwitch, type FormMode } from "../../forms/ModeSwitch";
+import { Confirm } from "../../components/AdminUi";
 
 /** Input form designer: group the workflow inputs into numbered steps, as in a step-by-step launch form. */
 export function FormTab() {
@@ -17,11 +20,37 @@ export function FormTab() {
   const patch = (i: number, p: Partial<FormStep>) => write(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const move = (i: number, d: number) => { const to = i + d; if (to < 0 || to >= steps.length) return; const c = [...steps]; [c[i], c[to]] = [c[to] as FormStep, c[i] as FormStep]; write(c); };
   const [values, setValues] = useState<Record<string, unknown>>(() => defaultsFor(graph.inputs));
+  const designed = graph.input_form != null;
+  const mode: FormMode = designed ? "design" : enabled ? "steps" : "simple";
+  const [pending, setPending] = useState<FormMode | null>(null);
+  const apply = (m: FormMode) => {
+    if (m === "design") setGraph({ ...graph, form: null, input_form: { ref: { form: "", version: null } } });
+    else if (m === "steps") setGraph({ ...graph, input_form: null, form: { steps: [{ title: "Paramètres", fields: [...names] }] } });
+    else setGraph({ ...graph, input_form: null, form: null });
+  };
+  // only a definition embedded in this workflow (older format) is lost when leaving: a library form stays in the library
+  const embedded = designed && graph.input_form?.sections !== undefined && graph.input_form.ref === undefined;
+  const choose = (m: FormMode) => { if (m === mode) return; if (embedded) setPending(m); else apply(m); };
+  const switcher = (
+    <>
+      <ModeSwitch mode={mode} onChange={choose} disabled={!editable} />
+      {pending && <Confirm title="Quitter le formulaire intégré ?" confirmLabel="Quitter et supprimer" onConfirm={() => { apply(pending); setPending(null); }} onCancel={() => setPending(null)}>Ce formulaire est intégré au workflow (ancien format) : il serait supprimé du brouillon. Utilisez d'abord « Déplacer vers la bibliothèque » pour le conserver.</Confirm>}
+    </>
+  );
+  if (designed) {
+    return (
+      <section aria-label="Formulaire d'entrée">
+        <h2>Formulaire d'entrée <HelpTip>Le formulaire du catalogue et de la page de lancement est un formulaire de la bibliothèque : il se conçoit dans « Formulaires » (sections, placement, règles, listes dynamiques) et se rattache ici. La version est figée à la publication du workflow.</HelpTip></h2>
+        {switcher}
+        <LibraryPicker />
+      </section>
+    );
+  }
   return (
     <section aria-label="Formulaire d'entrée">
       <h2>Formulaire d'entrée <HelpTip>Par défaut, toutes les entrées sont présentées sur une seule page. Un formulaire par étapes guide l'utilisateur, comme un assistant de lancement par étapes.</HelpTip></h2>
+      {switcher}
       <fieldset disabled={!editable} className="bare">
-        <div className="field field-inline"><input id="form-on" type="checkbox" checked={enabled} onChange={(e) => write(e.target.checked ? [{ title: "Paramètres", fields: [...names] }] : null)} /><label htmlFor="form-on">Utiliser un formulaire par étapes</label></div>
         {enabled && (
           <>
             {steps.map((s, i) => (

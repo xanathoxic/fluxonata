@@ -8,6 +8,7 @@ EMPTY_GRAPH = {
     "inputs": {"type": "object", "properties": {}, "required": []},
     "variables": [],  # read-only workflow constants, available as vars.<name>
     "form": None,  # optional step-by-step input form definition
+    "input_form": None,  # optional designed input form (sections, rules, dynamic lists): triggers/formengine.py
     "notes": [],  # visual annotations (never executed)
     "nodes": [],
     "edges": [],
@@ -76,6 +77,16 @@ class FolderGrant(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["access", "user"], name="uniq_folder_grant")]
+
+
+class CatalogGrant(models.Model):
+    """A group allowed to launch a catalog item. People holding the « Catalogue » role launch only the items granted to a group they belong to."""
+
+    workflow = models.ForeignKey(Workflow, on_delete=models.CASCADE, related_name="catalog_grants")
+    group = models.ForeignKey("tenancy.UserGroup", on_delete=models.CASCADE, related_name="catalog_grants")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workflow", "group"], name="uniq_catalog_grant")]
 
 
 class GitRepo(models.Model):

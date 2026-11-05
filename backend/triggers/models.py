@@ -102,6 +102,14 @@ class PublicForm(models.Model):
     max_uses = models.PositiveIntegerField(null=True, blank=True)
     uses = models.PositiveIntegerField(default=0)
     closed_reason = models.CharField(max_length=10, blank=True)  # "expired" or "exhausted" once it switched itself off
+    # the library form version this page serves (null = the legacy page, built from the workflow's inputs). Versions are
+    # immutable, so `published_definition` is a snapshot that always equals `library_version.definition`.
+    library_version = models.ForeignKey(
+        "formbuilder.FormVersion", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    published_definition = models.JSONField(null=True, blank=True)
+    # which field of the library form feeds which input of the workflow ({input: field key}); empty = fields and inputs share their names
+    input_map = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -109,6 +117,42 @@ class PublicForm(models.Model):
 class FormSubmission(models.Model):
     form = models.ForeignKey(PublicForm, on_delete=models.CASCADE, related_name="submissions")
     run = models.ForeignKey("runs.WorkflowRun", null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class FormLookup(models.Model):
+    """One dynamic-list lookup of a public form, run by the WORKER (never by the web process, which only queues it and
+    reads the outcome). Short-lived: the rows are swept after a few minutes, and a recent identical lookup is reused."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "En attente"
+        RUNNING = "running", "En cours"
+        DONE = "done", "Terminé"
+        FAILED = "failed", "Échec"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # a lookup belongs either to a public form (anonymous visitor) or to a workflow version (a signed-in person launching
+    # it from the catalog or the run page: `requested_by`, in `environment`)
+    form = models.ForeignKey(PublicForm, null=True, blank=True, on_delete=models.CASCADE, related_name="lookups")
+    workflow_version = models.ForeignKey(
+        "workflows.WorkflowVersion", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+    environment = models.ForeignKey(
+        "tenancy.Environment", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    field_key = models.CharField(max_length=64)
+    # "options": the choices of a dynamic list · "prefill": the whole value of a custom control (`options` then holds that value)
+    kind = models.CharField(max_length=8, default="options")
+    params = models.JSONField(default=dict)
+    params_hash = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.QUEUED, db_index=True)
+    options = models.JSONField(null=True, blank=True)
+    error = models.CharField(max_length=200, blank=True)
+    claimed_by = models.CharField(max_length=80, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
 

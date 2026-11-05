@@ -4,6 +4,7 @@ import { apiAll, type Integration, type WorkflowSummary } from "../../api";
 import { Badge, EmptyRow, SearchBox, usePaged } from "../../components/AdminUi";
 import { Overlay } from "../../components/Overlay";
 import { RowIcon } from "../../components/RowIcon";
+import { IconLabel } from "../../forms/FormIcon";
 import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
@@ -54,13 +55,15 @@ export function PollsTab() {
   return (
     <>
       <p className="help-row"><HelpTip caption="À savoir">Interroge un service à intervalle régulier (par une connexion) et lance le workflow pour chaque <strong>nouvel</strong> élément, repéré par son identifiant. Le premier relevé mémorise l'existant sans rien lancer (sauf option contraire). Le workflow reçoit l'élément dans l'entrée <code>item</code> (ou la liste dans <code>items</code> en mode lot).</HelpTip></p>
-      {edit && <p><button type="button" className="primary" onClick={() => { add.reset(); setF(EMPTY); setParams({}); setQuery(undefined); setOpen(true); }}>Nouveau déclencheur par interrogation</button></p>}
       <section className="adm-card">
-      <div className="adm-filters"><SearchBox label="Rechercher un déclencheur" value={search} onChange={setSearch} placeholder="Nom ou workflow" /><span className="lst-count" role="status">{rows.length} déclencheur(s)</span></div>
+      <div className="adm-filters"><SearchBox label="Rechercher un déclencheur" value={search} onChange={setSearch} placeholder="Nom ou workflow" /><span className="lst-count" role="status">{rows.length} déclencheur(s)</span>
+        <span style={{ flex: 1 }} />
+        {edit && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { add.reset(); setF(EMPTY); setParams({}); setQuery(undefined); setOpen(true); }}><IconLabel icon="plus">Nouveau déclencheur par interrogation</IconLabel></button>}
+      </div>
       <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Déclencheurs par interrogation</caption>
         <thead><tr><th scope="col">Nom</th><th scope="col">Workflow</th><th scope="col">Fréquence</th><th scope="col">Dernier relevé</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{paged.slice.map((r) => (
-          <tr key={r.id}><td>{r.name}{!r.enabled && <> <Badge tone="muted">⏸ Désactivé</Badge></>}</td><td>{r.workflow} ({r.environment})</td><td>{EVERY.find(([, s]) => s === r.interval_seconds)?.[0] ?? `${r.interval_seconds} s`}</td>
+          <tr key={r.id}><td>{r.name}{!r.enabled && <> <Badge tone="draft">⏸ Désactivé</Badge></>}</td><td>{r.workflow} ({r.environment})</td><td>{EVERY.find(([, s]) => s === r.interval_seconds)?.[0] ?? `${r.interval_seconds} s`}</td>
             <td>{r.last_poll_at ? <>{r.last_ok ? "✔" : "✖"} {r.last_note}<br /><span className="hint">{formatDate(r.last_poll_at)}</span></> : <span className="hint">{r.last_note || "Pas encore relevé"}</span>}</td>
             <td>{edit && <><button type="button" onClick={() => now.mutate({ id: r.id, preview: true })}>Essayer (sans rien lancer)</button>{" "}<button type="button" onClick={() => toggle.mutate({ id: r.id, enabled: !r.enabled })}>{r.enabled ? "Désactiver" : "Activer"}</button>{" "}<button type="button" className="icon-btn danger-icon" onClick={() => del.mutate({ id: r.id })} aria-label={`Supprimer le déclencheur ${r.name}`} title="Supprimer"><RowIcon name="trash" /></button></>}</td></tr>))}
           {rows.length === 0 && <EmptyRow cols={5}>{q.data?.results.length ? "Aucun déclencheur ne correspond." : "Aucun déclencheur par interrogation."}</EmptyRow>}</tbody></table></div>

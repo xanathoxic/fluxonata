@@ -52,6 +52,9 @@ ROUTES = [
     ("get", "/admins/"),
     ("post", "/admins/"),
     ("delete", "/admins/root/"),
+    ("get", "/egress/"),
+    ("post", "/egress/"),
+    ("delete", "/egress/1/"),
     ("get", "/audit/"),
 ]
 

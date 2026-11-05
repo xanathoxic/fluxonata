@@ -9,6 +9,7 @@ import { ExprPreview } from "./ExprPreview";
 import { HttpConfig } from "./HttpConfig";
 import { LdapConfig } from "./LdapConfig";
 import { SftpConfig } from "./SftpConfig";
+import { SmtpConfig } from "./SmtpConfig";
 import { SqlConfig } from "./SqlConfig";
 import { TransformConfig } from "./TransformConfig";
 import { WaitFormFields } from "./WaitFormFields";
@@ -213,6 +214,8 @@ export function NodePanel(p: Props) {
     tabs.push({ id: "config", label: "Transformation", content: <TransformConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "agent") {
     tabs.push({ id: "config", label: "Agent", content: <AgentConfig node={node} onUpdate={onUpdate} /> });
+  } else if (node.type === "smtp") {
+    tabs.push({ id: "config", label: "E-mail", content: <SmtpConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "sftp") {
     tabs.push({ id: "config", label: "Fichier SFTP", content: <SftpConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "ldap") {
@@ -287,7 +290,7 @@ export function NodePanel(p: Props) {
   } else if (node.type === "ai") {
     tabs.push({ id: "config", label: "Étape IA", content: <AiConfig node={node} variables={variables} editable={editable} onUpdate={onUpdate} /> });
   }
-  if (node.type !== "join" && node.type !== "race" && node.type !== "wait" && node.type !== "throw" && node.type !== "condition" && node.type !== "switch" && node.type !== "approval" && node.type !== "foreach" && node.type !== "subworkflow" && node.type !== "http" && node.type !== "sql" && node.type !== "agent" && node.type !== "ldap" && node.type !== "sftp" && node.type !== "transform") {
+  if (node.type !== "join" && node.type !== "race" && node.type !== "wait" && node.type !== "throw" && node.type !== "condition" && node.type !== "switch" && node.type !== "approval" && node.type !== "foreach" && node.type !== "subworkflow" && node.type !== "http" && node.type !== "sql" && node.type !== "agent" && node.type !== "ldap" && node.type !== "sftp" && node.type !== "smtp" && node.type !== "transform") {
     tabs.push({ id: "exceptions", label: "Exceptions", content: exceptions });
   } else if (retryable) {
     tabs.push({ id: "exceptions", label: "Exceptions", content: exceptions });

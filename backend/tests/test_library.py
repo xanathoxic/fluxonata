@@ -193,6 +193,25 @@ def test_action_list_does_not_query_per_action(world, django_assert_max_num_quer
     assert r.status_code == 200 and len(r.json()["results"]) >= 8
 
 
+def test_action_list_versions_are_serialised_exactly_like_the_detail_serializer(world):
+    """AR1.5 : le sérialiseur de version est réutilisé d'une action à l'autre ; le résultat ne doit pas changer d'un octet."""
+    import json
+
+    from catalog.models import Action
+    from catalog.serializers import ActionVersionSerializer
+
+    c = client_for(world["designer"])
+    for i in range(3):
+        assert new_action(c, slug=f"same-{i}").status_code == 201
+    rows = {a["slug"]: a for a in c.get(f"{BASE}/actions/").json()["results"]}
+    for action in Action.objects.filter(slug__startswith="same-"):
+        expected = ActionVersionSerializer(action.latest_version()).data
+        assert rows[action.slug]["latest_version"] == dict(
+            c.get(f"{BASE}/actions/{action.slug}/").json()["latest_version"]
+        )
+        assert rows[action.slug]["latest_version"] == json.loads(json.dumps(expected))
+
+
 def test_saved_test_sets_crud_rights_validation_and_audit(world):
     c = client_for(world["designer"])
     new_action(c)

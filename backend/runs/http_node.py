@@ -357,7 +357,9 @@ def claim_next() -> StepRun | None:
             StepRun.objects.select_for_update(skip_locked=True)
             .select_related("run__workspace")
             .filter(
-                node_type__in=("http", "sql", "ldap", "sftp"), status=StepRun.Status.WAITING, http_job__state="queued"
+                node_type__in=("http", "sql", "ldap", "sftp", "smtp"),
+                status=StepRun.Status.WAITING,
+                http_job__state="queued",
             )
             .filter(Q(http_job__not_before__isnull=True) | Q(http_job__not_before__lte=time.time()))
             .order_by("id")
@@ -681,6 +683,10 @@ def process_one() -> bool:
             from . import sql_node
 
             result, error = sql_node.execute(sr)
+        elif sr.node_type == "smtp":
+            from . import smtp_node
+
+            result, error = smtp_node.execute(sr)
         elif sr.node_type == "sftp":
             from . import sftp_node
 

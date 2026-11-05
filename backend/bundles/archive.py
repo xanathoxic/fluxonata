@@ -21,7 +21,7 @@ MAX_FILE = 1024 * 1024
 MAX_TOTAL = 20 * 1024 * 1024
 MAX_RATIO = 100
 ALLOWED_EXT = {".json", ".py", ".mjs", ".ts", ".sh", ".ps1", ".md", ".txt"}
-ALLOWED_PREFIX = ("actions/", "workflows/", "docs/")
+ALLOWED_PREFIX = ("actions/", "workflows/", "forms/", "docs/")
 SOURCE_EXT = {"python": "py", "node": "mjs", "typescript": "ts", "shell": "sh", "powershell": "ps1"}
 
 
@@ -34,7 +34,12 @@ def sha(data: bytes) -> str:
 
 
 def build(
-    meta: dict, actions: list[dict], workflows: list[dict], readme: str = "", sign: bool = False
+    meta: dict,
+    actions: list[dict],
+    workflows: list[dict],
+    readme: str = "",
+    sign: bool = False,
+    forms: list[dict] | None = None,
 ) -> tuple[bytes, dict]:
     """meta: name, slug, version, description, license. actions/workflows: dict payloads (see export view)."""
     files: dict[str, bytes] = {}
@@ -52,6 +57,12 @@ def build(
         path = f"workflows/{w['slug']}/{w['version']}/workflow.json"
         files[path] = json.dumps(w, indent=2, sort_keys=True, ensure_ascii=False).encode()
         contents["workflows"].append({"slug": w["slug"], "version": w["version"], "path": path})
+    if forms:  # the key is absent when there is no form: packages without forms stay byte-for-byte what they were
+        contents["forms"] = []
+    for f in forms or []:
+        path = f"forms/{f['slug']}/{f['version']}/form.json"
+        files[path] = json.dumps(f, indent=2, sort_keys=True, ensure_ascii=False).encode()
+        contents["forms"].append({"slug": f["slug"], "version": f["version"], "path": path})
     if readme:
         files["docs/README.md"] = readme.encode()
     manifest = {

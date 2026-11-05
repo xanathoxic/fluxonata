@@ -3,6 +3,8 @@ import { useId, useState, type FormEvent } from "react";
 import { api, type ApiError } from "../api";
 import { Avatar, Badge, Section } from "../components/AdminUi";
 import { Logo } from "../components/Logo";
+import { McpAssistantSection } from "../components/McpAssistantSection";
+import { useApp } from "../context";
 import { PageHeader } from "../components/PageHeader";
 import { errorText } from "../lib";
 
@@ -57,6 +59,8 @@ export function ForcedPasswordPage({ username, onLogout }: { username: string; o
 }
 
 export function AccountPage({ username, email, sso }: { username: string; email?: string; sso?: boolean }) {
+  const { workspace } = useApp();
+  const canAssist = workspace.permissions.includes("view");
   return (
     <>
       <PageHeader title="Mon compte" description={`Connecté en tant que ${username}${email ? ` (${email})` : ""}.`} />
@@ -70,6 +74,7 @@ export function AccountPage({ username, email, sso }: { username: string; email?
         <Section title="Sécurité" hint={sso ? undefined : "Choisissez un mot de passe que vous n'utilisez nulle part ailleurs. Vos autres sessions sont fermées au changement."}>
           {sso ? <p>Ce compte se connecte par SSO : le mot de passe se change chez votre fournisseur d'identité.</p> : <ChangePasswordForm />}
         </Section>
+        {canAssist && <div className="acct-wide"><McpAssistantSection /></div>}
       </div>
     </>
   );

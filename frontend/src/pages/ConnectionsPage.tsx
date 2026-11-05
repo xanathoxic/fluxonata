@@ -4,9 +4,10 @@ import { BrandIcon } from "../components/BrandIcon";
 import { EMPTY_SECRET, SecretSource, secretPayload, secretReady, type SecretDraft } from "../components/SecretSource";
 import { BRANDS } from "../components/brandIconData";
 import { Badge, Confirm, EmptyRow, SearchBox, SortTh, usePaged, useSort } from "../components/AdminUi";
+import { Menu } from "../components/Menu";
 import { Overlay } from "../components/Overlay";
 import { PageHeader } from "../components/PageHeader";
-import { RowIcon } from "../components/RowIcon";
+import { IconLabel } from "../forms/FormIcon";
 import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
@@ -24,6 +25,7 @@ const KIND: Record<string, string> = {
   mysql: "Base MySQL / MariaDB (lecture seule)",
   ldap: "Annuaire LDAP / Active Directory (lecture seule)",
   sftp: "Serveur SFTP (fichiers texte)",
+  smtp: "Serveur SMTP (envoi d'e-mails)",
   imap: "Boîte e-mail (IMAP, TLS)",
   generic: "Générique (un secret)",
 };
@@ -39,10 +41,11 @@ const CONFIG: Record<string, CfgField[]> = {
   mysql: [{ key: "host", label: "Serveur", placeholder: "db.exemple.org" }, { key: "port", label: "Port", placeholder: "3306", optional: true }, { key: "database", label: "Base de données" }, { key: "username", label: "Utilisateur (compte en lecture seule)" }, { key: "tls", label: "TLS (require ou disable)", placeholder: "require", optional: true }],
   ldap: [{ key: "host", label: "Serveur", placeholder: "ldap.exemple.org" }, { key: "port", label: "Port", placeholder: "389 (636 en LDAPS)", optional: true }, { key: "bind_dn", label: "Compte de lecture (DN)", placeholder: "cn=lecteur,dc=exemple,dc=org" }, { key: "base_dn", label: "Racine de recherche", placeholder: "dc=exemple,dc=org" }, { key: "tls", label: "TLS (starttls, ldaps ou none)", placeholder: "starttls", optional: true }],
   sftp: [{ key: "host", label: "Serveur", placeholder: "sftp.exemple.org" }, { key: "port", label: "Port", placeholder: "22", optional: true }, { key: "username", label: "Identifiant" }, { key: "host_key_sha256", label: "Empreinte de la clé du serveur (SHA256:…)", optional: true }],
+  smtp: [{ key: "host", label: "Serveur SMTP", placeholder: "smtp.gmail.com" }, { key: "port", label: "Port", placeholder: "465 (SSL) ou 587 (STARTTLS)", optional: true }, { key: "tls", label: "Sécurisation (ssl ou starttls)", placeholder: "ssl", optional: true }, { key: "username", label: "Identifiant (adresse du compte)" }, { key: "from_address", label: "Adresse d'expéditeur", placeholder: "compte@exemple.org" }, { key: "from_name", label: "Nom d'expéditeur", optional: true }],
   imap: [{ key: "host", label: "Serveur IMAP", placeholder: "imap.exemple.org" }, { key: "port", label: "Port", placeholder: "993", optional: true }, { key: "username", label: "Identifiant" }, { key: "folder", label: "Dossier", placeholder: "INBOX", optional: true }],
   oauth2_code: [{ key: "base_url", label: "Adresse du service", placeholder: URL_HINT }, { key: "authorize_url", label: "Adresse d'autorisation", placeholder: "https://auth.exemple.org/authorize" }, { key: "token_url", label: "Adresse d'obtention du jeton", placeholder: "https://auth.exemple.org/token" }, { key: "client_id", label: "Identifiant client" }, { key: "scope", label: "Périmètre (scope)", optional: true }],
 };
-const DYNAMIC_KINDS = ["postgres", "mysql", "ldap", "sftp", "imap", "basic"]; // kinds whose login is a user name + password
+const DYNAMIC_KINDS = ["postgres", "mysql", "ldap", "sftp", "smtp", "imap", "basic"]; // kinds whose login is a user name + password
 const ENV: Record<string, string> = { test: "Recette", prod: "Production", dev: "Développement" };
 
 export function ConnectionsPage() {
@@ -78,21 +81,22 @@ export function ConnectionsPage() {
   };
   return (
     <>
-      <PageHeader title="Connexions" description="Une connexion relie la plate-forme à un système externe. Le secret est chiffré, n'est jamais réaffiché et n'est transmis qu'aux actions autorisées qui le demandent."
-        actions={manage && <button type="button" className="primary" onClick={() => { reset(); setOpen(true); }}>Nouvelle connexion</button>} />
+      <PageHeader title="Connexions" description="Une connexion relie la plate-forme à un système externe. Le secret est chiffré, n'est jamais réaffiché et n'est transmis qu'aux actions autorisées qui le demandent." />
       <section className="adm-card">
         <div className="adm-filters">
           <SearchBox label="Rechercher une connexion" value={search} onChange={setSearch} placeholder="Nom ou identifiant" />
           <div className="field"><label htmlFor="c-kind">Type</label>
             <select id="c-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}><option value="">Tous les types</option>{[...new Set(all.map((c) => c.kind))].map((k) => <option key={k} value={k}>{KIND[k] ?? k}</option>)}</select></div>
           <span className="lst-count" role="status">{filtered.length} connexion(s)</span>
+          <span style={{ flex: 1 }} />
+          {manage && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { reset(); setOpen(true); }}><IconLabel icon="plus">Nouvelle connexion</IconLabel></button>}
         </div>
         <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Connexions de l'espace</caption>
           <thead><tr><SortTh label="Connexion" field="label" sort={sort} onSort={toggle} /><SortTh label="Type" field="kind" sort={sort} onSort={toggle} /><SortTh label="Environnement" field="env" sort={sort} onSort={toggle} /><SortTh label="Dernier test" field="test" sort={sort} onSort={toggle} /><th scope="col">Actions</th></tr></thead>
           <tbody>{paged.slice.map((c) => (
             <tr key={c.id}><td><span className="brand-line"><BrandIcon slug={BRANDS[c.name] ? c.name : c.kind} name={c.label} size={28} /><span><strong>{c.label}</strong> <span className="mono">({c.name})</span></span></span></td><td>{KIND[c.kind]}{c.secret_provider === "vault" && <> <Badge tone="info">Vault</Badge></>}</td><td>{c.environment ? <Badge>{ENV[c.environment]}</Badge> : <Badge tone="muted">Tous</Badge>}</td>
               <td>{c.last_test_ok === null ? <Badge tone="muted">Jamais testée</Badge> : <><Badge tone={c.last_test_ok ? "ok" : "bad"}>{c.last_test_ok ? "✔ Réussi" : "✖ Échec"}</Badge> <span className="lst-sub">{c.last_test_message} ({formatDate(c.last_test_at)})</span></>}</td>
-              <td>{manage && <>{c.kind === "oauth2_code" && <button type="button" onClick={() => authorize.mutate({ id: c.id }, { onSuccess: (r) => { window.location.href = r.authorize_url; } })}>Autoriser</button>} <button type="button" className="icon-btn" onClick={() => test.mutate({ id: c.id })} aria-label={`Tester la connexion ${c.label}`} title="Tester"><RowIcon name="check" /></button> <button type="button" className="icon-btn danger-icon" onClick={() => setToDelete(c)} aria-label={`Supprimer la connexion ${c.label}`} title="Supprimer"><RowIcon name="trash" /></button></>}</td></tr>))}
+              <td className="row-actions">{manage && <>{c.kind === "oauth2_code" && <button type="button" className="btn-s" onClick={() => authorize.mutate({ id: c.id }, { onSuccess: (r) => { window.location.href = r.authorize_url; } })}>Autoriser</button>} <button type="button" className="btn-s" onClick={() => test.mutate({ id: c.id })} aria-label={`Tester la connexion ${c.label}`}>Tester</button> <Menu label="Plus" ariaLabel={`Plus d'actions pour ${c.label}`} align="end" entries={[{ label: "Supprimer", danger: true, onSelect: () => setToDelete(c) }]} /></>}</td></tr>))}
             {filtered.length === 0 && <EmptyRow cols={5}>{q.isLoading ? "Chargement…" : all.length === 0 ? "Aucune connexion : ajoutez-en une pour relier la plate-forme à un système externe." : "Aucune connexion ne correspond."}</EmptyRow>}</tbody></table></div>
         {paged.pager("Pagination des connexions")}
       </section>

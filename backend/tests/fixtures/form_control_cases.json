@@ -1,0 +1,2002 @@
+[
+ {
+  "name": "groupe valide, clé inconnue ignorée",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "rue",
+       "label": "Rue",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "cp",
+       "label": "Cp",
+       "type": "text"
+      },
+      {
+       "key": "ville",
+       "label": "Ville",
+       "type": "text",
+       "required": true
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "rue": "1 rue X",
+   "ville": "Paris",
+   "zz": 1
+  },
+  "expected": {
+   "value": {
+    "rue": "1 rue X",
+    "ville": "Paris"
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "groupe : champ obligatoire manquant",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "rue",
+       "label": "Rue",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "cp",
+       "label": "Cp",
+       "type": "text"
+      },
+      {
+       "key": "ville",
+       "label": "Ville",
+       "type": "text",
+       "required": true
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "rue": "1 rue X"
+  },
+  "expected": {
+   "value": {
+    "rue": "1 rue X"
+   },
+   "problem": "Ville : Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "groupe : pas un objet",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "rue",
+       "label": "Rue",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "cp",
+       "label": "Cp",
+       "type": "text"
+      },
+      {
+       "key": "ville",
+       "label": "Ville",
+       "type": "text",
+       "required": true
+      }
+     ]
+    }
+   }
+  },
+  "value": "texte",
+  "expected": {
+   "value": "texte",
+   "problem": "Un objet est attendu."
+  }
+ },
+ {
+  "name": "lignes : calcul et ligne vide ignorée",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 1,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "produit": "A",
+    "qte": 2,
+    "prix": 5,
+    "total": 999
+   },
+   {},
+   {
+    "produit": "B",
+    "qte": 1,
+    "prix": 3
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "produit": "A",
+     "qte": 2,
+     "prix": 5,
+     "total": 10
+    },
+    {
+     "produit": "B",
+     "qte": 1,
+     "prix": 3,
+     "total": 3
+    }
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "lignes : la 2e est incomplète",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 1,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "produit": "A",
+    "qte": 1
+   },
+   {
+    "produit": "B"
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "produit": "A",
+     "qte": 1
+    }
+   ],
+   "problem": "Ligne 2 — Qte : Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "lignes : trop nombreuses",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 1,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "produit": "0",
+    "qte": 1
+   },
+   {
+    "produit": "1",
+    "qte": 1
+   },
+   {
+    "produit": "2",
+    "qte": 1
+   },
+   {
+    "produit": "3",
+    "qte": 1
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "produit": "0",
+     "qte": 1
+    },
+    {
+     "produit": "1",
+     "qte": 1
+    },
+    {
+     "produit": "2",
+     "qte": 1
+    },
+    {
+     "produit": "3",
+     "qte": 1
+    }
+   ],
+   "problem": "Au plus 3 ligne(s)."
+  }
+ },
+ {
+  "name": "lignes : pas une liste",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 1,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   }
+  },
+  "value": "x",
+  "expected": {
+   "value": "x",
+   "problem": "Une liste est attendue."
+  }
+ },
+ {
+  "name": "lignes : obligatoire et vide",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 1,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   },
+   "required": true
+  },
+  "value": [],
+  "expected": {
+   "value": [],
+   "problem": "Au moins 1 ligne(s)."
+  }
+ },
+ {
+  "name": "lignes : minimum non atteint",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "repeat",
+     "min": 2,
+     "max": 3,
+     "parts": [
+      {
+       "key": "produit",
+       "label": "Produit",
+       "type": "text",
+       "required": true
+      },
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true,
+       "min": 1
+      },
+      {
+       "key": "prix",
+       "label": "Prix",
+       "type": "number"
+      },
+      {
+       "key": "total",
+       "label": "Total",
+       "type": "number",
+       "compute": "{qte} * {prix}"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "produit": "A",
+    "qte": 1
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "produit": "A",
+     "qte": 1
+    }
+   ],
+   "problem": "Au moins 2 ligne(s)."
+  }
+ },
+ {
+  "name": "cases : ordre de la liste",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 1,
+     "max": 2
+    }
+   }
+  },
+  "value": [
+   "c",
+   "a"
+  ],
+  "expected": {
+   "value": [
+    "a",
+    "c"
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "cases : choix inconnu",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 1,
+     "max": 2
+    }
+   }
+  },
+  "value": [
+   "z"
+  ],
+  "expected": {
+   "value": [
+    "z"
+   ],
+   "problem": "Choix non proposé."
+  }
+ },
+ {
+  "name": "cases : doublon",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 1,
+     "max": 2
+    }
+   }
+  },
+  "value": [
+   "a",
+   "a"
+  ],
+  "expected": {
+   "value": [
+    "a",
+    "a"
+   ],
+   "problem": "Choix en double."
+  }
+ },
+ {
+  "name": "cases : trop de cases",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 1,
+     "max": 2
+    }
+   }
+  },
+  "value": [
+   "a",
+   "b",
+   "c"
+  ],
+  "expected": {
+   "value": [
+    "a",
+    "b",
+    "c"
+   ],
+   "problem": "Au plus 2 choix(s)."
+  }
+ },
+ {
+  "name": "cases : minimum",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 1,
+     "max": 2
+    }
+   }
+  },
+  "value": [],
+  "expected": {
+   "value": [],
+   "problem": "Au moins 1 choix(s)."
+  }
+ },
+ {
+  "name": "cases avec détails",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 0,
+     "max": 2,
+     "parts": [
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "value": "b",
+    "qte": 3
+   },
+   {
+    "value": "a",
+    "qte": 1
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "value": "a",
+     "qte": 1
+    },
+    {
+     "value": "b",
+     "qte": 3
+    }
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "cases avec détails : détail manquant",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "a",
+       "label": "Alpha"
+      },
+      {
+       "value": "b",
+       "label": "Bravo"
+      },
+      {
+       "value": "c",
+       "label": "Charlie"
+      }
+     ],
+     "min": 0,
+     "max": 2,
+     "parts": [
+      {
+       "key": "qte",
+       "label": "Qte",
+       "type": "number",
+       "required": true
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "value": "a"
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "value": "a"
+    }
+   ],
+   "problem": "Alpha — Qte : Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "cases : liste modifiable par l'auteur",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [],
+     "min": 0,
+     "max": 2,
+     "items_editable": true
+    }
+   },
+   "options": [
+    {
+     "value": "x",
+     "label": "X"
+    }
+   ]
+  },
+  "value": [
+   "x"
+  ],
+  "expected": {
+   "value": [
+    "x"
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "cases : liste modifiable, choix hors liste",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [],
+     "min": 0,
+     "max": 2,
+     "items_editable": true
+    }
+   },
+   "options": [
+    {
+     "value": "x",
+     "label": "X"
+    }
+   ]
+  },
+  "value": [
+   "a"
+  ],
+  "expected": {
+   "value": [
+    "a"
+   ],
+   "problem": "Choix non proposé."
+  }
+ },
+ {
+  "name": "sous-champs : règle masque et calcul",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "type",
+       "label": "Type",
+       "type": "select",
+       "options": [
+        {
+         "value": "pro",
+         "label": "Pro"
+        },
+        {
+         "value": "perso",
+         "label": "Perso"
+        }
+       ]
+      },
+      {
+       "key": "societe",
+       "label": "Societe",
+       "type": "text",
+       "rules": [
+        {
+         "name": "r",
+         "when": {
+          "field": "type",
+          "op": "equals",
+          "value": "pro"
+         },
+         "then": [
+          {
+           "do": "show"
+          },
+          {
+           "do": "require"
+          }
+         ],
+         "else": [
+          {
+           "do": "hide"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "key": "code",
+       "label": "Code",
+       "type": "text",
+       "compute": "upper(left({societe}, 3))"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "type": "perso",
+   "societe": "caché"
+  },
+  "expected": {
+   "value": {
+    "type": "perso"
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "sous-champs : règle rend obligatoire",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "type",
+       "label": "Type",
+       "type": "select",
+       "options": [
+        {
+         "value": "pro",
+         "label": "Pro"
+        },
+        {
+         "value": "perso",
+         "label": "Perso"
+        }
+       ]
+      },
+      {
+       "key": "societe",
+       "label": "Societe",
+       "type": "text",
+       "rules": [
+        {
+         "name": "r",
+         "when": {
+          "field": "type",
+          "op": "equals",
+          "value": "pro"
+         },
+         "then": [
+          {
+           "do": "show"
+          },
+          {
+           "do": "require"
+          }
+         ],
+         "else": [
+          {
+           "do": "hide"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "key": "code",
+       "label": "Code",
+       "type": "text",
+       "compute": "upper(left({societe}, 3))"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "type": "pro"
+  },
+  "expected": {
+   "value": {
+    "type": "pro"
+   },
+   "problem": "Societe : Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "sous-champs : calcul",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "type",
+       "label": "Type",
+       "type": "select",
+       "options": [
+        {
+         "value": "pro",
+         "label": "Pro"
+        },
+        {
+         "value": "perso",
+         "label": "Perso"
+        }
+       ]
+      },
+      {
+       "key": "societe",
+       "label": "Societe",
+       "type": "text",
+       "rules": [
+        {
+         "name": "r",
+         "when": {
+          "field": "type",
+          "op": "equals",
+          "value": "pro"
+         },
+         "then": [
+          {
+           "do": "show"
+          },
+          {
+           "do": "require"
+          }
+         ],
+         "else": [
+          {
+           "do": "hide"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "key": "code",
+       "label": "Code",
+       "type": "text",
+       "compute": "upper(left({societe}, 3))"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "type": "pro",
+   "societe": "acme"
+  },
+  "expected": {
+   "value": {
+    "type": "pro",
+    "societe": "acme",
+    "code": "ACM"
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: option without details",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "rien",
+   "adresse": "x"
+  },
+  "expected": {
+   "value": {
+    "value": "rien"
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: details of the picked option",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "mail",
+   "adresse": "a@b.fr",
+   "plages": [
+    "am"
+   ]
+  },
+  "expected": {
+   "value": {
+    "value": "mail",
+    "adresse": "a@b.fr"
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: required detail missing",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "mail"
+  },
+  "expected": {
+   "value": {
+    "value": "mail"
+   },
+   "problem": "E-mail — Adresse : Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "choice: checkbox list detail",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "tel",
+   "plages": [
+    "pm",
+    "am"
+   ]
+  },
+  "expected": {
+   "value": {
+    "value": "tel",
+    "plages": [
+     "pm",
+     "am"
+    ]
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: unknown option",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "zz"
+  },
+  "expected": {
+   "value": {
+    "value": "zz"
+   },
+   "problem": "Choix non proposé."
+  }
+ },
+ {
+  "name": "choice: plain string",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "a",
+       "label": "A"
+      },
+      {
+       "value": "b",
+       "label": "B"
+      }
+     ]
+    }
+   }
+  },
+  "value": "b",
+  "expected": {
+   "value": "b",
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: plain object",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "a",
+       "label": "A"
+      },
+      {
+       "value": "b",
+       "label": "B"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": "a"
+  },
+  "expected": {
+   "value": "a",
+   "problem": ""
+  }
+ },
+ {
+  "name": "choice: blank required",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "a",
+       "label": "A"
+      },
+      {
+       "value": "b",
+       "label": "B"
+      }
+     ]
+    }
+   },
+   "required": true
+  },
+  "value": {
+   "value": ""
+  },
+  "expected": {
+   "value": {},
+   "problem": "Ce champ est obligatoire."
+  }
+ },
+ {
+  "name": "choice: blank optional",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "a",
+       "label": "A"
+      },
+      {
+       "value": "b",
+       "label": "B"
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "value": ""
+  },
+  "expected": {
+   "value": {},
+   "problem": ""
+  }
+ },
+ {
+  "name": "items: own details per box, list order",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "mail",
+       "label": "E-mail",
+       "parts": [
+        {
+         "key": "adresse",
+         "label": "Adresse",
+         "type": "email",
+         "required": true
+        }
+       ]
+      },
+      {
+       "value": "tel",
+       "label": "Téléphone",
+       "parts": [
+        {
+         "key": "plages",
+         "label": "Plages",
+         "type": "checkbox_list",
+         "options": [
+          {
+           "value": "am",
+           "label": "Matin"
+          },
+          {
+           "value": "pm"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "value": "rien",
+       "label": "Aucun"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   {
+    "value": "tel",
+    "plages": [
+     "am"
+    ]
+   },
+   {
+    "value": "mail",
+    "adresse": "a@b.fr"
+   }
+  ],
+  "expected": {
+   "value": [
+    {
+     "value": "mail",
+     "adresse": "a@b.fr"
+    },
+    {
+     "value": "tel",
+     "plages": [
+      "am"
+     ]
+    }
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "nested: control inside a control",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "group",
+     "parts": [
+      {
+       "key": "in",
+       "label": "In",
+       "type": "custom",
+       "control": {
+        "ref": "inner",
+        "version": "1.0.0",
+        "name": "I",
+        "spec": {
+         "version": 1,
+         "mode": "group",
+         "parts": [
+          {
+           "key": "a",
+           "label": "A",
+           "type": "text"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "value": {
+   "in": {
+    "a": "x",
+    "zz": "y"
+   }
+  },
+  "expected": {
+   "value": {
+    "in": {
+     "a": "x"
+    }
+   },
+   "problem": ""
+  }
+ },
+ {
+  "name": "dropdown: disabled option refused",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "display": "dropdown",
+     "items": [
+      {
+       "value": "saab",
+       "label": "Saab"
+      },
+      {
+       "value": "mercedes",
+       "label": "Mercedes",
+       "disabled": true
+      },
+      {
+       "value": "ford",
+       "label": "Ford",
+       "group": "US Brands"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   "mercedes"
+  ],
+  "expected": {
+   "value": [
+    "mercedes"
+   ],
+   "problem": "Choix indisponible."
+  }
+ },
+ {
+  "name": "dropdown: list order, groups ignored by the value",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "display": "dropdown",
+     "items": [
+      {
+       "value": "saab",
+       "label": "Saab"
+      },
+      {
+       "value": "mercedes",
+       "label": "Mercedes",
+       "disabled": true
+      },
+      {
+       "value": "ford",
+       "label": "Ford",
+       "group": "US Brands"
+      }
+     ]
+    }
+   }
+  },
+  "value": [
+   "ford",
+   "saab"
+  ],
+  "expected": {
+   "value": [
+    "saab",
+    "ford"
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "service: unknown value accepted as a dynamic option, order sent",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "fixe",
+       "label": "Fixe",
+       "disabled": true
+      }
+     ],
+     "dynamic": true
+    }
+   },
+   "source": {
+    "connection": "svc",
+    "path": "/b"
+   }
+  },
+  "value": [
+   "zz",
+   "aa"
+  ],
+  "expected": {
+   "value": [
+    "zz",
+    "aa"
+   ],
+   "problem": ""
+  }
+ },
+ {
+  "name": "service: a fixed disabled option stays refused",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "fixe",
+       "label": "Fixe",
+       "disabled": true
+      }
+     ],
+     "dynamic": true
+    }
+   },
+   "source": {
+    "connection": "svc",
+    "path": "/b"
+   }
+  },
+  "value": [
+   "fixe"
+  ],
+  "expected": {
+   "value": [
+    "fixe"
+   ],
+   "problem": "Choix indisponible."
+  }
+ },
+ {
+  "name": "service: choice accepts a dynamic value",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "choice",
+     "items": [
+      {
+       "value": "fixe",
+       "label": "Fixe",
+       "disabled": true
+      }
+     ],
+     "dynamic": true
+    }
+   },
+   "source": {
+    "connection": "svc",
+    "path": "/b"
+   }
+  },
+  "value": "zz",
+  "expected": {
+   "value": "zz",
+   "problem": ""
+  }
+ },
+ {
+  "name": "service: too long a value is refused",
+  "field": {
+   "key": "c",
+   "label": "C",
+   "type": "custom",
+   "control": {
+    "ref": "ctl",
+    "version": "1.0.0",
+    "name": "C",
+    "spec": {
+     "version": 1,
+     "mode": "items",
+     "items": [
+      {
+       "value": "fixe",
+       "label": "Fixe",
+       "disabled": true
+      }
+     ],
+     "dynamic": true
+    }
+   },
+   "source": {
+    "connection": "svc",
+    "path": "/b"
+   }
+  },
+  "value": [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ],
+  "expected": {
+   "value": [
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ],
+   "problem": "Choix non proposé."
+  }
+ }
+]

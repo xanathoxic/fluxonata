@@ -139,7 +139,7 @@ export interface WorkflowSummary {
   success_workflow?: string;
   mcp_exposed?: boolean;
   folder_level?: "view" | "run" | "edit" | null; // level in a private folder (null: the folder is not private to this person)
-  latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null } | null;
+  latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null; input_form?: import("./forms/types").FormDefinition | null } | null;
 }
 export interface WorkflowDetail extends WorkflowSummary {
   draft_graph: import("./workflow/types").Graph;
@@ -188,8 +188,15 @@ export interface WorkflowRun {
   cancel_requested: boolean;
   steps?: StepRun[];
   events?: RunEvent[];
-  graph?: { nodes: { id: string; name: string; type: string; ui: { x: number; y: number } | null }[]; edges: { from: string; to: string; label?: string }[]; notes?: { id: string; text: string; ui: { x: number; y: number } }[] };
+  graph?: { nodes: { id: string; name: string; type: string; ui: { x: number; y: number } | null }[]; edges: { from: string; to: string; label?: string; ui?: { cx: number } }[]; notes?: { id: string; text: string; ui: { x: number; y: number } }[]; layout?: { start?: { x: number; y: number }; end?: { x: number; y: number } } | null };
+  inspector?: RunInspector;
   runtime?: { image?: string; digest?: string | null };
+}
+/** Values shown by the variable inspector (secrets already masked by the server). */
+export interface RunInspector {
+  start: { inputs: Record<string, unknown>; constants: Record<string, unknown> };
+  nodes: Record<string, { inputs: Record<string, unknown> | null }>;
+  end: { outputs: Record<string, unknown> | null };
 }
 export interface Approval {
   id: number;
@@ -217,7 +224,7 @@ export async function apiAll<T>(path: string, cap = 2000): Promise<Page<T>> {
     let count: number | undefined;
     for (;;) {
       const sep = path.includes("?") ? "&" : "?";
-      const page = await api<Page<T>>(`${path}${sep}limit=100&offset=${offset}`);
+      const page = await api<Page<T>>(`${path}${sep}limit=500&offset=${offset}`);
       results.push(...page.results);
       offset += page.results.length;
       count = page.count ?? results.length;
@@ -245,7 +252,7 @@ export interface AiSkill {
   folder: string;
   tags?: string[];
   owner: string | null;
-  status: "active" | "deprecated";
+  status: "active" | "deprecated" | "proposed";
   deprecation_reason: string;
   latest_version: AiSkillVersion | null;
   versions?: AiSkillVersion[];

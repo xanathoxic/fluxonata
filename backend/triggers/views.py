@@ -395,27 +395,62 @@ class WebhookReceiveView(APIView):
         if not hmac.compare_digest(sign(_signing_secret(hook), ts, body), sig):
             raise fail
         delivery_id = request.headers.get("X-Fluxonata-Delivery") or sig
+
+        def prepare():
+            try:
+                inputs = json.loads(body or b"{}")
+            except ValueError:
+                raise serializers.ValidationError({"body": "JSON invalide."}) from None
+            if not isinstance(inputs, dict):
+                raise serializers.ValidationError({"body": "Un objet JSON est attendu."})
+            owner = _check_owner(hook)
+            version = hook.workflow.latest_version()
+            if version is None:
+                raise serializers.ValidationError({"workflow": "Aucune version publiée."})
+            problems = validate_inputs_against(version.input_schema, inputs)
+            if problems:
+                raise serializers.ValidationError(problems)
+            return owner, version, inputs
+
+        run, duplicate = _accept_delivery(hook, delivery_id, prepare)
+        if duplicate is not None:
+            return duplicate
+        return Response(
+            {"run_id": str(run.id), "url": f"/api/v1/workspaces/{hook.workspace.slug}/workflow-runs/{run.id}/"},
+            status=202,
+        )
+
+
+def _check_owner(hook):
+    owner = hook.created_by
+    m = Membership.objects.filter(user=owner, workspace=hook.workspace).first() if owner else None
+    if m is None or RUN not in ROLE_PERMISSIONS[m.role]:
+        raise AuthenticationFailed("Le propriétaire du webhook n'a plus le droit de lancer ce workflow.")
+    return owner
+
+
+def _accept_delivery(hook, delivery_id: str, prepare):
+    """Enregistre la livraison ET démarre le run dans UNE transaction (AR0.4).
+
+    Avant, la livraison était validée (committée) puis le run créé ensuite : une panne entre les deux faisait répondre « déjà traitée » à la
+    nouvelle tentative de l'expéditeur alors qu'aucun run n'existait — événement perdu. Désormais : tout ou rien. Une livraison déjà liée à un run
+    est un vrai doublon (on renvoie ce run) ; une livraison SANS run (reste d'une panne d'avant ce correctif) est reprise et menée à son terme.
+    Retourne (run, None) ou (None, réponse de doublon)."""
+    key = delivery_id[:128]
+    with transaction.atomic():
         try:
-            with transaction.atomic():
-                delivery = WebhookDelivery.objects.create(webhook=hook, delivery_id=delivery_id[:128])
+            with transaction.atomic():  # point de sauvegarde : seule la collision d'identifiant est un « doublon »
+                delivery = WebhookDelivery.objects.create(webhook=hook, delivery_id=key)
         except IntegrityError:
-            return Response({"status": "duplicate", "message": "Livraison déjà traitée."}, status=200)
-        try:
-            inputs = json.loads(body or b"{}")
-        except ValueError:
-            raise serializers.ValidationError({"body": "JSON invalide."}) from None
-        if not isinstance(inputs, dict):
-            raise serializers.ValidationError({"body": "Un objet JSON est attendu."})
-        owner = hook.created_by
-        m = Membership.objects.filter(user=owner, workspace=hook.workspace).first() if owner else None
-        if m is None or RUN not in ROLE_PERMISSIONS[m.role]:
-            raise AuthenticationFailed("Le propriétaire du webhook n'a plus le droit de lancer ce workflow.")
-        version = hook.workflow.latest_version()
-        if version is None:
-            raise serializers.ValidationError({"workflow": "Aucune version publiée."})
-        problems = validate_inputs_against(version.input_schema, inputs)
-        if problems:
-            raise serializers.ValidationError(problems)
+            delivery = WebhookDelivery.objects.select_for_update().filter(webhook=hook, delivery_id=key).first()
+            if delivery is not None and delivery.run_id is not None:
+                return None, Response(
+                    {"status": "duplicate", "message": "Livraison déjà traitée.", "run_id": str(delivery.run_id)},
+                    status=200,
+                )
+            if delivery is None:  # supprimée entre-temps (conservation des données) : l'expéditeur réessaiera
+                raise
+        owner, version, inputs = prepare()
         run, _ = engine.start_run(
             workspace=hook.workspace,
             environment=hook.environment,
@@ -427,10 +462,7 @@ class WebhookReceiveView(APIView):
         )
         delivery.run = run
         delivery.save(update_fields=["run"])
-        return Response(
-            {"run_id": str(run.id), "url": f"/api/v1/workspaces/{hook.workspace.slug}/workflow-runs/{run.id}/"},
-            status=202,
-        )
+    return run, None
 
 
 def _provider_receive(request, hook, body, fail):
@@ -450,34 +482,24 @@ def _provider_receive(request, hook, body, fail):
     if hook.events and event not in hook.events:
         return Response({"status": "ignored", "event": event}, status=200)
     delivery_id = provider_delivery(hook.provider, request.headers, body)
-    try:
-        with transaction.atomic():
-            delivery = WebhookDelivery.objects.create(webhook=hook, delivery_id=delivery_id[:128])
-    except IntegrityError:
-        return Response({"status": "duplicate", "message": "Livraison déjà traitée."}, status=200)
-    owner = hook.created_by
-    m = Membership.objects.filter(user=owner, workspace=hook.workspace).first() if owner else None
-    if m is None or RUN not in ROLE_PERMISSIONS[m.role]:
-        raise AuthenticationFailed("Le propriétaire du webhook n'a plus le droit de lancer ce workflow.")
-    version = hook.workflow.latest_version()
-    if version is None:
-        raise serializers.ValidationError({"workflow": "Aucune version publiée."})
-    declared = (version.input_schema or {}).get("properties", {})
-    inputs = {k: v for k, v in {"payload": payload, "event": event, "delivery": delivery_id}.items() if k in declared}
-    problems = validate_inputs_against(version.input_schema, inputs)
-    if problems:
-        raise serializers.ValidationError(problems)
-    run, _ = engine.start_run(
-        workspace=hook.workspace,
-        environment=hook.environment,
-        workflow_version=version,
-        user=owner,
-        inputs=inputs,
-        idempotency_key=f"hook-{hook.pk}-{delivery_id[:100]}",
-        trigger="webhook",
-    )
-    delivery.run = run
-    delivery.save(update_fields=["run"])
+
+    def prepare():
+        owner = _check_owner(hook)
+        version = hook.workflow.latest_version()
+        if version is None:
+            raise serializers.ValidationError({"workflow": "Aucune version publiée."})
+        declared = (version.input_schema or {}).get("properties", {})
+        inputs = {
+            k: v for k, v in {"payload": payload, "event": event, "delivery": delivery_id}.items() if k in declared
+        }
+        problems = validate_inputs_against(version.input_schema, inputs)
+        if problems:
+            raise serializers.ValidationError(problems)
+        return owner, version, inputs
+
+    run, duplicate = _accept_delivery(hook, delivery_id, prepare)
+    if duplicate is not None:
+        return duplicate
     return Response({"run_id": str(run.id)}, status=202)
 
 
@@ -530,6 +552,7 @@ class ResumeWaitView(APIView):
                 return Response({"status": "already_resumed"}, status=409)
             sr.resume_payload = payload
             sr.save(update_fields=["resume_payload"])
+            engine.wake(sr.run_id)  # le run attendait cet appel (AR4.4)
         return Response({"status": "resumed"}, status=202)
 
 
@@ -584,6 +607,7 @@ class ResumeFormView(APIView):
                 raise serializers.ValidationError(problems)
             sr.resume_payload = values
             sr.save(update_fields=["resume_payload"])
+            engine.wake(sr.run_id)
         return Response(
             {
                 "status": "resumed",

@@ -29,7 +29,7 @@ from core import netsec
 from .models import Membership, OidcIdentity, Role, Workspace
 
 User = get_user_model()
-ROLE_ORDER = [Role.ADMIN, Role.SPACE_MANAGER, Role.DESIGNER, Role.OPERATOR, Role.APPROVER, Role.VIEWER]
+ROLE_ORDER = [Role.ADMIN, Role.SPACE_MANAGER, Role.DESIGNER, Role.OPERATOR, Role.APPROVER, Role.VIEWER, Role.CATALOG]
 STATE_TTL = 600
 
 

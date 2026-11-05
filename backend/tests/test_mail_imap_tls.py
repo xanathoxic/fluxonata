@@ -58,7 +58,7 @@ class ImapServer:
         (tmp_path / "k.pem").write_bytes(key_pem)
         self.ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.ctx.load_cert_chain(tmp_path / "c.pem", tmp_path / "k.pem")
-        self.password, self.commands = password, []
+        self.password, self.commands, self.messages = password, [], [MESSAGE]
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind(("127.0.0.1", 0))
         self.sock.listen(2)
@@ -94,10 +94,19 @@ class ImapServer:
                 elif cmd in ("SELECT", "EXAMINE"):
                     f.write(f"* 1 EXISTS\r\n{tag} OK [READ-ONLY] selected\r\n".encode())
                 elif cmd == "SEARCH":
-                    f.write(f"* SEARCH 1\r\n{tag} OK done\r\n".encode())
+                    ids = " ".join(str(i + 1) for i in range(len(self.messages)))
+                    f.write(f"* SEARCH {ids}\r\n{tag} OK done\r\n".encode())
                 elif cmd == "FETCH":
-                    body = MESSAGE.as_bytes()
-                    f.write(b"* 1 FETCH (BODY[] {%d}\r\n" % len(body) + body + b")\r\n" + f"{tag} OK done\r\n".encode())
+                    numbers = [int(x) for x in rest.split(" ")[1].split(",")]
+                    for n in numbers:
+                        msg = self.messages[n - 1]
+                        if "HEADER.FIELDS" in rest.upper():
+                            body = f"From: {msg['From']}\r\nSubject: {msg['Subject']}\r\n\r\n".encode()
+                            label = "BODY[HEADER.FIELDS (FROM SUBJECT)]"
+                        else:
+                            body, label = msg.as_bytes(), "BODY[]<0>"
+                        f.write(f"* {n} FETCH ({label} {{{len(body)}}}\r\n".encode() + body + b")\r\n")
+                    f.write(f"{tag} OK done\r\n".encode())
                 elif cmd == "LOGOUT":
                     f.write(f"* BYE\r\n{tag} OK bye\r\n".encode())
                     f.flush()
@@ -175,3 +184,35 @@ def test_connection_tries_each_validated_address_in_turn(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", lambda addr, timeout: (_ for _ in ()).throw(OSError("non")))
     with pytest.raises(OSError):
         netsec.open_connection(target, 5)
+
+
+def _message(n, subject, sender="Ada <ada@exemple.test>"):
+    m = EmailMessage()
+    m["From"], m["Subject"], m["Message-ID"] = sender, subject, f"<m{n}@exemple.test>"
+    m.set_content(f"Corps {n}")
+    return m
+
+
+def test_a_filter_downloads_headers_first_and_whole_messages_only_for_matches(server):
+    server.messages = [_message(i, f"Newsletter {i}") for i in range(1, 6)] + [_message(6, "[TEST] panne")]
+    conn = mail.connect(config(server), "bon", ssl_context=server.client_context())
+    items = mail.fetch_new(conn, "INBOX", subject_contains="[test]")
+    conn.logout()
+    assert [i["subject"] for i in items] == ["[TEST] panne"]
+    fetches = [c for c in server.commands if c.upper().startswith("FETCH")]
+    headers = [c for c in fetches if "HEADER.FIELDS" in c.upper()]
+    wholes = [c for c in fetches if "HEADER.FIELDS" not in c.upper()]
+    assert len(headers) == 1 and len(wholes) == 1  # ONE command for the headers of all six, one for the match
+    assert wholes[0].split(" ")[1] == "6"  # the five other messages were never downloaded
+
+
+def test_a_poll_stops_at_its_deadline_and_the_rest_is_read_next_time(server):
+    server.messages = [_message(i, f"[TEST] {i}") for i in range(1, 5)]
+    conn = mail.connect(config(server), "bon", ssl_context=server.client_context())
+    assert mail.fetch_new(conn, "INBOX", subject_contains="[TEST]", deadline_seconds=-1) == []
+    assert len(mail.fetch_new(conn, "INBOX", subject_contains="[TEST]")) == 4
+    server.commands.clear()
+    server.messages = [_message(i, f"[TEST] {i}") for i in range(1, 26)]  # 25 matches: 10 per command, 3 commands
+    assert len(mail.fetch_new(conn, "INBOX", subject_contains="[TEST]")) == 25
+    assert len([c for c in server.commands if c.upper().startswith("FETCH") and "HEADER" not in c.upper()]) == 3
+    conn.logout()

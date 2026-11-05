@@ -250,6 +250,158 @@
                 }
             }
         },
+        "/api/v1/forms/{token}/lookup/{field}/": {
+            "get": {
+                "operationId": "forms_lookup_retrieve",
+                "description": "POST: asks for the options of a dynamic-list field (queued for the worker, answered 202 with a job to follow).\nGET: the outcome. 404 for an unknown form, field or job: nothing says which.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "token",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "forms"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "forms_lookup_create",
+                "description": "POST: asks for the options of a dynamic-list field (queued for the worker, answered 202 with a job to follow).\nGET: the outcome. 404 for an unknown form, field or job: nothing says which.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "token",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "forms"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/forms/{token}/lookup/{field}/{job}/": {
+            "get": {
+                "operationId": "forms_lookup_retrieve_2",
+                "description": "POST: asks for the options of a dynamic-list field (queued for the worker, answered 202 with a job to follow).\nGET: the outcome. 404 for an unknown form, field or job: nothing says which.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "job",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "token",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "forms"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "forms_lookup_create_2",
+                "description": "POST: asks for the options of a dynamic-list field (queued for the worker, answered 202 with a job to follow).\nGET: the outcome. 404 for an unknown form, field or job: nothing says which.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "job",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "token",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "forms"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/hooks/{id}/": {
             "post": {
                 "operationId": "hooks_create",
@@ -412,6 +564,104 @@
                 ],
                 "responses": {
                     "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/platform/egress/": {
+            "get": {
+                "operationId": "platform_egress_retrieve",
+                "description": "Internal hosts the platform's server may call (SSRF guard exceptions). Those of the environment (`ORCH_EGRESS_ALLOWLIST`) are\nshown read-only; the others are added and removed here, by platform administrators only, each change audited. A change applies\nwithin seconds to every process.",
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Egress"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "platform_egress_create",
+                "description": "Internal hosts the platform's server may call (SSRF guard exceptions). Those of the environment (`ORCH_EGRESS_ALLOWLIST`) are\nshown read-only; the others are added and removed here, by platform administrators only, each change audited. A change applies\nwithin seconds to every process.",
+                "tags": [
+                    "platform"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Egress"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Egress"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Egress"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Egress"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/platform/egress/{id}/": {
+            "delete": {
+                "operationId": "platform_egress_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
                         "description": "No response body"
                     }
                 }
@@ -1399,6 +1649,7 @@
         "/api/v1/workspaces/{workspace}/actions/{slug}/ai/suggest-tests/": {
             "post": {
                 "operationId": "workspaces_actions_ai_suggest_tests_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -1880,6 +2131,7 @@
         "/api/v1/workspaces/{workspace}/ai/catalog-search/": {
             "post": {
                 "operationId": "workspaces_ai_catalog_search_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -2038,6 +2290,7 @@
         "/api/v1/workspaces/{workspace}/ai/draft-workflow/": {
             "post": {
                 "operationId": "workspaces_ai_draft_workflow_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -2122,6 +2375,7 @@
         "/api/v1/workspaces/{workspace}/ai/evals/{id}/": {
             "get": {
                 "operationId": "workspaces_ai_evals_retrieve_2",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -2158,6 +2412,7 @@
         "/api/v1/workspaces/{workspace}/ai/explain-error/": {
             "post": {
                 "operationId": "workspaces_ai_explain_error_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -2269,6 +2524,7 @@
         "/api/v1/workspaces/{workspace}/ai/propose-action/": {
             "post": {
                 "operationId": "workspaces_ai_propose_action_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -2297,6 +2553,7 @@
         "/api/v1/workspaces/{workspace}/ai/propose-skill/": {
             "post": {
                 "operationId": "workspaces_ai_propose_skill_create",
+                "description": "Calls that may use the model: limited by the « ai » scope (ORCH_AI_RATE).",
                 "parameters": [
                     {
                         "in": "path",
@@ -3301,6 +3558,449 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/control-library/": {
+            "get": {
+                "operationId": "workspaces_control_library_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Create"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_control_library_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Create"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/control-library/{slug}/": {
+            "get": {
+                "operationId": "workspaces_control_library_retrieve_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Patch"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "workspaces_control_library_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Patch"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_control_library_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/control-library/{slug}/publish/": {
+            "post": {
+                "operationId": "workspaces_control_library_publish_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Publish"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/control-library/{slug}/versions/{version}/": {
+            "get": {
+                "operationId": "workspaces_control_library_versions_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/control-library/check/": {
+            "post": {
+                "operationId": "workspaces_control_library_check_create",
+                "description": "Live feedback while designing: the problems of a spec, nothing stored.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Check"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/control-library/source-preview/": {
+            "post": {
+                "operationId": "workspaces_control_library_source_preview_create",
+                "description": "Tries a form field's reading of a web service on a sample reply pasted by the designer: which options it would give, or what\nvalue it would pre-fill into the control (and why not). Pure computation, no call is made.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SourcePreview"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SourcePreview"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SourcePreview"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SourcePreview"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/executions/": {
             "get": {
                 "operationId": "workspaces_executions_list",
@@ -3815,6 +4515,485 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/form-library/": {
+            "get": {
+                "operationId": "workspaces_form_library_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Create"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_form_library_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Create"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Create"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/{slug}/": {
+            "get": {
+                "operationId": "workspaces_form_library_retrieve_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Patch"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "workspaces_form_library_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatch"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Patch"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_form_library_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/{slug}/duplicate/": {
+            "post": {
+                "operationId": "workspaces_form_library_duplicate_create",
+                "description": "A copy of the draft (or of one published version): becomes a form, or a template, of its own.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Duplicate"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Duplicate"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Duplicate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Duplicate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/{slug}/publish/": {
+            "post": {
+                "operationId": "workspaces_form_library_publish_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Publish"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Publish"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/{slug}/versions/{version}/": {
+            "get": {
+                "operationId": "workspaces_form_library_versions_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/builtin-templates/": {
+            "get": {
+                "operationId": "workspaces_form_library_builtin_templates_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/form-library/check/": {
+            "post": {
+                "operationId": "workspaces_form_library_check_create",
+                "description": "Live feedback while designing: the canonical form of a custom CSS (or its problems, line by line) and the problems of a\nwhole definition. Nothing is stored.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Check"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Check"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/forms/": {
             "get": {
                 "operationId": "workspaces_forms_retrieve",
@@ -3904,6 +5083,40 @@
             }
         },
         "/api/v1/workspaces/{workspace}/forms/{id}/": {
+            "get": {
+                "operationId": "workspaces_forms_retrieve_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
             "patch": {
                 "operationId": "workspaces_forms_partial_update",
                 "parameters": [
@@ -3940,6 +5153,78 @@
             },
             "delete": {
                 "operationId": "workspaces_forms_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/forms/{id}/attach/": {
+            "post": {
+                "operationId": "workspaces_forms_attach_create",
+                "description": "Attaches a version of a library form to the public form (the latest published one when none is named): the page\nthen serves exactly that version, checked against the workflow's current inputs. DELETE detaches it.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_forms_attach_destroy",
+                "description": "The public page goes back to the workflow's own inputs.",
                 "parameters": [
                     {
                         "in": "path",
@@ -7171,6 +8456,43 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/ai/edit-jobs/": {
+            "post": {
+                "operationId": "workspaces_workflows_ai_edit_jobs_create",
+                "description": "The same turn as a job the worker runs (so its dry run can use the sandbox); followed through the draft-job\nendpoint (progress, then the proposal as `result`).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/workflows/{slug}/audit/": {
             "get": {
                 "operationId": "workspaces_workflows_audit_retrieve",
@@ -7836,6 +9158,198 @@
                 "operationId": "workspaces_workflows_export_retrieve",
                 "description": "The draft as a JSON document (format `fluxonata-workflow/1`), to move a workflow between instances.",
                 "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/form-lookup/{field}/": {
+            "get": {
+                "operationId": "workspaces_workflows_form_lookup_retrieve",
+                "description": "Dynamic lists of a workflow's designed input form, for a signed-in person who may launch it (catalog, run page).\nSame mechanism as the public form: queued for the worker, answered 202 with a job to follow.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_workflows_form_lookup_create",
+                "description": "Dynamic lists of a workflow's designed input form, for a signed-in person who may launch it (catalog, run page).\nSame mechanism as the public form: queued for the worker, answered 202 with a job to follow.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/form-lookup/{field}/{job}/": {
+            "get": {
+                "operationId": "workspaces_workflows_form_lookup_retrieve_2",
+                "description": "Dynamic lists of a workflow's designed input form, for a signed-in person who may launch it (catalog, run page).\nSame mechanism as the public form: queued for the worker, answered 202 with a job to follow.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "job",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_workflows_form_lookup_create_2",
+                "description": "Dynamic lists of a workflow's designed input form, for a signed-in person who may launch it (catalog, run page).\nSame mechanism as the public form: queued for the worker, answered 202 with a job to follow.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "field",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "job",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
                     {
                         "in": "path",
                         "name": "slug",
@@ -8822,12 +10336,21 @@
             },
             "BumpEnum": {
                 "enum": [
-                    "patch",
+                    "major",
                     "minor",
-                    "major"
+                    "patch"
                 ],
                 "type": "string",
-                "description": "* `patch` - patch\n* `minor` - minor\n* `major` - major"
+                "description": "* `major` - major\n* `minor` - minor\n* `patch` - patch"
+            },
+            "Check": {
+                "type": "object",
+                "properties": {
+                    "spec": {}
+                },
+                "required": [
+                    "spec"
+                ]
             },
             "ConnectionCreate": {
                 "type": "object",
@@ -8900,10 +10423,48 @@
                     "ldap",
                     "sftp",
                     "imap",
+                    "smtp",
                     "generic"
                 ],
                 "type": "string",
-                "description": "* `http_bearer` - Service HTTP (jeton)\n* `api_key` - Service HTTP (clé d'API)\n* `basic` - Service HTTP (identifiant + mot de passe)\n* `oauth2_client` - Service HTTP (OAuth2, identifiants client)\n* `oauth2_code` - Service HTTP (OAuth2, autorisation par une personne)\n* `aws_sigv4` - Stockage S3 / services AWS (signature SigV4)\n* `postgres` - Base PostgreSQL (lecture seule)\n* `mysql` - Base MySQL / MariaDB (lecture seule)\n* `ldap` - Annuaire LDAP / Active Directory (lecture seule)\n* `sftp` - Serveur SFTP (fichiers texte)\n* `imap` - Boîte e-mail (IMAP)\n* `generic` - Générique"
+                "description": "* `http_bearer` - Service HTTP (jeton)\n* `api_key` - Service HTTP (clé d'API)\n* `basic` - Service HTTP (identifiant + mot de passe)\n* `oauth2_client` - Service HTTP (OAuth2, identifiants client)\n* `oauth2_code` - Service HTTP (OAuth2, autorisation par une personne)\n* `aws_sigv4` - Stockage S3 / services AWS (signature SigV4)\n* `postgres` - Base PostgreSQL (lecture seule)\n* `mysql` - Base MySQL / MariaDB (lecture seule)\n* `ldap` - Annuaire LDAP / Active Directory (lecture seule)\n* `sftp` - Serveur SFTP (fichiers texte)\n* `imap` - Boîte e-mail (IMAP)\n* `smtp` - Serveur SMTP (envoi d'e-mails)\n* `generic` - Générique"
+            },
+            "Create": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "icon": {
+                        "type": "string",
+                        "default": "custom",
+                        "pattern": "^[A-Za-z0-9_]{1,40}$"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 60
+                        },
+                        "maxItems": 20
+                    },
+                    "spec": {}
+                },
+                "required": [
+                    "name",
+                    "slug"
+                ]
             },
             "CreateUserIn": {
                 "type": "object",
@@ -8970,6 +10531,53 @@
                 "required": [
                     "graph",
                     "revision"
+                ]
+            },
+            "Duplicate": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "as_template": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "from_version": {
+                        "type": "string",
+                        "maxLength": 20
+                    }
+                },
+                "required": [
+                    "name",
+                    "slug"
+                ]
+            },
+            "Egress": {
+                "type": "object",
+                "properties": {
+                    "host": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "note": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "host"
                 ]
             },
             "EnvironmentEnum": {
@@ -9211,6 +10819,12 @@
                             "$ref": "#/components/schemas/Ref"
                         }
                     },
+                    "forms": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Ref"
+                        }
+                    },
                     "sign": {
                         "type": "boolean",
                         "default": true
@@ -9277,6 +10891,20 @@
                         "description": "active, disabled (by a person), expired or exhausted (the limits switched it off, or are reached right now).",
                         "readOnly": true
                     },
+                    "library_form": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "library_version": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "published": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "workflow": {
                         "type": "string"
                     },
@@ -9302,7 +10930,10 @@
                     "created_at",
                     "environment",
                     "id",
+                    "library_form",
+                    "library_version",
                     "name",
+                    "published",
                     "state",
                     "submissions_last_hour",
                     "title",
@@ -9761,6 +11392,36 @@
                     "new_password"
                 ]
             },
+            "Patch": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "icon": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_]{1,40}$"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 60
+                        },
+                        "maxItems": 20
+                    },
+                    "spec": {},
+                    "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
             "PatchedMember": {
                 "type": "object",
                 "properties": {
@@ -9769,6 +11430,36 @@
                     },
                     "role": {
                         "$ref": "#/components/schemas/Role017Enum"
+                    }
+                }
+            },
+            "PatchedPatch": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "icon": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_]{1,40}$"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 60
+                        },
+                        "maxItems": 20
+                    },
+                    "spec": {},
+                    "revision": {
+                        "type": "integer",
+                        "minimum": 1
                     }
                 }
             },
@@ -9999,6 +11690,11 @@
             "Publish": {
                 "type": "object",
                 "properties": {
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
                     "bump": {
                         "allOf": [
                             {
@@ -10006,11 +11702,6 @@
                             }
                         ],
                         "default": "minor"
-                    },
-                    "changelog": {
-                        "type": "string",
-                        "default": "",
-                        "maxLength": 300
                     }
                 }
             },
@@ -10442,6 +12133,31 @@
                     "slug",
                     "version"
                 ]
+            },
+            "SourcePreview": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/SourcePreviewKindEnum"
+                    },
+                    "spec": {},
+                    "config": {},
+                    "sample": {}
+                },
+                "required": [
+                    "config",
+                    "kind",
+                    "sample",
+                    "spec"
+                ]
+            },
+            "SourcePreviewKindEnum": {
+                "enum": [
+                    "options",
+                    "prefill"
+                ],
+                "type": "string",
+                "description": "* `options` - options\n* `prefill` - prefill"
             },
             "Start": {
                 "type": "object",
@@ -10921,12 +12637,19 @@
                         "additionalProperties": {},
                         "nullable": true,
                         "readOnly": true
+                    },
+                    "input_form": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "created_at",
                     "digest",
                     "form",
+                    "input_form",
                     "input_schema",
                     "version"
                 ]

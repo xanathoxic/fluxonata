@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Count, Q
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import serializers
@@ -14,14 +15,16 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from audit.models import record
-from runs import engine
+from formbuilder import service as formservice
+from runs import engine, http_node
 from runs.serializers import validate_inputs_against
 from tenancy.models import Environment, Membership
 from tenancy.permissions import PUBLISH, ROLE_PERMISSIONS, RUN, VIEW, get_workspace
 from workflows import access
 from workflows.models import Workflow
 
-from .models import FormSubmission, PublicForm
+from . import formengine, lookups
+from .models import FormLookup, FormSubmission, PublicForm
 
 MAX_BODY = 64 * 1024
 
@@ -47,6 +50,9 @@ class FormSerializer(serializers.ModelSerializer):
             "max_uses",
             "uses",
             "state",
+            "library_form",
+            "library_version",
+            "published",
             "workflow",
             "environment",
             "url",
@@ -56,6 +62,18 @@ class FormSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "uses"]
 
     state = serializers.SerializerMethodField()
+    published = serializers.SerializerMethodField()
+    library_form = serializers.SerializerMethodField()
+    library_version = serializers.SerializerMethodField()
+
+    def get_library_form(self, obj) -> str | None:
+        return obj.library_version.form.slug if obj.library_version else None
+
+    def get_library_version(self, obj) -> str | None:
+        return obj.library_version.version if obj.library_version else None
+
+    def get_published(self, obj) -> bool:
+        return obj.published_definition is not None
 
     def get_state(self, obj) -> str:
         """active, disabled (by a person), expired or exhausted (the limits switched it off, or are reached right now)."""
@@ -75,6 +93,8 @@ class FormSerializer(serializers.ModelSerializer):
         return f"/f/{obj.token}"
 
     def get_submissions_last_hour(self, obj) -> int:
+        if hasattr(obj, "n_last_hour"):
+            return obj.n_last_hour
         return obj.submissions.filter(created_at__gte=timezone.now() - timedelta(hours=1)).count()
 
     def validate_max_per_hour(self, v):
@@ -123,7 +143,16 @@ class FormListCreateView(APIView):
 
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, VIEW)
-        rows = PublicForm.objects.filter(workspace=ws).select_related("workflow", "environment").order_by("name")
+        rows = (
+            PublicForm.objects.filter(workspace=ws)
+            .select_related("workflow", "environment", "library_version__form")
+            .annotate(
+                n_last_hour=Count(
+                    "submissions", filter=Q(submissions__created_at__gte=timezone.now() - timedelta(hours=1))
+                )
+            )
+            .order_by("name")
+        )  # AR1.6 : 756 requêtes pour 287 formulaires avant (version, formulaire de bibliothèque et envois lus ligne par ligne)
         rows = access.visible(rows, request.user, ws, "workflow__folder")
         return Response({"results": FormSerializer(rows, many=True).data})
 
@@ -153,6 +182,14 @@ class FormDetailView(APIView):
             raise Http404()
         access.require(request.user, ws, form.workflow.folder, PUBLISH)
         return ws, form
+
+    def get(self, request, workspace, pk):
+        ws = get_workspace(request.user, workspace, VIEW)
+        form = PublicForm.objects.filter(workspace=ws, pk=pk).select_related("workflow", "environment").first()
+        if form is None:
+            raise Http404()
+        access.require(request.user, ws, form.workflow.folder, VIEW)
+        return Response(FormSerializer(form).data)
 
     def patch(self, request, workspace, pk):
         ws, form = self._get(request, workspace, pk)
@@ -192,6 +229,57 @@ class FormDetailView(APIView):
         return Response(status=204)
 
 
+class FormAttachView(FormDetailView):
+    """Attaches a version of a library form to the public form (the latest published one when none is named): the page
+    then serves exactly that version, checked against the workflow's current inputs. DELETE detaches it."""
+
+    http_method_names = ["post", "delete", "options"]  # not the detail view's get/patch
+
+    def post(self, request, workspace, pk):
+        ws, form = self._get(request, workspace, pk)
+        version = form.workflow.latest_version()
+        if version is None:
+            raise serializers.ValidationError({"workflow": "Ce workflow n'a pas de version publiée."})
+        try:
+            lib, lib_version = formservice.resolve(
+                ws, {"form": request.data.get("form"), "version": request.data.get("version")}
+            )
+        except formservice.FormRefError as exc:
+            raise serializers.ValidationError({"form": str(exc)}) from None
+        access.require(request.user, ws, lib.folder, VIEW)
+        definition = lib_version.definition
+        mapping = request.data.get("input_map")
+        if mapping is None:  # by default the correspondence the workflow itself chose for this same form
+            pinned = (version.graph or {}).get("input_form") or {}
+            mapping = pinned.get("map") if (pinned.get("ref") or {}).get("form") == lib.slug else None
+        if mapping is not None and not formengine._valid_map(mapping):
+            raise serializers.ValidationError({"input_map": "Correspondance des entrées invalide."})
+        problems = formengine.check_against_inputs(definition, version.input_schema, mapping)
+        if not problems:
+            for key, src in formengine.iter_sources(definition):
+                name = src.get("connection", "")
+                if not http_node.find_connection(ws.pk, form.environment_id, name):
+                    problems[key] = f"Connexion « {name} » introuvable pour cet environnement (type « Service HTTP »)."
+        if problems:
+            raise serializers.ValidationError(problems)
+        form.library_version = lib_version
+        form.published_definition = definition
+        form.input_map = mapping or {}
+        form.save(update_fields=["library_version", "published_definition", "input_map"])
+        record("form.attach", actor=request.user, workspace=ws, target=form, form=lib.slug, version=lib_version.version)
+        return Response(FormSerializer(form).data)
+
+    def delete(self, request, workspace, pk):
+        """The public page goes back to the workflow's own inputs."""
+        ws, form = self._get(request, workspace, pk)
+        form.library_version = None
+        form.published_definition = None
+        form.input_map = {}
+        form.save(update_fields=["library_version", "published_definition", "input_map"])
+        record("form.detach", actor=request.user, workspace=ws, target=form)
+        return Response(FormSerializer(form).data)
+
+
 class _NoAuth(BaseAuthentication):
     def authenticate(self, request):
         return None
@@ -222,6 +310,15 @@ class PublicFormView(APIView):
         if version is None:
             raise Http404()
         schema = version.input_schema or {}
+        if form.published_definition is not None:
+            return Response(
+                {
+                    "title": form.title,
+                    "description": form.description,
+                    "submit_label": form.submit_label,
+                    "definition": form.published_definition,
+                }
+            )
         return Response(
             {
                 "title": form.title,
@@ -253,8 +350,16 @@ class PublicFormView(APIView):
         member = Membership.objects.filter(user=owner, workspace=form.workspace).first() if owner else None
         if version is None or member is None or RUN not in ROLE_PERMISSIONS[member.role]:
             raise AuthenticationFailed("Ce formulaire n'est plus disponible.")
+        if form.published_definition is not None:
+            values, problems = formengine.validate_submission(form.published_definition, values)
+            if problems:
+                raise serializers.ValidationError(problems)
+            values = formengine.map_inputs(form.published_definition, version.input_schema, form.input_map, values)
         problems = validate_inputs_against(version.input_schema, values)
         if problems:
+            if form.published_definition is not None and form.input_map:
+                back = formengine.input_fields(form.published_definition, version.input_schema, form.input_map)
+                problems = {back.get(k, k): v for k, v in problems.items()}
             raise serializers.ValidationError(problems)
         with (
             transaction.atomic()
@@ -275,3 +380,105 @@ class PublicFormView(APIView):
             locked.save(update_fields=["uses"])
             close_if_due(locked)  # that was the last allowed use: the form switches itself off now
         return Response({"ok": True, "message": form.success_message}, status=201)
+
+
+def _kind(request) -> str:
+    """What is asked: the options of a list (default) or the pre-filled value of a custom control."""
+    kind = request.data.get("kind", "options") if isinstance(request.data, dict) else "options"
+    if kind not in lookups.KINDS:
+        raise Http404()
+    return kind
+
+
+def _done(row) -> dict:
+    return (
+        {"state": "done", "value": row.options}
+        if row.kind == "prefill"
+        else {"state": "done", "options": row.options or []}
+    )
+
+
+class PublicLookupView(APIView):
+    """POST: asks for the options of a dynamic-list field (queued for the worker, answered 202 with a job to follow).
+    GET: the outcome. 404 for an unknown form, field or job: nothing says which."""
+
+    authentication_classes = [_NoAuth]
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "form_lookup"
+
+    def post(self, request, token, field, job=None):
+        form = _open_form(token)
+        kind = _kind(request)
+        source = None if job is not None else lookups.find_source(form, field, kind)
+        if source is None:
+            raise Http404()
+        raw = request.data.get("params") if isinstance(request.data, dict) else None
+        job = lookups.enqueue(form, field, lookups.clean_params(raw, source.get("params", [])), kind)
+        if job is None:
+            raise Throttled(detail="Trop de recherches en cours : réessayez dans un instant.")
+        return Response({"id": str(job.pk)}, status=202)
+
+    def get(self, request, token, field, job=None):
+        form = _open_form(token)
+        row = FormLookup.objects.filter(pk=job, form=form, field_key=field).first() if job else None
+        if row is None:
+            raise Http404()
+        if row.status == FormLookup.Status.DONE:
+            return Response(_done(row))
+        if row.status == FormLookup.Status.FAILED:
+            return Response({"state": "failed", "message": row.error})
+        return Response({"state": "pending"})
+
+
+class WorkflowLookupView(APIView):
+    """Dynamic lists of a workflow's designed input form, for a signed-in person who may launch it (catalog, run page).
+    Same mechanism as the public form: queued for the worker, answered 202 with a job to follow."""
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "form_lookup"
+
+    def _version(self, request, workspace, slug):
+        from workflows.catalog_views import catalog_only, catalog_workflows, catalog_workspace
+
+        ws = catalog_workspace(request.user, workspace)
+        if catalog_only(request.user, ws):  # « Catalogue » role: only the items its groups are granted
+            wf = catalog_workflows(ws, request.user).filter(slug=slug).first()
+            if wf is None:
+                raise Http404()
+        else:
+            ws = get_workspace(request.user, workspace, RUN)
+            wf = access.workflow_or_404(request.user, ws, slug, RUN)
+        version = wf.latest_version()
+        if version is None:
+            raise Http404()
+        return ws, version
+
+    def post(self, request, workspace, slug, field, job=None):
+        ws, version = self._version(request, workspace, slug)
+        what = _kind(request)
+        source = None if job is not None else lookups.source_in((version.graph or {}).get("input_form"), field, what)
+        if source is None:
+            raise Http404()
+        kind = request.data.get("environment", "test") if isinstance(request.data, dict) else "test"
+        env = Environment.objects.filter(workspace=ws, kind=kind if kind in ("dev", "test", "prod") else "test").first()
+        if env is None:
+            raise Http404()
+        raw = request.data.get("params") if isinstance(request.data, dict) else None
+        job = lookups.enqueue_for_version(
+            version, env, request.user, field, lookups.clean_params(raw, source.get("params", [])), what
+        )
+        if job is None:
+            raise Throttled(detail="Trop de recherches en cours : réessayez dans un instant.")
+        return Response({"id": str(job.pk)}, status=202)
+
+    def get(self, request, workspace, slug, field, job=None):
+        _, version = self._version(request, workspace, slug)
+        row = FormLookup.objects.filter(pk=job, workflow_version=version, field_key=field).first() if job else None
+        if row is None:
+            raise Http404()
+        if row.status == FormLookup.Status.DONE:
+            return Response(_done(row))
+        if row.status == FormLookup.Status.FAILED:
+            return Response({"state": "failed", "message": row.error})
+        return Response({"state": "pending"})

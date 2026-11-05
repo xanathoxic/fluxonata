@@ -6,7 +6,7 @@ from rest_framework.permissions import BasePermission
 
 from .models import Membership, Role, Workspace
 
-VIEW, EDIT, PUBLISH, RUN, APPROVE, MANAGE_CONNECTIONS, ADMINISTER = (
+VIEW, EDIT, PUBLISH, RUN, APPROVE, MANAGE_CONNECTIONS, ADMINISTER, CATALOG = (
     "view",
     "edit",
     "publish",
@@ -14,8 +14,9 @@ VIEW, EDIT, PUBLISH, RUN, APPROVE, MANAGE_CONNECTIONS, ADMINISTER = (
     "approve",
     "manage_connections",
     "administer",
+    "catalog",
 )
-ALL = {VIEW, EDIT, PUBLISH, RUN, APPROVE, MANAGE_CONNECTIONS, ADMINISTER}
+ALL = {VIEW, EDIT, PUBLISH, RUN, APPROVE, MANAGE_CONNECTIONS, ADMINISTER}  # CATALOG is held by its own role only
 
 ROLE_PERMISSIONS = {
     Role.ADMIN: ALL,
@@ -24,6 +25,8 @@ ROLE_PERMISSIONS = {
     Role.OPERATOR: {VIEW, RUN},
     Role.APPROVER: {VIEW, APPROVE},
     Role.VIEWER: {VIEW},
+    # Deny by default: without VIEW every workspace route answers 403; only the catalog routes accept this permission.
+    Role.CATALOG: {CATALOG},
 }
 
 
@@ -56,6 +59,12 @@ def has_perm(user, workspace, perm: str) -> bool:
         return False
     m = Membership.objects.filter(user=user, workspace=workspace).first()
     return m is not None and perm in effective_permissions(user, m)
+
+
+def require_human_session(request) -> None:
+    """Acte réservé à une personne connectée (relecture, activation) : jamais un jeton de service, donc jamais un assistant externe (ADR 0025)."""
+    if getattr(request.user, "_token", None) is not None:
+        raise PermissionDenied("Cette action est réservée à une personne connectée à l'interface, pas à un jeton.")
 
 
 def require_platform_admin(request) -> None:

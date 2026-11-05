@@ -82,6 +82,7 @@ class Connection(models.Model):
         LDAP = "ldap", "Annuaire LDAP / Active Directory (lecture seule)"
         SFTP = "sftp", "Serveur SFTP (fichiers texte)"
         IMAP = "imap", "Boîte e-mail (IMAP)"
+        SMTP = "smtp", "Serveur SMTP (envoi d'e-mails)"
         GENERIC = "generic", "Générique"
 
     workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="connections")

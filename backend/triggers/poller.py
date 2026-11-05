@@ -1,6 +1,7 @@
 """Polling triggers, run by a thread of the WORKER process (never the web process)."""
 
 import hashlib
+import imaplib
 import logging
 import threading
 from datetime import timedelta
@@ -81,6 +82,14 @@ def _fetch_mail(t: PollTrigger):
                 log.debug("imap logout failed", exc_info=True)
     except mail.MailError as exc:
         return None, str(exc)
+    except (
+        OSError,
+        imaplib.IMAP4.error,
+    ) as exc:  # a read that timed out or a connection dropped in the middle of a poll
+        return (
+            None,
+            f"Le serveur de messagerie n'a pas répondu à temps ({type(exc).__name__}) : le prochain relevé réessaiera.",
+        )
 
 
 def _fetch_sftp(t: PollTrigger):

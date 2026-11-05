@@ -1,14 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { apiAll, type WorkflowSummary } from "../../api";
+import { Link } from "react-router-dom";
+import { api, apiAll, type ApiError, type WorkflowSummary } from "../../api";
 import { Badge, EmptyRow, SearchBox, usePaged } from "../../components/AdminUi";
 import { Overlay } from "../../components/Overlay";
 import { RowIcon } from "../../components/RowIcon";
+import { FormIcon, IconLabel } from "../../forms/FormIcon";
 import { useApp } from "../../context";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { HelpTip } from "../../components/HelpTip";
 
-interface FormRow { id: number; name: string; title: string; workflow: string; environment: string; enabled: boolean; url: string; max_per_hour: number; submissions_last_hour: number; expires_at: string | null; max_uses: number | null; uses: number; state: "active" | "disabled" | "expired" | "exhausted" }
+interface FormRow { id: number; name: string; title: string; workflow: string; environment: string; enabled: boolean; url: string; max_per_hour: number; submissions_last_hour: number; expires_at: string | null; max_uses: number | null; uses: number; library_form?: string | null; library_version?: string | null; published?: boolean; state: "active" | "disabled" | "expired" | "exhausted" }
 const EMPTY = { name: "", title: "", description: "", workflow: "", environment: "test", max_per_hour: 60, expires_local: "", max_uses: "" };
 const STATE: Record<string, string> = { active: "Disponible", disabled: "⏸ Désactivé", expired: "⌛ Expiré", exhausted: "🚫 Limite d'utilisations atteinte" };
 /** `<input type="datetime-local">` works in local time without a zone: send an absolute instant, show it back in local time. */
@@ -39,6 +41,7 @@ export function FormsTab() {
   const avail = useWsMutation<{ id: number; expires_at: string | null; max_uses: number | null; reset_uses: boolean; enabled?: boolean }>("PATCH", (i) => `/forms/${i.id}/`, ["forms"]);
   const del = useWsMutation<{ id: number }>("DELETE", (i) => `/forms/${i.id}/`, ["forms"]);
   const [open, setOpen] = useState(false);
+  const [attaching, setAttaching] = useState<FormRow | null>(null);
   const [f, setF] = useState(EMPTY);
   const [editing, setEditing] = useState<FormRow | null>(null);
   const [ed, setEd] = useState({ local: "", uses: "", reset: false });
@@ -51,18 +54,21 @@ export function FormsTab() {
   return (
     <>
       <p className="help-row"><HelpTip caption="À savoir">Une page publique, sans connexion, qui démarre un workflow avec les valeurs saisies. L'adresse est secrète (jeton long) ; chaque formulaire a un plafond d'envois par heure et un piège anti-robots. Le workflow tourne avec vos droits : si vous perdez le droit de lancer, le formulaire s'arrête.</HelpTip></p>
-      {edit && <p><button type="button" className="primary" onClick={() => { add.reset(); setF(EMPTY); setOpen(true); }}>Nouveau formulaire public</button></p>}
       <section className="adm-card">
-      <div className="adm-filters"><SearchBox label="Rechercher un formulaire" value={search} onChange={setSearch} placeholder="Nom, titre ou workflow" /><span className="lst-count" role="status">{rows.length} formulaire(s)</span></div>
+      <div className="adm-filters"><SearchBox label="Rechercher un formulaire" value={search} onChange={setSearch} placeholder="Nom, titre ou workflow" /><span className="lst-count" role="status">{rows.length} formulaire(s)</span>
+        <span style={{ flex: 1 }} />
+        {edit && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { add.reset(); setF(EMPTY); setOpen(true); }}><IconLabel icon="plus">Nouveau formulaire public</IconLabel></button>}
+      </div>
       <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Formulaires publics</caption>
         <thead><tr><th scope="col">Formulaire</th><th scope="col">Workflow</th><th scope="col">Adresse publique</th><th scope="col">État et disponibilité</th><th scope="col">Envois (dernière heure)</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{paged.slice.map((r) => (
           <tr key={r.id}><td>{r.title}<br /><span className="hint">{r.name}</span></td><td>{r.workflow} ({r.environment})</td><td><a href={r.url}><code>{link(r.url)}</code></a></td>
-            <td><Badge tone={r.state === "active" ? "ok" : r.state === "disabled" ? "muted" : "bad"}>{STATE[r.state]}</Badge>
+            <td><Badge tone={r.state === "active" ? "ok" : r.state === "disabled" ? "draft" : "bad"}>{STATE[r.state]}</Badge>
               <br /><span className="hint">{r.expires_at ? `Jusqu'au ${when(r.expires_at)}` : "Sans limite de durée"}</span>
+              <br /><span className="hint">{r.library_form ? <>Formulaire <Link to={`/library/forms/${r.library_form}`}>{r.library_form}</Link> v{r.library_version}</> : "Page issue des entrées du workflow"}</span>
               <br /><span className="hint">{r.max_uses === null ? `${r.uses} utilisation(s)` : `${r.uses} / ${r.max_uses} utilisation(s)`}</span></td>
             <td>{r.submissions_last_hour} / {r.max_per_hour}</td>
-            <td>{edit && <><button type="button" onClick={() => openEdit(r)} aria-label={`Modifier la disponibilité de ${r.name}`}>Disponibilité</button>{" "}<button type="button" onClick={() => toggle.mutate({ id: r.id, enabled: !r.enabled })} aria-label={`${r.enabled ? "Désactiver" : "Activer"} le formulaire ${r.name}`}>{r.enabled ? "Désactiver" : "Activer"}</button>{" "}<button type="button" className="icon-btn danger-icon" onClick={() => del.mutate({ id: r.id })} aria-label={`Supprimer le formulaire ${r.name}`} title="Supprimer"><RowIcon name="trash" /></button></>}</td></tr>))}
+            <td>{edit && <><button type="button" className="icon-btn neutral-icon" onClick={() => setAttaching(r)} aria-label={`Choisir le formulaire de ${r.name}`} title="Choisir le formulaire"><FormIcon name="design" /></button>{" "}<button type="button" className="icon-btn neutral-icon" onClick={() => openEdit(r)} aria-label={`Modifier la disponibilité de ${r.name}`} title="Disponibilité"><FormIcon name="clock" /></button>{" "}<button type="button" onClick={() => toggle.mutate({ id: r.id, enabled: !r.enabled })} className="icon-btn neutral-icon" aria-label={`${r.enabled ? "Désactiver" : "Activer"} le formulaire ${r.name}`} title={r.enabled ? "Désactiver" : "Activer"}><RowIcon name={r.enabled ? "pause" : "play"} /></button>{" "}<button type="button" className="icon-btn danger-icon" onClick={() => del.mutate({ id: r.id })} aria-label={`Supprimer le formulaire ${r.name}`} title="Supprimer"><RowIcon name="trash" /></button></>}</td></tr>))}
           {rows.length === 0 && <EmptyRow cols={6}>{q.data?.results.length ? "Aucun formulaire ne correspond." : "Aucun formulaire public."}</EmptyRow>}</tbody></table></div>
       {paged.pager("Pagination des formulaires")}
       </section>
@@ -82,6 +88,7 @@ export function FormsTab() {
             </form>)}
         </Overlay>
       )}
+      {edit && attaching && <AttachForm row={attaching} onClose={() => setAttaching(null)} />}
       {edit && editing && (
         <Overlay variant="modal" title={`Disponibilité de « ${editing.name} »`} description={`${STATE[editing.state]} · ${editing.uses} utilisation(s) jusqu'ici.`} onClose={() => setEditing(null)}
           footer={<><button type="button" onClick={() => setEditing(null)}>Annuler</button><button type="submit" form="pf-avail" className="primary" disabled={avail.isPending}>Enregistrer</button></>}>
@@ -93,5 +100,39 @@ export function FormsTab() {
         </Overlay>
       )}
     </>
+  );
+}
+
+interface LibForm { slug: string; name: string; is_template: boolean; latest_version: { version: string } | null }
+
+/** Chooses the library form (and version) a public page serves; « aucun » goes back to the workflow's own inputs. */
+function AttachForm({ row, onClose }: { row: FormRow; onClose: () => void }) {
+  const { workspace } = useApp();
+  const qc = useQueryClient();
+  const [form, setForm] = useState(row.library_form ?? "");
+  const [version, setVersion] = useState(row.library_version ?? "");
+  const lib = useWsQuery<{ results: LibForm[] }>("form-library", "/form-library/");
+  const detail = useQuery({ queryKey: ["form-lib", workspace.slug, form], enabled: form !== "", queryFn: () => api<{ versions: { version: string }[] }>(`/workspaces/${workspace.slug}/form-library/${form}/`) });
+  const done = () => { void qc.invalidateQueries({ queryKey: ["forms"] }); onClose(); };
+  const attach = useMutation<unknown, ApiError, void>({ mutationFn: () => form ? api(`/workspaces/${workspace.slug}/forms/${row.id}/attach/`, { json: { form, version: version || null } }) : api(`/workspaces/${workspace.slug}/forms/${row.id}/attach/`, { method: "DELETE" }), onSuccess: done });
+  const choices = (lib.data?.results ?? []).filter((f) => !f.is_template && f.latest_version);
+  return (
+    <Overlay variant="modal" title={`Formulaire de « ${row.name} »`} description="La page publique affichera la version choisie, vérifiée contre les entrées du workflow." onClose={onClose}
+      footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form="af-form" className="primary" disabled={attach.isPending}>{form ? "Rattacher" : "Utiliser les entrées du workflow"}</button></>}>
+      <form id="af-form" onSubmit={(e) => { e.preventDefault(); attach.mutate(); }}>
+        <div className="field"><label htmlFor="af-form-sel">Formulaire</label>
+          <select id="af-form-sel" value={form} onChange={(e) => { setForm(e.target.value); setVersion(""); }}>
+            <option value="">Aucun : page issue des entrées du workflow</option>
+            {choices.map((f) => <option key={f.slug} value={f.slug}>{f.name}</option>)}
+          </select>
+          {choices.length === 0 && <p className="hint">Aucun formulaire publié : créez-en un dans <Link to="/library/forms">Formulaires</Link>.</p>}</div>
+        {form && <div className="field"><label htmlFor="af-ver">Version</label>
+          <select id="af-ver" value={version} onChange={(e) => setVersion(e.target.value)}>
+            <option value="">Dernière publiée ({detail.data?.versions[0]?.version ?? "…"})</option>
+            {(detail.data?.versions ?? []).map((v) => <option key={v.version} value={v.version}>{v.version}</option>)}
+          </select></div>}
+        {attach.error && <p role="alert" className="field-error">Erreur : {errorText(attach.error)}</p>}
+      </form>
+    </Overlay>
   );
 }

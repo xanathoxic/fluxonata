@@ -33,7 +33,7 @@ def diff_graphs(a: dict, b: dict) -> dict:
     eb = {(e["from"], e["to"], e.get("label")) for e in b.get("edges", [])}
     edge = lambda t: {"from": t[0], "to": t[1], "label": t[2]}  # noqa: E731
     sections = {}
-    for key in ("inputs", "outputs", "variables", "form"):
+    for key in ("inputs", "outputs", "variables", "form", "input_form"):
         if a.get(key) != b.get(key):
             sections[key] = {"before": _short(a.get(key)), "after": _short(b.get(key))}
     return {

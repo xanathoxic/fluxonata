@@ -57,4 +57,11 @@ class ActionSerializer(serializers.ModelSerializer):
 
     def get_latest_version(self, obj) -> dict | None:
         version = obj.latest_version()
-        return ActionVersionSerializer(version).data if version else None
+        if not version:
+            return None
+        # AR1.5 : un `ActionVersionSerializer(version).data` par action reconstruit tous ses champs à chaque fois (mesuré : l'essentiel des
+        # 17 ms de GET /actions/ pour 62 actions ; la vérification du contrat, elle, coûte 0,2 ms). Une instance par sérialiseur de liste suffit.
+        child = self.__dict__.get("_version_serializer")
+        if child is None:
+            child = self.__dict__["_version_serializer"] = ActionVersionSerializer(context=self.context)
+        return child.to_representation(version)

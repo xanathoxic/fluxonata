@@ -4,7 +4,9 @@ import { Link, useParams } from "react-router-dom";
 import { api, type AiSkill, type ApiError, type JsonSchema } from "../../api";
 import { useFolders } from "../../components/FolderTree";
 import { MoveFolderOverlay } from "../../components/MoveFolderOverlay";
-import { PageHeader } from "../../components/PageHeader";
+import { EditorShell } from "../../components/EditorShell";
+import { Menu } from "../../components/Menu";
+import { StatusLine } from "../../components/StatusLine";
 import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { useWsQuery } from "../../lib";
@@ -39,6 +41,7 @@ export function SkillDetailPage() {
   const [draftTags, setDraftTags] = useState<string[] | null>(null);
   const saveTags = useMutation<unknown, ApiError, string[]>({ mutationFn: (tags) => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/`, { method: "PATCH", json: { tags } }), onSuccess: () => { setDraftTags(null); void qc.invalidateQueries({ queryKey: ["ai-skill"] }); void qc.invalidateQueries({ queryKey: ["ai-skills"] }); } });
   const [moving, setMoving] = useState(false);
+  const activate = useMutation<unknown, ApiError, void>({ mutationFn: () => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/activate/`, { method: "POST", json: {} }), onSuccess: () => { void qc.invalidateQueries(); } });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["ai-skill"] }); void qc.invalidateQueries({ queryKey: ["ai-skills"] }); };
   const move = useMutation<unknown, ApiError, string>({ mutationFn: (folder) => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/`, { method: "PATCH", json: { folder } }), onSuccess: () => { setMoving(false); refresh(); } });
   const deprecate = useMutation<unknown, ApiError, boolean>({ mutationFn: (reinstate) => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/deprecate/`, { json: reinstate ? { reinstate: true } : { reason: "Remplacé : voir un autre skill" } }), onSuccess: refresh });
@@ -47,14 +50,22 @@ export function SkillDetailPage() {
   if (!s) return <p role="status">Chargement…</p>;
   const v = s.latest_version;
   return (
-    <>
-      <nav aria-label="Fil d'Ariane" className="breadcrumb"><Link to="/library/skills">Skills IA</Link> / <span aria-current="page">{s.name}</span></nav>
-      <PageHeader title={s.name} description={s.description || undefined}
-        actions={can("publish") && <>
-          <button type="button" className="primary" onClick={() => setNewVersion(true)}>Nouvelle version</button>
-          <button type="button" onClick={() => setMoving(true)}>Déplacer</button>
-          <button type="button" onClick={() => deprecate.mutate(s.status === "deprecated")}>{s.status === "deprecated" ? "Réactiver" : "Déprécier"}</button></>} />
-      <p className="meta"><span>{s.status === "deprecated" ? "⚠ Déprécié" : "✔ Actif"}</span><span>Dossier : {s.folder || "—"}</span><span>Propriétaire : {s.owner ?? "—"}</span>{v && <span>Version {v.version}</span>}</p>
+    <EditorShell backTo="/library/skills" backLabel="Retour aux skills" title={s.name} titleHint={s.description || undefined} fill={false}
+      status={<StatusLine published={v ? `v${v.version} publiée` : "Jamais publié"} extra={`${s.status === "deprecated" ? "Déprécié" : s.status === "proposed" ? "Proposition à relire" : "Actif"} · Dossier : ${s.folder || "—"} · Propriétaire : ${s.owner ?? "—"}`} />}
+      actions={can("publish") && <>
+        <button type="button" className="primary" onClick={() => setNewVersion(true)}>Nouvelle version</button>
+        <Menu label="Plus" ariaLabel="Plus d'actions" align="end" entries={[
+          { label: "Déplacer", onSelect: () => setMoving(true) },
+          { label: s.status === "deprecated" ? "Réactiver" : "Déprécier", onSelect: () => deprecate.mutate(s.status === "deprecated") },
+        ]} />
+      </>}
+      notices={s.status === "proposed" ? (
+        <div role="note" className="notice">
+          <p>⚠ Proposition d'un assistant : relisez les instructions et le format de réponse avant de l'activer. Tant qu'il n'est pas activé, ce skill ne peut pas s'exécuter ni entrer dans un workflow publié.</p>
+          {can("publish") && <button type="button" className="primary" disabled={activate.isPending} onClick={() => activate.mutate()}>Activer ce skill</button>}
+          {activate.error && <span role="alert" className="field-error"> Erreur : {activate.error.message}</span>}
+        </div>) : undefined}>
+      {s.description && <p>{s.description}</p>}
       {(can("publish") || (s.tags?.length ?? 0) > 0) && (
         <section className="adm-card tag-card" aria-label="Étiquettes du skill">
           {can("publish")
@@ -90,6 +101,6 @@ export function SkillDetailPage() {
       </section>
       {newVersion && <SkillForm skill={s} onClose={() => setNewVersion(false)} />}
       {moving && <MoveFolderOverlay title={`Déplacer « ${s.name} »`} current={s.folder} folders={[...(all.data?.results ?? []).map((x) => x.folder), ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate(f)} onClose={() => setMoving(false)} />}
-    </>
+    </EditorShell>
   );
 }

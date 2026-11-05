@@ -31,6 +31,7 @@ export function defaultNode(graph: Graph, type: NodeType, action?: Action): Grap
   if (type === "wait") node.seconds = 60;
   if (type === "transform") Object.assign(node, { op: "filter", items: "", where: "" });
   if (type === "agent") Object.assign(node, { goal: "", tools: [], provider: "", mode: "test", approval: "effectful", max_steps: 5 });
+  if (type === "smtp") Object.assign(node, { connection: "", mode: "test", to: "", cc: "", subject: "", body: "" });
   if (type === "sftp") Object.assign(node, { connection: "", mode: "test", operation: "list", path: "/" });
   if (type === "ldap") Object.assign(node, { connection: "", mode: "test", filter: "(objectClass=person)", attributes: ["cn", "mail"], scope: "sub", max_rows: 100 });
   if (type === "sql") Object.assign(node, { connection: "", mode: "test", statement: "SELECT 1 AS n", max_rows: 100, timeout_seconds: 15 });
@@ -59,6 +60,11 @@ function placeNext(graph: Graph, afterId?: string): { x: number; y: number } {
 /** Gives a position to the nodes that have none (steps proposed by the AI assistant): right of their first predecessor,
  *  on a free slot. Existing nodes never move. */
 export function placeNewNodes(graph: Graph): Graph {
+  if (graph.nodes.length > 0 && graph.nodes.every((n) => !n.ui)) {
+    // nothing is placed yet (a draft written by the AI, an import, a workflow published without layout): lay the whole diagram out
+    const pos = layeredPositions(graph);
+    return placeNewNodes({ ...graph, nodes: graph.nodes.map((n) => ({ ...n, ui: pos.get(n.id) ?? { x: 0, y: 0 } })) });
+  }
   const placed: GraphNode[] = graph.nodes.filter((n) => n.ui);
   for (const n of graph.nodes.filter((x) => !x.ui)) {
     const pred = graph.edges.find((e) => e.to === n.id && placed.some((p) => p.id === e.from))?.from;
@@ -181,26 +187,76 @@ export function ancestors(graph: Graph, id: string): Set<string> {
   return result;
 }
 
-/** Layered auto-layout (longest path from the entries), no external dependency. */
-export function autoLayout(graph: Graph): Graph {
+/** Layers per band: a longer chain is folded onto the next band (below) so the diagram keeps a readable shape instead of a very long strip. */
+export const BAND_LAYERS = 14;
+
+/** Layered layout, no external dependency: layers by longest path from the entries, order inside a layer by barycentre sweeps (fewer
+ *  crossings), each node centred on its predecessors (then on its successors), long chains folded onto bands stacked vertically. */
+export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<string, { x: number; y: number }> {
   const order = topoOrder(graph) ?? graph.nodes.map((n) => n.id);
+  const ids = new Set(graph.nodes.map((n) => n.id));
+  const preds = new Map<string, string[]>(), succs = new Map<string, string[]>();
+  for (const id of ids) { preds.set(id, []); succs.set(id, []); }
+  for (const e of graph.edges) if (ids.has(e.from) && ids.has(e.to) && e.from !== e.to) { preds.get(e.to)?.push(e.from); succs.get(e.from)?.push(e.to); }
   const level = new Map<string, number>();
-  for (const id of order) {
-    const parents = graph.edges.filter((e) => e.to === id).map((e) => level.get(e.from) ?? 0);
-    level.set(id, parents.length ? Math.max(...parents) + 1 : 0);
+  for (const id of order) level.set(id, Math.max(-1, ...(preds.get(id) ?? []).map((p) => level.get(p) ?? 0)) + 1);
+  const depth = Math.max(0, ...level.values()) + 1;
+  const layers: string[][] = Array.from({ length: depth }, () => []);
+  for (const n of graph.nodes) layers[level.get(n.id) ?? 0]?.push(n.id);
+
+  // 1. order inside each layer: barycentre of the neighbours' rank, a few sweeps down then up
+  const rank = new Map<string, number>();
+  const rerank = (l: string[]) => l.forEach((id, i) => rank.set(id, i));
+  layers.forEach(rerank);
+  const mean = (xs: number[], fallback: number) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : fallback);
+  const sweep = (idxs: number[], nb: Map<string, string[]>) => {
+    for (const li of idxs) {
+      const l = layers[li] ?? [];
+      const key = new Map(l.map((id) => [id, mean((nb.get(id) ?? []).map((m) => rank.get(m) ?? 0), rank.get(id) ?? 0)]));
+      l.sort((a, b) => (key.get(a) ?? 0) - (key.get(b) ?? 0) || (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+      rerank(l);
+    }
+  };
+  const down = layers.map((_, i) => i), up = [...down].reverse();
+  for (let i = 0; i < 4; i++) { sweep(down.slice(1), preds); sweep(up.slice(1), succs); }
+
+  // 2. vertical position: centred on the predecessors (the first layer of a band starts afresh), neighbours never closer than GRID_Y
+  const y = new Map<string, number>();
+  const place = (l: string[], want: (id: string, i: number) => number) => {
+    const ws = l.map(want);
+    const ys: number[] = [];
+    ws.forEach((w, i) => ys.push(i === 0 ? w : Math.max(w, (ys[i - 1] ?? 0) + GRID_Y)));
+    const shift = mean(ws.map((w, i) => w - (ys[i] ?? w)), 0); // pushed apart: recentre the layer on what its nodes wanted
+    l.forEach((id, i) => y.set(id, (ys[i] ?? 0) + shift));
+  };
+  layers.forEach((l, li) => place(l, (id, i) => (li % bandLayers === 0 ? i * GRID_Y : mean((preds.get(id) ?? []).filter((p) => y.has(p)).map((p) => y.get(p) ?? 0), i * GRID_Y))));
+  for (let li = depth - 2; li >= 0; li--) {
+    if (li % bandLayers === bandLayers - 1) continue; // the next layer is on another band
+    const l = layers[li] ?? [];
+    place(l, (id, i) => { const ss = (succs.get(id) ?? []).filter((m) => (level.get(m) ?? 0) === li + 1); return ss.length ? mean(ss.map((m) => y.get(m) ?? 0), i * GRID_Y) : (y.get(id) ?? i * GRID_Y); });
   }
-  const perLevel = new Map<number, number>();
-  const { layout: _layout, ...rest } = graph; // a fresh layout forgets the hand-placed endpoints and bent lines
+
+  // 3. bands: x by layer inside the band, bands stacked below one another
+  const out = new Map<string, { x: number; y: number }>();
+  let top = 0;
+  for (let b = 0; b * bandLayers < depth; b++) {
+    const members = layers.slice(b * bandLayers, (b + 1) * bandLayers).flat();
+    const lo = Math.min(...members.map((id) => y.get(id) ?? 0)), hi = Math.max(...members.map((id) => y.get(id) ?? 0));
+    for (const id of members) out.set(id, { x: ((level.get(id) ?? 0) % bandLayers) * GRID_X, y: Math.round(top + (y.get(id) ?? 0) - lo) });
+    top += hi - lo + GRID_Y * 1.5;
+  }
+  return out;
+}
+
+/** « Organiser automatiquement »: a fresh layout (forgets the hand-placed endpoints and bent lines). */
+export function autoLayout(graph: Graph): Graph {
+  const pos = layeredPositions(graph);
+  const { layout: _layout, ...rest } = graph;
   void _layout;
   return {
     ...rest,
     edges: graph.edges.map(({ ui: _ui, ...e }) => { void _ui; return e; }),
-    nodes: graph.nodes.map((n) => {
-      const l = level.get(n.id) ?? 0;
-      const idx = perLevel.get(l) ?? 0;
-      perLevel.set(l, idx + 1);
-      return { ...n, ui: { x: l * GRID_X, y: idx * GRID_Y } };
-    }),
+    nodes: graph.nodes.map((n) => ({ ...n, ui: pos.get(n.id) ?? { x: 0, y: 0 } })),
   };
 }
 
@@ -221,6 +277,10 @@ function fieldsOfNode(n: GraphNode, actions: Action[]): OutputField[] {
   if (n.type === "agent") return [
     { path: `steps.${n.id}.output.answer`, label: `${n.name} → réponse`, type: "string" },
     { path: `steps.${n.id}.output.iterations`, label: `${n.name} → tours`, type: "integer" },
+  ];
+  if (n.type === "smtp") return [
+    { path: `steps.${n.id}.output.sent`, label: `${n.name} → envoyé`, type: "boolean" },
+    { path: `steps.${n.id}.output.recipients`, label: `${n.name} → destinataires`, type: "integer" },
   ];
   if (n.type === "sftp") return [
     { path: `steps.${n.id}.output.content`, label: `${n.name} → contenu` },
@@ -315,6 +375,8 @@ export function clientValidate(graph: Graph, actions: Action[]): Issue[] {
       if (!(n.provider ?? "").trim()) issues.push({ node: n.id, level: "error", code: "unknown_provider", message: "Choisissez un fournisseur d'IA." });
     }
     if (n.type === "agent" && (!(n.goal ?? "").trim() || (n.tools ?? []).length === 0)) issues.push({ node: n.id, level: "error", code: "bad_agent", message: "Décrivez l'objectif de l'agent et choisissez au moins un outil." });
+    if (n.type === "smtp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SMTP »)." });
+    if (n.type === "smtp" && (!(n.to ?? "").trim() || !(n.subject ?? "").trim() || !String(n.body ?? "").trim())) issues.push({ node: n.id, level: "error", code: "bad_smtp", message: "Indiquez le destinataire, l'objet et le corps du message." });
     if (n.type === "sftp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SFTP »)." });
     if (n.type === "ldap" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Annuaire LDAP »)." });
     if (n.type === "sql" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Base PostgreSQL »)." });
@@ -349,6 +411,7 @@ export function summarize(n: GraphNode, actions: Action[]): string {
     case "script": return `${n.language === "javascript" ? "JavaScript" : "Python"} · ${(n.script ?? "").split("\n").find((l) => l.trim() && !l.trim().startsWith("#")) ?? "script vide"}`.slice(0, 70);
     case "throw": return n.message ? `Lève : ${n.message}` : "Exception à définir";
     case "agent": return `${n.mode === "reel" ? "" : "[test] "}Agent · ${(n.tools ?? []).length} outil(s)`;
+    case "smtp": return `${n.mode === "reel" ? "" : "[test] "}E-mail à ${n.to || "?"} : ${n.subject || "objet à saisir"}`.slice(0, 70);
     case "sftp": return `${n.mode === "reel" ? "" : "[test] "}SFTP ${n.operation ?? "list"} ${n.path ?? ""}`.slice(0, 70);
     case "ldap": return `${n.mode === "reel" ? "" : "[test] "}Annuaire ${n.filter ?? ""}`.slice(0, 70);
     case "sql": return `${n.mode === "reel" ? "" : "[test] "}${(n.statement ?? "").replace(/\s+/g, " ").slice(0, 50) || "requête à saisir"}`;

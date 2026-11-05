@@ -1,30 +1,16 @@
 import { useId, type ReactNode } from "react";
+import { PageTabs, type PageTab } from "./PageTabs";
 
-export interface TabDef {
-  id: string;
-  label: string;
+export interface TabDef extends Omit<PageTab, "to"> {
   content: ReactNode;
 }
 
-/** Accessible tabs (roving selection with arrow keys, roles and panel association). */
-export function Tabs({ tabs, active, onChange, label }: { tabs: TabDef[]; active: string; onChange: (id: string) => void; label: string }) {
+/** Page tabs with their panels (only the active one is rendered). The bar itself is `PageTabs`. */
+export function Tabs({ tabs, active, onChange, label, className }: { tabs: TabDef[]; active: string; onChange: (id: string) => void; label: string; className?: string }) {
   const base = useId();
-  const idx = Math.max(0, tabs.findIndex((t) => t.id === active));
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    e.preventDefault();
-    const next = (idx + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
-    onChange((tabs[next] as TabDef).id);
-    document.getElementById(`${base}-t-${(tabs[next] as TabDef).id}`)?.focus();
-  };
   return (
     <>
-      <div role="tablist" aria-label={label} onKeyDown={onKey} className="tabs">
-        {tabs.map((t) => (
-          <button key={t.id} id={`${base}-t-${t.id}`} role="tab" type="button" aria-selected={t.id === active} aria-controls={`${base}-p-${t.id}`}
-            tabIndex={t.id === active ? 0 : -1} onClick={() => onChange(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <PageTabs tabs={tabs} active={active} label={label} className={className} onChange={onChange} tabId={(id) => `${base}-t-${id}`} panelId={(id) => `${base}-p-${id}`} />
       {tabs.map((t) => (
         <div key={t.id} id={`${base}-p-${t.id}`} role="tabpanel" aria-labelledby={`${base}-t-${t.id}`} hidden={t.id !== active} className="tabpanel">
           {t.id === active && t.content}

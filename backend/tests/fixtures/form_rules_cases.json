@@ -1,0 +1,1412 @@
+[
+ {
+  "name": "equals texte",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "FR"
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": true
+ },
+ {
+  "name": "equals texte différent",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "FR"
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": false
+ },
+ {
+  "name": "equals sensible à la casse",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "fr"
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": false
+ },
+ {
+  "name": "equals ignorer la casse",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "fr",
+   "ci": true
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": true
+ },
+ {
+  "name": "equals nombre texte",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "5"
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": true
+ },
+ {
+  "name": "equals nombre nombre",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": 5
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": true
+ },
+ {
+  "name": "equals nombre décimal",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": 1.5
+  },
+  "values": {
+   "a": 1.5
+  },
+  "expected": true
+ },
+ {
+  "name": "equals entier flottant",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "5"
+  },
+  "values": {
+   "a": 5.0
+  },
+  "expected": true
+ },
+ {
+  "name": "equals booléen",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": true
+  },
+  "values": {
+   "a": true
+  },
+  "expected": true
+ },
+ {
+  "name": "equals booléen texte",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "true"
+  },
+  "values": {
+   "a": true
+  },
+  "expected": true
+ },
+ {
+  "name": "equals valeur absente vide",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": ""
+  },
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "equals absente non vide",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "x"
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "not_equals",
+  "cond": {
+   "field": "a",
+   "op": "not_equals",
+   "value": "FR"
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": true
+ },
+ {
+  "name": "not_equals égal",
+  "cond": {
+   "field": "a",
+   "op": "not_equals",
+   "value": "FR"
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": false
+ },
+ {
+  "name": "not_equals casse",
+  "cond": {
+   "field": "a",
+   "op": "not_equals",
+   "value": "fr",
+   "ci": true
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": false
+ },
+ {
+  "name": "equals ref",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "ref": "b"
+  },
+  "values": {
+   "a": "x",
+   "b": "x"
+  },
+  "expected": true
+ },
+ {
+  "name": "equals ref différente",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "ref": "b"
+  },
+  "values": {
+   "a": "x",
+   "b": "y"
+  },
+  "expected": false
+ },
+ {
+  "name": "equals ref absente",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "ref": "b"
+  },
+  "values": {
+   "a": "x"
+  },
+  "expected": false
+ },
+ {
+  "name": "equals ref nombre",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "ref": "b"
+  },
+  "values": {
+   "a": 3,
+   "b": "3"
+  },
+  "expected": true
+ },
+ {
+  "name": "contains sous-chaîne",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "ell"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "contains absent",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "xyz"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "contains casse",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "ELL"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "contains ignorer la casse",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "ELL",
+   "ci": true
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "contains vide",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": ""
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "contains liste élément",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "b"
+  },
+  "values": {
+   "a": [
+    "a",
+    "b"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "contains liste absent",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "z"
+  },
+  "values": {
+   "a": [
+    "a",
+    "b"
+   ]
+  },
+  "expected": false
+ },
+ {
+  "name": "contains liste pas sous-chaîne",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "a"
+  },
+  "values": {
+   "a": [
+    "abc"
+   ]
+  },
+  "expected": false
+ },
+ {
+  "name": "contains liste casse",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "B",
+   "ci": true
+  },
+  "values": {
+   "a": [
+    "a",
+    "b"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "contains ref",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "ref": "b"
+  },
+  "values": {
+   "a": "hello world",
+   "b": "world"
+  },
+  "expected": true
+ },
+ {
+  "name": "contains valeur absente",
+  "cond": {
+   "field": "a",
+   "op": "contains",
+   "value": "x"
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "not_contains",
+  "cond": {
+   "field": "a",
+   "op": "not_contains",
+   "value": "xyz"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "not_contains présent",
+  "cond": {
+   "field": "a",
+   "op": "not_contains",
+   "value": "ell"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "not_contains liste",
+  "cond": {
+   "field": "a",
+   "op": "not_contains",
+   "value": "z"
+  },
+  "values": {
+   "a": [
+    "a"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "starts_with",
+  "cond": {
+   "field": "a",
+   "op": "starts_with",
+   "value": "he"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "starts_with non",
+  "cond": {
+   "field": "a",
+   "op": "starts_with",
+   "value": "lo"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "starts_with casse",
+  "cond": {
+   "field": "a",
+   "op": "starts_with",
+   "value": "HE",
+   "ci": true
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "starts_with sensible",
+  "cond": {
+   "field": "a",
+   "op": "starts_with",
+   "value": "HE"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "ends_with",
+  "cond": {
+   "field": "a",
+   "op": "ends_with",
+   "value": "lo"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "ends_with non",
+  "cond": {
+   "field": "a",
+   "op": "ends_with",
+   "value": "he"
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": false
+ },
+ {
+  "name": "ends_with ref",
+  "cond": {
+   "field": "a",
+   "op": "ends_with",
+   "ref": "b"
+  },
+  "values": {
+   "a": "x@y.fr",
+   "b": ".fr"
+  },
+  "expected": true
+ },
+ {
+  "name": "starts_with vide",
+  "cond": {
+   "field": "a",
+   "op": "starts_with",
+   "value": ""
+  },
+  "values": {
+   "a": "hello"
+  },
+  "expected": true
+ },
+ {
+  "name": "is_empty absent",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "is_empty chaîne vide",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": ""
+  },
+  "expected": true
+ },
+ {
+  "name": "is_empty liste vide",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": []
+  },
+  "expected": true
+ },
+ {
+  "name": "is_empty null",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": null
+  },
+  "expected": true
+ },
+ {
+  "name": "is_empty texte",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": "x"
+  },
+  "expected": false
+ },
+ {
+  "name": "is_empty zéro",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": 0
+  },
+  "expected": false
+ },
+ {
+  "name": "is_empty faux",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": false
+  },
+  "expected": false
+ },
+ {
+  "name": "is_empty espaces",
+  "cond": {
+   "field": "a",
+   "op": "is_empty"
+  },
+  "values": {
+   "a": " "
+  },
+  "expected": false
+ },
+ {
+  "name": "not_empty texte",
+  "cond": {
+   "field": "a",
+   "op": "not_empty"
+  },
+  "values": {
+   "a": "x"
+  },
+  "expected": true
+ },
+ {
+  "name": "not_empty absent",
+  "cond": {
+   "field": "a",
+   "op": "not_empty"
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "not_empty liste",
+  "cond": {
+   "field": "a",
+   "op": "not_empty"
+  },
+  "values": {
+   "a": [
+    "x"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "is_true",
+  "cond": {
+   "field": "a",
+   "op": "is_true"
+  },
+  "values": {
+   "a": true
+  },
+  "expected": true
+ },
+ {
+  "name": "is_true faux",
+  "cond": {
+   "field": "a",
+   "op": "is_true"
+  },
+  "values": {
+   "a": false
+  },
+  "expected": false
+ },
+ {
+  "name": "is_true absent",
+  "cond": {
+   "field": "a",
+   "op": "is_true"
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "is_false",
+  "cond": {
+   "field": "a",
+   "op": "is_false"
+  },
+  "values": {
+   "a": false
+  },
+  "expected": true
+ },
+ {
+  "name": "is_false vrai",
+  "cond": {
+   "field": "a",
+   "op": "is_false"
+  },
+  "values": {
+   "a": true
+  },
+  "expected": false
+ },
+ {
+  "name": "is_false absent",
+  "cond": {
+   "field": "a",
+   "op": "is_false"
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "in_list présent",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "FR",
+    "BE"
+   ]
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": true
+ },
+ {
+  "name": "in_list absent",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "FR",
+    "BE"
+   ]
+  },
+  "values": {
+   "a": "DE"
+  },
+  "expected": false
+ },
+ {
+  "name": "in_list casse",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "fr",
+    "be"
+   ],
+   "ci": true
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": true
+ },
+ {
+  "name": "in_list nombres",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    1,
+    2,
+    3
+   ]
+  },
+  "values": {
+   "a": 2
+  },
+  "expected": true
+ },
+ {
+  "name": "in_list nombre texte",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "1",
+    "2"
+   ]
+  },
+  "values": {
+   "a": 1
+  },
+  "expected": true
+ },
+ {
+  "name": "in_list valeur absente",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "x"
+   ]
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "in_list vide dans la liste",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    ""
+   ]
+  },
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "includes_any oui",
+  "cond": {
+   "field": "a",
+   "op": "includes_any",
+   "values": [
+    "x",
+    "y"
+   ]
+  },
+  "values": {
+   "a": [
+    "y",
+    "z"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "includes_any non",
+  "cond": {
+   "field": "a",
+   "op": "includes_any",
+   "values": [
+    "x",
+    "y"
+   ]
+  },
+  "values": {
+   "a": [
+    "z"
+   ]
+  },
+  "expected": false
+ },
+ {
+  "name": "includes_any pas une liste",
+  "cond": {
+   "field": "a",
+   "op": "includes_any",
+   "values": [
+    "x"
+   ]
+  },
+  "values": {
+   "a": "x"
+  },
+  "expected": false
+ },
+ {
+  "name": "includes_any casse",
+  "cond": {
+   "field": "a",
+   "op": "includes_any",
+   "values": [
+    "X"
+   ],
+   "ci": true
+  },
+  "values": {
+   "a": [
+    "x"
+   ]
+  },
+  "expected": true
+ },
+ {
+  "name": "gt nombres",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5
+  },
+  "values": {
+   "a": 6
+  },
+  "expected": true
+ },
+ {
+  "name": "gt égal",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": false
+ },
+ {
+  "name": "gte égal",
+  "cond": {
+   "field": "a",
+   "op": "gte",
+   "value": 5
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": true
+ },
+ {
+  "name": "lt",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "value": 5
+  },
+  "values": {
+   "a": 4
+  },
+  "expected": true
+ },
+ {
+  "name": "lt égal",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "value": 5
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": false
+ },
+ {
+  "name": "lte égal",
+  "cond": {
+   "field": "a",
+   "op": "lte",
+   "value": 5
+  },
+  "values": {
+   "a": 5
+  },
+  "expected": true
+ },
+ {
+  "name": "gt texte numérique",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5
+  },
+  "values": {
+   "a": "10"
+  },
+  "expected": true
+ },
+ {
+  "name": "gt texte numérique non lexical",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": "9"
+  },
+  "values": {
+   "a": "10"
+  },
+  "expected": true
+ },
+ {
+  "name": "gt décimal",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 1.5
+  },
+  "values": {
+   "a": 2
+  },
+  "expected": true
+ },
+ {
+  "name": "gt négatif",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": -3
+  },
+  "values": {
+   "a": -2
+  },
+  "expected": true
+ },
+ {
+  "name": "gt non numérique",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5
+  },
+  "values": {
+   "a": "abc"
+  },
+  "expected": false
+ },
+ {
+  "name": "gt absent",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5
+  },
+  "values": {},
+  "expected": false
+ },
+ {
+  "name": "gt booléen",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 0
+  },
+  "values": {
+   "a": true
+  },
+  "expected": false
+ },
+ {
+  "name": "gt ref",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "ref": "b"
+  },
+  "values": {
+   "a": 10,
+   "b": 9
+  },
+  "expected": true
+ },
+ {
+  "name": "lt ref absente",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "ref": "b"
+  },
+  "values": {
+   "a": 1
+  },
+  "expected": false
+ },
+ {
+  "name": "gt espaces",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 1
+  },
+  "values": {
+   "a": " 5 "
+  },
+  "expected": true
+ },
+ {
+  "name": "lt dates",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "value": "2026-12-31"
+  },
+  "values": {
+   "a": "2026-01-15"
+  },
+  "expected": true
+ },
+ {
+  "name": "gt dates",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": "2026-01-01"
+  },
+  "values": {
+   "a": "2026-06-30"
+  },
+  "expected": true
+ },
+ {
+  "name": "gte dates égales",
+  "cond": {
+   "field": "a",
+   "op": "gte",
+   "value": "2026-05-05"
+  },
+  "values": {
+   "a": "2026-05-05"
+  },
+  "expected": true
+ },
+ {
+  "name": "lt date et texte",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "value": "2026-12-31"
+  },
+  "values": {
+   "a": "demain"
+  },
+  "expected": false
+ },
+ {
+  "name": "lt dates ref",
+  "cond": {
+   "field": "a",
+   "op": "lt",
+   "ref": "b"
+  },
+  "values": {
+   "a": "2026-01-01",
+   "b": "2026-02-01"
+  },
+  "expected": true
+ },
+ {
+  "name": "all vrai",
+  "cond": {
+   "op": "all",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "y"
+    }
+   ]
+  },
+  "values": {
+   "a": "x",
+   "b": "y"
+  },
+  "expected": true
+ },
+ {
+  "name": "all faux",
+  "cond": {
+   "op": "all",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "y"
+    }
+   ]
+  },
+  "values": {
+   "a": "x",
+   "b": "z"
+  },
+  "expected": false
+ },
+ {
+  "name": "any vrai",
+  "cond": {
+   "op": "any",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "y"
+    }
+   ]
+  },
+  "values": {
+   "a": "n",
+   "b": "y"
+  },
+  "expected": true
+ },
+ {
+  "name": "any faux",
+  "cond": {
+   "op": "any",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "y"
+    }
+   ]
+  },
+  "values": {
+   "a": "n",
+   "b": "n"
+  },
+  "expected": false
+ },
+ {
+  "name": "groupes imbriqués",
+  "cond": {
+   "op": "all",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "op": "any",
+     "items": [
+      {
+       "field": "b",
+       "op": "gt",
+       "value": 3
+      },
+      {
+       "field": "c",
+       "op": "is_true"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "x",
+   "b": 1,
+   "c": true
+  },
+  "expected": true
+ },
+ {
+  "name": "groupes imbriqués faux",
+  "cond": {
+   "op": "all",
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "x"
+    },
+    {
+     "op": "any",
+     "items": [
+      {
+       "field": "b",
+       "op": "gt",
+       "value": 3
+      },
+      {
+       "field": "c",
+       "op": "is_true"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "x",
+   "b": 1,
+   "c": false
+  },
+  "expected": false
+ },
+ {
+  "name": "groupe d'un seul",
+  "cond": {
+   "op": "all",
+   "items": [
+    {
+     "field": "a",
+     "op": "not_empty"
+    }
+   ]
+  },
+  "values": {
+   "a": "1"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — égal",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "equals",
+   "value": "Ada Lovelace"
+  },
+  "values": {
+   "prenom": "Ada",
+   "nom": "Lovelace"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — différent",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "equals",
+   "value": "Ada Lovelace"
+  },
+  "values": {
+   "prenom": "Ada",
+   "nom": "Byron"
+  },
+  "expected": false
+ },
+ {
+  "name": "valeur composée — casse ignorée",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "equals",
+   "value": "ada lovelace",
+   "ci": true
+  },
+  "values": {
+   "prenom": "Ada",
+   "nom": "Lovelace"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — contient",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "contains",
+   "value": "love"
+  },
+  "values": {
+   "prenom": "Ada",
+   "nom": "Lovelace"
+  },
+  "expected": false
+ },
+ {
+  "name": "valeur composée — commence par",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "starts_with",
+   "value": "Ada "
+  },
+  "values": {
+   "prenom": "Ada",
+   "nom": "Lovelace"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — comparée à un autre champ",
+  "cond": {
+   "template": "{a}{b}",
+   "op": "equals",
+   "ref": "c"
+  },
+  "values": {
+   "a": "1",
+   "b": "2",
+   "c": "12"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — nombres comparés",
+  "cond": {
+   "template": "{a}{b}",
+   "op": "gt",
+   "value": 100
+  },
+  "values": {
+   "a": "1",
+   "b": "20"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — dans la liste",
+  "cond": {
+   "template": "{a}-{b}",
+   "op": "in_list",
+   "values": [
+    "FR-75",
+    "FR-13"
+   ]
+  },
+  "values": {
+   "a": "FR",
+   "b": "13"
+  },
+  "expected": true
+ },
+ {
+  "name": "valeur composée — vide malgré le séparateur",
+  "cond": {
+   "template": "{a}{b}",
+   "op": "is_empty"
+  },
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "valeur composée — séparateur seul n'est pas vide",
+  "cond": {
+   "template": "{prenom} {nom}",
+   "op": "is_empty"
+  },
+  "values": {},
+  "expected": false
+ }
+]

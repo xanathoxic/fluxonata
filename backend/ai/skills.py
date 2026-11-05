@@ -16,7 +16,7 @@ from audit.models import record
 from catalog.library import SECRET_LIKE, SEMVER, bump
 from core.folders import clean_folder
 from core.tags import clean_tags
-from tenancy.permissions import PUBLISH, VIEW, get_workspace
+from tenancy.permissions import EDIT, PUBLISH, VIEW, get_workspace, has_perm, require_human_session
 from workflows import access
 from workflows.expressions import ExpressionError, parse, template_expressions
 from workflows.models import WorkflowVersion
@@ -190,6 +190,10 @@ class SkillsView(APIView):
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, VIEW)
         rows = AiSkill.objects.filter(workspace=ws).prefetch_related("versions").select_related("owner")
+        if request.query_params.get("status") == "proposed" and has_perm(request.user, ws, EDIT):  # ADR 0025
+            rows = rows.filter(status="proposed")
+        else:
+            rows = rows.exclude(status="proposed")
         return Response({"results": SkillSerializer(rows, many=True).data})
 
     @transaction.atomic
@@ -229,6 +233,8 @@ class SkillDetailView(APIView):
     def get(self, request, workspace, slug):
         ws = get_workspace(request.user, workspace, VIEW)
         s = _skill(ws, slug)
+        if s.status == "proposed" and not has_perm(request.user, ws, EDIT):
+            raise Http404()
         versions = sorted(s.versions.all(), key=lambda v: tuple(map(int, v.version.split("."))), reverse=True)
         return Response({**SkillSerializer(s).data, "versions": VersionSerializer(versions, many=True).data})
 
@@ -279,10 +285,34 @@ class SkillDeprecateView(APIView):
         ws = get_workspace(request.user, workspace, PUBLISH)
         s = _skill(ws, slug)
         reinstate = bool(request.data.get("reinstate"))
+        if reinstate and s.status == AiSkill.Status.PROPOSED:
+            raise serializers.ValidationError(
+                {"reinstate": "Une proposition d'assistant s'active après relecture (« Activer »)."}
+            )
         s.status = AiSkill.Status.ACTIVE if reinstate else AiSkill.Status.DEPRECATED
         s.deprecation_reason = "" if reinstate else str(request.data.get("reason", ""))[:300]
         s.save()
         record("ai_skill.reinstate" if reinstate else "ai_skill.deprecate", actor=request.user, workspace=ws, target=s)
+        return Response(SkillSerializer(s).data)
+
+
+class SkillActivateView(APIView):
+    """Relecture humaine d'une proposition d'assistant (ADR 0025). Jamais par jeton."""
+
+    @transaction.atomic
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        require_human_session(request)
+        s = AiSkill.objects.select_for_update().filter(workspace=ws, slug=slug).first()
+        if s is None:
+            raise Http404()
+        if s.status != AiSkill.Status.PROPOSED:
+            raise serializers.ValidationError({"status": "Ce skill n'est pas une proposition d'assistant."})
+        if s.latest_version() is None:
+            raise serializers.ValidationError({"status": "Aucune version à activer."})
+        s.status = AiSkill.Status.ACTIVE
+        s.save(update_fields=["status"])
+        record("ai_skill.activate", actor=request.user, workspace=ws, target=s)
         return Response(SkillSerializer(s).data)
 
 

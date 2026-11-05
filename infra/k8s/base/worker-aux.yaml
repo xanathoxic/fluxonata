@@ -1,0 +1,43 @@
+# worker-aux : base de données seule + sorties selon `fluxonata/egress`. Pas de socket Docker (voir README : plan d'exécution = agents).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-aux
+  labels: {app.kubernetes.io/name: worker-aux, app.kubernetes.io/part-of: fluxonata}
+spec:
+  replicas: 1
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 1, maxSurge: 0}}
+  selector: {matchLabels: {app.kubernetes.io/name: worker-aux}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: worker-aux, app.kubernetes.io/part-of: fluxonata, fluxonata/egress: "allowed"}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      containers:
+      - name: worker-aux
+        image: fluxonata-backend:local
+        command: ["python", "manage.py", "run_worker"]
+        envFrom: [{configMapRef: {name: fluxonata-config}}, {secretRef: {name: fluxonata-secrets}}]
+        env:
+        - {name: ORCH_ROLES, value: "aux"}
+        livenessProbe:
+          exec: {command: ["python", "manage.py", "healthcheck", "--kind", "worker-aux"]}
+          initialDelaySeconds: 40
+          periodSeconds: 15
+          timeoutSeconds: 20
+          failureThreshold: 3
+        resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 512Mi}}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: ["ALL"] }
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile: { type: RuntimeDefault }
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: keys, mountPath: /keys, readOnly: true}
+      volumes:
+      - {name: tmp, emptyDir: {medium: Memory}}
+      - {name: keys, secret: {secretName: fluxonata-keys, defaultMode: 0400}}

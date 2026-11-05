@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import ops_views, run_views, runner_api, views
+from . import catalog_views, ops_views, run_views, runner_api, views
 from . import runner_admin as ra
 
 urlpatterns = [
@@ -28,6 +28,9 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/executions/", views.ExecutionListCreateView.as_view()),
     path("workspaces/<slug:workspace>/executions/<uuid:pk>/", views.ExecutionDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/runs/", run_views.StartWorkflowRunView.as_view()),
+    path("workspaces/<slug:workspace>/catalog/<slug:slug>/runs/", catalog_views.CatalogStartView.as_view()),
+    path("workspaces/<slug:workspace>/catalog-runs/", catalog_views.CatalogRunListView.as_view()),
+    path("workspaces/<slug:workspace>/catalog-runs/<uuid:pk>/", catalog_views.CatalogRunDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/", run_views.WorkflowRunListView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/", run_views.WorkflowRunDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/events/", run_views.RunEventsView.as_view()),

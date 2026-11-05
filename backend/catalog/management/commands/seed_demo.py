@@ -5,7 +5,13 @@ from catalog.seed_helpers import install_demo_actions, publish_workflow
 from tenancy.models import Environment, Membership, Organization, Role, Workspace
 from workflows.models import Workflow
 
-DEMO_USERS = [("alice", Role.DESIGNER), ("bob", Role.VIEWER), ("claire", Role.APPROVER), ("admin", Role.ADMIN)]
+DEMO_USERS = [
+    ("alice", Role.DESIGNER),
+    ("bob", Role.VIEWER),
+    ("claire", Role.APPROVER),
+    ("admin", Role.ADMIN),
+    ("dave", Role.CATALOG),
+]
 
 
 DEMO_TAGS = {

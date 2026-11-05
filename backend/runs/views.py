@@ -10,7 +10,7 @@ from tenancy.permissions import RUN, VIEW, get_workspace
 from workflows import access
 
 from . import services
-from .artifacts import SAFE_INLINE_TYPES, get_store
+from .artifacts import SAFE_INLINE_TYPES, fetch
 from .models import Artifact, Execution, RunFile, WorkflowRun
 from .serializers import ExecutionDetailSerializer, ExecutionSerializer, RunRequestSerializer, validate_inputs_against
 
@@ -118,7 +118,7 @@ class ArtifactDownloadView(APIView):
             raise Http404()
         if art.execution is not None and art.execution.step_run is not None:  # produced inside a workflow run
             access.require_run(request.user, ws, art.execution.step_run.run)
-        data = get_store().get(art.storage_key)
+        data = fetch(art.storage_key)
         ctype = art.content_type if art.content_type in SAFE_INLINE_TYPES else "application/octet-stream"
         resp = HttpResponse(data, content_type=ctype)
         resp["Content-Disposition"] = f'attachment; filename="{art.name}"'

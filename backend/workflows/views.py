@@ -31,10 +31,14 @@ class Conflict(APIException):
 
 class WorkflowVersionSerializer(serializers.ModelSerializer):
     form = serializers.SerializerMethodField()
+    input_form = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowVersion
-        fields = ["version", "digest", "changelog", "created_at", "input_schema", "form"]
+        fields = ["version", "digest", "changelog", "created_at", "input_schema", "form", "input_form"]
+
+    def get_input_form(self, obj) -> dict | None:
+        return obj.graph.get("input_form")
 
     def get_form(self, obj) -> dict | None:
         return obj.graph.get("form")
@@ -79,7 +83,14 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
     def get_latest_version(self, obj) -> dict | None:
         v = obj.latest_version()
-        return WorkflowVersionSerializer(v).data if v else None
+        if not v:
+            return None
+        child = self.__dict__.get(
+            "_version_serializer"
+        )  # un seul sérialiseur de version pour toute la liste (voir AR1.5)
+        if child is None:
+            child = self.__dict__["_version_serializer"] = WorkflowVersionSerializer()
+        return child.to_representation(v)
 
 
 class WorkflowDetailSerializer(WorkflowSerializer):
@@ -117,6 +128,9 @@ class WorkflowListCreateView(ListAPIView):
     def get_queryset(self):
         ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
         qs = access.visible(Workflow.objects.filter(workspace=ws), self.request.user, ws).select_related("owner")
+        qs = qs.prefetch_related(
+            "versions"
+        )  # AR1.6 : latest_version() relisait les versions workflow par workflow (50 requêtes pour 50)
         if q := self.request.query_params.get("q"):
             qs = qs.filter(name__icontains=q)
         return qs

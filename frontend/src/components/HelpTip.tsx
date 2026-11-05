@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { FormIcon } from "../forms/FormIcon";
 
-/** A small « ? » that opens a balloon with the help text: explanations stay one click away instead of cluttering the page.
+/** A small help icon that opens a balloon with the help text: explanations stay one click away instead of cluttering the page.
  *  The balloon is drawn in a portal (never clipped by a panel) and closes on Escape, on a click elsewhere or on the button. */
 export function HelpTip({ children, label = "Aide", caption }: { children: ReactNode; label?: string; caption?: string }) {
   const [open, setOpen] = useState(false);
@@ -39,7 +40,7 @@ export function HelpTip({ children, label = "Aide", caption }: { children: React
 
   return (
     <span className="help">
-      <button ref={btn} type="button" className={caption ? "help-pill" : "help-btn"} aria-label={caption ? undefined : label} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen((o) => !o)}>{caption ? <><span aria-hidden="true" className="help-q">?</span> {caption}</> : "?"}</button>
+      <button ref={btn} type="button" className={caption ? "help-pill" : "help-btn"} aria-label={caption ? undefined : label} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen((o) => !o)}>{caption ? <><span aria-hidden="true" className="help-q"><FormIcon name="help" size={14} /></span> {caption}</> : <FormIcon name="help" size={16} />}</button>
       {open && createPortal(
         <span ref={pop} id={id} role="note" className="help-pop" style={{ top: pos.top, left: pos.left }}>{children}</span>,
         document.body,

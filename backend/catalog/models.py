@@ -8,6 +8,8 @@ class Action(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         DEPRECATED = "deprecated", "Dépréciée"
+        # ADR 0025 : proposée par un assistant externe, jamais exécutable ni publiable avant relecture humaine (activation)
+        PROPOSED = "proposed", "Proposée"
 
     workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="actions")
     slug = models.SlugField()

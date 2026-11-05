@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from tests.wf_helpers import ACTIONS, drain, launch, make_action, node, publish
@@ -6,7 +8,12 @@ from vault.models import Connection, Secret
 
 @pytest.fixture
 def ws(world, settings):
-    db = settings.DATABASES["default"]
+    db = dict(settings.DATABASES["default"])
+    # Cette base sert de « base du client » que l'étape SQL interroge. Derrière un pooler en mode transaction (scripts/pooler-test.sh) on la
+    # joint en DIRECT : PgBouncer refuse le paramètre de démarrage `options` (délai, lecture seule) que l'étape envoie à une base cible,
+    # ce qui échoue de façon sûre (SQL_ERROR) mais ne teste plus la garde de lecture seule. Le chemin de la plateforme reste, lui, via le pooler.
+    if os.environ.get("ORCH_TEST_TARGET_DB_HOST"):
+        db["HOST"], db["PORT"] = os.environ["ORCH_TEST_TARGET_DB_HOST"], os.environ["ORCH_TEST_TARGET_DB_PORT"]
     host = db.get("HOST") or "127.0.0.1"
     settings.ORCH_EGRESS_ALLOWLIST = f"{host},127.0.0.1,localhost"
     ws = world["ws_a"]

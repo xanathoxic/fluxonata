@@ -7,8 +7,10 @@ are never followed, and the connection goes to the *validated IP* (no second DNS
 
 import http.client
 import ipaddress
+import re
 import socket
 import ssl
+import time
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -55,8 +57,84 @@ class Target:
     ips: tuple[str, ...] = ()  # every validated address, in connection order
 
 
-def _allowlist() -> set[str]:
+def env_allowlist() -> set[str]:
+    """What the operator allowed in the environment (`ORCH_EGRESS_ALLOWLIST`): not editable from the web interface."""
     return {h.strip().lower() for h in getattr(settings, "ORCH_EGRESS_ALLOWLIST", "").split(",") if h.strip()}
+
+
+# What a platform administrator adds in the web interface (`tenancy.EgressHost`), read from the database every few seconds so every
+# process (API, workers) follows a change without a restart. If the database cannot be read, the last known list stays.
+MANAGED_TTL = 5.0
+_managed: dict = {"at": float("-inf"), "hosts": frozenset()}
+
+
+def managed_allowlist() -> frozenset[str]:
+    if time.monotonic() - _managed["at"] < MANAGED_TTL:
+        return _managed["hosts"]
+    try:
+        from tenancy.models import EgressHost
+
+        _managed["hosts"] = frozenset(EgressHost.objects.values_list("host", flat=True))
+        _managed["at"] = time.monotonic()
+    except Exception:  # noqa: BLE001 - no database (runner agent, early start): the environment's list still applies
+        _managed["at"] = time.monotonic() - MANAGED_TTL + 1.0
+    return _managed["hosts"]
+
+
+def reset_allowlist_cache() -> None:
+    _managed["at"] = float("-inf")
+
+
+def _allowlist() -> set[str]:
+    return env_allowlist() | managed_allowlist()
+
+
+# Never allowed through the web interface, whatever the name: cloud metadata and link-local services, "this host", multicast and
+# reserved ranges, unspecified IPv6. Internal services (loopback, private networks) are what the allowlist is for.
+NEVER = [
+    ipaddress.ip_network(n)
+    for n in (
+        "0.0.0.0/8",
+        "169.254.0.0/16",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "::/128",
+        "fe80::/10",
+        "ff00::/8",
+        "fd00:ec2::/32",
+    )
+]
+HOST_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
+
+
+def never_allowed(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip.split("%")[0])
+    except ValueError:
+        return True
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    return any(addr in net for net in NEVER)
+
+
+def check_managed_host(raw: str) -> str:
+    """The normalized host an administrator may add, or UnsafeURL with the reason: a name or an IP address, nothing else (no scheme,
+    port, path, wildcard or range), and no address that is never allowed."""
+    host = (raw or "").strip().lower()
+    if not host or len(host) > 253 or any(c in host for c in " /\\@?#,;*"):
+        raise UnsafeURL("Indiquez seulement un nom d'hôte ou une adresse IP : ni schéma, ni port, ni chemin, ni joker.")
+    bare = host[1:-1] if host.startswith("[") and host.endswith("]") else host
+    if _is_ip(bare):
+        if never_allowed(bare):
+            raise UnsafeURL(
+                "Cette adresse (métadonnées cloud, lien local, multidiffusion, réservée) ne peut pas être autorisée."
+            )
+        return bare
+    if ":" in host or not HOST_RE.match(host) or host.endswith("."):
+        raise UnsafeURL("Nom d'hôte invalide (lettres, chiffres, tirets et points ; pas de port).")
+    if host in ("metadata.google.internal", "metadata"):
+        raise UnsafeURL("Ce nom désigne un service de métadonnées : il ne peut pas être autorisé.")
+    return host
 
 
 def is_public(ip: str) -> bool:
@@ -112,6 +190,9 @@ def validate_url(url: str) -> Target:
     except ValueError:
         raise UnsafeURL("Port invalide.") from None
     ips = [host] if _is_ip(host) else resolve(host)
+    if host in managed_allowlist() and host not in env_allowlist() and any(never_allowed(ip) for ip in ips):
+        # a name added in the web interface that (now) answers with a metadata or link-local address: refused, whatever the name
+        raise UnsafeURL("Cette adresse est interne ou réservée : elle n'est pas autorisée (SSRF).")
     if host not in _allowlist():
         bad = [ip for ip in ips if not is_public(ip)]
         if bad:

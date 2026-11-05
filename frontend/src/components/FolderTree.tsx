@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { api, type ApiError } from "../api";
+import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useApp } from "../context";
 import { FolderShareDialog } from "./FolderShare";
 import { Overlay } from "./Overlay";
@@ -61,7 +62,7 @@ function Branch({ node, current, onPick, counts, locked, fold }: { node: Node; c
 
 export const inFolder = (itemFolder: string, current: string) => !current || itemFolder === current || itemFolder.startsWith(`${current}/`);
 
-export type FolderKind = "workflow" | "action" | "ai_skill";
+export type FolderKind = "workflow" | "action" | "ai_skill" | "form" | "control";
 const parentOf = (p: string) => p.split("/").slice(0, -1).join("/");
 const REFRESH = ["folders", "workflows", "actions-lib", "actions", "ai-skills", "ai-skill"];
 
@@ -107,6 +108,9 @@ function FolderDialog({ title, description, label, initial, submit, error, busy,
 export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
   label: string; kind: FolderKind; folders: string[]; current: string; onPick: (p: string) => void; canEdit: boolean;
 }) {
+  const phone = useMediaQuery(PHONE);
+  const [foldOpen, setFoldOpen] = useState(false);
+  useEffect(() => setFoldOpen(false), [current]);
   const folderQuery = useFolders(kind).data;
   const persisted = folderQuery?.results;
   const locked = useMemo(() => new Set(folderQuery?.private ?? []), [folderQuery]);
@@ -133,7 +137,7 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
   const fold: Fold = { collapsed, toggle: (path, open) => setCollapsed((c) => { const n = new Set(c); const want = open ?? n.has(path); if (want) n.delete(path); else n.add(path); return n; }) };
   const branches = useMemo(() => { const all: string[] = []; const walk = (n: Node) => n.children.forEach((c) => { if (c.children.size) all.push(c.path); walk(c); }); walk(tree); return all; }, [tree]);
   const open = (d: "create" | "rename" | "delete" | "share") => { acts.create.reset(); acts.rename.reset(); acts.remove.reset(); setDialog(d); };
-  return (
+  const body = (
     <nav aria-label={label} className="tree-nav">
       {canEdit && (
         <div className="tree-tools" role="toolbar" aria-label="Gérer les dossiers">
@@ -171,6 +175,8 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
       )}
     </nav>
   );
+  // On a phone the tree is folded behind « Dossier : … » so the list comes first (it unfolds on demand, and folds again once a folder is picked)
+  return phone ? <details className="ft-mobile" open={foldOpen} onToggle={(e) => setFoldOpen((e.currentTarget as HTMLDetailsElement).open)}><summary>Dossier : {current ? current.split("/").join(" / ") : "Tous"}</summary>{body}</details> : body;
 }
 
 const errorMessage = (e: ApiError) => {

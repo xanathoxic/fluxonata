@@ -81,12 +81,14 @@ test("Skills IA : créer, versionner, déplacer, déprécier (concepteur)", asyn
   await expect(page.getByRole("row", { name: /1\.0\.1.*Précision/ })).toBeVisible();
   await expect(page.getByRole("row", { name: /1\.0\.0/ })).toBeVisible(); // l'ancienne version reste
 
-  await page.getByRole("button", { name: "Déplacer", exact: true }).click();
+  await page.getByRole("button", { name: "Plus d'actions" }).click();
+  await page.getByRole("menuitem", { name: "Déplacer" }).click();
   await page.getByRole("dialog").getByLabel("Dossier").fill("Texte/Autre");
   await page.getByRole("dialog").getByRole("button", { name: "Déplacer", exact: true }).click();
   await expect(page.getByText("Dossier : Texte/Autre")).toBeVisible();
-  await page.getByRole("button", { name: "Déprécier" }).click();
-  await expect(page.getByText("⚠ Déprécié").first()).toBeVisible();
+  await page.getByRole("button", { name: "Plus d'actions" }).click();
+  await page.getByRole("menuitem", { name: "Déprécier" }).click();
+  await expect(page.getByText("Déprécié").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Skills IA", exact: true }).first().click();
   const tree = page.getByRole("navigation", { name: "Dossiers de skills" });

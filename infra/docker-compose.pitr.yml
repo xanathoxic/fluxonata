@@ -1,0 +1,24 @@
+# Archivage continu des journaux de transactions (WAL) — OPTIONNEL (AR5.5). À ajouter aux autres fichiers :
+#   docker compose -f infra/docker-compose.prod.yml [-f …roles.yml] -f infra/docker-compose.pitr.yml --env-file infra/.env.prod up -d
+# Permet de restaurer la base à un INSTANT choisi (RPO de l'ordre de `archive_timeout`, ici 60 s) au lieu du dernier dump : procédure et preuve dans docs/BACKUP.md et scripts/pitr-test.sh.
+# ATTENTION — l'archive GROSSIT SANS FIN tant qu'on ne la purge pas : planifiez une sauvegarde de base régulière (`pg_basebackup`) et la suppression des WAL plus anciens que la plus
+# vieille sauvegarde conservée. Sans cela, le volume `walarchive` finira par remplir le disque et PostgreSQL cessera d'archiver (puis de fonctionner). Rien de tout cela n'est automatisé ici.
+# Le volume d'archive doit vivre SUR UN AUTRE DISQUE que les données (sinon il ne protège pas d'une perte de disque) : remplacez-le par un montage de votre infrastructure.
+name: fluxonata-prod
+services:
+  db:
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /archive/%f && cp %p /archive/%f
+      - -c
+      - archive_timeout=60
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - walarchive:/archive
+volumes:
+  walarchive: {}

@@ -196,6 +196,7 @@ def run_scenario(  # noqa: C901
     force: tuple | dict | None = None,
     mechanical: bool = False,
     pick: dict | None = None,
+    max_steps: int = MAX_STEPS,
 ) -> dict:
     """Walk the graph with the engine's activation rules. `strict`: problems are errors (the nominal scenario) rather
     than warnings (edge cases, which may legitimately fail on empty data)."""
@@ -257,7 +258,7 @@ def run_scenario(  # noqa: C901
     try:
         for nid in order:
             node, inc = nodes[nid], incoming[nid]
-            if time.monotonic() > deadline or executed >= MAX_STEPS:
+            if time.monotonic() > deadline or executed >= max_steps:
                 outcome = {"status": "stopped", "message": "Essai interrompu (durée ou nombre d'étapes maximal)."}
                 break
             active = []
@@ -457,6 +458,12 @@ def run_scenario(  # noqa: C901
                     ctx["steps"][nid] = {"output": produced}
                     state[nid] = "ok"
                     record(nid, "simulated", note)
+                elif t == "smtp":
+                    ctx["steps"][nid] = {
+                        "output": {"sent": False, "simulated": True, "recipients": 1, "message_id": None}
+                    }
+                    state[nid] = "ok"
+                    record(nid, "simulated", "E-mail simulé : rien n'est envoyé.")
                 elif t == "sftp":
                     ctx["steps"][nid] = {
                         "output": {
@@ -601,10 +608,19 @@ def _awaited_values(graph: dict) -> list[tuple]:
     return found
 
 
-def dry_run(graph: dict, workspace, runner, samples: list[dict], progress=None, cache: dict | None = None) -> dict:
+def dry_run(
+    graph: dict,
+    workspace,
+    runner,
+    samples: list[dict],
+    progress=None,
+    cache: dict | None = None,
+    max_steps: int = MAX_STEPS,
+    budget: float = TOTAL_BUDGET,
+) -> dict:
     """Run the scenarios: each sample (label, inputs, expected) with approvals granted, plus one with approvals refused
     when the workflow has any. Returns {scenarios, problems, coverage, ran}."""
-    deadline = time.monotonic() + TOTAL_BUDGET
+    deadline = time.monotonic() + budget
     plan = [(s, True, None, None) for s in samples[:3]]
     if any(n["type"] == "approval" for n in graph.get("nodes", [])):  # each sample again, approvals refused
         plan += [
@@ -675,6 +691,8 @@ def dry_run(graph: dict, workspace, runner, samples: list[dict], progress=None, 
         sample, approve, fail, force = plan[i]
         picked = force.get("__pick__") if isinstance(force, dict) else None
         force = None if picked else force
+        if force is None and not picked and isinstance(sample.get("mocks"), dict):
+            force = sample["mocks"]  # sorties imposées à des étapes SIMULÉES (action, IA…) : {étape: {champ: valeur}}
         return run_scenario(
             graph,
             workspace,
@@ -690,6 +708,7 @@ def dry_run(graph: dict, workspace, runner, samples: list[dict], progress=None, 
             force=force,
             mechanical=bool(sample.get("mechanical")),
             pick=picked,
+            max_steps=max_steps,
         )
 
     # The scenarios are independent: they run side by side (starting a container is slow, waiting for each in turn is not).

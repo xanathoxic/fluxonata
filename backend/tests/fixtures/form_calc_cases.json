@@ -1,0 +1,478 @@
+[
+ {
+  "name": "produit",
+  "formula": "{prix} * {qte}",
+  "values": {
+   "prix": 12.5,
+   "qte": 4
+  },
+  "expected": 50
+ },
+ {
+  "name": "texte numérique lu comme nombre",
+  "formula": "{a} + {b}",
+  "values": {
+   "a": "1.5",
+   "b": "2"
+  },
+  "expected": 3.5
+ },
+ {
+  "name": "champ vide : pas de valeur",
+  "formula": "{a} * 2",
+  "values": {},
+  "expected": null
+ },
+ {
+  "name": "division par zéro : pas de valeur",
+  "formula": "{a} / {b}",
+  "values": {
+   "a": 1,
+   "b": 0
+  },
+  "expected": null
+ },
+ {
+  "name": "division",
+  "formula": "{a} / {b}",
+  "values": {
+   "a": 7,
+   "b": 2
+  },
+  "expected": 3.5
+ },
+ {
+  "name": "priorité des opérateurs",
+  "formula": "2 + 3 * 4",
+  "values": {},
+  "expected": 14
+ },
+ {
+  "name": "parenthèses",
+  "formula": "(2 + 3) * 4",
+  "values": {},
+  "expected": 20
+ },
+ {
+  "name": "moins unaire",
+  "formula": "-{a} + 10",
+  "values": {
+   "a": 4
+  },
+  "expected": 6
+ },
+ {
+  "name": "reste",
+  "formula": "{a} % 4",
+  "values": {
+   "a": 10
+  },
+  "expected": 2
+ },
+ {
+  "name": "reste négatif (signe du dividende)",
+  "formula": "{a} % 4",
+  "values": {
+   "a": -10
+  },
+  "expected": -2
+ },
+ {
+  "name": "arrondi à 2 décimales",
+  "formula": "round({a}, 2)",
+  "values": {
+   "a": 2.675
+  },
+  "expected": 2.68
+ },
+ {
+  "name": "arrondi à l'entier (demi vers l'extérieur)",
+  "formula": "round({a})",
+  "values": {
+   "a": 2.5
+  },
+  "expected": 3
+ },
+ {
+  "name": "arrondi négatif",
+  "formula": "round({a})",
+  "values": {
+   "a": -2.5
+  },
+  "expected": -3
+ },
+ {
+  "name": "arrondi : décimales invalides",
+  "formula": "round({a}, 11)",
+  "values": {
+   "a": 1
+  },
+  "expected": null
+ },
+ {
+  "name": "plancher et plafond",
+  "formula": "floor({a}) + ceil({a})",
+  "values": {
+   "a": 1.2
+  },
+  "expected": 3
+ },
+ {
+  "name": "valeur absolue",
+  "formula": "abs({a})",
+  "values": {
+   "a": -3
+  },
+  "expected": 3
+ },
+ {
+  "name": "min et max ignorent les vides",
+  "formula": "min({a}, {b}, {c}) & \"/\" & max({a}, {b}, {c})",
+  "values": {
+   "a": 4,
+   "b": "",
+   "c": 9
+  },
+  "expected": "4/9"
+ },
+ {
+  "name": "somme de rien",
+  "formula": "sum({a}, {b})",
+  "values": {},
+  "expected": 0
+ },
+ {
+  "name": "moyenne",
+  "formula": "avg({a}, {b}, {c})",
+  "values": {
+   "a": 1,
+   "b": 2,
+   "c": 6
+  },
+  "expected": 3
+ },
+ {
+  "name": "moyenne de rien",
+  "formula": "avg({a})",
+  "values": {},
+  "expected": null
+ },
+ {
+  "name": "concaténation &",
+  "formula": "{prenom} & \" \" & {nom}",
+  "values": {
+   "prenom": "Ada",
+   "nom": "Lovelace"
+  },
+  "expected": "Ada Lovelace"
+ },
+ {
+  "name": "concaténation avec un nombre",
+  "formula": "\"n°\" & {n}",
+  "values": {
+   "n": 12.0
+  },
+  "expected": "n°12"
+ },
+ {
+  "name": "concat()",
+  "formula": "concat({a}, \"-\", {b})",
+  "values": {
+   "a": "x",
+   "b": 3
+  },
+  "expected": "x-3"
+ },
+ {
+  "name": "majuscules",
+  "formula": "upper({a}) & lower(\"ABC\")",
+  "values": {
+   "a": "ada"
+  },
+  "expected": "ADAabc"
+ },
+ {
+  "name": "trim et len",
+  "formula": "len(trim({a}))",
+  "values": {
+   "a": "  hé  "
+  },
+  "expected": 2
+ },
+ {
+  "name": "left et right",
+  "formula": "left({a}, 3) & \"|\" & right({a}, 2)",
+  "values": {
+   "a": "abcdef"
+  },
+  "expected": "abc|ef"
+ },
+ {
+  "name": "left négatif",
+  "formula": "left({a}, -1)",
+  "values": {
+   "a": "abc"
+  },
+  "expected": null
+ },
+ {
+  "name": "si vrai",
+  "formula": "if({age} >= 18, \"majeur\", \"mineur\")",
+  "values": {
+   "age": 20
+  },
+  "expected": "majeur"
+ },
+ {
+  "name": "si faux",
+  "formula": "if({age} >= 18, \"majeur\", \"mineur\")",
+  "values": {
+   "age": 7
+  },
+  "expected": "mineur"
+ },
+ {
+  "name": "si : seule la branche choisie est évaluée",
+  "formula": "if({a} = 0, 0, 10 / {a})",
+  "values": {
+   "a": 0
+  },
+  "expected": 0
+ },
+ {
+  "name": "égalité numérique texte/nombre",
+  "formula": "{a} = {b}",
+  "values": {
+   "a": "2.0",
+   "b": 2
+  },
+  "expected": true
+ },
+ {
+  "name": "différent",
+  "formula": "{a} <> {b}",
+  "values": {
+   "a": "x",
+   "b": "y"
+  },
+  "expected": true
+ },
+ {
+  "name": "égal à vide",
+  "formula": "{a} = \"\"",
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "comparaison de dates",
+  "formula": "{a} < {b}",
+  "values": {
+   "a": "2026-01-02",
+   "b": "2026-03-04"
+  },
+  "expected": true
+ },
+ {
+  "name": "comparaison de textes non ordonnables",
+  "formula": "{a} < {b}",
+  "values": {
+   "a": "a",
+   "b": "b"
+  },
+  "expected": false
+ },
+ {
+  "name": "et / ou / non",
+  "formula": "and({a} > 1, or({b}, not({c})))",
+  "values": {
+   "a": 2,
+   "b": false,
+   "c": false
+  },
+  "expected": true
+ },
+ {
+  "name": "est vide",
+  "formula": "is_empty({a})",
+  "values": {
+   "a": []
+  },
+  "expected": true
+ },
+ {
+  "name": "coalesce",
+  "formula": "coalesce({a}, {b}, \"défaut\")",
+  "values": {
+   "a": "",
+   "b": null
+  },
+  "expected": "défaut"
+ },
+ {
+  "name": "number()",
+  "formula": "number({a}) + 1",
+  "values": {
+   "a": "4"
+  },
+  "expected": 5
+ },
+ {
+  "name": "number() d'un texte",
+  "formula": "number({a})",
+  "values": {
+   "a": "abc"
+  },
+  "expected": null
+ },
+ {
+  "name": "text()",
+  "formula": "text({a}) & \"!\"",
+  "values": {
+   "a": 3.5
+  },
+  "expected": "3.5!"
+ },
+ {
+  "name": "jours entre deux dates",
+  "formula": "days_between({a}, {b})",
+  "values": {
+   "a": "2026-02-27",
+   "b": "2026-03-02"
+  },
+  "expected": 3
+ },
+ {
+  "name": "jours : date invalide",
+  "formula": "days_between({a}, {b})",
+  "values": {
+   "a": "2026-02-30",
+   "b": "2026-03-02"
+  },
+  "expected": null
+ },
+ {
+  "name": "texte entre apostrophes",
+  "formula": "'l''a'",
+  "values": {},
+  "expected": null
+ },
+ {
+  "name": "booléens",
+  "formula": "true",
+  "values": {},
+  "expected": true
+ },
+ {
+  "name": "liste (cases multiples) en texte",
+  "formula": "{l} & \"\"",
+  "values": {
+   "l": [
+    "a",
+    "b"
+   ]
+  },
+  "expected": "a,b"
+ },
+ {
+  "name": "trop grand : pas de valeur",
+  "formula": "{a} * {a}",
+  "values": {
+   "a": 1000000000.0
+  },
+  "expected": null
+ },
+ {
+  "name": "somme d'un tableau de prix",
+  "formula": "sum({a}, {b}) * 1.2",
+  "values": {
+   "a": 10,
+   "b": 20
+  },
+  "expected": 36
+ },
+ {
+  "name": "count — lignes",
+  "formula": "count({l})",
+  "values": {
+   "l": [
+    {
+     "qte": 2,
+     "prix": 5
+    },
+    {
+     "qte": 1,
+     "prix": "7.5"
+    },
+    {
+     "prix": "x"
+    },
+    "?"
+   ]
+  },
+  "expected": 4
+ },
+ {
+  "name": "count — vide",
+  "formula": "count({l})",
+  "values": {},
+  "expected": 0
+ },
+ {
+  "name": "count — valeur simple",
+  "formula": "count({l})",
+  "values": {
+   "l": "a"
+  },
+  "expected": 1
+ },
+ {
+  "name": "sum_col — total d'une colonne",
+  "formula": "sum_col({l}, \"prix\")",
+  "values": {
+   "l": [
+    {
+     "qte": 2,
+     "prix": 5
+    },
+    {
+     "qte": 1,
+     "prix": "7.5"
+    },
+    {
+     "prix": "x"
+    },
+    "?"
+   ]
+  },
+  "expected": 12.5
+ },
+ {
+  "name": "sum_col — pas une liste",
+  "formula": "sum_col({l}, \"prix\") + 1",
+  "values": {
+   "l": "a"
+  },
+  "expected": 1
+ },
+ {
+  "name": "sum_col — colonne absente",
+  "formula": "sum_col({l}, \"zzz\")",
+  "values": {
+   "l": [
+    {
+     "qte": 2,
+     "prix": 5
+    },
+    {
+     "qte": 1,
+     "prix": "7.5"
+    },
+    {
+     "prix": "x"
+    },
+    "?"
+   ]
+  },
+  "expected": 0
+ }
+]

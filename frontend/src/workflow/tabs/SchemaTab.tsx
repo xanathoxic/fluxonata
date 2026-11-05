@@ -1,3 +1,4 @@
+import { IconLabel } from "../../forms/FormIcon";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAiMode } from "../../components/AiBox";
@@ -15,6 +16,9 @@ import type { Integration } from "../../api";
 import { useWsQuery } from "../../lib";
 import type { Graph, GraphNode, Note } from "../types";
 import { HelpTip } from "../../components/HelpTip";
+import { Menu } from "../../components/Menu";
+import { Overlay } from "../../components/Overlay";
+import { StepFinder } from "../StepFinder";
 
 const CHAT_W = 380; // px, colonne de l'assistant IA (à droite des propriétés)
 const VIEW_KEY = "orch.schema.view";
@@ -34,6 +38,8 @@ export function SchemaTab() {
   const [view, setView] = useState<"canvas" | "list">(readView);
   const [scriptOpen, setScriptOpen] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
+  const [finder, setFinder] = useState(false);
+  const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null); // asks the canvas to centre on a node
   const [layout, setLayout] = useState(loadLayout);
   const ai = useAiMode();
   const integrations = useWsQuery<{ results: Integration[] }>("integrations", "/integrations/").data?.results ?? [];
@@ -44,12 +50,20 @@ export function SchemaTab() {
   useEffect(() => { if (assist && ai.enabled && editable) setChatOpen(true); }, [assist, ai.enabled, editable]);
   const showChat = chatOpen && ai.enabled && editable;
   useEffect(() => saveLayout(layout), [layout]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setFinder(true); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view); } catch { /* preference only */ } }, [view]);
 
   const selected = graph.nodes.find((n) => n.id === selectedId) ?? null;
   const selectedNote = (graph.notes ?? []).find((n) => n.id === selectedId) ?? null;
   const errors = issues.filter((i) => i.level === "error").length;
   const hasSelection = Boolean(selected || selectedNote);
+  const palShown = layout.palOpen; // only the person decides: selecting a step never folds the palette
+  const togglePal = () => setLayout({ ...layout, palOpen: !palShown });
+  const pick = (id: string | null) => setSelectedId(id);
   const warnings = issues.filter((i) => i.level === "warning").length;
 
   const add = (item: PaletteItem, pos?: { x: number; y: number }) => {
@@ -101,23 +115,35 @@ export function SchemaTab() {
   return (
     <div className="schema-tab">
       <div className="schema-toolbar" role="toolbar" aria-label="Outils du schéma">
-        <button type="button" onClick={d.undo} disabled={!d.canUndo || !editable}>Annuler</button>
-        <button type="button" onClick={d.redo} disabled={!d.canRedo || !editable}>Rétablir</button>
-        <button type="button" onClick={() => setGraph(autoLayout(graph))} disabled={!editable}>Organiser automatiquement</button>
-        <label className="inline-label" htmlFor="goto">Aller à
-          <select id="goto" value={selectedId ?? ""} onChange={(e) => setSelectedId(e.target.value || null)}>
-            <option value="">—</option>{graph.nodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-          </select></label>
-        <button type="button" aria-pressed={layout.palOpen} onClick={() => setLayout({ ...layout, palOpen: !layout.palOpen })} title="Afficher ou masquer la palette d'éléments">Palette</button>
-        <button type="button" aria-pressed={layout.panOpen} onClick={() => setLayout({ ...layout, panOpen: !layout.panOpen })} title="Afficher ou masquer les propriétés de l'élément sélectionné">Propriétés</button>
-        {ai.enabled && editable && <button type="button" aria-pressed={chatOpen} onClick={() => setChatOpen(!chatOpen)} title="Demander des modifications du workflow à l'assistant IA">Assistant IA</button>}
-        <button type="button" onClick={() => setView(view === "canvas" ? "list" : "canvas")} aria-pressed={view === "list"}>{view === "canvas" ? "Vue liste" : "Vue schéma"}</button>
-        <button type="button" className={`chip ${errors ? "chip-bad" : "chip-ok"}`} aria-expanded={showIssues} onClick={() => setShowIssues(!showIssues)}>
+        <span className="tb-group">
+          <button type="button" className="tb-icon" onClick={d.undo} disabled={!d.canUndo || !editable} aria-label="Annuler" title="Annuler (Ctrl+Z)">↶</button>
+          <button type="button" className="tb-icon" onClick={d.redo} disabled={!d.canRedo || !editable} aria-label="Rétablir" title="Rétablir (Ctrl+Y)">↷</button>
+        </span>
+        {editable && (
+          <button type="button" className="tb-icon-toggle" aria-pressed={palShown} aria-label="Palette d'éléments" title={palShown ? "Masquer la palette d'éléments" : "Afficher la palette d'éléments"} onClick={togglePal}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{palShown ? <path d="M16 10l-2 2 2 2" /> : <path d="M13.5 10l2 2-2 2" />}</svg>
+          </button>
+        )}
+        <button type="button" onClick={() => setFinder(true)} title="Aller à une étape (Ctrl+K)"><IconLabel icon="search">Aller à…</IconLabel></button>
+        <Menu label="Affichage" entries={[
+          { kind: "heading", label: "Vue" },
+          { label: "Vue schéma", checked: view === "canvas", onSelect: () => setView("canvas") },
+          { label: "Vue liste", checked: view === "list", onSelect: () => setView("list") },
+          { kind: "separator" },
+          { kind: "heading", label: "Panneaux" },
+          { label: "Palette d'éléments", checked: palShown, onSelect: togglePal },
+          { label: "Propriétés", checked: layout.panOpen, onSelect: () => setLayout({ ...layout, panOpen: !layout.panOpen }) },
+          { kind: "separator" },
+          { label: "Organiser automatiquement", hint: "Replace les étapes et remet les lignes en automatique", disabled: !editable, onSelect: () => setGraph(autoLayout(graph)) },
+        ]} />
+        <span className="tb-spacer" />
+        {ai.enabled && editable && <button type="button" className="tb-ai" aria-pressed={chatOpen} onClick={() => setChatOpen(!chatOpen)} title="Demander des modifications du workflow à l'assistant IA">✨ Assistant IA</button>}
+        <button type="button" className={`chip ${errors ? "chip-bad" : "chip-ok"}`} aria-haspopup="dialog" onClick={() => setShowIssues(true)}>
           {errors ? `✖ ${errors} problème(s) bloquant(s)` : warnings ? `✔ Valide · ${warnings} avertissement(s)` : "✔ Valide"}
         </button>
       </div>
-      <div className={`schema-grid custom-cols${hasSelection ? " with-panel" : ""}`} style={{ gridTemplateColumns: gridColumns(layout, hasSelection) + (showChat ? ` ${HANDLE}px ${CHAT_W}px` : "") }}>
-        {layout.palOpen && (
+      <div className={`schema-grid custom-cols${hasSelection ? " with-panel" : ""}`} style={{ gridTemplateColumns: gridColumns({ ...layout, palOpen: palShown }, hasSelection) + (showChat ? ` ${HANDLE}px ${CHAT_W}px` : "") }}>
+        {palShown && (
           <>
             <aside className="schema-palette" aria-label="Palette d'éléments">{editable ? <Palette actions={actions} integrations={integrations} selectedName={selected?.name ?? null} onAdd={(i) => add(i)} /> : <p className="hint">Lecture seule.</p>}</aside>
             <PaneResizer side="left" label="Redimensionner la palette" value={layout.palW} min={LIMITS.pal.min} max={LIMITS.pal.max} def={DEFAULT_LAYOUT.palW} onChange={(v) => setLayout((l) => ({ ...l, palW: v }))} />
@@ -125,7 +151,7 @@ export function SchemaTab() {
         )}
         <div className="schema-center">
           {view === "canvas" ? (
-            <CanvasView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={setSelectedId} readOnly={!editable}
+            <CanvasView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={pick} focus={focus} readOnly={!editable}
               onOpen={(id) => graph.nodes.find((n) => n.id === id)?.type === "script" && setScriptOpen(id)}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
               onBendEdge={(f, t, cx) => editable && setGraph(bendEdge(graph, f, t, cx))}
@@ -135,7 +161,15 @@ export function SchemaTab() {
           ) : (
             <ListView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={setSelectedId} />
           )}
-          {graph.nodes.length === 0 && <p className="empty canvas-empty">Schéma vide : ajoutez un élément depuis la palette (clic ou glisser-déposer).</p>}
+          {graph.nodes.length === 0 && (
+            <div className="empty canvas-empty">
+              <p>Schéma vide : ajoutez un élément depuis la palette (clic ou glisser-déposer).</p>
+              {editable && <p className="canvas-empty-actions">
+                {!palShown && <button type="button" className="primary" onClick={() => setLayout({ ...layout, palOpen: true })}>Ouvrir la palette</button>}
+                {ai.enabled && !chatOpen && <button type="button" onClick={() => setChatOpen(true)}>Décrire avec l'assistant IA</button>}
+              </p>}
+            </div>
+          )}
         </div>
         {hasSelection && layout.panOpen && <PaneResizer side="right" label="Redimensionner les propriétés" value={layout.panW} min={LIMITS.panel.min} max={LIMITS.panel.max} def={DEFAULT_LAYOUT.panW} onChange={(v) => setLayout((l) => ({ ...l, panW: v }))} />}
         {selected && layout.panOpen && (
@@ -165,19 +199,20 @@ export function SchemaTab() {
         {showChat && (<><div aria-hidden="true" /><AiChat initialMessage={assist || undefined} onClose={() => { setChatOpen(false); if (assist) setSearchParams({}, { replace: true }); }} /></>)}
       </div>
       {showIssues && (
-        <section aria-label="Validation" className="schema-issues">
+        <Overlay title="Validation du schéma" description={errors ? `${errors} problème(s) bloquant(s) à corriger avant de publier.` : "Aucun problème bloquant."} onClose={() => setShowIssues(false)} footer={<button type="button" onClick={() => setShowIssues(false)}>Fermer</button>}>
           {issues.length === 0 ? <p>Aucun problème détecté.</p> : (
             <ul className="issue-list">
               {issues.map((i, k) => (
                 <li key={k} className={`issue issue-${i.level}`}>
                   <span aria-hidden="true">{i.level === "error" ? "✖ " : "⚠ "}</span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>
-                  {i.node ? <button type="button" className="linklike" onClick={() => setSelectedId(i.node)}>{graph.nodes.find((n) => n.id === i.node)?.name ?? i.node}</button> : null}{i.node ? " — " : ""}{i.message}
+                  {i.node ? <button type="button" className="linklike" onClick={() => { setSelectedId(i.node); setFocus({ id: i.node as string, seq: Date.now() }); setShowIssues(false); }}>{graph.nodes.find((n) => n.id === i.node)?.name ?? i.node}</button> : null}{i.node ? " — " : ""}{i.message}
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Overlay>
       )}
+      {finder && <StepFinder graph={graph} onPick={(id) => { setSelectedId(id); setFocus({ id, seq: Date.now() }); setLayout((l) => ({ ...l, panOpen: true })); setFinder(false); }} onClose={() => setFinder(false)} />}
       {scriptNode && <ScriptEditorDialog node={scriptNode} graph={graph} actions={actions} slug={d.slug} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}
     </div>
   );

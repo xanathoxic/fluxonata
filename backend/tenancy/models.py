@@ -51,6 +51,7 @@ class Role(models.TextChoices):
     OPERATOR = "operator", "Opérateur"
     APPROVER = "approver", "Approbateur"
     VIEWER = "viewer", "Lecteur"
+    CATALOG = "catalog", "Catalogue"  # launches only the catalog items its groups allow, sees only its own runs
 
 
 class UserProfile(models.Model):
@@ -69,6 +70,20 @@ class Membership(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "workspace"], name="uniq_membership")]
+
+
+class UserGroup(models.Model):
+    """A named set of people of a workspace. For the « Catalogue » role, the groups decide which catalog items a person may launch."""
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="user_groups")
+    name = models.CharField(max_length=80)
+    description = models.CharField(max_length=300, blank=True)
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="workspace_groups")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace", "name"], name="uniq_group_name")]
+        ordering = ["name"]
 
 
 DEFAULT_POLICY = {
@@ -135,7 +150,13 @@ class ApiToken(models.Model):
     """Bearer token limited in scope, lifetime and environments. Only its SHA-256 hash is stored."""
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="api_tokens")
-    service_account = models.ForeignKey(ServiceAccount, on_delete=models.CASCADE, related_name="tokens")
+    service_account = models.ForeignKey(
+        ServiceAccount, null=True, blank=True, on_delete=models.CASCADE, related_name="tokens"
+    )
+    # Jeton PERSONNEL (ADR 0025 amendement) : agit au nom de cette personne, avec ses droits ∩ les portées du jeton. Exactement un des deux.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="personal_tokens"
+    )
     name = models.CharField(max_length=80)
     prefix = models.CharField(max_length=12)
     token_hash = models.CharField(max_length=64, unique=True)
@@ -146,6 +167,19 @@ class ApiToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(service_account__isnull=False, user__isnull=True)
+                | models.Q(service_account__isnull=True, user__isnull=False),
+                name="api_token_one_owner",
+            )
+        ]
+
+    @property
+    def owner_user(self):
+        return self.user if self.user_id else self.service_account.user
 
 
 class OidcIdentity(models.Model):
@@ -169,6 +203,8 @@ class Folder(models.Model):
         WORKFLOW = "workflow", "Workflows"
         ACTION = "action", "Actions"
         AI_SKILL = "ai_skill", "Skills IA"
+        FORM = "form", "Formulaires"
+        CONTROL = "control", "Contrôles"
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="folders")
     kind = models.CharField(max_length=10, choices=Kind.choices)
@@ -178,3 +214,20 @@ class Folder(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["workspace", "kind", "path"], name="uniq_folder")]
         ordering = ["path"]
+
+
+class EgressHost(models.Model):
+    """A host (name or IP address) the platform's server may call although it is internal, added by a platform administrator in the
+    web interface. It adds to `ORCH_EGRESS_ALLOWLIST` (which the operator keeps in the environment and which this table never
+    shows as editable). Exact match, no range, no wildcard; see `core.netsec` for what can never be allowed this way."""
+
+    host = models.CharField(max_length=253, unique=True)
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["host"]
+
+    def __str__(self) -> str:
+        return self.host

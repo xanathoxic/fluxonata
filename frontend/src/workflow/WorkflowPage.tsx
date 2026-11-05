@@ -1,12 +1,17 @@
 import { useState } from "react";
-import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError } from "../api";
 import { Confirm } from "../components/AdminUi";
+import { EditorShell } from "../components/EditorShell";
 import { FavoriteStar } from "../components/FavoriteStar";
+import { Menu, type MenuEntry } from "../components/Menu";
 import { Overlay } from "../components/Overlay";
+import { PageTabs } from "../components/PageTabs";
+import { StatusLine } from "../components/StatusLine";
 import { useApp } from "../context";
 import { errorText, useWsQuery } from "../lib";
-import { DraftProvider, useDraft, type SaveState } from "./DraftContext";
+import { DraftProvider, useDraft } from "./DraftContext";
+import { PublishDialog } from "./PublishDialog";
 import { AuditTab } from "./tabs/AuditTab";
 import { FollowTab } from "./tabs/FollowTab";
 import { FormTab } from "./tabs/FormTab";
@@ -18,31 +23,28 @@ import { VariablesTab } from "./tabs/VariablesTab";
 import { VersionsTab } from "./tabs/VersionsTab";
 
 const TABS = [
-  { id: "summary", label: "Résumé", el: <SummaryTab /> },
+  { id: "summary", label: "Informations", el: <SummaryTab /> },
   { id: "variables", label: "Variables", el: <VariablesTab /> },
   { id: "io", label: "Entrées/Sorties", el: <IOTab /> },
-  { id: "schema", label: "Schéma", el: <SchemaTab /> },
+  { id: "schema", label: "Conception", el: <SchemaTab /> },
   { id: "follow", label: "Suivi", el: <FollowTab /> },
   { id: "form", label: "Formulaire d'entrée", el: <FormTab /> },
-  { id: "versions", label: "Historique des versions", el: <VersionsTab /> },
-  { id: "audit", label: "Audit", el: <AuditTab /> },
+  { id: "versions", label: "Versions", el: <VersionsTab /> },
+  { id: "audit", label: "Activité", el: <AuditTab /> },
   { id: "runs", label: "Exécutions", el: <RunsTab /> },
 ];
-const SAVE_LABEL: Record<SaveState, string> = {
-  saved: "✔ Brouillon enregistré", dirty: "● Modifications non enregistrées", saving: "⟳ Enregistrement…",
-  conflict: "⚠ Conflit : le brouillon a été modifié ailleurs", error: "⚠ Enregistrement impossible, nouvel essai automatique",
-};
-
 interface Dep { actions: { slug: string; name: string | null; pinned: string | null; latest: string | null; deprecated: boolean; exists: boolean }[]; workflows: { slug: string; name: string | null; exists: boolean }[]; connections: string[]; ai_providers: string[] }
 interface Usage { results: { workflow: string; workflow_version: string; uses_versions: string[] }[] }
 
-function Header() {
+/** The pieces of the editor header (status line, actions, notices, dialogs), built once for every tab. */
+function useHeaderParts() {
   const d = useDraft();
   const { workspace, can } = useApp();
   const navigate = useNavigate();
   const [panel, setPanel] = useState<"usages" | "deps" | null>(null);
   const [validation, setValidation] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [delError, setDelError] = useState("");
   const deps = useWsQuery<Dep>(`wf-deps-${d.slug}`, `/workflows/${d.slug}/dependencies/`, { enabled: panel === "deps" });
   const usages = useWsQuery<Usage>(`wf-usages-${d.slug}`, `/workflows/${d.slug}/dependents/`, { enabled: panel === "usages" });
@@ -57,6 +59,17 @@ function Header() {
     } catch (e) { setCatalogError(errorText(e as ApiError)); }
   };
 
+  const moreEntries: MenuEntry[] = [
+    { kind: "heading", label: "Diffusion" },
+    ...(can("publish") && published ? [{ label: inCatalog ? "Retirer du catalogue" : "Publier au catalogue", hint: inCatalog ? "Proposé à toutes les personnes de l'espace" : "Le proposer dans le catalogue d'automatisations", onSelect: () => void toggleCatalog() }] : []),
+    ...(can("publish") ? [{ label: "Planifier", hint: "Lancer automatiquement (horaire, webhook)", onSelect: () => navigate("/triggers", { state: { workflow: d.slug } }) }] : []),
+    { kind: "separator" },
+    { kind: "heading", label: "Suivi et analyse" },
+    { label: "Toutes les exécutions", onSelect: () => navigate(`/workflows/${d.slug}/runs`) },
+    { label: "Rechercher les utilisations", hint: "Workflows qui appellent celui-ci", onSelect: () => setPanel("usages") },
+    { label: "Rechercher les dépendances", hint: "Actions, connexions, fournisseurs d'IA", onSelect: () => setPanel("deps") },
+    ...(can("edit") && d.editable ? [{ kind: "separator" } as MenuEntry, { label: "Supprimer", danger: true, onSelect: () => setConfirmDelete(true) }] : []),
+  ];
   const validate = async () => {
     setValidation("Validation en cours…");
     const issues = await d.validateNow();
@@ -67,44 +80,38 @@ function Header() {
     try { await api(`/workspaces/${workspace.slug}/workflows/${d.slug}/delete/`, { method: "DELETE" }); navigate("/workflows"); }
     catch (e) { setDelError(errorText(e as ApiError)); setConfirmDelete(false); }
   };
-  return (
-    <header className="wf-header">
-      <nav aria-label="Fil d'Ariane" className="breadcrumb">
-        <Link to="/workflows">Workflows</Link>{d.wf.folder && ` / ${d.wf.folder.split("/").join(" / ")}`} / <span aria-current="page">{d.wf.name}</span>
-      </nav>
-      <div className="wf-title">
-        <h1>{d.wf.name}</h1>
-        <FavoriteStar kind="workflow" slug={d.slug} name={d.wf.name} />
-        {d.wf.latest_version && <span className="tag">v{d.wf.latest_version.version}</span>}
-        <span role="status" aria-live="polite" className={`save save-${d.saveState}`}>{SAVE_LABEL[d.saveState]}</span>
-      </div>
-      <div className="action-bar" role="toolbar" aria-label="Actions du workflow">
-        <span className="bar-group" role="group" aria-label="Exécution">
-        {published && can("run") && d.wf.folder_level !== "view" ? <Link className="bar-link bar-primary" to={`/workflows/${d.slug}/run`}>Lancer v{d.wf.latest_version?.version}</Link> : <span className="bar-link disabled" title={published ? "Droit de lancement requis" : "Publiez d'abord une version"} aria-disabled="true">Lancer</span>}
-        <button type="button" className="bar-link" onClick={() => void validate()}>Valider</button>
-        {can("publish") && d.editable && <Link className="bar-link bar-publish" to={`/workflows/${d.slug}/versions#publier`}>Publier</Link>}
-        </span>
-        <span className="bar-group" role="group" aria-label="Diffusion">
-        {can("publish") && published && <button type="button" className="bar-link" aria-pressed={inCatalog} onClick={() => void toggleCatalog()} title={inCatalog ? "Ce workflow est proposé dans le catalogue d'automatisations" : "Le proposer à toutes les personnes de l'espace dans le catalogue d'automatisations"}>{inCatalog ? "Retirer du catalogue" : "Publier au catalogue"}</button>}
-        {can("publish") && <Link className="bar-link" to="/triggers" state={{ workflow: d.slug }}>Planifier</Link>}
-        </span>
-        <span className="bar-group" role="group" aria-label="Suivi et analyse">
-        <NavLink className="bar-link" to={`/workflows/${d.slug}/runs`}>Toutes les exécutions</NavLink>
-        <button type="button" className="bar-link" aria-expanded={panel === "usages"} onClick={() => setPanel(panel === "usages" ? null : "usages")}>Rechercher les utilisations</button>
-        <button type="button" className="bar-link" aria-expanded={panel === "deps"} onClick={() => setPanel(panel === "deps" ? null : "deps")}>Rechercher les dépendances</button>
-        </span>
-        <span className="bar-group bar-end">
-        {can("edit") && d.editable && <button type="button" className="bar-link bar-danger" onClick={() => setConfirmDelete(true)}>Supprimer</button>}
-        </span>
-      </div>
+  const status = <StatusLine published={d.wf.latest_version ? `v${d.wf.latest_version.version} publiée` : "Jamais publié"} state={d.saveState} />;
+  const actions = (
+    <>
+      {published && can("run") && d.wf.folder_level !== "view" ? <Link className="bar-link bar-primary" to={`/workflows/${d.slug}/run`}>Lancer v{d.wf.latest_version?.version}</Link> : <span className="bar-link disabled" title={published ? "Droit de lancement requis" : "Publiez d'abord une version"} aria-disabled="true">Lancer</span>}
+      <button type="button" className="bar-link" onClick={() => void validate()}>Valider</button>
+      {can("publish") && d.editable && <button type="button" className="bar-link bar-publish" aria-haspopup="dialog" onClick={() => setPublishing(true)}>Publier</button>}
+      <Menu label="Plus" ariaLabel="Plus d'actions" align="end" className="bar-link" entries={moreEntries} />
+    </>
+  );
+  const notices = (
+    <>
       {validation && <p role="status" className="notice">{validation}</p>}
       {catalogError && <p role="alert" className="field-error">Erreur : {catalogError}</p>}
+      {delError && <p role="alert" className="field-error">Erreur : {delError}</p>}
+      {d.saveState === "conflict" && (
+        <p role="alert" className="conflict">Quelqu'un d'autre a enregistré ce brouillon. <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button> <button type="button" onClick={() => void d.save(true)}>Écraser avec ma version</button></p>
+      )}
+      {d.recover && (
+        <p role="alert" className="conflict">Un brouillon local non enregistré a été retrouvé (déconnexion ou fermeture ?). <button type="button" onClick={d.acceptRecovery}>Le récupérer</button> <button type="button" onClick={d.discardRecovery}>L'ignorer</button></p>
+      )}
+      {d.graph.meta?.ai_generated && <p role="note" className="notice">🤖 Ce brouillon a été généré par IA ({d.graph.meta.provider || "fournisseur inconnu"}). Relisez chaque étape avant de publier : il n'a pas été validé par un humain.</p>}
+      {!d.editable && <p role="note" className="hint">Vous avez un accès en lecture seule à ce workflow.</p>}
+    </>
+  );
+  const dialogs = (
+    <>
+      {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
       {confirmDelete && (
-        <Confirm title="Supprimer ce workflow ?" confirmLabel="Oui, supprimer" onCancel={() => setConfirmDelete(false)} onConfirm={() => void remove()}>
+        <Confirm title={`Supprimer « ${d.wf.name} » ?`} confirmLabel="Supprimer" onCancel={() => setConfirmDelete(false)} onConfirm={() => void remove()}>
           <p>Le workflow <strong>{d.wf.name}</strong> sera supprimé définitivement. L'opération est refusée s'il a déjà été exécuté ou s'il est utilisé ailleurs : dans ce cas, déclarez-le déprécié plutôt que de le supprimer.</p>
         </Confirm>
       )}
-      {delError && <p role="alert" className="field-error">Erreur : {delError}</p>}
       {panel === "usages" && (
         <Overlay title="Utilisations" description="Les workflows publiés qui appellent celui-ci." onClose={() => setPanel(null)} footer={<button type="button" onClick={() => setPanel(null)}>Fermer</button>}>
           {usages.data?.results.length === 0 ? <p>Aucun workflow publié n'appelle celui-ci.</p> : <ul>{usages.data?.results.map((u) => <li key={`${u.workflow}${u.workflow_version}`}><Link to={`/workflows/${u.workflow}`}>{u.workflow}</Link> v{u.workflow_version} (utilise v{u.uses_versions.join(", v")})</li>)}</ul>}
@@ -121,30 +128,25 @@ function Header() {
           </ul>
         </Overlay>
       )}
-      {d.saveState === "conflict" && (
-        <p role="alert" className="conflict">Quelqu'un d'autre a enregistré ce brouillon. <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button> <button type="button" onClick={() => void d.save(true)}>Écraser avec ma version</button></p>
-      )}
-      {d.recover && (
-        <p role="alert" className="conflict">Un brouillon local non enregistré a été retrouvé (déconnexion ou fermeture ?). <button type="button" onClick={d.acceptRecovery}>Le récupérer</button> <button type="button" onClick={d.discardRecovery}>L'ignorer</button></p>
-      )}
-      {d.graph.meta?.ai_generated && <p role="note" className="notice">🤖 Ce brouillon a été généré par IA ({d.graph.meta.provider || "fournisseur inconnu"}). Relisez chaque étape avant de publier : il n'a pas été validé par un humain.</p>}
-      {!d.editable && <p role="note" className="hint">Vous avez un accès en lecture seule à ce workflow.</p>}
-    </header>
+    </>
   );
+  return { status, actions, notices, dialogs };
 }
 
 function Body() {
   const { tab = "summary" } = useParams();
   const d = useDraft();
+  const parts = useHeaderParts();
   const current = TABS.find((t) => t.id === tab) ?? TABS[0];
   return (
-    <div className={`wf-page${current?.id === "schema" ? " wf-fill" : ""}`}>
-      <Header />
-      <nav aria-label="Sections du workflow" className="wf-tabs">
-        <ul>{TABS.map((t) => <li key={t.id}><NavLink to={`/workflows/${d.slug}/${t.id}`} className={({ isActive }) => (isActive || (t.id === current?.id && !tab) ? "active" : "")} aria-current={t.id === current?.id ? "page" : undefined}>{t.label}</NavLink></li>)}</ul>
-      </nav>
+    <EditorShell backTo="/workflows" backLabel="Retour aux workflows" title={d.wf.name} titleHint={d.wf.folder ? `Dossier : ${d.wf.folder}` : undefined}
+      titleExtra={<FavoriteStar kind="workflow" slug={d.slug} name={d.wf.name} />} status={parts.status} actions={parts.actions} actionsLabel="Actions du workflow"
+      fill={current?.id === "schema" ? "wf" : false}
+      tabs={<PageTabs label="Sections du workflow" className="wf-tabs" active={current?.id ?? ""} tabs={TABS.map((t) => ({ id: t.id, label: t.label, to: `/workflows/${d.slug}/${t.id}` }))} />}
+      notices={parts.notices}>
       <div className={`wf-content tab-${current?.id}`}>{current?.el}</div>
-    </div>
+      {parts.dialogs}
+    </EditorShell>
   );
 }
 

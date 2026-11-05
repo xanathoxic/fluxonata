@@ -105,3 +105,31 @@ def test_a_provider_webhook_needs_a_workflow_that_declares_payload(ws, world):
         f"{BASE}/webhooks/", {"name": "x", "workflow": "reagit", "provider": "inconnu"}, format="json"
     )
     assert r.status_code == 400
+
+
+def test_a_provider_delivery_survives_a_failure_before_the_run_starts(ws, world, monkeypatch):
+    """AR0.4 : même garantie que pour les webhooks signés — le service (GitHub…) réessaie la MÊME livraison après une erreur 5xx et obtient son run."""
+    from triggers import views as trigger_views
+
+    url, secret = _hook(world, "github", events=["push"])
+    body = json.dumps({"ref": "refs/heads/main"}).encode()
+    h = {
+        "HTTP_X_HUB_SIGNATURE_256": _sig(secret, body),
+        "HTTP_X_GITHUB_EVENT": "push",
+        "HTTP_X_GITHUB_DELIVERY": "d-crash",
+    }
+    real, calls = trigger_views.engine.start_run, {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("PostgreSQL est indisponible")
+        return real(*a, **k)
+
+    monkeypatch.setattr(trigger_views.engine, "start_run", flaky)
+    with pytest.raises(RuntimeError):
+        APIClient().post(url, body, content_type="application/json", **h)
+    assert WorkflowRun.objects.count() == 0
+    assert APIClient().post(url, body, content_type="application/json", **h).status_code == 202
+    again = APIClient().post(url, body, content_type="application/json", **h)
+    assert again.status_code == 200 and again.json()["status"] == "duplicate" and WorkflowRun.objects.count() == 1

@@ -34,13 +34,15 @@ class BearerTokenAuthentication(BaseAuthentication):
         raw = header[7:].strip()
         if not raw.startswith(TOKEN_PREFIX):
             raise AuthenticationFailed("Jeton invalide.")
-        token = ApiToken.objects.select_related("service_account__user").filter(token_hash=hash_token(raw)).first()
+        token = (
+            ApiToken.objects.select_related("service_account__user", "user").filter(token_hash=hash_token(raw)).first()
+        )
         now = timezone.now()
         if token is None or token.revoked_at is not None or token.expires_at <= now:
             raise AuthenticationFailed("Jeton invalide, expiré ou révoqué.")
-        user = token.service_account.user
+        user = token.owner_user
         if not user.is_active:
-            raise AuthenticationFailed("Compte de service désactivé.")
+            raise AuthenticationFailed("Compte désactivé.")
         user._token = token  # consulted by get_workspace / governance
         if token.last_used_at is None or now - token.last_used_at > timedelta(minutes=1):
             ApiToken.objects.filter(pk=token.pk).update(last_used_at=now)

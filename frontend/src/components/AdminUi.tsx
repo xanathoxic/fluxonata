@@ -1,9 +1,10 @@
+import { FormIcon } from "../forms/FormIcon";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { HelpTip } from "./HelpTip";
-import { Overlay } from "./Overlay";
 import { Pagination } from "./Pagination";
 
-export type Tone = "ok" | "warn" | "bad" | "info" | "muted";
+/** ok / warn / bad / draft are STATUS (a coloured capsule); info and muted are plain secondary text (version, type, folder…). */
+export type Tone = "ok" | "warn" | "bad" | "info" | "muted" | "draft";
 
 /** A status or role chip. The text always says what the colour says. */
 export function Badge({ tone = "muted", children }: { tone?: Tone; children: ReactNode }) {
@@ -50,23 +51,14 @@ export function SearchBox({ label, value, onChange, placeholder }: { label: stri
   return (
     <div className="adm-search">
       <label htmlFor={`s-${label}`} className="sr-only">{label}</label>
-      <span aria-hidden="true">⌕</span>
+      <FormIcon name="search" size={16} />
       <input id={`s-${label}`} type="search" value={value} placeholder={placeholder ?? label} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
-/** « Are you sure? » in a small dialog, for actions that are hard to undo. */
-export function Confirm({ title, children, confirmLabel, danger = true, busy, onConfirm, onCancel }: {
-  title: string; children: ReactNode; confirmLabel: string; danger?: boolean; busy?: boolean; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <Overlay variant="modal" title={title} onClose={onCancel}
-      footer={<><button type="button" onClick={onCancel}>Annuler</button><button type="button" className={danger ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{confirmLabel}</button></>}>
-      {children}
-    </Overlay>
-  );
-}
+/** « Are you sure? » in a small dialog: the shared `ConfirmDialog`, under the name the pages already use. */
+export { ConfirmDialog as Confirm } from "./ConfirmDialog";
 
 export function EmptyRow({ cols, children }: { cols: number; children: ReactNode }) {
   return <tr><td colSpan={cols} className="adm-empty">{children}</td></tr>;
@@ -94,7 +86,7 @@ export function SortTh({ label, field, sort, onSort }: { label: string; field: s
   const on = sort.key === field;
   return (
     <th scope="col" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
-      <button type="button" className="adm-sort" onClick={() => onSort(field)}>{label}<span aria-hidden="true">{on ? (sort.dir === "asc" ? " ▲" : " ▼") : " ↕"}</span></button>
+      <button type="button" className="adm-sort" onClick={() => onSort(field)}>{label}<FormIcon name={on ? (sort.dir === "asc" ? "up" : "down") : "sort"} size={14} /></button>
     </th>
   );
 }

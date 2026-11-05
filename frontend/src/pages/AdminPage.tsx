@@ -5,6 +5,7 @@ import { useApp } from "../context";
 import { AiTab } from "./admin/AiTab";
 import { AuditTab } from "./admin/AuditTab";
 import { GitTab } from "./admin/GitTab";
+import { GroupsTab } from "./admin/GroupsTab";
 import { HealthTab } from "./admin/HealthTab";
 import { MembersTab } from "./admin/MembersTab";
 import { PolicyTab } from "./admin/PolicyTab";
@@ -22,6 +23,7 @@ export function AdminPage() {
       <Tabs label="Sections d'administration" active={tab} onChange={setTab} tabs={[
         { id: "health", label: "Santé", content: <HealthTab /> },
         { id: "members", label: "Membres", content: <MembersTab /> },
+        { id: "groups", label: "Groupes", content: <GroupsTab /> },
         { id: "tokens", label: "Jetons et comptes de service", content: <TokensTab /> },
         { id: "secrets", label: "Secrets", content: <SecretsTab /> },
         { id: "runners", label: "Runners", content: <RunnersPanel mode="workspace" /> },

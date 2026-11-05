@@ -146,6 +146,9 @@ class WorkflowRun(models.Model):
     child_index = models.IntegerField(null=True, blank=True)
     priority = models.IntegerField(default=0)
     cancel_requested = models.BooleanField(default=False)
+    # Quand l'orchestrateur doit repasser sur ce run (AR4.4). NULL = tout de suite. Calculé à la fin de chaque `advance`, ramené à « maintenant » par les
+    # événements externes (approbation, annulation, reprise, fin d'exécution) ; un filet de sécurité borne le retard d'un événement oublié.
+    next_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
     idempotency_key = models.CharField(max_length=128, null=True, blank=True)
     callback_url = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

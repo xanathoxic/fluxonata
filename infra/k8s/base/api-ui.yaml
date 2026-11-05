@@ -1,0 +1,56 @@
+# api-ui : interface et API authentifiée. Sortie réseau AUTORISÉE (OIDC, coffre externe, fournisseurs d'IA, S3).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-ui
+  labels: {app.kubernetes.io/name: api-ui, app.kubernetes.io/part-of: fluxonata}
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: api-ui}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api-ui, app.kubernetes.io/part-of: fluxonata, fluxonata/egress: "allowed"}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: api-ui
+        image: fluxonata-backend:local
+        command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+        envFrom: [{configMapRef: {name: fluxonata-config}}, {secretRef: {name: fluxonata-secrets}}]
+        env:
+        - {name: ORCH_ROLES, value: "ui"}
+        ports: [{containerPort: 8000, name: http}]
+        readinessProbe: {httpGet: {path: /api/v1/health/ready/, port: http}, periodSeconds: 5, failureThreshold: 3}
+        livenessProbe: {httpGet: {path: /api/v1/health/live/, port: http}, periodSeconds: 10, failureThreshold: 6}
+        resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {memory: 768Mi}}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: ["ALL"] }
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile: { type: RuntimeDefault }
+        volumeMounts:
+        - {name: keys, mountPath: /keys, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+      volumes:
+      - {name: keys, secret: {secretName: fluxonata-keys, defaultMode: 0400}}
+      - {name: tmp, emptyDir: {medium: Memory}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-ui
+spec:
+  selector: {app.kubernetes.io/name: api-ui}
+  ports: [{port: 8000, targetPort: http, name: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-ui
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app.kubernetes.io/name: api-ui}}

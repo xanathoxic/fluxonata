@@ -250,3 +250,51 @@ def test_webhook_management_is_permissioned(ws, world):
     hook = create_hook(world)
     assert client_for(world["outsider"]).delete(f"{BASE}/webhooks/{hook['id']}/").status_code == 404
     assert make_user  # keep import used
+
+
+def test_a_failure_between_recording_the_delivery_and_starting_the_run_never_loses_the_event(ws, world, monkeypatch):
+    """AR0.4 : la livraison était enregistrée (et validée) AVANT le démarrage du run, dans une autre transaction. Si la base ou l'API tombait entre les
+    deux, l'expéditeur — qui reçoit une erreur et réessaie — se voyait répondre « déjà traitée » alors qu'aucun run n'existait : événement perdu, en silence."""
+    from triggers import views as trigger_views
+
+    hook = create_hook(world)
+    raw, h = signed(hook["secret"], {"v": "important"}, delivery="evt-42")
+    real_start = trigger_views.engine.start_run
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("PostgreSQL est indisponible")
+        return real_start(*a, **k)
+
+    monkeypatch.setattr(trigger_views.engine, "start_run", flaky)
+    with pytest.raises(RuntimeError):
+        post(hook, raw, h)  # première tentative : erreur (500 côté serveur)
+    assert WorkflowRun.objects.count() == 0
+    retry = post(hook, raw, h)  # l'expéditeur réessaie avec la MÊME livraison
+    assert retry.status_code == 202, retry.content  # et le run est bien créé (pas « duplicate »)
+    assert WorkflowRun.objects.count() == 1 and WorkflowRun.objects.get().inputs == {"v": "important"}
+    again = post(hook, raw, h)  # une troisième fois : maintenant c'est un vrai doublon, et on renvoie le run existant
+    assert again.status_code == 200 and again.json()["status"] == "duplicate"
+    assert again.json()["run_id"] == str(WorkflowRun.objects.get().id) and WorkflowRun.objects.count() == 1
+
+
+def test_an_invalid_payload_does_not_burn_the_delivery_id(ws, world):
+    hook = create_hook(world)
+    bad, h = signed(hook["secret"], b"pas du json", delivery="evt-7")
+    assert post(hook, bad, h).status_code == 400
+    good, h2 = signed(hook["secret"], {"v": "ok"}, delivery="evt-7")  # corrigé, même identifiant de livraison
+    assert post(hook, good, h2).status_code == 202 and WorkflowRun.objects.count() == 1
+
+
+def test_a_delivery_left_without_a_run_by_the_old_behaviour_is_completed_on_retry(ws, world):
+    """Les installations existantes peuvent contenir des livraisons enregistrées sans run (panne d'avant le correctif) : la prochaine tentative les termine."""
+    from triggers.models import WebhookDelivery
+
+    hook = create_hook(world)
+    raw, h = signed(hook["secret"], {"v": "orphelin"}, delivery="evt-old")
+    WebhookDelivery.objects.create(webhook=Webhook.objects.get(), delivery_id="evt-old")  # l'état laissé par la panne
+    r = post(hook, raw, h)
+    assert r.status_code == 202 and WorkflowRun.objects.count() == 1
+    assert WebhookDelivery.objects.get().run_id == WorkflowRun.objects.get().id

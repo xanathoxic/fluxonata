@@ -13,6 +13,7 @@ import { SkillAssistant, type SkillProposal } from "./SkillAssistant";
 import { SkillForm } from "./SkillForm";
 import { Overlay } from "../../components/Overlay";
 import { TagFilter, TagList } from "../../components/Tags";
+import { ProposalsPanel } from "../../components/ProposalsPanel";
 
 export function useSkills() {
   const { workspace } = useApp();
@@ -44,10 +45,10 @@ export function SkillsPage() {
   const paged = usePaged(sorted, 25);
   return (
     <>
-      <PageHeader title="Skills IA" description="Compétences IA réutilisables : des instructions, des entrées typées et le format de la réponse. Elles se choisissent dans l'« Étape IA » d'un workflow."
-        actions={can("publish") && <>{ai.enabled && <button type="button" aria-haspopup="dialog" onClick={() => setAssisting(true)}>✨ Générer avec l'IA</button>}<button type="button" className="primary" onClick={() => { setDraft(undefined); setCreating(true); }}>Nouveau skill</button></>} />
+      <PageHeader title="Skills IA" description="Compétences IA réutilisables : des instructions, des entrées typées et le format de la réponse. Elles se choisissent dans l'« Étape IA » d'un workflow." />
       {!ai.enabled && <p role="note" className="notice">L'IA est désactivée pour cet espace : vous pouvez préparer des skills, mais aucune étape IA ne s'exécutera tant qu'un administrateur n'a pas activé l'IA (Administration → Assistant IA).</p>}
       {ai.enabled && <AiNotice mode={ai.mode} />}
+      <ProposalsPanel kind="skill" />
       <div className="wf-list-layout">
         <FolderTree label="Dossiers de skills" kind="ai_skill" canEdit={can("publish")} folders={folders} current={folder} onPick={setFolder} />
         <section className="adm-card lst-main">
@@ -55,6 +56,9 @@ export function SkillsPage() {
             <SearchBox label="Rechercher un skill" value={search} onChange={setSearch} placeholder="Nom, description ou étiquette" />
             <TagFilter lists={all.map((s) => s.tags)} value={tagF} onChange={setTagF} />
             <span className="lst-count" role="status">{shown.length} skill(s)</span>
+            <span style={{ flex: 1 }} />
+            {can("publish") && ai.enabled && <button type="button" aria-haspopup="dialog" onClick={() => setAssisting(true)}>✨ Générer avec l'IA</button>}
+            {can("publish") && <button type="button" className="primary" onClick={() => { setDraft(undefined); setCreating(true); }}>Nouveau skill</button>}
           </div>
           <div className="table-wrap">
             <table className="adm-table">

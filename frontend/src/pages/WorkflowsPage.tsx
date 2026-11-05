@@ -48,17 +48,7 @@ export function WorkflowsPage() {
   const published = all.filter((w) => w.latest_version).length;
   return (
     <>
-      <PageHeader title="Workflows" description={`${all.length} workflow(s) dans cet espace : ${published} publié(s), ${all.length - published} en brouillon.`}
-        actions={<>
-          {ai.enabled && can("edit") && (
-            <button type="button" onClick={() => setAiOpen(true)} aria-haspopup="dialog">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ verticalAlign: "-3px", marginRight: 6 }}><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>
-              Générer avec l'IA
-            </button>
-          )}
-          {can("edit") && <button type="button" onClick={() => setTemplatesOpen(true)} aria-haspopup="dialog">Partir d'un modèle</button>}
-          {can("edit") && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { create.reset(); setName(""); setFolderNew(""); setNewTags([]); setCreating(true); }}>Nouveau workflow</button>}
-        </>} />
+      <PageHeader title="Workflows" description={`${all.length} workflow(s) dans cet espace : ${published} publié(s), ${all.length - published} en brouillon.`} />
       {templatesOpen && <TemplatesDialog onClose={() => setTemplatesOpen(false)} />}
       <div className="wf-list-layout">
         <FolderTree label="Dossiers de workflows" kind="workflow" canEdit={can("edit")} folders={folders} current={folder} onPick={setFolder} />
@@ -67,6 +57,15 @@ export function WorkflowsPage() {
             <SearchBox label="Rechercher un workflow" value={q} onChange={setQ} placeholder="Nom, description ou étiquette" />
             <TagFilter lists={all.map((w) => w.tags)} value={tagF} onChange={setTagF} />
             <span className="lst-count" role="status">{filtered.length} résultat(s){folder ? ` dans « ${folder} »` : ""}</span>
+            <span style={{ flex: 1 }} />
+          {ai.enabled && can("edit") && (
+            <button type="button" onClick={() => setAiOpen(true)} aria-haspopup="dialog">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ verticalAlign: "-3px", marginRight: 6 }}><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>
+              Générer avec l'IA
+            </button>
+          )}
+          {can("edit") && <button type="button" onClick={() => setTemplatesOpen(true)} aria-haspopup="dialog">Partir d'un modèle</button>}
+          {can("edit") && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { create.reset(); setName(""); setFolderNew(""); setNewTags([]); setCreating(true); }}>Nouveau workflow</button>}
           </div>
           {creating && can("edit") && (
             <Overlay variant="modal" title="Nouveau workflow" description="Donnez un nom : vous arriverez directement dans l'éditeur." onClose={() => setCreating(false)}
@@ -93,7 +92,7 @@ export function WorkflowsPage() {
                     <td><Link className="lst-title" to={`/workflows/${w.slug}`}>{w.name}</Link>{w.deprecated && <> <Badge tone="warn">⚠ déprécié</Badge></>}{w.description && <span className="lst-sub">{w.description}</span>}</td>
                     <td>{w.folder ? <span className="tag">{w.folder}</span> : "—"}</td>
                     <td>{(w.tags?.length ?? 0) > 0 ? <TagList tags={w.tags} onPick={setTagF} active={tagF} /> : "—"}</td>
-                    <td>{w.latest_version ? <Badge tone="ok">v{w.latest_version.version}</Badge> : <Badge>brouillon</Badge>}</td>
+                    <td>{w.latest_version ? <Badge tone="info">v{w.latest_version.version}</Badge> : <Badge tone="draft">brouillon</Badge>}</td>
                     <td>{formatDate(w.updated_at)}</td>
                     <td className="row-actions">
                       <Link className="icon-btn" to={`/workflows/${w.slug}/schema`} aria-label={`${can("edit") ? "Modifier" : "Consulter"} ${w.name}`} title={can("edit") ? "Modifier" : "Consulter"}><RowIcon name={can("edit") ? "edit" : "view"} /></Link>{" "}

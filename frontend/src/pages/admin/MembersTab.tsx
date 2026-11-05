@@ -5,7 +5,7 @@ import { useApp } from "../../context";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { Kpi } from "../OpsCharts";
 
-const ROLES: Record<string, string> = { admin: "Administrateur", space_manager: "Responsable d'espace", designer: "Concepteur", operator: "Opérateur", approver: "Approbateur", viewer: "Lecteur" };
+const ROLES: Record<string, string> = { admin: "Administrateur", space_manager: "Responsable d'espace", designer: "Concepteur", operator: "Opérateur", approver: "Approbateur", viewer: "Lecteur", catalog: "Catalogue" };
 interface Members { results: { username: string; role: string; is_service: boolean }[] }
 
 export function MembersTab() {

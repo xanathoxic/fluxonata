@@ -7,6 +7,7 @@ POST     /api/v1/runner/jobs/<id>/complete/    hand the outcome back (masked, va
 """
 
 import json
+import threading
 import time
 
 from django.conf import settings
@@ -22,6 +23,24 @@ from .finalize import finalize_attempt
 from .models import Execution, Runner
 from .runner_auth import IsRunner, RunnerAuthentication, RunnerThrottle
 from .runners import RunOutcome
+
+RUNNER_PROTOCOL = (
+    1  # numéro du protocole agent ↔ plateforme (docs/VERSIONING.md) ; un changement incompatible incrémente ce numéro
+)
+
+
+def _version_tuple(v: str) -> tuple:
+    return tuple(int(x) if x.isdigit() else 0 for x in str(v).split(".")[:4])
+
+
+def agent_too_old(request) -> str | None:
+    """La version annoncée par l'agent (en-tête User-Agent `fluxonata-runner/x.y.z`) est-elle inférieure au minimum exigé ? (None = acceptée ou pas d'exigence)"""
+    minimum = settings.ORCH_MIN_AGENT_VERSION
+    if not minimum:
+        return None
+    ua = request.headers.get("User-Agent", "")
+    version = ua.split("fluxonata-runner/", 1)[1].split()[0] if "fluxonata-runner/" in ua else "0"
+    return minimum if _version_tuple(version) < _version_tuple(minimum) else None
 
 
 class RunnerView(APIView):
@@ -42,6 +61,8 @@ def _config(runner: Runner) -> dict:
         "lease_seconds": settings.ORCH_LEASE_SECONDS,
         "heartbeat_seconds": max(2, settings.ORCH_LEASE_SECONDS // 3),
         "long_poll_seconds": settings.ORCH_RUNNER_LONG_POLL_SECONDS,
+        "protocol": RUNNER_PROTOCOL,
+        "min_agent_version": settings.ORCH_MIN_AGENT_VERSION,
     }
 
 
@@ -109,26 +130,80 @@ class RequestIn(serializers.Serializer):
     wait = serializers.IntegerField(min_value=0, max_value=300, required=False, default=0)
 
 
+# AR1.3 — une attente longue occupe un thread de l'API pendant toute sa durée (ADR 0013). Sans plafond, quelques dizaines de runners en
+# attente prennent les 16 threads de la pile de production et l'interface ne répond plus. On plafonne donc, PAR PROCESSUS, le nombre
+# d'attentes simultanées (ORCH_RUNNER_LONG_POLL_SLOTS) : au-delà, la demande ne bloque pas, elle reçoit « réessayez dans N s ».
+_lp_lock = threading.Lock()
+_lp_active = 0
+
+
+def _enter_long_poll() -> bool:
+    global _lp_active
+    with _lp_lock:
+        if _lp_active >= settings.ORCH_RUNNER_LONG_POLL_SLOTS:
+            return False
+        _lp_active += 1
+        return True
+
+
+def _leave_long_poll() -> None:
+    global _lp_active
+    with _lp_lock:
+        _lp_active = max(0, _lp_active - 1)
+
+
 class JobRequestView(RunnerView):
     def post(self, request):
+        if (minimum := agent_too_old(request)) is not None:  # AR3.7 : 426 Upgrade Required, avec la version à installer
+            return Response(
+                {
+                    "error": {
+                        "code": "agent_too_old",
+                        "message": f"Mettez l'agent à jour (version minimale {minimum}).",
+                        "details": {"min_agent_version": minimum},
+                    }
+                },
+                status=426,
+            )
         ser = RequestIn(data=request.data)
         ser.is_valid(raise_exception=True)
         deadline = time.monotonic() + min(ser.validated_data["wait"], settings.ORCH_RUNNER_LONG_POLL_SECONDS)
         runner = request.auth
-        while True:
-            runner = Runner.objects.filter(
-                pk=runner.pk
-            ).first()  # pause / token rotation / deletion apply to a waiting call
-            if runner is None:
-                return Response(
-                    {"error": {"code": "runner_revoked", "message": "Runner supprimé.", "details": None}}, status=401
-                )
-            job = None if runner.paused else _claim_one(runner)
-            if job is not None:
-                return Response(job)
-            if time.monotonic() >= deadline:
-                return Response(status=204)
-            time.sleep(1.0)
+        slot = False  # le créneau d'attente n'est pris qu'au moment où l'on va réellement dormir
+        try:
+            while True:
+                runner = Runner.objects.filter(
+                    pk=runner.pk
+                ).first()  # pause / token rotation / deletion apply to a waiting call
+                if runner is None:
+                    return Response(
+                        {"error": {"code": "runner_revoked", "message": "Runner supprimé.", "details": None}},
+                        status=401,
+                    )
+                job = None if runner.paused else _claim_one(runner)
+                if job is not None:
+                    return Response(job)  # une tâche disponible est toujours servie, même quand les créneaux sont pris
+                if time.monotonic() >= deadline:
+                    return Response(status=204)
+                if not slot:
+                    slot = _enter_long_poll()
+                    if not slot:
+                        retry = settings.ORCH_RUNNER_BUSY_RETRY_SECONDS
+                        return Response(
+                            {
+                                "error": {
+                                    "code": "long_poll_busy",
+                                    "message": "Trop d'attentes longues en cours sur ce serveur : réessayez.",
+                                    "details": {"retry_after": retry},
+                                }
+                            },
+                            status=429,
+                            headers={"Retry-After": str(retry)},
+                        )
+                time.sleep(1.0)
+        finally:
+            if slot:
+                _leave_long_poll()
 
 
 def _job(runner: Runner, pk) -> Execution:

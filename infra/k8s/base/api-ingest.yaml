@@ -1,0 +1,56 @@
+# api-ingest : webhooks et formulaires publics. AUCUNE sortie réseau (NetworkPolicy `deny-egress`) : c'est le rôle exposé à Internet.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-ingest
+  labels: {app.kubernetes.io/name: api-ingest, app.kubernetes.io/part-of: fluxonata}
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: api-ingest}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api-ingest, app.kubernetes.io/part-of: fluxonata, fluxonata/egress: "denied"}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: api-ingest
+        image: fluxonata-backend:local
+        command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+        envFrom: [{configMapRef: {name: fluxonata-config}}, {secretRef: {name: fluxonata-secrets}}]
+        env:
+        - {name: ORCH_ROLES, value: "ingest"}
+        ports: [{containerPort: 8000, name: http}]
+        readinessProbe: {httpGet: {path: /api/v1/health/ready/, port: http}, periodSeconds: 5, failureThreshold: 3}
+        livenessProbe: {httpGet: {path: /api/v1/health/live/, port: http}, periodSeconds: 10, failureThreshold: 6}
+        resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {memory: 768Mi}}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: { drop: ["ALL"] }
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile: { type: RuntimeDefault }
+        volumeMounts:
+        - {name: keys, mountPath: /keys, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+      volumes:
+      - {name: keys, secret: {secretName: fluxonata-keys, defaultMode: 0400}}
+      - {name: tmp, emptyDir: {medium: Memory}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-ingest
+spec:
+  selector: {app.kubernetes.io/name: api-ingest}
+  ports: [{port: 8000, targetPort: http, name: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-ingest
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app.kubernetes.io/name: api-ingest}}

@@ -1,6 +1,6 @@
 import type { JsonSchema } from "../api";
 
-export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "transform";
+export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "transform";
 export type ScriptLanguage = "python" | "javascript";
 export type VarType = "string" | "integer" | "number" | "boolean" | "array" | "object";
 export interface ScriptOutput { name: string; type: VarType }
@@ -26,6 +26,9 @@ export interface GraphNode {
   integration?: string;
   operation?: string;
   content?: unknown;
+  to?: string;
+  cc?: string;
+  subject?: string;
   params?: Record<string, unknown>;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path?: string;
@@ -111,6 +114,8 @@ export interface Note { id: string; text: string; ui: { x: number; y: number } }
 export interface Graph {
   variables?: Variable[];
   form?: FormDef | null;
+  /** designed input form (sections, rules, dynamic lists); takes precedence over `form` */
+  input_form?: import("../forms/types").InputForm | null;
   notes?: Note[];
   pins?: Record<string, Record<string, unknown>>;
   /** where the person put the virtual « Début » and « Fin » nodes (computed from the steps when absent) */
@@ -148,6 +153,7 @@ export const NODE_LABELS: Record<NodeType, string> = {
   while: "Répéter tant que",
   ldap: "Annuaire LDAP",
   sftp: "Fichier SFTP",
+  smtp: "Envoyer un e-mail",
   transform: "Transformer les données",
 };
 

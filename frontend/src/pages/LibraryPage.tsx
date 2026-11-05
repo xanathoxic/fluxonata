@@ -16,6 +16,7 @@ import { NewActionForm } from "./library/NewActionForm";
 import { PackagesTab } from "./library/PackagesTab";
 import { HelpTip } from "../components/HelpTip";
 import { TagFilter, TagList } from "../components/Tags";
+import { ProposalsPanel } from "../components/ProposalsPanel";
 
 function ActionsTab() {
   const { can, workspace } = useApp();
@@ -40,6 +41,8 @@ function ActionsTab() {
   const { sorted, sort, toggle } = useSort(shown, { name: (a) => a.name, folder: (a) => a.folder, domain: (a) => a.domain, version: (a) => a.latest_version?.version ?? "", status: (a) => a.status }, { key: "name", dir: "asc" });
   const paged = usePaged(sorted, 25);
   return (
+    <>
+    <ProposalsPanel kind="action" />
     <div className="wf-list-layout">
       <FolderTree label="Dossiers d'actions" kind="action" canEdit={can("publish")} folders={folders} current={folder} onPick={setFolder} />
       <section className="adm-card lst-main">
@@ -73,6 +76,7 @@ function ActionsTab() {
       {creating && <Overlay wide title={draft ? "Nouvelle action proposée par l'IA" : "Nouvelle action"} description="Code, contrat d'entrées et de sorties : la version 1.0.0 est publiée et immuable." onClose={() => setCreating(false)}><NewActionForm folder={folder} initial={draft} onDone={() => setCreating(false)} /></Overlay>}
       {moving && <MoveFolderOverlay title={`Déplacer « ${moving.name} »`} current={moving.folder} folders={[...folders, ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate({ slug: moving.slug, folder: f })} onClose={() => setMoving(null)} />}
     </div>
+    </>
   );
 }
 

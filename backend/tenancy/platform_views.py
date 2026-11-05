@@ -7,16 +7,18 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.http import Http404
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.models import AuditEvent, record
+from core import netsec
 from core.health import STALE
 from runs.models import ServiceInstance
 
-from .models import Environment, Membership, Organization, Role, Workspace
+from .models import EgressHost, Environment, Membership, Organization, Role, Workspace
 from .permissions import require_platform_admin
 
 User = get_user_model()
@@ -226,3 +228,61 @@ class PlatformAuditView(_Guarded):
                 ]
             }
         )
+
+
+MAX_EGRESS_HOSTS = 100
+
+
+def _egress_row(h: EgressHost) -> dict:
+    return {
+        "id": h.pk,
+        "host": h.host,
+        "note": h.note,
+        "created_by": h.created_by.username if h.created_by else "",
+        "created_at": h.created_at,
+    }
+
+
+class EgressSerializer(serializers.Serializer):
+    host = serializers.CharField(max_length=300)
+    note = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+
+
+class EgressView(_Guarded):
+    """Internal hosts the platform's server may call (SSRF guard exceptions). Those of the environment (`ORCH_EGRESS_ALLOWLIST`) are
+    shown read-only; the others are added and removed here, by platform administrators only, each change audited. A change applies
+    within seconds to every process."""
+
+    serializer_class = EgressSerializer
+
+    def get(self, request):
+        rows = EgressHost.objects.select_related("created_by")
+        return Response({"environment": sorted(netsec.env_allowlist()), "results": [_egress_row(h) for h in rows]})
+
+    def post(self, request):
+        ser = EgressSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            host = netsec.check_managed_host(ser.validated_data["host"])
+        except netsec.UnsafeURL as exc:
+            raise serializers.ValidationError({"host": str(exc)}) from None
+        if host in netsec.env_allowlist() or EgressHost.objects.filter(host=host).exists():
+            raise serializers.ValidationError({"host": "Cette adresse est déjà autorisée."})
+        if EgressHost.objects.count() >= MAX_EGRESS_HOSTS:
+            raise serializers.ValidationError({"host": f"{MAX_EGRESS_HOSTS} adresses au plus."})
+        row = EgressHost.objects.create(host=host, note=ser.validated_data["note"].strip(), created_by=request.user)
+        netsec.reset_allowlist_cache()
+        record("platform.egress_add", actor=request.user, target=row, host=host, note=row.note)
+        return Response(_egress_row(row), status=201)
+
+
+class EgressDetailView(_Guarded):
+    def delete(self, request, pk):
+        row = EgressHost.objects.filter(pk=pk).first()
+        if row is None:
+            raise Http404()
+        host = row.host
+        row.delete()
+        netsec.reset_allowlist_cache()
+        record("platform.egress_remove", actor=request.user, host=host)
+        return Response(status=204)

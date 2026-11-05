@@ -10,6 +10,7 @@ import re
 import time
 
 from django.http import HttpResponse
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -125,8 +126,39 @@ def _call(request, ws, params) -> dict:
     }
 
 
+class AnyAccept(DefaultContentNegotiation):
+    """Un client MCP demande `text/event-stream` (pour ouvrir un flux serveur) : sans cette classe, DRF répond 406 avant même d'atteindre la vue,
+    alors que la norme attend un 405 (ce serveur n'a pas de flux). Les réponses sont toujours du JSON."""
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        return renderers[0], renderers[0].media_type
+
+
+class McpParamsError(Exception):
+    """Paramètres invalides d'une méthode : réponse JSON-RPC -32602."""
+
+
 class McpServerView(APIView):
-    """POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session."""
+    """POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session.
+
+    Le protocole est ici ; les OUTILS viennent de `list_tools` / `call_tool`, que le profil de conception (`mcp_design.py`, ADR 0025) redéfinit."""
+
+    content_negotiation_class = AnyAccept
+    capabilities = {"tools": {"listChanged": False}}
+    instructions = "Chaque outil lance un workflow publié et attend son résultat (25 s au plus)."
+
+    def list_tools(self, request, ws) -> list:
+        return _tools(ws, request.user)
+
+    def call_tool(self, request, ws, params) -> dict:
+        return _call(request, ws, params)
+
+    def extra_method(self, request, ws, method, params):
+        """Méthodes propres à un profil (invites du profil de conception) ; None si la méthode est inconnue."""
+        return None
+
+    def on_initialize(self, request, ws, params) -> None:
+        """Point d'accroche (audit du profil de conception) ; l'exécution n'en a pas besoin."""
 
     def get(self, request, workspace):
         return HttpResponse(status=405)
@@ -147,25 +179,32 @@ class McpServerView(APIView):
         if rid is None:  # a notification: no answer
             return None
         if method == "initialize":
+            self.on_initialize(request, ws, params)
             asked = params.get("protocolVersion")
             return {
                 "jsonrpc": "2.0",
                 "id": rid,
                 "result": {
                     "protocolVersion": asked if asked in PROTOCOLS else PROTOCOLS[0],
-                    "capabilities": {"tools": {"listChanged": False}},
+                    "capabilities": self.capabilities,
                     "serverInfo": {"name": "fluxonata", "version": "0.3"},
-                    "instructions": "Chaque outil lance un workflow publié et attend son résultat (25 s au plus).",
+                    "instructions": self.instructions,
                 },
             }
         if method == "ping":
             return {"jsonrpc": "2.0", "id": rid, "result": {}}
         if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": rid, "result": {"tools": _tools(ws, request.user)}}
+            return {"jsonrpc": "2.0", "id": rid, "result": {"tools": self.list_tools(request, ws)}}
         if method == "tools/call":
             return {
                 "jsonrpc": "2.0",
                 "id": rid,
-                "result": _call(request, ws, params if isinstance(params, dict) else {}),
+                "result": self.call_tool(request, ws, params if isinstance(params, dict) else {}),
             }
+        try:
+            extra = self.extra_method(request, ws, method, params if isinstance(params, dict) else {})
+        except McpParamsError as exc:
+            return _err(rid, -32602, str(exc))
+        if extra is not None:
+            return {"jsonrpc": "2.0", "id": rid, "result": extra}
         return _err(rid, -32601, f"Méthode inconnue : {method}")

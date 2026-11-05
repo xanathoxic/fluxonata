@@ -1,0 +1,32 @@
+# Topologie « PAR AGENTS » (ADR 0023, AR3.2) — À UTILISER EN PLUS des deux autres fichiers :
+#
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod --profile agent up -d --build
+#   puis, UNE fois : docker compose … exec -T api-ui python manage.py runner_bootstrap     (enregistre le runner dont le jeton est ORCH_EXEC_AGENT_TOKEN)
+#
+# `worker-exec` (qui cumulait socket Docker + clé du coffre + accès base) disparaît : le service `exec-agent` détient le socket Docker mais N'A NI base NI clé ; il ne parle qu'à
+# `runner-gw` (protocole HTTP des runners, ADR 0013). L'invariant I1 de docs/ARCHITECTURE.md devient vrai dans cette topologie.
+name: fluxonata-prod
+
+services:
+  worker-exec: { profiles: ["disabled-by-agent-topology"] }
+  worker-ai: { profiles: ["disabled-by-agent-topology"] }   # garde le socket ET la clé : incompatible avec I1 ; l'essai à blanc de l'assistant n'est pas disponible dans ce mode
+
+  exec-agent:
+    profiles: ["agent"]   # démarré APRÈS l'enregistrement du runner (sinon il sort avec le code 2 « jeton refusé » et redémarre jusqu'à ce que ce soit fait)
+    image: fluxonata-runner:local
+    build: { context: .., dockerfile: runner/Dockerfile }
+    restart: unless-stopped
+    user: "0:0"   # accès au socket Docker de l'hôte ; les conteneurs d'action, eux, tournent sans privilège (65534, sans capacités, réseau coupé)
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      ORCH_URL: http://runner-gw:8000
+      ORCH_RUNNER_TOKEN: ${ORCH_EXEC_AGENT_TOKEN:?run scripts/prod-init.sh}
+      ORCH_RUNNER_CONCURRENCY: "2"
+      ORCH_WORK_DIR: ${ORCH_WORK_DIR:?}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}
+    networks: [edge]   # runner-gw seulement : aucune base, aucune sortie réseau
+    depends_on:
+      runner-gw: { condition: service_healthy }
+    stop_grace_period: 120s

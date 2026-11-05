@@ -1,0 +1,687 @@
+[
+ {
+  "name": "afficher si — vrai",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "show"
+      }
+     ],
+     "else": [
+      {
+       "do": "hide"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "afficher si — faux",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "show"
+      }
+     ],
+     "else": [
+      {
+       "do": "hide"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": {
+   "visible": false,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "masquer si",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "hide"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": true
+  },
+  "expected": {
+   "visible": false,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "masquer si — faux garde visible",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "hide"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": false
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "obligatoire si",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "require"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "v"
+  },
+  "expected": {
+   "visible": true,
+   "required": true,
+   "options": null
+  }
+ },
+ {
+  "name": "obligatoire si — faux",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "require"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {},
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "facultatif si",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "required": true,
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "optional"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": true
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "obligatoire par défaut",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "required": true,
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "optional"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": false
+  },
+  "expected": {
+   "visible": true,
+   "required": true,
+   "options": null
+  }
+ },
+ {
+  "name": "sinon obligatoire",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "optional"
+      }
+     ],
+     "else": [
+      {
+       "do": "require"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": false
+  },
+  "expected": {
+   "visible": true,
+   "required": true,
+   "options": null
+  }
+ },
+ {
+  "name": "limiter les choix",
+  "field": {
+   "key": "x",
+   "type": "select",
+   "options": [
+    {
+     "value": "a"
+    },
+    {
+     "value": "b"
+    },
+    {
+     "value": "c"
+    }
+   ],
+   "rules": [
+    {
+     "when": {
+      "field": "p",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "options",
+       "values": [
+        "a",
+        "b"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "p": "FR"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": [
+    "a",
+    "b"
+   ]
+  }
+ },
+ {
+  "name": "limiter les choix — non appliqué",
+  "field": {
+   "key": "x",
+   "type": "select",
+   "options": [
+    {
+     "value": "a"
+    },
+    {
+     "value": "b"
+    }
+   ],
+   "rules": [
+    {
+     "when": {
+      "field": "p",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "options",
+       "values": [
+        "a"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "p": "BE"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "plusieurs règles : la dernière gagne",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "hide"
+      }
+     ]
+    },
+    {
+     "when": {
+      "field": "b",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "show"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "1",
+   "b": "1"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "plusieurs règles : seule la première",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "hide"
+      }
+     ]
+    },
+    {
+     "when": {
+      "field": "b",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "show"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "1"
+  },
+  "expected": {
+   "visible": false,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "effets multiples",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "pro"
+     },
+     "then": [
+      {
+       "do": "show"
+      },
+      {
+       "do": "require"
+      }
+     ],
+     "else": [
+      {
+       "do": "hide"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "pro"
+  },
+  "expected": {
+   "visible": true,
+   "required": true,
+   "options": null
+  }
+ },
+ {
+  "name": "texte ne change pas l'état",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "not_empty"
+     },
+     "then": [
+      {
+       "do": "text",
+       "target": "label",
+       "text": "Nom de {a}"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "v"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "sans règle",
+  "field": {
+   "key": "x",
+   "type": "text"
+  },
+  "values": {
+   "a": "v"
+  },
+  "expected": {
+   "visible": true,
+   "required": false,
+   "options": null
+  }
+ },
+ {
+  "name": "remplir — valeur fixe",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "fill",
+       "value": "France"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": {
+   "fill": "France"
+  }
+ },
+ {
+  "name": "remplir — pas de règle qui s'applique",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "fill",
+       "value": "France"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "DE"
+  },
+  "expected": {
+   "fill": null
+  }
+ },
+ {
+  "name": "remplir — avec des champs",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "fill",
+       "value": "{a}-{b}"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "FR",
+   "b": "7"
+  },
+  "expected": {
+   "fill": "FR-7"
+  }
+ },
+ {
+  "name": "charger — condition vraie",
+  "field": {
+   "key": "c",
+   "type": "custom",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "load",
+       "what": "options"
+      }
+     ],
+     "else": [
+      {
+       "do": "load",
+       "what": "prefill"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": {
+   "load": [
+    "options"
+   ]
+  }
+ },
+ {
+  "name": "charger — condition fausse (sinon)",
+  "field": {
+   "key": "c",
+   "type": "custom",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "FR"
+     },
+     "then": [
+      {
+       "do": "load",
+       "what": "options"
+      }
+     ],
+     "else": [
+      {
+       "do": "load",
+       "what": "prefill"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": {
+   "load": [
+    "prefill"
+   ]
+  }
+ },
+ {
+  "name": "charger — sans règle de chargement",
+  "field": {
+   "key": "c",
+   "type": "custom"
+  },
+  "values": {},
+  "expected": {
+   "load": []
+  }
+ }
+]

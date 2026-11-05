@@ -138,7 +138,7 @@ class TokensView(APIView):
 
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, ADMINISTER)
-        rows = ApiToken.objects.filter(workspace=ws).select_related("service_account").order_by("-created_at")
+        rows = ApiToken.objects.filter(workspace=ws).select_related("service_account", "user").order_by("-created_at")
         return Response(
             {
                 "results": [
@@ -146,7 +146,10 @@ class TokensView(APIView):
                         "id": t.pk,
                         "name": t.name,
                         "prefix": t.prefix,
-                        "service_account": t.service_account.name,
+                        "service_account": t.service_account.name
+                        if t.service_account_id
+                        else f"{t.user.username} (jeton personnel)",
+                        "personal": t.user_id is not None,
                         "scopes": t.scopes,
                         "environments": t.environments,
                         "expires_at": t.expires_at,
@@ -219,7 +222,11 @@ class TokenRotateView(APIView):
     @transaction.atomic
     def post(self, request, workspace, pk):
         ws = get_workspace(request.user, workspace, ADMINISTER)
-        old = ApiToken.objects.select_for_update().filter(workspace=ws, pk=pk, revoked_at__isnull=True).first()
+        old = (
+            ApiToken.objects.select_for_update()
+            .filter(workspace=ws, pk=pk, revoked_at__isnull=True, service_account__isnull=False)
+            .first()
+        )
         if old is None or old.expires_at <= timezone.now():
             raise Http404()
         overlap = request.data.get("overlap_hours", 24)
@@ -297,7 +304,12 @@ class PromotionSerializer(serializers.ModelSerializer):
 
     def get_can_decide(self, obj) -> bool:
         u = self.context["request"].user
-        _, rules = governance.current_policy(obj.workspace)
+        policies = self.context.setdefault(
+            "_policies", {}
+        )  # AR1.6 : la politique est lue une fois par espace, pas une fois par demande
+        if obj.workspace_id not in policies:
+            policies[obj.workspace_id] = governance.current_policy(obj.workspace)[1]
+        rules = policies[obj.workspace_id]
         return obj.status == "requested" and not (rules["forbid_self_review"] and obj.requested_by_id == u.id)
 
 
@@ -308,7 +320,7 @@ class PromotionListView(ListAPIView):
         ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
         qs = (
             Promotion.objects.filter(workspace=ws)
-            .select_related("workflow_version__workflow", "environment", "requested_by", "reviewed_by")
+            .select_related("workflow_version__workflow", "environment", "requested_by", "reviewed_by", "workspace")
             .order_by("-created_at")
         )
         from workflows import access

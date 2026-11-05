@@ -87,6 +87,7 @@ NODE_TYPES = {
     "while",
     "ldap",
     "sftp",
+    "smtp",
     "transform",
 }
 HTTP_CONNECTION_KINDS = ("http_bearer", "api_key", "basic", "oauth2_client", "oauth2_code", "aws_sigv4")
@@ -103,6 +104,12 @@ STATIC_OUTPUTS = {
     "wait": {},
     "join": {},
     "race": {"winner": {"type": "string"}, "winner_name": {"type": "string"}, "value": {}},
+    "smtp": {
+        "sent": {"type": "boolean"},
+        "simulated": {"type": "boolean"},
+        "recipients": {"type": "integer"},
+        "message_id": {"type": "string"},
+    },
     "sftp": {
         "operation": {"type": "string"},
         "path": {"type": "string"},
@@ -161,6 +168,7 @@ ERROR_CAPABLE = {
     "while",
     "ldap",
     "sftp",
+    "smtp",
 }
 
 
@@ -391,6 +399,7 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
 
     issues += _validate_variables(variables)
     issues += _validate_form(graph.get("form"), declared_inputs)
+    issues += _validate_input_form(graph.get("input_form"), graph.get("inputs"), workspace)
     issues += [issue(None, "bad_pins", m) for m in debug.validate_pins(graph.get("pins"), set(ids))]
     by_id = {n["id"]: n for n in nodes}
     clean_edges = []
@@ -518,6 +527,11 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
             for src in _node_expressions(n):
                 _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
             out_types[nid] = STATIC_OUTPUTS["http"]
+        elif ntype == "smtp":
+            _validate_smtp(n, workspace, issues)
+            for src in _node_expressions(n):
+                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
+            out_types[nid] = STATIC_OUTPUTS["smtp"]
         elif ntype == "sftp":
             _validate_sftp(n, workspace, issues)
             for src in _node_expressions(n):
@@ -682,6 +696,29 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
         )
 
 
+def _validate_smtp(n: dict, workspace, issues: list) -> None:
+    nid = n["id"]
+    for field, label in (("to", "un destinataire"), ("subject", "l'objet"), ("body", "le corps du message")):
+        if not str(n.get(field) or "").strip():
+            issues.append(issue(nid, "bad_smtp", f"Indiquez {label}."))
+    cname = n.get("connection")
+    if not isinstance(cname, str) or not cname:
+        issues.append(issue(nid, "missing_connection", "Choisissez la connexion (type « Serveur SMTP »)."))
+    elif not Connection.objects.filter(workspace=workspace, name=cname, kind="smtp").exists():
+        issues.append(issue(nid, "unknown_connection", f"Connexion « Serveur SMTP » introuvable : {cname}."))
+    if n.get("mode", "test") not in ("test", "reel"):
+        issues.append(issue(nid, "bad_smtp", "Mode : « test » (simulation) ou « reel »."))
+    if n.get("mode", "test") == "test":
+        issues.append(
+            issue(
+                nid,
+                "smtp_test_mode",
+                "Mode test : aucun e-mail n'est envoyé (la sortie est simulée).",
+                level="warning",
+            )
+        )
+
+
 def _validate_sftp(n: dict, workspace, issues: list) -> None:
     nid = n["id"]
     if n.get("operation", "list") not in ("list", "read", "write", "delete"):
@@ -751,6 +788,10 @@ def _validate_agent(n: dict, workspace, issues: list) -> None:
         for t in tools:
             if t not in known:
                 issues.append(issue(nid, "unknown_action", f"Outil de l'agent introuvable dans le catalogue : {t}."))
+        for t in Action.objects.filter(workspace=workspace, slug__in=list(known), status="proposed").values_list(
+            "name", flat=True
+        ):
+            issues.append(issue(nid, "proposed_action", f"L'outil « {t} » est une proposition d'assistant non relue."))
     steps = n.get("max_steps")
     if steps is not None and (not isinstance(steps, int) or not 1 <= steps <= 10):
         issues.append(issue(nid, "bad_agent", "Nombre de tours : de 1 à 10."))
@@ -858,6 +899,8 @@ def _node_expressions(n) -> list[str]:
         out += plain + per
     if n["type"] == "while":
         out.append(str(n.get("condition") or ""))
+    if n["type"] == "smtp":
+        out += template_expressions([n.get("to", ""), n.get("cc", ""), n.get("subject", ""), n.get("body", "")])
     if n["type"] == "sftp":
         out += template_expressions([n.get("path", ""), n.get("content", "")])
     if n["type"] == "ldap":
@@ -1035,6 +1078,14 @@ def _validate_action(n, workspace, issues, out_types, declared_inputs):
         out_types[nid] = None
         return
     out_types[nid] = (version.output_schema or {}).get("properties", {})
+    if action.status == "proposed":
+        issues.append(
+            issue(
+                nid,
+                "proposed_action",
+                f"L'action « {action.name} » est une proposition d'assistant : relisez-la et activez-la avant de publier ou lancer.",
+            )
+        )
     if action.status == "deprecated":
         issues.append(
             issue(
@@ -1212,6 +1263,54 @@ def _validate_form(form, declared_inputs) -> list[dict]:
     missing = [k for k in declared_inputs if k not in used]
     if missing:
         out.append(issue(None, "bad_form", f"Entrées absentes du formulaire : {', '.join(missing)}.", "warning"))
+    return out
+
+
+def _validate_input_form(definition, inputs, workspace) -> list[dict]:
+    """The designed input form (`input_form`): well formed, bound to the workflow's own inputs, connections known."""
+    if definition in (None, {}):
+        return []
+    from formbuilder import service as formservice
+    from triggers import formengine
+
+    mapping = definition.get("map") if isinstance(definition, dict) else None  # which field feeds which input
+    if mapping is not None and not formengine._valid_map(mapping):
+        return [issue(None, "bad_input_form", "Formulaire d'entrée : correspondance des entrées invalide.")]
+    if isinstance(definition, dict) and "ref" in definition and "sections" not in definition:
+        if workspace is None:
+            return []
+        if not (definition["ref"] or {}).get("form"):
+            return [
+                issue(
+                    None,
+                    "bad_input_form",
+                    "Formulaire d'entrée : choisissez le formulaire de la bibliothèque à utiliser.",
+                )
+            ]
+        try:
+            definition = formservice.resolve(workspace, definition["ref"])[1].definition
+        except formservice.FormRefError as exc:
+            return [issue(None, "bad_input_form", f"Formulaire d'entrée : {exc}")]
+    problems = formengine.check_definition(definition) or formengine.check_against_inputs(
+        definition, inputs or {}, mapping
+    )
+    out = [issue(None, "bad_input_form", f"Formulaire d'entrée : {k} : {v}") for k, v in list(problems.items())[:5]]
+    if problems or workspace is None:
+        return out
+    from vault.auth import HTTP_KINDS
+    from vault.models import Connection
+
+    for key, src in formengine.iter_sources(definition):
+        name = src.get("connection", "")
+        if not Connection.objects.filter(workspace=workspace, name=name, kind__in=HTTP_KINDS).exists():
+            out.append(
+                issue(
+                    None,
+                    "input_form_connection",
+                    f"Formulaire d'entrée : « {key} » lit un service par la connexion « {name} », introuvable.",
+                    "warning",
+                )
+            )
     return out
 
 
@@ -1408,6 +1507,14 @@ def _validate_ai(n, workspace, issues, out_types, declared_inputs):
                 )
             )
             return None
+        if skill.status == "proposed":
+            issues.append(
+                issue(
+                    nid,
+                    "proposed_skill",
+                    f"Le skill « {skill.name} » est une proposition d'assistant : relisez-le et activez-le avant de publier ou lancer.",
+                )
+            )
         if skill.status == "deprecated":
             issues.append(
                 issue(
@@ -1503,4 +1610,11 @@ def pin_graph(graph: dict, workspace) -> dict:
             _, sv = resolve_skill_version(workspace, n["skill"], n.get("skill_version"))
             n["skill_version"] = sv.version
             n["provider"] = n.get("provider") or sv.default_provider
+    if pinned.get("input_form"):
+        from formbuilder import service as formservice
+
+        try:
+            pinned["input_form"] = formservice.pin_input_form(workspace, pinned["input_form"])
+        except formservice.FormRefError as exc:
+            raise ValueError(f"Formulaire d'entrée : {exc}") from None
     return pinned

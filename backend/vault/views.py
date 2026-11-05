@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.db import transaction
+from django.db.models import Count
 from django.http import Http404, HttpResponseRedirect
 from django.utils import timezone
 from rest_framework import serializers
@@ -95,7 +96,7 @@ def secret_row(s: Secret) -> dict:
         "created_at": s.created_at,
         "rotated_at": s.rotated_at,
         "key_id": s.key_id,
-        "used_by": s.connections.count(),
+        "used_by": s.n_connections if hasattr(s, "n_connections") else s.connections.count(),
         "provider": s.provider,
         "vault_mode": s.vault_mode,
         "vault_mount": s.vault_mount,
@@ -110,7 +111,7 @@ class SecretListView(APIView):
 
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, MANAGE_CONNECTIONS)
-        rows = Secret.objects.filter(workspace=ws).order_by("name", "id")
+        rows = Secret.objects.filter(workspace=ws).annotate(n_connections=Count("connections")).order_by("name", "id")
         return Response({"results": [secret_row(s) for s in rows]})
 
     def post(self, request, workspace):
@@ -247,6 +248,7 @@ CONFIG_FIELDS = {
     Connection.Kind.MYSQL: ("host", "port", "database", "username", "tls"),
     Connection.Kind.LDAP: ("host", "port", "bind_dn", "base_dn", "tls"),
     Connection.Kind.SFTP: ("host", "port", "username", "host_key_sha256"),
+    Connection.Kind.SMTP: ("host", "port", "username", "tls", "from_address", "from_name"),
     Connection.Kind.AWS_SIGV4: ("base_url", "access_key_id", "region", "service"),
 }
 URL_FIELDS = ("base_url", "token_url", "authorize_url")
@@ -271,6 +273,7 @@ def _check_config(kind, config, dynamic: bool = False):
                     "tls",
                     "port",
                     "host_key_sha256",
+                    "from_name",
                 )
                 or key == "description"
                 or (dynamic and key in ("username", "bind_dn"))
@@ -280,6 +283,13 @@ def _check_config(kind, config, dynamic: bool = False):
                 raise serializers.ValidationError(
                     {"config": f"Le paramètre « {key} » est requis pour ce type de connexion."}
                 )
+        if kind == Connection.Kind.SMTP:
+            from runs import smtp_node
+
+            try:
+                smtp_node.check_connection_config(config)
+            except smtp_node.SmtpStepError as exc:
+                raise serializers.ValidationError({"config": exc.message}) from None
         if kind == Connection.Kind.API_KEY and config.get("in", "header") not in ("header", "query"):
             raise serializers.ValidationError({"config": "« in » : header ou query."})
         for key in URL_FIELDS:

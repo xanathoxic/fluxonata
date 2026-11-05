@@ -12,11 +12,13 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q, Window
+from django.db.models.functions import RowNumber
 from django.utils import timezone
 
 from audit.models import record
 
+from . import proposed
 from .models import Attempt, Execution, ExecutionEvent
 
 S = Execution.Status
@@ -55,6 +57,7 @@ def enqueue(
     connections=None,
     limits=None,
 ):
+    proposed.refuse_proposed_version(action_version)  # ADR 0025 : dernier barrage, toute exécution passe ici
     execution = Execution.objects.create(
         workspace=workspace,
         environment=environment,
@@ -113,11 +116,9 @@ def claim_next(worker_id: str, runner=None):
     - a runner agent serves only its scope (the spaces it is dedicated to, or the shared pool), only runtimes it is
       allowed to run, jobs whose required tags it carries, never AI steps, and never more than its own concurrency."""
     now = timezone.now()
-    qs = (
-        Execution.objects.select_for_update(skip_locked=True, of=("self",))
-        .select_related("action_version__action")
-        .filter(status=S.QUEUED)
-    )
+    qs = Execution.objects.filter(
+        status=S.QUEUED
+    )  # sans verrou : on choisit d'abord les candidats, on ne verrouille que ceux-là (FOR UPDATE interdit avec une fonction de fenêtre)
     if runner is None:
         qs, tags = qs.filter(workspace__use_shared_runners=True), set(settings.ORCH_WORKER_TAGS)
     else:
@@ -130,11 +131,6 @@ def claim_next(worker_id: str, runner=None):
         )
         qs = qs.filter(scope, action_version__runtime__in=runner.runtimes).exclude(action_version__runtime="ai")
         tags = set(runner.tags)
-    candidates = [
-        c for c in qs.order_by("-priority", "created_at")[:200] if set(c.action_version.required_tags or []) <= tags
-    ]
-    if not candidates:
-        return None
     running = dict(
         Execution.objects.filter(status=S.RUNNING)
         .values_list("workspace_id")
@@ -142,9 +138,30 @@ def claim_next(worker_id: str, runner=None):
         .values_list("workspace_id", "n")
     )
     cap = settings.ORCH_MAX_CONCURRENT_PER_WORKSPACE
-    eligible = [c for c in candidates if running.get(c.workspace_id, 0) < cap]
-    if not eligible:
+    # Équité (AR5.4) : les espaces déjà au plafond sont écartés AVANT de choisir, et les candidats sont les plus anciens PAR ESPACE (fenêtre), pas les 200 plus anciens
+    # tous espaces confondus — sinon un espace au plafond avec un long carnet remplissait la fenêtre de tâches inéligibles et en affamait un autre (reproduit : test_fairness.py).
+    qs = qs.exclude(workspace_id__in=[w for w, n in running.items() if n >= cap])
+    window = settings.ORCH_CLAIM_WINDOW_PER_WORKSPACE
+    ranked = (
+        qs.annotate(
+            rn=Window(
+                RowNumber(), partition_by=[F("workspace_id")], order_by=[F("priority").desc(), F("created_at").asc()]
+            )
+        )
+        .filter(rn__lte=window)
+        .values_list("pk", flat=True)
+    )
+    candidates = [
+        c
+        for c in Execution.objects.select_for_update(skip_locked=True, of=("self",))
+        .select_related("action_version__action")
+        .filter(pk__in=list(ranked), status=S.QUEUED)
+        .order_by("-priority", "created_at")
+        if set(c.action_version.required_tags or []) <= tags
+    ]
+    if not candidates:
         return None
+    eligible = candidates  # les espaces au plafond ont déjà été exclus
     # fairness: least-loaded workspace first; stable w.r.t. priority/age thanks to min() keeping first minimum
     execution = min(eligible, key=lambda c: (-c.priority, running.get(c.workspace_id, 0)))
     _transition(execution, S.RUNNING)
@@ -222,6 +239,7 @@ def complete_attempt(
         execution.result, execution.error = (result, None) if ok else (None, error)
     execution.finished_at, execution.lease_expires_at = now, None
     execution.save()
+    _wake_run_of(execution)  # l'étape de workflow qui attend ce résultat doit être reprise tout de suite (AR4.4)
     if cancelled:
         add_event(execution, "cancelled", "Exécution annulée.")
     elif ok:
@@ -274,4 +292,13 @@ def reconcile_expired() -> int:
             ex.lease_expires_at = None
             add_event(ex, "requeued", f"Worker perdu : tentative {ex.attempt_count} abandonnée, nouvelle tentative.")
         ex.save()
+        _wake_run_of(ex)  # échec définitif ou nouvelle tentative : le run doit le voir tout de suite
     return len(expired)
+
+
+def _wake_run_of(execution) -> None:
+    """Réveille le run dont une étape attend cette exécution (aucun effet pour une exécution lancée seule, sans workflow)."""
+    from .models import WorkflowRun
+
+    if execution.step_run_id:
+        WorkflowRun.objects.filter(steps__pk=execution.step_run_id).update(next_check_at=timezone.now())

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fluxonata
+resources:
+  - base/config.yaml
+  - base/pgbouncer.yaml
+  - base/api-ui.yaml
+  - base/api-ingest.yaml
+  - base/runner-gw.yaml
+  - base/orchestrator.yaml
+  - base/worker-aux.yaml
+  - base/ingress.yaml
+  - base/hpa.yaml
+  - base/networkpolicy.yaml
+  # base/migrate-job.yaml : volontairement HORS de la liste — à appliquer à part, avant chaque changement d'image (voir README)
+images:
+  - name: fluxonata-backend
+    newName: registry.exemple.org/fluxonata/backend   # À REMPLACER par votre registre
+    newTag: "0.1.0"

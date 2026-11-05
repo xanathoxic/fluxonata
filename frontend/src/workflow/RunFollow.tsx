@@ -1,7 +1,10 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Page, type WorkflowRun } from "../api";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { StatusBadge } from "../components/StatusBadge";
+import { useToast } from "../components/Toast";
 import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
 import { CanvasView } from "./CanvasView";
@@ -59,9 +62,11 @@ export function SingleRunFollow({ id }: { id: string }) {
   const { workspace, can } = useApp();
   const qc = useQueryClient();
   const { data: run, isLoading, isError } = useRun(id);
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
   const cancel = useMutation({
     mutationFn: () => api(`/workspaces/${workspace.slug}/workflow-runs/${id}/cancel/`, { method: "POST" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["run", id] }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["run", id] }); toast.show("Annulation demandée : les étapes en cours vont s'arrêter."); },
   });
   if (isLoading) return <p role="status">{t("common.loading")}</p>;
   if (isError || !run) return <p role="alert">{t("common.error")}</p>;
@@ -79,11 +84,16 @@ export function SingleRunFollow({ id }: { id: string }) {
         <div role="status" aria-live="polite">{active && <p>{t("exec.inProgress")}</p>}{run.status === "succeeded" && <p>{t("exec.succeeded")}</p>}{run.status === "failed" && <p>{t("exec.failed")}</p>}{run.status === "cancelled" && <p>L'exécution a été annulée.</p>}</div>
         <div className="actions">
           <Link className="button" to={`/runs/${run.id}`}>Détail complet (journaux, chronologie)</Link>
-          {active && can("run") && !run.cancel_requested && <button type="button" onClick={() => { if (window.confirm("L'annulation arrête les étapes en cours mais n'annule pas les effets déjà réalisés. Annuler l'exécution ?")) cancel.mutate(); }}>Annuler l'exécution</button>}
+          {active && can("run") && !run.cancel_requested && <button type="button" onClick={() => setConfirming(true)}>Annuler l'exécution</button>}
         </div>
       </div>
       <RunSummary run={run} />
       <RunSchemaView run={run} />
+      {confirming && (
+        <ConfirmDialog title={`Annuler l'exécution de « ${run.workflow.name ?? run.workflow.slug} »`} confirmLabel="Annuler l'exécution" cancelLabel="Laisser se poursuivre" busy={cancel.isPending} onConfirm={() => { cancel.mutate(); setConfirming(false); }} onCancel={() => setConfirming(false)}>
+          <p>Les étapes en cours sont arrêtées, mais les effets déjà réalisés ne sont pas annulés.</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

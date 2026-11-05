@@ -41,3 +41,11 @@ export async function publishViaApi(page: Page, slug: string, graph: unknown) {
     return (await fetch(`${base}/workflows/${slug}/publish/`, { method: "POST", headers: h, body: "{}" })).status;
   }, { slug, graph });
 }
+
+/** Opens a dropdown menu (button `menu`) and returns the menu item `item` ; click it or assert on it. */
+export async function openMenu(page: Page, menu: string, item: string) {
+  const trigger = page.getByRole("button", { name: menu, exact: true });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+  return page.getByRole("menuitem", { name: item }).or(page.getByRole("menuitemcheckbox", { name: item })).first();
+}
+export async function menuClick(page: Page, menu: string, item: string) { await (await openMenu(page, menu, item)).click(); }

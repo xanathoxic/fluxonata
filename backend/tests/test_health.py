@@ -18,7 +18,10 @@ BASE = "/api/v1/workspaces/team-a"
 
 def test_liveness_and_readiness_are_distinct(db):
     c = APIClient()
-    assert c.get("/api/v1/health/live/").json() == {"status": "alive"}
+    live = c.get("/api/v1/health/live/").json()
+    assert live["status"] == "alive" and {"version", "revision", "roles"} <= set(
+        live
+    )  # AR6.6 : version et rôle annoncés
     r = c.get("/api/v1/health/ready/")
     assert r.status_code == 200 and r.json()["database"] == "up"
 
@@ -97,3 +100,28 @@ def test_request_id_is_echoed_or_generated_and_sanitised(db):
     assert len(generated) == 32
     evil = c.get("/api/v1/health/live/", HTTP_X_REQUEST_ID="x\r\nSet-Cookie: a=b")["X-Request-ID"]
     assert "\n" not in evil and evil != "x\r\nSet-Cookie: a=b"
+
+
+# --- AR6.6 : version et rôle visibles ; signaux d'autoscaling -----------------------------------------------------------------------
+def test_live_announces_version_revision_and_role(client, settings):
+    settings.ORCH_VERSION, settings.ORCH_REVISION, settings.ORCH_ROLES = "0.9.1", "abc1234", "ingest"
+    body = client.get("/api/v1/health/live/").json()
+    assert body == {"status": "alive", "version": "0.9.1", "revision": "abc1234", "roles": "ingest"}
+    settings.ORCH_ROLES = ""
+    assert client.get("/api/v1/health/live/").json()["roles"] == "all"
+
+
+def test_metrics_expose_the_queue_age_instances_and_build_info(client, settings, db):
+    from django.utils import timezone
+
+    from runs.models import ServiceInstance
+
+    settings.ORCH_METRICS_TOKEN, settings.ORCH_VERSION, settings.ORCH_REVISION = "t0ken", "0.9.1", "abc1234"
+    ServiceInstance.objects.create(kind="worker-aux", name="a", hostname="h", last_seen_at=timezone.now())
+    text = client.get("/api/v1/metrics/", HTTP_AUTHORIZATION="Bearer t0ken").content.decode()
+    assert "fluxonata_queue_oldest_age_seconds 0" in text
+    assert (
+        'fluxonata_service_instances{kind="worker-aux"} 1' in text
+        and 'fluxonata_service_instances{kind="orchestrator"} 0' in text
+    )
+    assert 'fluxonata_build_info{version="0.9.1",revision="abc1234",roles="all"} 1' in text

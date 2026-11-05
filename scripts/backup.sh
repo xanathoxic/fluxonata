@@ -8,7 +8,13 @@ mkdir -p "$DEST" && chmod 700 "$DEST"
 DB="${ORCH_DB_NAME:-fluxonata}"; USERNAME="${ORCH_DB_USER:-fluxonata}"
 docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" fluxonata-db-1 pg_dump -U "$USERNAME" -Fc "$DB" > "$DEST/db.dump"
 ART="${ORCH_ARTIFACTS_DIR:-$ROOT/var/artifacts}"
-[ -d "$ART" ] && tar -C "$ART" -czf "$DEST/artifacts.tar.gz" . || tar -czf "$DEST/artifacts.tar.gz" -T /dev/null
+if [ "${ORCH_ARTIFACTS_STORE:-fs}" = "s3" ]; then
+  # Les fichiers sont dans le service S3, pas sur ce disque : archive vide (restore.sh l'attend) et rappel de les protéger côté service.
+  tar -czf "$DEST/artifacts.tar.gz" -T /dev/null
+  echo "ATTENTION : ORCH_ARTIFACTS_STORE=s3 — les artefacts ne sont PAS dans cette sauvegarde. Protégez le bucket ${ORCH_S3_BUCKET:-?} côté service (versionnement, réplication ou copie régulière) : sans lui, les fichiers référencés par la base seront introuvables."
+else
+  [ -d "$ART" ] && tar -C "$ART" -czf "$DEST/artifacts.tar.gz" . || tar -czf "$DEST/artifacts.tar.gz" -T /dev/null
+fi
 if [[ " $* " == *" --with-keys "* ]]; then
   KEYS="${ORCH_KEY_DIR:-$HOME/.config/fluxonata/keys}"; tar -C "$KEYS" -czf "$DEST/keys.tar.gz" . && chmod 600 "$DEST/keys.tar.gz"
   echo "ATTENTION : keys.tar.gz contient les clés de chiffrement : stockez-le séparément du reste."

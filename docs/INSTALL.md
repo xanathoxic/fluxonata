@@ -83,6 +83,20 @@ Tout se règle par variables d'environnement (`.env` en développement, `infra/.
 | `ORCH_INSECURE_COOKIES` | `0` | `1` pour une évaluation en HTTP simple uniquement |
 | `ORCH_KEY_DIR` | `~/.config/fluxonata/keys` | clés de chiffrement et de signature |
 | `ORCH_ARTIFACTS_DIR` | `var/artifacts` | fichiers produits par les actions |
+| `ORCH_ARTIFACTS_STORE` | `fs` | où sont écrits les fichiers produits par les actions et les archives de paquets : `fs` (volume local, un seul hôte) ou `s3` (service compatible S3 : API et workers peuvent alors tourner sur des hôtes différents) |
+| `ORCH_S3_ENDPOINT` / `ORCH_S3_BUCKET` | — | adresse `http(s)://hôte[:port]` du service et nom du bucket (adressage « path-style »). **L'hôte doit figurer dans `ORCH_EGRESS_ALLOWLIST`** dès qu'il est interne : toute sortie réseau passe par la protection SSRF |
+| `ORCH_S3_ACCESS_KEY` / `ORCH_S3_SECRET_KEY` | — | identifiants du service (environnement uniquement ; jamais dans un journal ni un message d'erreur) |
+| `ORCH_S3_PREFIX` / `ORCH_S3_REGION` | vide / `us-east-1` | préfixe de toutes les clés (un bucket partagé entre installations) et région de signature |
+| `ORCH_S3_TIMEOUT` / `ORCH_S3_MAX_OBJECT_MB` | `30` / `64` | délai par requête (s) et taille maximale d'un objet : au-delà, écriture et lecture sont refusées plutôt que tronquées |
+| `ORCH_CACHE` | `locmem` (pile de production : `db`) | cache des limites de débit strictes (connexion, webhooks, formulaires publics, IA, runners) : `locmem` (un seul processus), `db` (table `fluxonata_cache`, créée par `manage.py createcachetable`) ou `redis://hôte:6379/1` (paquet `redis` à installer ; non exécuté ici). Avec plusieurs processus, `locmem` multiplie le plafond par leur nombre |
+| `ORCH_USER_THROTTLE_CACHE` | `local` | `default` rend la limite générale par utilisateur exacte entre processus, au prix de deux requêtes SQL par appel (cache `db`) |
+| `ORCH_KEY_AUTOCREATE` | `1` (pile de production : `0`) | `1` : la première clé du coffre se crée au premier usage (développement, tests). `0` : **jamais** — un service démarré sans le volume des clés fabriquerait sinon une clé neuve que rien ne conserverait ; la première clé se crée alors explicitement, une fois, par `manage.py vault_init` (déjà lancé par `bootstrap`) ; tout autre service échoue avec un message qui dit quoi faire. Sauvegardez le dossier des clés À PART |
+| `ORCH_WORKER_CONCURRENCY` | `1` | actions exécutées EN PARALLÈLE par un process worker (rôle `exec`, 1 à 16). Mesuré sur une machine de développement : ×1,23 pour 4 créneaux (le démarrage de conteneur Docker borne l'hôte) ; à essayer sur un hôte qui suit, pas à supposer gagnant. L'arrêt propre attend la fin de toutes les actions en cours (`stop_grace_period`) |
+| `ORCH_CLAIM_WINDOW_PER_WORKSPACE` | `50` | tâches en file examinées PAR ESPACE à chaque prise (les plus anciennes, après priorité) : borne le coût d'une prise sans qu'un espace au long carnet n'en prive un autre |
+| `ORCH_ROLES` | vide (= tous) | rôles portés par CE process (ADR 0022) — une valeur par conteneur. **Worker** (`run_worker`, `--roles` l'emporte) : `exec` (exécution des actions), `aux` (étapes HTTP/SQL/SFTP/SMTP/LDAP, interrogation, listes dynamiques, alertes, Git), `ai` (assistant, évaluations) ; un process sans `exec` n'exécute aucune action et **n'est pas compté comme worker** par la santé. **API** (gunicorn) : `ui` (interface et API authentifiée), `ingest` (webhooks, formulaires publics, reprise d'attente : les seules routes exposées à Internet), `runner-gw` (protocole des runners) ; une route d'un rôle non servi **n'existe pas** dans le process (404) ; `health/live` et `health/ready` sont servies par tous. Plusieurs rôles possibles, séparés par des virgules. Une valeur inconnue — ou un rôle de worker sur l'API, et inversement — empêche le démarrage |
+| `ORCH_RUNNER_LONG_POLL_SLOTS` / `ORCH_RUNNER_BUSY_RETRY_SECONDS` | `4` / `5` | attentes longues simultanées **par processus** de l'API (chacune occupe un thread) ; au-delà, un runner reçoit `429` « réessayez dans N s » et revient plus tard. Une tâche disponible est toujours servie. Pile de production : 2 processus × 4 = 8 attentes pour 16 threads |
+| `ORCH_DB_POOLED` | `0` (pile de production : `1` pour api, orchestrator et worker) | `1` quand `ORCH_DB_HOST`/`PORT` désignent un pooler en **mode transaction** (PgBouncer) : désactive les curseurs serveur et les instructions préparées automatiques (état de session perdu entre deux transactions), active la vérification de connexion. **Jamais pour `migrate`** |
+| `ORCH_DB_CONN_MAX_AGE` | `0` (derrière un pooler : `60`) | durée de conservation d'une connexion par fil, en secondes |
 | `ORCH_RUNNER` | `docker` | exécuteur du worker : `docker` (isolé) ou `subprocess` (développement, **non isolé**) |
 | `ORCH_WORK_DIR` | — | répertoire de travail des conteneurs d'actions (même chemin hôte/conteneur) |
 | `ORCH_PYTHON_IMAGE` / `_NODE_IMAGE` / `_POWERSHELL_IMAGE` | images officielles | images d'exécution (référencez-les **par digest** en production : `scripts/pin-images.sh`) |
@@ -90,7 +104,7 @@ Tout se règle par variables d'environnement (`.env` en développement, `infra/.
 | `ORCH_MAX_ATTEMPTS` | `3` | tentatives par tâche |
 | `ORCH_MAX_CONCURRENT_PER_WORKSPACE` | `4` | plafond de tâches simultanées par espace |
 | `ORCH_WORKER_TAGS` | — | étiquettes des workers intégrés (pour les actions qui en exigent) |
-| `ORCH_EGRESS_ALLOWLIST` | — | hôtes privés explicitement autorisés pour les sorties réseau (anti-SSRF) |
+| `ORCH_EGRESS_ALLOWLIST` | — | hôtes privés explicitement autorisés pour les sorties réseau (anti-SSRF). Les administrateurs de plate-forme peuvent en ajouter d'autres dans **Plate-forme → Réseau** (sans redémarrage) ; cette variable reste l'affaire de l'opérateur et n'est pas modifiable depuis l'interface |
 | `ORCH_LOGIN_RATE` / `_API_RATE` / `_WEBHOOK_RATE` / `_AI_RATE` / `_RUNNER_RATE` | `10/min` / `600/min` / `120/min` / `30/min` / `1500/min` | limites de débit |
 | `ORCH_METRICS_TOKEN` | — | jeton d'accès à `/api/v1/metrics/` (Prometheus) ; vide = désactivé |
 | `ORCH_LOG_FORMAT` | `json` | format des journaux |
@@ -199,8 +213,29 @@ Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.pro
 | Erreur CSRF / cookie refusé derrière un proxy | `ORCH_TRUSTED_ORIGINS`, `ORCH_BEHIND_TLS_PROXY`, en-tête `Host` transmis |
 | « Essai à blanc non effectué (bac à sable indisponible : …) » | le texte après les deux-points donne la cause, relevée par le **worker** (journal : `docker compose logs worker`). Vérifier dans le worker : `docker compose … exec worker sh -c 'docker run --rm --network none -v "$ORCH_WORK_DIR":/work python:3.13-slim python -c "print(1)"'` ; causes fréquentes : image `python:3.13-slim` absente (serveur sans accès Internet : `docker pull` ou `docker load`), `ORCH_WORK_DIR` inexistant ou sans droit de lecture (`755`) sur l'hôte, socket Docker inaccessible au worker |
 | Connexion à une boîte e-mail (IMAP) en échec | le message distingue : identifiant refusé, certificat refusé, serveur injoignable (avec le type d'erreur) et erreur interne (voir `docker compose logs worker`). Le serveur doit répondre en TLS (port 993) ; les adresses IPv4 sont essayées avant les IPv6, une par une |
-| Appels sortants refusés (SSRF) | l'hôte est privé : ajoutez-le explicitement à `ORCH_EGRESS_ALLOWLIST` |
+| Appels sortants refusés (SSRF) | l'hôte est privé : un administrateur de plate-forme l'autorise dans **Plate-forme → Réseau** (ou l'opérateur l'ajoute à `ORCH_EGRESS_ALLOWLIST`) |
 | Secrets illisibles après restauration | clés de chiffrement absentes : restaurez `ORCH_KEY_DIR` d'origine |
 
 ## 10. Désinstallation
 `docker compose -f infra/docker-compose.prod.yml down` ; ajoutez `-v` pour supprimer les volumes (**destructif** : sauvegardez d'abord). En développement : `scripts/dev-down.sh --db`, puis supprimez le volume `fluxonata_fluxonata-pgdata` si vous voulez repartir de zéro.
+
+## Arrêt propre et sondes de santé (AR2.6)
+`docker compose stop` envoie SIGTERM : l'orchestrateur finit son tour, le worker **termine l'action en cours** (puis ne reprend rien), les deux se retirent du registre de santé et sortent en code 0 ; l'API (gunicorn) finit ses requêtes. Si le délai (`stop_grace_period` : API 30 s, orchestrateur 20 s, worker 120 s) est dépassé, Docker tue le process : l'exécution en cours est reprise après expiration de son bail (voir `docs/RECOVERY.md`), plus lentement mais sans perte. **Une action plus longue que 120 s** doit faire augmenter `stop_grace_period` du worker.
+Sondes : `api` interroge `/api/v1/health/ready/` ; `orchestrator` et `worker` exécutent `manage.py healthcheck --kind …` (le battement de cœur de leur conteneur date de moins de 30 s). `docker compose ps` affiche leur état.
+
+## Topologie par rôles (AR2.4, AR2.7)
+Par défaut, la pile de production est **compacte** : un `api` et un `worker`. Pour séparer les surfaces et les privilèges :
+```
+docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml --env-file infra/.env.prod up -d --build
+docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml --env-file infra/.env.prod --profile ai up -d   # + le worker de l'assistant (garde le socket Docker)
+```
+`api-ui` (interface), `api-ingest` (webhooks, formulaires publics ; **aucune sortie réseau**), `runner-gw` (runners distants), `worker-exec` (actions, seul avec `worker-ai` à détenir le socket Docker), `worker-aux` (étapes de connexion, interrogation, alertes, Git). nginx route par préfixe ; l'arrêt d'un rôle n'indisponibilise que sa surface. Les réseaux `data` et `edge` sont internes : un service qui doit appeler l'extérieur doit être aussi sur `egress` (voir le fichier). `scripts/prod-smoke.sh --roles` rejoue l'installation vierge sur cette topologie. **Ne pas mélanger** les deux topologies sur un même projet sans `down` : les noms de services diffèrent.
+
+## Topologie par agents (AR3.2, ADR 0023)
+Pour que le service qui détient le socket Docker n'ait **ni la base ni la clé du coffre** : ajoutez `-f infra/docker-compose.agent.yml` aux deux fichiers de la topologie par rôles. `scripts/prod-init.sh` (rejoué sur une installation existante) ajoute `ORCH_EXEC_AGENT_TOKEN` à `infra/.env.prod`. Une fois la pile démarrée :
+```
+C="docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod"
+$C exec -T -e ORCH_EXEC_AGENT_TOKEN api-ui python manage.py runner_bootstrap      # enregistre le runner (jeton de l'environnement, jamais affiché)
+$C --profile agent up -d --build exec-agent
+```
+Limites : le worker de l'assistant (`worker-ai`) n'est pas disponible dans ce mode ; la prise de tâche passe par HTTP (latence non mesurée) ; l'agent tourne sur le même hôte (le déplacer sur un hôte dédié est le but du mode, non testé ici). `scripts/prod-smoke.sh --agent` rejoue l'installation vierge.

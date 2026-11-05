@@ -45,23 +45,37 @@ def directory():
     if not cid:
         pytest.skip("image osixia/openldap indisponible")
     try:
-        deadline = time.time() + 120
+        # osixia/openldap démarre un slapd TEMPORAIRE pour s'initialiser, puis le relance : un premier `bind` réussi ne prouve pas que le serveur est stable
+        # (les entrées ajoutées à ce moment-là peuvent se perdre, ou la connexion tomber en plein test — cause du seul échec récurrent des passes complètes).
+        # On exige donc deux liaisons réussies espacées de 6 s, puis on vérifie les entrées après coup.
+        def bind():
+            return ldap3.Connection(
+                ldap3.Server("127.0.0.1", port=port, connect_timeout=3),
+                ADMIN_DN,
+                ADMIN_PW,
+                auto_bind=True,
+                raise_exceptions=True,
+            )
+
+        deadline, stable_since = time.time() + 150, None
         while True:
             try:
-                c = ldap3.Connection(
-                    ldap3.Server("127.0.0.1", port=port, connect_timeout=3),
-                    ADMIN_DN,
-                    ADMIN_PW,
-                    auto_bind=True,
-                    raise_exceptions=True,
-                )
-                break
-            except Exception:  # noqa: BLE001  (the server is still starting)
+                bind().unbind()
+                stable_since = stable_since or time.time()
+                if time.time() - stable_since >= 6:
+                    break
+            except Exception:  # noqa: BLE001  (le serveur démarre ou redémarre)
+                stable_since = None
                 if time.time() > deadline:
                     pytest.skip("OpenLDAP ne démarre pas")
-                time.sleep(1)
+            time.sleep(1)
+        c = bind()
         for uid, cn, mail in (("ada", "Ada Lovelace", "ada@exemple.org"), ("bob", "Bob (équipe) *", "bob@exemple.org")):
             c.add(f"uid={uid},{BASE}", ["inetOrgPerson"], {"cn": cn, "sn": uid.title(), "mail": mail, "uid": uid})
+        time.sleep(2)
+        c.search(BASE, "(objectClass=inetOrgPerson)", attributes=["uid"])
+        if len(c.entries) < 2:
+            pytest.skip("OpenLDAP a perdu ses entrées (redémarrage tardif)")
         c.unbind()
         yield port
     finally:

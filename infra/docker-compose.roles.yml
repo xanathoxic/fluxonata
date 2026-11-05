@@ -1,0 +1,160 @@
+# Topologie PAR RÔLES (ADR 0022, AR2.4 + AR2.7) — à utiliser EN PLUS du fichier de base :
+#
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml --env-file infra/.env.prod up -d --build
+#   (+ `--profile ai` pour démarrer le worker de l'assistant, voir plus bas)
+#
+# Ce que ça change par rapport à la topologie compacte (un `api`, un `worker`) :
+#  - `api` et `worker` ne démarrent plus (profil « compact ») ; à leur place : api-ui, api-ingest, runner-gw, worker-exec, worker-aux (et worker-ai).
+#  - nginx route par préfixe (infra/nginx.roles.conf) : un rôle arrêté ou saturé n'affecte pas les autres surfaces.
+#  - Réseaux : `data` et `edge` sont INTERNES (aucune sortie vers Internet) ; seuls les services qui ont besoin d'appeler l'extérieur sont aussi sur `egress`.
+#    api-ingest, exposé à Internet, n'a donc AUCUNE sortie réseau au niveau du conteneur (ARCHITECTURE.md I3), pas seulement la protection applicative.
+#  - Privilèges par service : docs/ARCHITECTURE.md § 4, vérifiés par tests/test_roles_stack.py.
+name: fluxonata-prod
+
+x-role: &role   # service d'API ou worker « léger » : image runtime (sans CLI Docker), non-root, capacités retirées, lecture seule
+  image: ${ORCH_BACKEND_IMAGE:-fluxonata-backend:local}
+  pull_policy: never   # construite par le service `migrate` du fichier de base
+  env_file: .env.prod
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  read_only: true
+  tmpfs: ["/tmp"]
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+    pgbouncer: { condition: service_healthy }
+x-env: &env
+  ORCH_CACHE: db
+  ORCH_KEY_AUTOCREATE: "0"
+  ORCH_DB_HOST: pgbouncer
+  ORCH_DB_PORT: "5432"
+  ORCH_DB_POOLED: "1"
+x-ready: &ready
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready/', timeout=3)"]
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
+
+services:
+  # --- topologie compacte : inactive ici -------------------------------------------------------------------------------------
+  api: { profiles: ["compact"] }
+  worker: { profiles: ["compact"] }
+
+  # --- données : réseau interne seulement ---------------------------------------------------------------------------------------
+  db: { networks: [data] }
+  pgbouncer: { networks: [data] }
+  migrate: { networks: [data] }
+
+  # --- orchestrateur : base de données SEULE — ni clé, ni artefacts, ni sortie réseau (AR4.2) ----------------------------------------
+  orchestrator: { networks: [data] }
+
+  # --- API : trois rôles ----------------------------------------------------------------------------------------------------------
+  api-ui:
+    <<: *role
+    environment: { <<: *env, ORCH_ROLES: ui }
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+    volumes: ["keys:/keys", "artifacts:/app/var/artifacts"]
+    networks: [edge, data, egress]   # appelle OIDC, coffre externe, fournisseurs d'IA, test de connexions (ARCHITECTURE.md C-5)
+    healthcheck: *ready
+    stop_grace_period: 30s
+
+  api-ingest:
+    <<: *role
+    environment: { <<: *env, ORCH_ROLES: ingest }
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+    volumes: ["keys:/keys"]   # la clé : vérifier la signature d'un webhook déchiffre son secret (C-4) ; PAS d'artefacts
+    networks: [edge, data]   # AUCUNE sortie : ni egress, ni réseau externe
+    healthcheck: *ready
+    stop_grace_period: 30s
+
+  runner-gw:
+    <<: *role
+    environment: { <<: *env, ORCH_ROLES: runner-gw, ORCH_RUNNER_LONG_POLL_SLOTS: "8", ORCH_ALLOWED_HOSTS: "${ORCH_ALLOWED_HOSTS:-localhost,127.0.0.1},runner-gw" }   # + son nom interne : l'agent d'exécution s'y connecte directement (en-tête Host)
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "16", "--timeout", "60", "--access-logfile", "-"]   # les attentes longues occupent des threads (AR1.3)
+    volumes: ["keys:/keys", "artifacts:/app/var/artifacts"]
+    networks: [edge, data, egress]   # écrit les artefacts (stockage S3 éventuel)
+    healthcheck: *ready
+    stop_grace_period: 30s
+
+  # --- workers : trois rôles --------------------------------------------------------------------------------------------------------
+  worker-exec:   # exécute les actions : le SEUL (avec worker-ai) à détenir le socket Docker
+    <<: *role
+    image: ${ORCH_WORKER_IMAGE:-fluxonata-worker:local}   # cible « exec » : avec le CLI Docker
+    build: { context: .., dockerfile: infra/Dockerfile.backend, target: exec }
+    pull_policy: build
+    user: "0:0"
+    cap_drop: []   # root doit écrire dans le répertoire de travail de l'hôte (DAC_OVERRIDE), comme dans la topologie compacte
+    read_only: false
+    tmpfs: []
+    environment: { <<: *env, ORCH_ROLES: exec }
+    command: ["python", "manage.py", "run_worker"]
+    volumes:
+      - keys:/keys
+      - artifacts:/app/var/artifacts
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}
+    networks: [data, egress]
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "healthcheck", "--kind", "worker"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 120s
+
+  worker-aux:   # étapes HTTP/SQL/SFTP/SMTP/LDAP, interrogation, listes dynamiques, alertes, Git : AUCUN socket Docker, image sans CLI
+    <<: *role
+    environment: { <<: *env, ORCH_ROLES: aux }
+    command: ["python", "manage.py", "run_worker"]
+    volumes: ["keys:/keys", "artifacts:/app/var/artifacts"]
+    networks: [data, egress]   # parle aux systèmes du client
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "healthcheck", "--kind", "worker-aux"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 30s
+
+  worker-ai:   # assistant (plan, génération, édition) et évaluations ; démarré seulement avec `--profile ai`
+    <<: *role
+    profiles: ["ai"]
+    image: ${ORCH_WORKER_IMAGE:-fluxonata-worker:local}   # l'essai à blanc d'un workflow généré exécute des scripts dans le bac à sable : il lui faut Docker (ARCHITECTURE.md C-2)
+    build: { context: .., dockerfile: infra/Dockerfile.backend, target: exec }
+    pull_policy: build
+    user: "0:0"
+    cap_drop: []
+    read_only: false
+    tmpfs: []
+    environment: { <<: *env, ORCH_ROLES: ai }
+    command: ["python", "manage.py", "run_worker"]
+    volumes:
+      - keys:/keys
+      - artifacts:/app/var/artifacts
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}
+    networks: [data, egress]   # fournisseurs d'IA
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "healthcheck", "--kind", "worker-aux"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 120s
+
+  # --- proxy ---------------------------------------------------------------------------------------------------------------------------
+  web:
+    image: fluxonata-web-roles:local   # nom distinct : ne jamais confondre avec l'image de la topologie compacte
+    build: { context: .., dockerfile: infra/Dockerfile.web, args: { NGINX_CONF: infra/nginx.roles.conf } }
+    depends_on: !override
+      api-ui: { condition: service_started }
+      api-ingest: { condition: service_started }
+      runner-gw: { condition: service_started }
+    networks: [front, edge]
+
+networks:
+  front: {}                 # le seul réseau qui publie un port sur l'hôte
+  edge: { internal: true }  # web ↔ rôles d'API
+  data: { internal: true }  # PostgreSQL, PgBouncer et tous les services qui y accèdent
+  egress: {}                # services autorisés à appeler l'extérieur

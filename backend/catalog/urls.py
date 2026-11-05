@@ -9,6 +9,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/actions/<slug:slug>/versions/", lib.ActionVersionsView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/meta/", lib.ActionMetaView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/deprecate/", lib.ActionDeprecateView.as_view()),
+    path("workspaces/<slug:workspace>/actions/<slug:slug>/activate/", lib.ActionActivateView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/rollback/", lib.ActionRollbackView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/compare/", lib.ActionCompareView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/tests/", lib.ActionTestCasesView.as_view()),

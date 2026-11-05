@@ -17,8 +17,16 @@ STALE = timedelta(seconds=30)
 
 
 def live(request):
-    """Liveness: the process answers. Never touches dependencies (a restart cannot fix a dead database)."""
-    return JsonResponse({"status": "alive"})
+    """Liveness: the process answers. Never touches dependencies (a restart cannot fix a dead database).
+    Annonce aussi la version construite et le rôle de CE process (AR6.6) : lors d'une mise à jour progressive on voit quel rôle tourne encore l'ancien code."""
+    return JsonResponse(
+        {
+            "status": "alive",
+            "version": settings.ORCH_VERSION,
+            "revision": settings.ORCH_REVISION,
+            "roles": settings.ORCH_ROLES or "all",
+        }
+    )
 
 
 def ready(request):
@@ -100,6 +108,32 @@ def summary(workspace=None) -> list[dict]:
         )
     else:
         items.append(_item("workers", "Workers", "ok", f"{len(workers)} worker(s) actif(s)."))
+    # Déploiement par rôles (AR2) : les étapes HTTP/SQL/SFTP/SMTP/LDAP, l'interrogation, les listes dynamiques, les alertes et Git tournent dans le rôle « aux ».
+    # Un process sans information de rôles (installation compacte, ancien worker) porte tous les rôles.
+    covered: set = set()
+    for w in ServiceInstance.objects.filter(kind__in=("worker", "worker-aux")):
+        if now - w.last_seen_at <= STALE:
+            covered.update((w.info or {}).get("roles") or ["exec", "aux", "ai"])
+    if covered and "aux" not in covered:
+        items.append(
+            _item(
+                "aux_role",
+                "Étapes de connexion",
+                "error",
+                "Aucun process actif ne porte le rôle « aux » : les étapes HTTP, SQL, SFTP, SMTP, LDAP, l'interrogation des déclencheurs, les alertes et Git ne s'exécutent plus.",
+                "Démarrez un worker avec ORCH_ROLES contenant « aux » (ou sans ORCH_ROLES).",
+            )
+        )
+    if not settings.DEBUG and "@sha256:" not in settings.ORCH_PYTHON_IMAGE:
+        items.append(
+            _item(
+                "image_pin",
+                "Image d'exécution",
+                "warn",
+                "L'image d'exécution Python n'est pas épinglée par empreinte : un tag peut changer sans avertissement et les runs ne tracent pas l'image exacte utilisée.",
+                "Lancez scripts/pin-images.sh --write puis redémarrez (voir docs/INSTALL.md).",
+            )
+        )
     depth = queued.count()
     oldest = queued.order_by("created_at").first()
     wait = int((now - oldest.created_at).total_seconds()) if oldest else 0
@@ -214,6 +248,30 @@ class MetricsView(APIView):
             "fluxonata_workers_alive",
             "Workers seen in the last 30 s",
             sum(1 for w in ServiceInstance.objects.filter(kind="worker") if now - w.last_seen_at <= STALE),
+        )
+        oldest = (
+            Execution.objects.filter(status="queued")
+            .order_by("created_at")
+            .values_list("created_at", flat=True)
+            .first()
+        )
+        gauge(
+            "fluxonata_queue_oldest_age_seconds",
+            "Age of the oldest queued execution (autoscaling signal for execution agents)",
+            int((now - oldest).total_seconds()) if oldest else 0,
+        )
+        for kind in ("orchestrator", "worker", "worker-aux"):
+            gauge(
+                "fluxonata_service_instances",
+                "Process instances seen in the last 30 s, by kind",
+                sum(1 for w in ServiceInstance.objects.filter(kind=kind) if now - w.last_seen_at <= STALE),
+                f'{{kind="{kind}"}}',
+            )
+        gauge(
+            "fluxonata_build_info",
+            "Version and revision of the code serving this scrape (value is always 1)",
+            1,
+            f'{{version="{settings.ORCH_VERSION}",revision="{settings.ORCH_REVISION}",roles="{settings.ORCH_ROLES or "all"}"}}',
         )
         gauge(
             "fluxonata_uncertain_steps",

@@ -4,9 +4,10 @@ import hashlib
 import hmac
 import json
 import logging
+import threading
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from core import netsec
@@ -86,3 +87,18 @@ def deliver_due(now=None) -> int:
                     cb.next_attempt_at = timezone.now() + backoff(cb.attempts)
             cb.save()
     return done
+
+
+def run_loop(worker_id: str, stop=None, poll_seconds: float = 1.0) -> None:
+    """Livraison des rappels sortants, dans le rôle « aux » du worker (AR4.2).
+
+    Elle était dans le tour de l'orchestrateur : jusqu'à 50 envois de 5 s en série retardaient l'avancement de TOUS les runs, et l'orchestrateur avait besoin de
+    la clé du coffre (signature) et d'un réseau sortant. Désormais l'orchestrateur n'a plus ni l'un ni l'autre."""
+    stop = stop or threading.Event()
+    while not stop.is_set():
+        close_old_connections()
+        try:
+            deliver_due()
+        except Exception:  # noqa: BLE001
+            log.exception("callbacks loop iteration failed")
+        stop.wait(poll_seconds)

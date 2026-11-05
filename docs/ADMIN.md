@@ -90,3 +90,12 @@ Toute génération reste un **brouillon** ; la décision d'autorisation n'est ja
 ## Exploitation
 Journaux JSON avec `correlation_id` (`X-Request-ID`), `run_id`, `execution_id` ; `GET /api/v1/health/live/` (vivacité) et `/health/ready/` (disponibilité) ;
 métriques Prometheus sur `/api/v1/metrics/` si `ORCH_METRICS_TOKEN` est défini ; rétention : `manage.py prune_data`.
+
+## Adresses internes autorisées (Plate-forme → Réseau)
+Par principe (SSRF), le serveur refuse d'appeler une adresse interne (cette machine, un réseau privé). Un **administrateur de plate-forme** autorise ici, une par une, les adresses internes que les connexions, les listes dynamiques et les contrôles lus depuis un service doivent joindre :
+- une adresse = un **nom d'hôte ou une IP exacts** (pas de plage, de joker, de schéma, de port ni de chemin) ; le port reste libre ;
+- **jamais autorisables par l'interface** : métadonnées cloud, adresses de lien local (169.254.0.0/16, fe80::/10), « cet hôte » (0.0.0.0), multidiffusion et plages réservées ; un nom ajouté ici qui répond avec une telle adresse reste refusé ;
+- l'ajout demande une **confirmation** explicite, concerne **tous les espaces**, s'applique en **quelques secondes** à l'API et aux workers (sans redémarrage) et est **journalisé** (« Adresse interne autorisée / retirée ») ; 100 adresses au plus ;
+- les adresses de `ORCH_EGRESS_ALLOWLIST` (environnement) sont affichées en lecture seule : l'opérateur les garde sous sa responsabilité.
+Les jetons d'API n'ont jamais ces droits (comme pour toute la plate-forme) ; l'autorisation est décidée par le serveur.
+

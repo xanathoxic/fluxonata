@@ -2,15 +2,24 @@
 # The worker needs the Docker daemon to start isolated action containers: it is a TRUSTED component (see « Durcissement et limites » in docs/INSTALL.md).
 name: fluxonata-prod
 x-backend: &backend
-  image: fluxonata-backend:local
+  image: ${ORCH_BACKEND_IMAGE:-fluxonata-backend:local}
   pull_policy: never   # built once by the `migrate` service below
   env_file: .env.prod
+  environment:
+    ORCH_CACHE: db   # limites de débit partagées entre les processus de l'API (AR1.1) ; redis://… possible, voir docs/INSTALL.md
+    ORCH_KEY_AUTOCREATE: "0"   # jamais de clé du coffre fabriquée toute seule : `bootstrap` / `vault_init` la crée explicitement (AR2.5)
   restart: unless-stopped
   depends_on:
     migrate: { condition: service_completed_successfully }
   volumes:
     - keys:/keys
     - artifacts:/app/var/artifacts
+x-pooled: &pooled   # api, orchestrator, worker : via PgBouncer (mode transaction). `migrate` reste direct (DDL, createcachetable).
+  ORCH_CACHE: db   # limites de débit partagées entre les processus de l'API (AR1.1) ; redis://… possible, voir docs/INSTALL.md
+  ORCH_KEY_AUTOCREATE: "0"
+  ORCH_DB_HOST: pgbouncer
+  ORCH_DB_PORT: "5432"
+  ORCH_DB_POOLED: "1"
 services:
   db:
     image: postgres:17-alpine
@@ -21,25 +30,95 @@ services:
       POSTGRES_PASSWORD: ${ORCH_DB_PASSWORD:?run scripts/prod-init.sh}
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fluxonata -d fluxonata"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U fluxonata -d fluxonata"]   # TCP, pas le socket Unix : pendant l'initialisation d'un volume neuf l'image démarre un serveur TEMPORAIRE qui n'écoute que sur le socket — `migrate` partait alors trop tôt
       interval: 3s
       timeout: 3s
       retries: 30
   migrate:
     <<: *backend
-    build: { context: .., dockerfile: infra/Dockerfile.backend }
+    build: { context: .., dockerfile: infra/Dockerfile.backend, target: runtime }
     pull_policy: build
     restart: "no"
+    volumes: []   # AR2.5 : ni le volume des clés ni celui des artefacts (hérités par erreur du bloc commun)
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
     depends_on:
       db: { condition: service_healthy }
-    command: ["sh", "-c", "python manage.py migrate --noinput"]
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
+  # Pooler de connexions (AR1.2). Image épinglée par empreinte. Le mot de passe est celui de la base (déjà dans l'environnement du service `db`).
+  pgbouncer:
+    image: edoburu/pgbouncer@sha256:8638aa563607256d3c7440437534195f1066a92b68015d89ae9d6b935b444a6d
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://fluxonata:${ORCH_DB_PASSWORD:?run scripts/prod-init.sh}@db:5432/fluxonata
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "400"      # connexions clients (API : processus × threads ; worker : un fil par boucle)
+      DEFAULT_POOL_SIZE: "20"     # connexions réelles vers PostgreSQL (à garder très en dessous de max_connections, 100 par défaut)
+      SERVER_IDLE_TIMEOUT: "120"
+      QUERY_WAIT_TIMEOUT: "30"    # un client n'attend jamais plus de 30 s une connexion libre : erreur nette plutôt que blocage
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
   api:
     <<: *backend
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]   # fichiers temporaires de gunicorn ; le reste du système de fichiers est en lecture seule
+    healthcheck:   # AR2.6 : prête = la base répond (health/ready) ; l'image n'a pas curl
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s   # gunicorn finit les requêtes en cours (arrêt gracieux) avant d'être tué
+    environment: *pooled
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      pgbouncer: { condition: service_healthy }
   orchestrator:
     <<: *backend
+    volumes: []   # AR2.5 + AR4.2 : ni artefacts (la rétention tourne dans le worker) ni clé du coffre (les rappels signés partent du rôle « aux » du worker)
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:   # AR2.6 : pas de port HTTP — la sonde lit le battement de cœur de CE conteneur dans la base
+      test: ["CMD", "python", "manage.py", "healthcheck", "--kind", "orchestrator"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 20s   # SIGTERM : le tour en cours se termine, puis arrêt propre (runs/lifecycle.py)
+    environment: *pooled
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      pgbouncer: { condition: service_healthy }
     command: ["python", "manage.py", "run_orchestrator"]
   worker:
     <<: *backend
+    image: ${ORCH_WORKER_IMAGE:-fluxonata-worker:local}   # cible « exec » : la seule image qui contient le CLI Docker (AR2.5)
+    build: { context: .., dockerfile: infra/Dockerfile.backend, target: exec }
+    pull_policy: build
+    security_opt: ["no-new-privileges:true"]   # pas de cap_drop : root doit écrire dans le répertoire de travail de l'hôte (DAC_OVERRIDE)
+    healthcheck:   # AR2.6
+      test: ["CMD", "python", "manage.py", "healthcheck", "--kind", "worker"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 120s   # SIGTERM : l'action en cours va jusqu'au bout (délai d'une action : voir ses limites) avant l'arrêt ; au-delà, la reprise sur bail rattrape
+    environment: *pooled
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      pgbouncer: { condition: service_healthy }
     user: "0:0"   # needs access to the Docker socket; the action containers themselves run as 65534 without capabilities
     command: ["python", "manage.py", "run_worker"]
     volumes:

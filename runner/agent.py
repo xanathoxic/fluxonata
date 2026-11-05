@@ -153,9 +153,10 @@ class Agent:
                     t.join(0.2)
         except KeyboardInterrupt:
             self.stop.set()
-        return 2 if self.revoked else 0
+        return 2 if self.revoked else 3 if self.too_old else 0
 
     revoked = False
+    too_old = False
 
     def _slot(self):
         backoff, idle_since = 1.0, time.monotonic()
@@ -176,6 +177,25 @@ class Agent:
                 elif status == 204:
                     if self.idle_exit and time.monotonic() - idle_since > self.idle_exit:
                         self.stop.set()
+                elif status == 426:  # la plateforme exige une version d'agent plus récente (AR3.7)
+                    detail = ((job or {}).get("error") or {}).get("details") or {} if isinstance(job, dict) else {}
+                    log.error(
+                        "agent trop ancien : la plateforme exige la version %s ou plus récente (installée : %s). Arrêt.",
+                        detail.get("min_agent_version", "?"),
+                        VERSION,
+                    )
+                    self.too_old = True
+                    self.stop.set()
+                elif (
+                    status == 429 and isinstance(job, dict) and (job.get("error") or {}).get("code") == "long_poll_busy"
+                ):
+                    # La plateforme limite ses attentes longues (AR1.3) : ce n'est pas une panne, on revient plus tard.
+                    retry = ((job["error"].get("details") or {}).get("retry_after")) or 5
+                    log.debug(
+                        "plate-forme occupée par d'autres attentes longues ; nouvelle demande dans %s s",
+                        retry,
+                    )
+                    self._sleep(min(max(float(retry), 1.0), 60.0))
                 else:
                     log.warning("demande de tâche : réponse %s", status)
                     self._sleep(backoff)
@@ -193,7 +213,7 @@ class Agent:
                 backoff = min(backoff * 2, 30.0)
 
     def _sleep(self, seconds: float):
-        self.stop.wait(seconds * (0.7 + random.random() * 0.6))  # noqa: S311 - jitter, not a secret  # jitter: runners must not retry in lockstep
+        self.stop.wait(seconds * (0.7 + random.random() * 0.6))  # noqa: S311 - jitter, not a secret ; runners must not retry in lockstep
 
     # ------------------------------------------------------------ one job
     def _execute(self, job: dict):

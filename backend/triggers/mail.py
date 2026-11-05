@@ -7,7 +7,9 @@ allowlisted by the administrator) and the connection is pinned to the validated 
 import email
 import imaplib
 import logging
+import re
 import ssl
+import time
 from email import policy
 from email.utils import parseaddr
 
@@ -100,25 +102,62 @@ def to_item(raw: bytes, uid: str) -> dict:
     }
 
 
-def fetch_new(conn, folder: str, from_contains: str = "", subject_contains: str = "") -> list[dict]:
-    """Unread messages (newest `MAX_FETCH`), oldest first, filtered by sender / subject substring (case-insensitive)."""
+HEADER_ITEMS = "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"
+BODY_ITEMS = "(BODY.PEEK[]<0.524288>)"  # at most 512 KB of a message: its text, not a huge attachment
+SCAN_LIMIT = 200  # unread messages whose headers are looked at when a filter is set
+BATCH = 10  # messages per FETCH command
+FETCH_DEADLINE = 90.0  # seconds for one poll: well under the poller's lease, the rest is read at the next poll
+_FETCH_NUM = re.compile(rb"^\s*(\d+)\s*\(")
+
+
+def _headers_match(raw: bytes, from_contains: str, subject_contains: str) -> bool:
+    msg = email.message_from_bytes(raw, policy=policy.default)
+    name, addr = parseaddr(str(msg.get("From", "")))
+    if from_contains and from_contains.lower() not in f"{addr} {name}".lower():
+        return False
+    return not subject_contains or subject_contains.lower() in str(msg.get("Subject", "")).lower()
+
+
+def _fetch_many(conn, nums: list[bytes], items: str) -> dict[bytes, bytes]:
+    """One FETCH command for several messages (every command costs a round trip, which a loaded server makes slow):
+    {message number: the bytes returned}."""
+    status, parts = conn.fetch(b",".join(nums).decode(), items)
+    if status != "OK":
+        return {}
+    out = {}
+    for p in parts:
+        if isinstance(p, tuple):
+            m = _FETCH_NUM.match(p[0])
+            if m:
+                out[m.group(1)] = p[1]
+    return out
+
+
+def fetch_new(
+    conn, folder: str, from_contains: str = "", subject_contains: str = "", deadline_seconds: float = FETCH_DEADLINE
+) -> list[dict]:
+    """Unread messages, oldest first, filtered by sender / subject substring (case-insensitive). Few commands, small
+    transfers: the HEADERS of the newest unread messages come in ONE command (with a filter), then the messages that match
+    come in batches, each limited to 512 KB; so a mailbox with thousands of unread messages and large attachments cannot make
+    a poll last minutes. A poll stops at its deadline: what was not read is read at the next poll (nothing is marked as
+    read, and only returned messages are remembered)."""
     status, _ = conn.select(f'"{folder or "INBOX"}"', readonly=True)
     if status != "OK":
         raise MailError(f"Dossier introuvable : {folder}.")
     status, data = conn.search(None, "UNSEEN")
     if status != "OK":
         raise MailError("Recherche impossible dans la boîte.")
-    uids = (data[0] or b"").split()[-MAX_FETCH:]
-    out = []
-    for uid in uids:
-        status, parts = conn.fetch(uid, "(BODY.PEEK[])")
-        raw = next((p[1] for p in parts if isinstance(p, tuple)), None) if status == "OK" else None
-        if raw is None:
-            continue
-        item = to_item(raw, uid.decode())
-        if from_contains and from_contains.lower() not in f"{item['from']} {item['from_name']}".lower():
-            continue
-        if subject_contains and subject_contains.lower() not in item["subject"].lower():
-            continue
-        out.append(item)
+    filtered = bool(from_contains or subject_contains)
+    nums = (data[0] or b"").split()[-(SCAN_LIMIT if filtered else MAX_FETCH) :]
+    stop_at = time.monotonic() + deadline_seconds
+    if filtered and nums:
+        heads = _fetch_many(conn, nums, HEADER_ITEMS)
+        nums = [n for n in nums if n in heads and _headers_match(heads[n], from_contains, subject_contains)]
+    out: list[dict] = []
+    for i in range(0, min(len(nums), MAX_FETCH), BATCH):
+        if time.monotonic() > stop_at:
+            break
+        chunk = nums[i : min(i + BATCH, MAX_FETCH)]
+        raws = _fetch_many(conn, chunk, BODY_ITEMS)
+        out += [to_item(raws[n], n.decode()) for n in chunk if n in raws]
     return out

@@ -1,4 +1,4 @@
-"""Artifact storage behind a small interface (filesystem for dev; an S3-compatible store can implement it)."""
+"""Artifact storage behind a small interface: local filesystem (default) or an S3-compatible service (`runs/s3store.py`, AR1.4)."""
 
 import base64
 import binascii
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Protocol
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 MAX_FILES = 10
 MAX_TOTAL_BYTES = 5 * 1024 * 1024
@@ -47,7 +48,38 @@ class FileSystemStore:
 
 
 def get_store() -> ArtifactStore:
+    kind = getattr(settings, "ORCH_ARTIFACTS_STORE", "fs")
+    if kind == "s3":
+        from .s3store import S3Store
+
+        return S3Store.from_settings()
+    if kind != "fs":
+        raise ImproperlyConfigured(f"ORCH_ARTIFACTS_STORE={kind!r} inconnu : attendu fs ou s3.")
     return FileSystemStore(Path(settings.ORCH_ARTIFACTS_DIR))
+
+
+def fetch(key: str) -> bytes:
+    """Lecture pour une réponse HTTP : un fichier manquant donne 404, un stockage injoignable donne 503 (au lieu d'une erreur 500)."""
+    import logging
+
+    from rest_framework.exceptions import APIException, NotFound
+
+    from .s3store import ArtifactStoreError
+
+    class StoreUnavailable(APIException):
+        status_code = 503
+        default_detail = "Le stockage des fichiers est momentanément indisponible. Réessayez dans un instant."
+        default_code = "store_unavailable"
+
+    try:
+        return get_store().get(key)
+    except FileNotFoundError:
+        raise NotFound("Ce fichier n'est plus présent dans le stockage.") from None
+    except ArtifactStoreError as exc:
+        logging.getLogger(__name__).warning(
+            "lecture d'un fichier impossible : %s", exc
+        )  # le message ne contient aucun secret
+        raise StoreUnavailable() from None
 
 
 def safe_name(name: str) -> str:

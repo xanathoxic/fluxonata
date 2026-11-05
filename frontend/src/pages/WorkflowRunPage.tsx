@@ -5,6 +5,7 @@ import { api, type ApiError, type WorkflowDetail, type WorkflowRun } from "../ap
 import { defaultsFor } from "../components/SchemaForm";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { WizardForm } from "../workflow/WizardForm";
+import { RunForm } from "../forms/RunForm";
 import { useApp } from "../context";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { t } from "../i18n";
@@ -44,7 +45,7 @@ export function WorkflowRunPage() {
   useEffect(() => { if (schema) setValues(defaultsFor(schema)); }, [schema]);
 
   const run = useMutation({
-    mutationFn: () => api<WorkflowRun>(`/workspaces/${workspace.slug}/workflows/${slug}/runs/`, { json: { environment, inputs: values } }),
+    mutationFn: (inputs: Record<string, unknown>) => api<WorkflowRun>(`/workspaces/${workspace.slug}/workflows/${slug}/runs/`, { json: { environment, inputs } }),
     onSuccess: (r) => navigate(`/workflows/${slug}/follow?run=${r.id}`),
     onError: (e: ApiError) => setErrors(e.status === 400 && e.details ? Object.fromEntries(Object.entries(e.details).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])) : { _: e.message }),
   });
@@ -61,8 +62,13 @@ export function WorkflowRunPage() {
       <p className="hint">Environnement : <strong>{t(`env.${environment}` as never)}</strong></p>
       {environment === "prod" && <PromotionPanel slug={slug} version={wf.latest_version.version} />}
       {Object.keys(schema.properties ?? {}).length === 0 && <p>Ce workflow n'a pas d'entrée : vous pouvez le lancer directement.</p>}
-      <WizardForm schema={schema} form={wf.latest_version.form} values={values} onChange={setValues} errors={errors} disabled={!allowed} submitLabel={t("action.run")}
-        busy={run.isPending} onSubmit={() => run.mutate()} onCancel={() => navigate(`/workflows/${slug}`)} />
+      {wf.latest_version.input_form ? (
+        <RunForm schema={schema} definition={wf.latest_version.input_form} workspace={workspace.slug} workflow={slug} environment={environment} values={values} onChange={setValues} errors={errors} setErrors={setErrors}
+          disabled={!allowed} submitLabel={t("action.run")} busy={run.isPending} onSubmit={(inputs) => run.mutate(inputs)} onCancel={() => navigate(`/workflows/${slug}`)} />
+      ) : (
+        <WizardForm schema={schema} form={wf.latest_version.form} values={values} onChange={setValues} errors={errors} disabled={!allowed} submitLabel={t("action.run")}
+          busy={run.isPending} onSubmit={() => run.mutate(values)} onCancel={() => navigate(`/workflows/${slug}`)} />
+      )}
       {!allowed && <p id="no-run" className="hint">{t("action.noRunRight")}</p>}
     </>
   );

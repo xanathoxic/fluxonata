@@ -1,0 +1,20 @@
+# Routage par préfixe (même répartition que infra/nginx.roles.conf). À adapter : classe d'Ingress, nom d'hôte, TLS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fluxonata
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"   # attentes longues des runners
+    nginx.ingress.kubernetes.io/proxy-body-size: 6m
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: fluxonata.exemple.org
+    http:
+      paths:
+      - {path: /api/v1/hooks/, pathType: Prefix, backend: {service: {name: api-ingest, port: {name: http}}}}
+      - {path: /api/v1/forms/, pathType: Prefix, backend: {service: {name: api-ingest, port: {name: http}}}}
+      - {path: /api/v1/resume-forms/, pathType: Prefix, backend: {service: {name: api-ingest, port: {name: http}}}}
+      - {path: /api/v1/runner/, pathType: Prefix, backend: {service: {name: runner-gw, port: {name: http}}}}
+      - {path: /api/, pathType: Prefix, backend: {service: {name: api-ui, port: {name: http}}}}
+      # Les fichiers statiques de l'interface (image `fluxonata-web`, nginx) : ajouter `/` → service web (non fourni ici).

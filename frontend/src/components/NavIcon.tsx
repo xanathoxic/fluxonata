@@ -5,6 +5,8 @@ const PATHS: Record<string, React.ReactElement> = {
   "/library": <path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 5.5l3.8-1 3 15-3.8 1z" />,
   "/library/actions": <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" />,
   "/library/skills": <path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z" />,
+  "/library/forms": <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+  "/library/controls": <path d="M10 3h4v3a2 2 0 1 0 0 4v3h-3a2 2 0 1 1-4 0H4V9h3a2 2 0 1 0 0-4V3zM14 13h6v8h-8v-4a2 2 0 1 0 2-4z" />,
   "/connections": <><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0z" /><path d="M12 18v3" /></>,
   "/triggers": <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
   "/executions": <><circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" /></>,

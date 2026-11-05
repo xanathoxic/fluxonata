@@ -1,0 +1,246 @@
+"""ADR 0025 — le guide de conception ne peut pas dériver : ses exemples passent les VRAIS contrôles du serveur."""
+
+import json
+
+import pytest
+
+from ai.skills import SkillCreateSerializer
+from catalog.library import ActionCreateSerializer, require_contract
+from tests.conftest import client_for
+from tests.wf_helpers import STR, make_action, schema
+from triggers import formengine
+from workflows.mcp_design_guide import (
+    ACTION_EXAMPLE,
+    BRANCHING_EXAMPLE,
+    FORM_EXAMPLE,
+    FORM_RULES_EXAMPLE,
+    OTHER_NODES,
+    SKILL_EXAMPLE,
+    WORKFLOW_EXAMPLE,
+    guide,
+)
+from workflows.validation import NODE_TYPES, validate
+
+URL = "/api/v1/workspaces/team-a/mcp/design/"
+
+
+def call(c, tool, args=None):
+    r = c.post(
+        URL,
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": args or {}}},
+        format="json",
+    )
+    return r.json()["result"]
+
+
+@pytest.fixture
+def ws(world):
+    # deux actions réelles dont les contrats correspondent à l'exemple du guide (le guide demande de remplacer les <slug>)
+    make_action(
+        world["ws_a"],
+        "echo",
+        input_schema=schema(["texte"], texte=STR),
+        output_schema=schema(["n"], n={"type": "integer"}),
+    )
+    make_action(
+        world["ws_a"],
+        "log",
+        input_schema=schema(["value"], value={"type": "integer"}),
+        output_schema=schema(["value"], value={"type": "integer"}),
+    )
+    return world["ws_a"]
+
+
+def test_the_workflow_example_has_no_error_once_its_placeholders_are_real_actions(ws):
+    text = (
+        json.dumps(WORKFLOW_EXAMPLE)
+        .replace("<slug d'une action existante>", "echo")
+        .replace("<slug d'une autre action>", "log")
+    )
+    issues = validate(json.loads(text), ws, "exemple")
+    assert [i for i in issues if i["level"] == "error"] == [], issues
+
+
+def test_the_form_example_is_valid_and_feeds_the_workflow_example(ws):
+    assert not formengine.check_definition(FORM_EXAMPLE)
+    assert formengine.check_against_inputs(FORM_EXAMPLE, WORKFLOW_EXAMPLE["inputs"]) == {}
+
+
+def test_the_action_and_skill_examples_pass_the_real_serializers():
+    a = ActionCreateSerializer(data={**ACTION_EXAMPLE, "ai_generated": True, "reviewed": True})
+    assert a.is_valid(), a.errors
+    require_contract(a.validated_data["description"], a.validated_data["version"])  # contrat complet
+    s = SkillCreateSerializer(data={**SKILL_EXAMPLE, "ai_generated": True, "reviewed": True})
+    assert s.is_valid(), s.errors
+
+
+def test_the_guide_lists_every_node_and_field_type_from_the_code():
+    text = guide("all")["guide"]
+    assert all(t in text for t in NODE_TYPES) and all(t in text for t in formengine.FIELD_TYPES)
+
+
+def test_topics_and_unknown_topics(ws):
+    only = guide("form")
+    assert only["topic"] == "form" and only["guide"].startswith("FORMULAIRE") and "WORKFLOW." not in only["guide"]
+    assert guide("n'importe quoi")["topic"] == "all"
+
+
+def test_the_tool_is_readable_by_a_viewer_and_declared_read_only(ws, world):
+    res = call(client_for(world["viewer"]), "get_authoring_guide", {"topic": "workflow"})
+    assert res["isError"] is False and res["structuredContent"]["examples"]["workflow"]["nodes"]
+    tools = (
+        client_for(world["viewer"])
+        .post(URL, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, format="json")
+        .json()["result"]["tools"]
+    )
+    spec = next(t for t in tools if t["name"] == "get_authoring_guide")
+    assert spec["annotations"]["readOnlyHint"] is True and "COMMENCEZ ICI" in spec["description"]
+
+
+def test_the_branching_example_has_no_error(ws):
+    """Script, décision, approbation, jonction, aiguillage : le format enseigné par le guide est celui que le serveur accepte."""
+    issues = validate(BRANCHING_EXAMPLE, ws, "exemple")
+    assert [i for i in issues if i["level"] == "error"] == [], issues
+
+
+def test_the_form_rules_example_is_valid_and_its_conditional_fields_may_feed_optional_inputs(ws):
+    assert not formengine.check_definition(FORM_RULES_EXAMPLE)
+    props = {k: {"type": "string"} for k in ("service", "motif", "mail")} | {
+        "montant": {"type": "number"},
+        "urgent": {"type": "boolean"},
+    }
+    assert (
+        formengine.check_against_inputs(
+            FORM_RULES_EXAMPLE, {"type": "object", "required": ["montant"], "properties": props}
+        )
+        == {}
+    )
+
+
+def test_the_other_node_examples_pass_the_validator(ws):
+    from ai.models import AiProvider, AiSkill, AiSkillVersion
+
+    skill = AiSkill.objects.create(workspace=ws, slug="qualifier", name="Qualifier")
+    AiSkillVersion.objects.create(
+        skill=skill,
+        version="1.0.0",
+        instructions="x {{ inputs.motif }}",
+        input_schema=schema(["motif"], motif=STR),
+        output_schema=schema(["c"], c=STR),
+    )
+    AiProvider.objects.create(workspace=ws, name="local", kind="fake")
+    ai = {**OTHER_NODES["ai (skill actif)"], "skill": "qualifier", "provider": "local"}
+    without = {**OTHER_NODES["ai (skill actif)"], "skill": "qualifier", "provider": "absent"}
+    g0 = {"inputs": schema(motif=STR), "nodes": [without], "edges": [], "outputs": {}}
+    assert "unknown_provider" in {
+        i["code"] for i in validate(g0, ws, "x")
+    }  # d'où `workspace.ai_providers` dans le guide
+    for node_ in (OTHER_NODES["transform"], ai):
+        g = {"inputs": schema(lignes={"type": "array"}, motif=STR), "nodes": [node_], "edges": [], "outputs": {}}
+        assert [i for i in validate(g, ws, "x") if i["level"] == "error"] == [], (node_["type"], validate(g, ws, "x"))
+
+
+def test_the_guide_warns_about_nodes_that_need_a_published_workflow():
+    text = guide("workflow")["guide"]
+    assert "foreach" in text and "PUBLIÉ" in text and "script" in text and "approval" in text and "default" in text
+
+
+def test_the_guide_tells_which_ai_providers_the_workspace_has_without_exposing_their_settings(ws, world):
+    from ai.models import AiProvider
+
+    AiProvider.objects.create(
+        workspace=ws, name="local", kind="local_openai", base_url="http://llm.interne:8080", model="modele-secret-xyz"
+    )
+    out = call(client_for(world["viewer"]), "get_authoring_guide", {"topic": "workflow"})["structuredContent"]
+    assert out["workspace"] == {"ai_providers": ["local"]}
+    assert "llm.interne" not in json.dumps(out) and "modele-secret-xyz" not in json.dumps(out)
+
+
+def test_a_refused_approval_is_a_failed_step_that_an_error_edge_can_handle(ws, world):
+    """Constaté sur un workflow de plus de 100 étapes : l'assistant ne savait pas router un refus d'approbation. Le moteur le traite comme un échec
+    de l'étape (code APPROVAL_REJECTED) : une arête `error` le prend en charge, et sans elle le workflow échoue. Ce que le guide enseigne est exécuté ici."""
+    from runs.engine import decide_approval
+    from runs.models import Approval
+    from tenancy.models import Role
+    from tests.conftest import make_user
+    from tests.wf_helpers import drain, launch, publish
+
+    approver = make_user("appro", ws, Role.APPROVER)
+
+    def build(slug, with_handler):
+        nodes = [
+            {"id": "ok", "type": "approval", "name": "Validation", "title": "Valider ?"},
+            {
+                "id": "suite",
+                "type": "script",
+                "name": "Suite",
+                "language": "python",
+                "script": "r = 1\n",
+                "bindings": {},
+                "outputs": [{"name": "r", "type": "integer"}],
+            },
+        ]
+        edges = [{"from": "ok", "to": "suite"}]
+        if with_handler:
+            nodes.append(
+                {
+                    "id": "refus",
+                    "type": "script",
+                    "name": "Traiter le refus",
+                    "language": "python",
+                    "script": "traite = 1\n",
+                    "bindings": {},
+                    "outputs": [{"name": "traite", "type": "integer"}],
+                }
+            )
+            edges.append({"from": "ok", "to": "refus", "label": "error"})
+        return publish(ws, slug, nodes, edges, user=world["designer"])
+
+    handled = launch(ws, build("avec-refus", True), world["designer"])
+    handled = drain(
+        handled, max_rounds=40, until=lambda r: Approval.objects.filter(step_run__run=r, status="pending").exists()
+    )
+    decide_approval(Approval.objects.get(step_run__run=handled).pk, approver, False, "non")
+    handled = drain(handled, max_rounds=60)
+    steps = {s.node_id: s.status for s in handled.steps.all()}
+    assert steps["refus"] == "succeeded" and steps.get("suite") != "succeeded" and handled.status == "succeeded"
+
+    bare = launch(ws, build("sans-refus", False), world["designer"])
+    bare = drain(
+        bare, max_rounds=40, until=lambda r: Approval.objects.filter(step_run__run=r, status="pending").exists()
+    )
+    decide_approval(Approval.objects.get(step_run__run=bare).pk, approver, False, "non")
+    bare = drain(bare, max_rounds=60)
+    assert bare.status == "failed"  # sans arête `error`, un refus fait échouer le workflow
+
+
+def test_the_guide_teaches_what_an_assistant_got_wrong_or_could_not_know():
+    """Constatés sur une session réelle de plus de 100 étapes : refus d'approbation, codes d'options, impossibilité d'exécuter."""
+    text = guide("all")["guide"]
+    assert "REFUS fait ÉCHOUER" in text and "arête `error`" in text
+    assert "`value` des options" in text and "pas leurs libellés" in text
+    assert (
+        "ESSAYEZ avant de rendre la main" in text and "ce que l'essai ne couvre pas" in text
+    )  # il peut désormais essayer, mais doit dire ce qui reste non couvert
+
+
+def test_the_guide_makes_the_assistant_try_before_handing_over():
+    full = guide("all")["guide"]
+    assert "start_dry_run" in full and "get_dry_run" in full and "zéro problème" in full and "SIMULÉS" in full
+    essai = guide("essai")["guide"]
+    assert (
+        essai.startswith("ESSAI À BLANC")
+        and "mocks" in essai
+        and "expected" in essai
+        and "MÊMES codes que le formulaire" in essai
+    )
+
+
+def test_the_guide_makes_the_assistant_test_the_code_of_the_actions_it_proposes():
+    essai = guide("essai")["guide"]
+    assert (
+        "start_action_test" in essai
+        and "reste « proposée »" in essai
+        and "cas nominal, un cas vide ou limite et un cas d'erreur" in essai
+    )
+    assert "start_action_test" in guide("method")["guide"]

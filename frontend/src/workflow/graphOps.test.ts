@@ -1,5 +1,6 @@
+import type { GraphNode } from "./types";
 import type { Action } from "../api";
-import { addNode, allVariables, ancestors, autoLayout, availableVariables, bendEdge, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, bendEdge, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -199,5 +200,49 @@ describe("requête HTTP", () => {
     g = addNode(g, next, "appel");
     const paths = availableVariables(g, "apres", []).map((v) => v.path);
     expect(paths).toEqual(expect.arrayContaining(["steps.appel.output.status", "steps.appel.output.ok", "steps.appel.output.body"]));
+  });
+});
+
+describe("layered auto-layout", () => {
+  const n = (id: string): GraphNode => ({ id, type: "script", name: id });
+  const g = (ids: string[], edges: [string, string][]) => ({ ...emptyGraph(), nodes: ids.map(n), edges: edges.map(([from, to]) => ({ from, to })) });
+
+  it("centres a fan-out on its source and a join on its branches", () => {
+    const pos = layeredPositions(g(["a", "b", "c", "d", "e"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "e"], ["c", "e"], ["d", "e"]]));
+    expect(pos.get("c")?.y).toBe(pos.get("a")?.y);
+    expect(pos.get("e")?.y).toBe(pos.get("c")?.y);
+    expect(pos.get("b")?.y).toBe((pos.get("c")?.y ?? 0) - GRID_Y);
+  });
+
+  it("never overlaps two nodes", () => {
+    const ids = Array.from({ length: 60 }, (_, i) => `n${i}`);
+    const edges: [string, string][] = ids.slice(1).map((id, i) => [`n${Math.floor(i / 2)}`, id]);
+    const seen = new Set<string>();
+    for (const p of layeredPositions(g(ids, edges)).values()) { const k = `${p.x}:${p.y}`; expect(seen.has(k)).toBe(false); seen.add(k); }
+  });
+
+  it("untangles crossing branches", () => {
+    // declared a1,a2 / b1,b2 but wired a1->b2 and a2->b1: the order must follow the wiring
+    const pos = layeredPositions(g(["r", "a1", "a2", "b1", "b2"], [["r", "a1"], ["r", "a2"], ["a1", "b2"], ["a2", "b1"]]));
+    const above = (p: string, q: string) => (pos.get(p)?.y ?? 0) < (pos.get(q)?.y ?? 0);
+    expect(above("a1", "a2")).toBe(above("b2", "b1"));
+  });
+
+  it("folds a long chain onto stacked bands", () => {
+    const ids = Array.from({ length: BAND_LAYERS * 2 + 3 }, (_, i) => `s${i}`);
+    const pos = layeredPositions(g(ids, ids.slice(1).map((id, i) => [`s${i}`, id])));
+    const xs = [...pos.values()].map((p) => p.x);
+    expect(Math.max(...xs)).toBe((BAND_LAYERS - 1) * GRID_X);
+    expect(pos.get(`s${BAND_LAYERS}`)?.x).toBe(0);
+    expect(pos.get(`s${BAND_LAYERS}`)?.y).toBeGreaterThan(pos.get("s0")?.y ?? 0);
+  });
+
+  it("lays out a workflow that has no position at all, and leaves a partly placed one alone", () => {
+    const base = g(["a", "b", "c"], [["a", "b"], ["a", "c"]]);
+    const out = placeNewNodes(base);
+    expect(out.nodes.every((x) => x.ui)).toBe(true);
+    expect(out.nodes.find((x) => x.id === "b")?.ui?.x).toBe(GRID_X);
+    const partly = { ...base, nodes: base.nodes.map((x) => (x.id === "a" ? { ...x, ui: { x: 7, y: 9 } } : x)) };
+    expect(placeNewNodes(partly).nodes.find((x) => x.id === "a")?.ui).toEqual({ x: 7, y: 9 });
   });
 });

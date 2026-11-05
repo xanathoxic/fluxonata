@@ -77,8 +77,10 @@ def edge(a, b, label=None):
     return {"from": a, "to": b, **({"label": label} if label else {})}
 
 
-def publish(ws, slug, nodes, edges, inputs=None, outputs=None, user=None):
+def publish(ws, slug, nodes, edges, inputs=None, outputs=None, user=None, input_form=None):
     graph = {"inputs": inputs or schema(), "nodes": nodes, "edges": edges, "outputs": outputs or {}}
+    if input_form is not None:
+        graph["input_form"] = input_form
     issues = [i for i in validate(graph, ws, slug) if i["level"] == "error"]
     assert not issues, issues
     wf, _ = Workflow.objects.get_or_create(workspace=ws, slug=slug, defaults={"name": slug})

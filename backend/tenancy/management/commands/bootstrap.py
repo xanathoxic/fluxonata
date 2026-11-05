@@ -2,6 +2,7 @@ import os
 import secrets
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
 from tenancy.models import Environment, Membership, Organization, Role, Workspace
@@ -24,6 +25,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, org, workspace, admin_user, password_env, no_platform_admin=False, **opts):
+        call_command(
+            "vault_init", stdout=self.stdout
+        )  # première clé du coffre, explicite (jamais créée toute seule en production, AR2.5)
         User = get_user_model()
         o, _ = Organization.objects.get_or_create(slug="main", defaults={"name": org})
         ws, _ = Workspace.objects.get_or_create(

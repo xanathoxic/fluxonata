@@ -549,6 +549,86 @@ def test_long_poll_waits_then_gives_up_and_deleted_runner_gets_401(world, boss, 
     assert ask(c).status_code == 401
 
 
+def test_long_poll_slots_are_capped_per_process_and_excess_gets_a_retry_not_a_blocked_thread(
+    world, boss, settings, monkeypatch
+):
+    """AR1.3 : les attentes longues occupent des threads de l'API ; au-delà du plafond on répond tout de suite 429 + retry_after."""
+    from runs import runner_api
+
+    settings.ORCH_RUNNER_LONG_POLL_SLOTS = 1
+    settings.ORCH_RUNNER_BUSY_RETRY_SECONDS = 7
+    monkeypatch.setattr(runner_api, "_lp_active", 1)  # un autre runner occupe déjà l'unique créneau
+    clock = FakeClock()
+    monkeypatch.setattr("runs.runner_api.time", clock)
+    c = agent(new_runner(boss)["token"])
+    r = ask(c, wait=30)
+    assert r.status_code == 429 and r["Retry-After"] == "7"
+    assert r.json()["error"]["code"] == "long_poll_busy" and r.json()["error"]["details"] == {"retry_after": 7}
+    assert clock.sleeps == 0  # aucun thread n'a été gardé
+    assert runner_api._lp_active == 1  # et le créneau de l'autre n'a pas été touché
+    assert ask(c, wait=0).status_code == 204  # une demande sans attente n'a jamais besoin de créneau
+
+
+def test_a_job_is_served_even_when_all_long_poll_slots_are_taken(world, boss, settings, monkeypatch):
+    from runs import runner_api
+
+    settings.ORCH_RUNNER_LONG_POLL_SLOTS = 1
+    monkeypatch.setattr(runner_api, "_lp_active", 1)
+    queue(world)
+    r = ask(agent(new_runner(boss)["token"]), wait=30)
+    assert r.status_code == 200 and r.json()["job_id"]
+
+
+def test_the_slot_is_released_after_waiting_after_a_revocation_and_after_an_error(world, boss, settings, monkeypatch):
+    from runs import runner_api
+
+    settings.ORCH_RUNNER_LONG_POLL_SLOTS = 2
+    settings.ORCH_RUNNER_LONG_POLL_SECONDS = 2
+    monkeypatch.setattr(runner_api, "_lp_active", 0)
+    monkeypatch.setattr("runs.runner_api.time", FakeClock())
+    d = new_runner(boss)
+    c = agent(d["token"])
+    assert ask(c, wait=30).status_code == 204 and runner_api._lp_active == 0  # a attendu, puis rendu
+
+    class DeletesTheRunnerWhileWaiting(FakeClock):
+        def sleep(self, seconds):  # le runner est supprimé pendant l'attente : la demande répond 401
+            super().sleep(seconds)
+            Runner.objects.filter(pk=d["id"]).delete()
+
+    monkeypatch.setattr("runs.runner_api.time", DeletesTheRunnerWhileWaiting())
+    assert ask(c, wait=30).status_code == 401 and runner_api._lp_active == 0  # créneau rendu malgré la sortie anticipée
+
+
+def test_the_agent_backs_off_on_a_busy_platform_without_warning_spam(monkeypatch, caplog):
+    """Côté agent : 429 `long_poll_busy` = attendre `retry_after`, pas une panne."""
+    import logging
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "runner"))  # l'agent vit hors du paquet backend
+    import agent as agent_mod
+
+    slept = []
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = 0
+
+        def call(self, method, path, body=None, timeout=30.0):
+            self.calls += 1
+            return 429, {"error": {"code": "long_poll_busy", "message": "x", "details": {"retry_after": 9}}}
+
+    a = agent_mod.Agent.__new__(agent_mod.Agent)
+    a.client, a.config, a.once, a.idle_exit = FakeClient(), {"long_poll_seconds": 20}, False, 0.0
+    import threading
+
+    a.stop = threading.Event()
+    monkeypatch.setattr(a, "_sleep", lambda secs: (slept.append(secs), a.stop.set()))
+    with caplog.at_level(logging.WARNING):
+        a._slot()
+    assert slept == [9.0] and not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
 def test_requests_are_throttled_per_runner(world, boss, monkeypatch):
     monkeypatch.setattr(RunnerThrottle, "THROTTLE_RATES", {"runner": "3/min"})
     a, b = (

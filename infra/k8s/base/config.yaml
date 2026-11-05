@@ -1,0 +1,21 @@
+# Réglages NON secrets communs. Les secrets (clé Django, mot de passe de la base, identifiants S3) vont dans le Secret `fluxonata-secrets` (modèle : secrets.example.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluxonata-config
+data:
+  ORCH_DEBUG: "0"
+  ORCH_KEY_AUTOCREATE: "0"        # la clé du coffre vient du Secret `fluxonata-keys`, jamais fabriquée par un pod
+  ORCH_KEY_DIR: /keys
+  ORCH_DB_HOST: pgbouncer
+  ORCH_DB_PORT: "5432"
+  ORCH_DB_NAME: fluxonata
+  ORCH_DB_USER: fluxonata
+  ORCH_DB_POOLED: "1"
+  ORCH_CACHE: db
+  ORCH_ARTIFACTS_STORE: s3        # pas de volume partagé entre pods : les artefacts vont dans un service compatible S3
+  ORCH_S3_REGION: us-east-1
+  ORCH_S3_PREFIX: fluxonata
+  ORCH_RUNNER: subprocess         # SANS OBJET ici : aucun worker `exec` dans ce déploiement (voir README) ; ne jamais servir de bac à sable
+  ORCH_ALLOWED_HOSTS: "*"         # À RESTREINDRE au nom public du service (Ingress)
+  ORCH_BEHIND_TLS_PROXY: "1"

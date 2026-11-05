@@ -1,7 +1,7 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from . import catalog_views as cat
-from . import mcp, views
+from . import mcp, mcp_design, views
 from . import views_comments as com
 from . import views_debug as dbg
 from . import views_extra as x
@@ -9,7 +9,10 @@ from . import views_git as git
 from . import views_templates as tpl
 
 urlpatterns = [
-    path("workspaces/<slug:workspace>/mcp/", mcp.McpServerView.as_view()),
+    # Les clients MCP enregistrent l'adresse telle qu'on la leur donne et en retirent parfois le « / » final : sans lui, une redirection
+    # transformerait le POST en GET (405, ou 500 avec DEBUG). Les deux routes MCP acceptent donc les deux formes.
+    re_path(r"^workspaces/(?P<workspace>[-a-zA-Z0-9_]+)/mcp/?$", mcp.McpServerView.as_view()),
+    re_path(r"^workspaces/(?P<workspace>[-a-zA-Z0-9_]+)/mcp/design/?$", mcp_design.McpDesignView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/comments/", com.CommentListCreateView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/comments/<int:pk>/", com.CommentDetailView.as_view()),
     path("workspaces/<slug:workspace>/git/", git.GitConfigView.as_view()),

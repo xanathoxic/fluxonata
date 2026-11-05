@@ -1,6 +1,6 @@
 /** Layout of the schema editor: width of the element palette (left) and of the properties panel (right), and whether each is shown.
  *  Remembered per browser (a convenience, never required: every read/write is guarded). */
-export const LIMITS = { pal: { min: 160, max: 420, def: 236 }, panel: { min: 280, max: 720, def: 400 } } as const;
+export const LIMITS = { pal: { min: 160, max: 420, def: 236 }, panel: { min: 280, max: 720, def: 340 } } as const;
 export const HANDLE = 12;
 
 export interface PaneLayout { palW: number; panW: number; palOpen: boolean; panOpen: boolean }

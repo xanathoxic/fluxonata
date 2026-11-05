@@ -1,5 +1,6 @@
 """API for workflow runs, approvals and operator decisions."""
 
+from django.db.models import Exists, OuterRef
 from django.http import Http404, HttpResponse
 from rest_framework import serializers
 from rest_framework.generics import ListAPIView, RetrieveAPIView
@@ -125,6 +126,8 @@ class RunSerializer(serializers.ModelSerializer):
         return {"slug": w["slug"], "version": w["version"], "name": obj.workflow_version.workflow.name}
 
     def get_needs_decision(self, obj) -> bool:
+        if hasattr(obj, "_needs_decision"):
+            return obj._needs_decision
         return obj.steps.filter(status=StepRun.Status.UNCERTAIN).exists()
 
 
@@ -132,10 +135,11 @@ class RunDetailSerializer(RunSerializer):
     steps = serializers.SerializerMethodField()
     events = serializers.SerializerMethodField()
     graph = serializers.SerializerMethodField()
+    inspector = serializers.SerializerMethodField()
     runtime = serializers.SerializerMethodField()
 
     class Meta(RunSerializer.Meta):
-        fields = RunSerializer.Meta.fields + ["steps", "events", "graph", "runtime"]
+        fields = RunSerializer.Meta.fields + ["steps", "events", "graph", "inspector", "runtime"]
 
     def _nodes(self, obj):
         return {n["id"]: n for n in obj.definition["graph"]["nodes"]}
@@ -158,7 +162,13 @@ class RunDetailSerializer(RunSerializer):
             ],
             "edges": g["edges"],
             "notes": g.get("notes", []),
+            "layout": g.get("layout"),
         }
+
+    def get_inspector(self, obj) -> dict:
+        from . import inspector
+
+        return inspector.build(obj, {s.node_id: s for s in obj.steps.all()})
 
     def get_runtime(self, obj) -> dict:
         return obj.definition.get("runtime", {})
@@ -178,8 +188,12 @@ class WorkflowRunListView(ListAPIView):
 
     def get_queryset(self):
         ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
-        qs = WorkflowRun.objects.filter(workspace=ws, parent_step__isnull=True).select_related(
-            "environment", "requested_by", "workflow_version__workflow"
+        qs = (
+            WorkflowRun.objects.filter(workspace=ws, parent_step__isnull=True)
+            .select_related("environment", "requested_by", "workflow_version__workflow")
+            .annotate(  # AR1.6 : « a-t-elle une étape à issue incertaine ? » en une requête pour toute la page (50 requêtes avant)
+                _needs_decision=Exists(StepRun.objects.filter(run=OuterRef("pk"), status=StepRun.Status.UNCERTAIN))
+            )
         )
         return analysis.filter_runs(access.visible_runs(qs, self.request.user, ws), self.request.query_params)
 
@@ -427,7 +441,9 @@ class ApprovalListView(ListAPIView):
         ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
         qs = (
             Approval.objects.filter(workspace=ws)
-            .select_related("requested_by", "decided_by", "step_run__run__workflow_version__workflow")
+            .select_related(
+                "requested_by", "decided_by", "step_run__run__workflow_version__workflow", "step_run__run__environment"
+            )
             .order_by("-created_at")
         )
         qs = access.visible(qs, self.request.user, ws, "step_run__run__workflow_version__workflow__folder")

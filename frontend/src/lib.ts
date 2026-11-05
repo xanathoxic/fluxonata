@@ -17,6 +17,10 @@ export function useWsMutation<I = unknown, O = unknown>(method: "POST" | "PUT" |
   });
 }
 
+/** The role as people read it (the technical value is never shown). */
+export const ROLE_LABELS: Record<string, string> = { viewer: "Lecteur", operator: "Opérateur", approver: "Approbateur", designer: "Concepteur", space_manager: "Responsable d'espace", admin: "Administrateur", catalog: "Catalogue" };
+export const roleLabel = (r: string): string => ROLE_LABELS[r] ?? r.replace(/_/g, " ");
+
 export function errorText(e: unknown): string {
   const err = e as Partial<ApiError> | null;
   if (!err) return "";

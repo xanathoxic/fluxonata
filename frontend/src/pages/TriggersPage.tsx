@@ -5,6 +5,7 @@ import { apiAll, type WorkflowSummary } from "../api";
 import { Badge, Confirm, EmptyRow, SearchBox, Section, usePaged } from "../components/AdminUi";
 import { Overlay } from "../components/Overlay";
 import { PageHeader } from "../components/PageHeader";
+import { IconLabel } from "../forms/FormIcon";
 import { RowIcon } from "../components/RowIcon";
 import { Tabs } from "../components/Tabs";
 import { useApp } from "../context";
@@ -49,16 +50,15 @@ export function TriggersPage() {
   const hookPaged = usePaged(hookRows, 10);
   return (
     <>
-      <PageHeader title="Déclencheurs" description="Lancez un workflow à heure fixe (planification) ou depuis un système externe (webhook signé)."
-        actions={edit && (tab === "sch"
-          ? <button type="button" className="primary" onClick={() => { addS.reset(); setOpenS(true); }}>Nouvelle planification</button>
-          : tab === "hooks" ? <button type="button" className="primary" onClick={() => { addH.reset(); setOpenH(true); }}>Nouveau webhook</button> : null)} />
+      <PageHeader title="Déclencheurs" description="Lancez un workflow à heure fixe (planification) ou depuis un système externe (webhook signé)." />
       <Tabs label="Types de déclencheurs" active={tab} onChange={setTab} tabs={[
         { id: "sch", label: "Planifications", content: (
           <>
             <p className="help-row"><HelpTip caption="À savoir">Les dates sont stockées en UTC et calculées dans le fuseau choisi. Une heure locale inexistante (passage à l'heure d'été) est sautée ; une heure répétée (retour à l'heure d'hiver) ne s'exécute qu'une fois.</HelpTip></p>
             <Section title="Planifications" info={`${sch.data?.results.filter((r) => r.enabled).length ?? 0} active(s) sur ${sch.data?.results.length ?? 0}.`}>
-            <div className="adm-filters"><SearchBox label="Rechercher une planification" value={qs} onChange={setQs} placeholder="Nom ou workflow" /></div>
+            <div className="adm-filters"><SearchBox label="Rechercher une planification" value={qs} onChange={setQs} placeholder="Nom ou workflow" />
+              <span style={{ flex: 1 }} />
+              {edit && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { addS.reset(); setOpenS(true); }}><IconLabel icon="plus">Nouvelle planification</IconLabel></button>}</div>
             <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Planifications</caption>
               <thead><tr><th scope="col">Nom</th><th scope="col">Workflow</th><th scope="col">Quand</th><th scope="col">Prochaines exécutions</th><th scope="col">Statut</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>{schPaged.slice.map((r) => (
@@ -73,7 +73,9 @@ export function TriggersPage() {
           <>
             <p className="help-row"><HelpTip caption="À savoir">Chaque appel doit être signé (HMAC-SHA256 de « horodatage.corps »), daté de moins de 5 minutes, et ne peut être rejoué. Rien n'est public par défaut.</HelpTip></p>
             <Section title="Webhooks entrants" info={`${hooks.data?.results.length ?? 0} webhook(s).`}>
-            <div className="adm-filters"><SearchBox label="Rechercher un webhook" value={qh} onChange={setQh} placeholder="Nom ou workflow" /></div>
+            <div className="adm-filters"><SearchBox label="Rechercher un webhook" value={qh} onChange={setQh} placeholder="Nom ou workflow" />
+              <span style={{ flex: 1 }} />
+              {edit && <button type="button" className="primary" aria-haspopup="dialog" onClick={() => { addH.reset(); setOpenH(true); }}><IconLabel icon="plus">Nouveau webhook</IconLabel></button>}</div>
             <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Webhooks entrants</caption>
               <thead><tr><th scope="col">Nom</th><th scope="col">Workflow</th><th scope="col">Adresse</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>{hookPaged.slice.map((r) => <tr key={r.id}><td>{r.name}{r.signing_secret && <> <Badge tone={r.signing_secret.provider === "vault" ? "info" : "muted"}>secret « {r.signing_secret.name} »{r.signing_secret.provider === "vault" ? " · Vault" : ""}</Badge></>}</td><td>{r.workflow} ({r.environment})</td><td><code>POST {r.url}</code>{r.provider !== "fluxonata" && <><br /><span className="hint">{PROVIDERS.find(([v]) => v === r.provider)?.[1]}{r.events.length ? ` — ${r.events.join(", ")}` : ""}</span></>}</td>

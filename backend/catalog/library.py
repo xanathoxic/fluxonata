@@ -16,7 +16,7 @@ from audit.models import record
 from core.folders import clean_folder
 from core.tags import clean_tags
 from runs.runners import NETWORK_POLICIES, RUNTIMES
-from tenancy.permissions import PUBLISH, VIEW, get_workspace
+from tenancy.permissions import PUBLISH, VIEW, get_workspace, require_human_session
 from workflows import access
 from workflows.models import Workflow, WorkflowVersion
 
@@ -278,10 +278,34 @@ class ActionDeprecateView(APIView):
         ws = get_workspace(request.user, workspace, PUBLISH)
         a = _action(ws, slug)
         reinstate = bool(request.data.get("reinstate"))
+        if reinstate and a.status == Action.Status.PROPOSED:
+            raise serializers.ValidationError(
+                {"reinstate": "Une proposition d'assistant s'active après relecture (« Activer »)."}
+            )
         a.status = Action.Status.ACTIVE if reinstate else Action.Status.DEPRECATED
         a.deprecation_reason = "" if reinstate else str(request.data.get("reason", ""))[:300]
         a.save()
         record("action.reinstate" if reinstate else "action.deprecate", actor=request.user, workspace=ws, target=a)
+        return Response(ActionSerializer(a).data)
+
+
+class ActionActivateView(APIView):
+    """Relecture humaine d'une proposition d'assistant : elle devient une action ordinaire (ADR 0025). Jamais par jeton."""
+
+    @transaction.atomic
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        require_human_session(request)
+        a = Action.objects.select_for_update().filter(workspace=ws, slug=slug).first()
+        if a is None:
+            raise Http404()
+        if a.status != Action.Status.PROPOSED:
+            raise serializers.ValidationError({"status": "Cette action n'est pas une proposition d'assistant."})
+        if a.latest_version() is None:
+            raise serializers.ValidationError({"status": "Aucune version à activer."})
+        a.status = Action.Status.ACTIVE
+        a.save(update_fields=["status"])
+        record("action.activate", actor=request.user, workspace=ws, target=a)
         return Response(ActionSerializer(a).data)
 
 

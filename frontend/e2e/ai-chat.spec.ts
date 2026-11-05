@@ -82,8 +82,8 @@ test("assistant IA de l'éditeur : propose, applique, annule ; absent quand l'IA
     await expect(chat.getByRole("button", { name: "Appliquer au brouillon" })).toHaveCount(0);
 
     // la conversation survit à un changement d'onglet du workflow
-    await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Résumé", exact: true }).click();
-    await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Schéma", exact: true }).click();
+    await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Informations", exact: true }).click();
+    await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Conception", exact: true }).click();
     await designer.getByRole("button", { name: "Assistant IA" }).click();
     await expect(designer.getByRole("region", { name: "Assistant IA" })).toContainText("ajoute un script à la fin");
   } finally {

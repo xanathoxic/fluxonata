@@ -6,8 +6,8 @@ describe("schema editor pane layout", () => {
 
   it("builds the grid for what is visible", () => {
     expect(gridColumns(DEFAULT_LAYOUT, false)).toBe("236px 12px minmax(0, 1fr)");
-    expect(gridColumns(DEFAULT_LAYOUT, true)).toBe("236px 12px minmax(0, 1fr) 12px 400px");
-    expect(gridColumns({ ...DEFAULT_LAYOUT, palOpen: false }, true)).toBe("minmax(0, 1fr) 12px 400px");
+    expect(gridColumns(DEFAULT_LAYOUT, true)).toBe("236px 12px minmax(0, 1fr) 12px 340px");
+    expect(gridColumns({ ...DEFAULT_LAYOUT, palOpen: false }, true)).toBe("minmax(0, 1fr) 12px 340px");
     expect(gridColumns({ ...DEFAULT_LAYOUT, panOpen: false }, true)).toBe("236px 12px minmax(0, 1fr)"); // hidden panel: no column
     expect(gridColumns({ ...DEFAULT_LAYOUT, palOpen: false, panOpen: false }, true)).toBe("minmax(0, 1fr)");
   });

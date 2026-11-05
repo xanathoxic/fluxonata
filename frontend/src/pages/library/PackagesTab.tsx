@@ -7,7 +7,7 @@ import { Badge, Confirm, EmptyRow, SearchBox, Section, usePaged, type Tone } fro
 import { Overlay } from "../../components/Overlay";
 import { Kpi } from "../OpsCharts";
 
-interface Pkg { slug: string; name: string; version: string; checksum: string; origin: string; created_at: string; download_url: string; contents: { actions: number; workflows: number } }
+interface Pkg { slug: string; name: string; version: string; checksum: string; origin: string; created_at: string; download_url: string; contents: { actions: number; workflows: number; forms?: number } }
 interface Report { signature?: { status: string; signer: string | null }; package: { name: string; version: string; license: string } | null; items: { kind: string; slug: string; version: string; status: string; messages: string[] }[]; errors: string[]; applied: boolean; can_apply: boolean }
 const SIG_TONE: Record<string, Tone> = { trusted: "ok", untrusted: "warn", invalid: "bad", unsigned: "warn" };
 const SIG: Record<string, string> = { trusted: "✔ Signature valide d'un éditeur de confiance", untrusted: "⚠ Signature valide mais éditeur inconnu", invalid: "✖ Signature invalide (paquet modifié ?)", unsigned: "⚠ Paquet non signé" };
@@ -44,6 +44,9 @@ export function PackagesTab() {
   const [f, setF] = useState({ name: "", slug: "", version: "1.0.0", description: "", sign: true });
   const [selA, setSelA] = useState<string[]>([]);
   const [selW, setSelW] = useState<string[]>([]);
+  const [selF, setSelF] = useState<string[]>([]);
+  const forms = useWsQuery<{ results: { slug: string; name: string; is_template: boolean; latest_version: { version: string } | null }[] }>("form-library", "/form-library/");
+  const fItems = (forms.data?.results ?? []).filter((x) => !x.is_template && x.latest_version).map((x) => ({ key: `${x.slug}@${x.latest_version?.version}`, label: `${x.name} (v${x.latest_version?.version})` }));
   const [file, setFile] = useState<File | null>(null);
   const [strategy, setStrategy] = useState("abort");
   const [report, setReport] = useState<Report | null>(null);
@@ -87,7 +90,7 @@ export function PackagesTab() {
           <tbody>{paged.slice.map((p) => (
             <tr key={`${p.slug}-${p.version}`}>
               <td><strong>{p.name}</strong><span className="lst-sub mono">{p.slug}</span></td><td><Badge tone="info">{p.version}</Badge></td>
-              <td>{p.contents.actions} action(s), {p.contents.workflows} workflow(s)</td>
+              <td>{p.contents.actions} action(s), {p.contents.workflows} workflow(s){p.contents.forms ? `, ${p.contents.forms} formulaire(s)` : ""}</td>
               <td>{p.origin === "import" ? <Badge>Importé</Badge> : <Badge tone="ok">Exporté</Badge>}</td><td>{formatDate(p.created_at)}</td>
               <td><a className="button" href={p.download_url} download>{p.slug}-{p.version}.zip</a></td>
             </tr>))}
@@ -98,8 +101,8 @@ export function PackagesTab() {
 
       {dlg === "export" && (
         <Overlay wide title="Exporter un paquet" description="Choisissez ce qu'il contient : seules les versions publiées sont incluses." onClose={() => setDlg(null)}
-          footer={<><button type="button" onClick={() => setDlg(null)}>Annuler</button><button type="submit" form="pk-form" className="primary" disabled={exp.isPending || (!selA.length && !selW.length)}>Créer le paquet</button></>}>
-          <form id="pk-form" onSubmit={(e) => { e.preventDefault(); exp.mutate({ ...f, actions: selA.map((s) => ({ slug: s.split("@")[0], version: s.split("@")[1] })), workflows: selW.map((s) => ({ slug: s.split("@")[0], version: s.split("@")[1] })) }, { onSuccess: () => { setCreated(f.name); setDlg(null); } }); }}>
+          footer={<><button type="button" onClick={() => setDlg(null)}>Annuler</button><button type="submit" form="pk-form" className="primary" disabled={exp.isPending || (!selA.length && !selW.length && !selF.length)}>Créer le paquet</button></>}>
+          <form id="pk-form" onSubmit={(e) => { e.preventDefault(); exp.mutate({ ...f, actions: selA.map((s) => ({ slug: s.split("@")[0], version: s.split("@")[1] })), workflows: selW.map((s) => ({ slug: s.split("@")[0], version: s.split("@")[1] })), forms: selF.map((s) => ({ slug: s.split("@")[0], version: s.split("@")[1] })) }, { onSuccess: () => { setCreated(f.name); setDlg(null); } }); }}>
             <div className="adm-two">
               <div className="field"><label htmlFor="pk-n">Nom</label><input id="pk-n" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></div>
               <div className="field"><label htmlFor="pk-s">Identifiant</label><input id="pk-s" value={f.slug} pattern="[A-Za-z0-9_-]+" onChange={(e) => setF({ ...f, slug: e.target.value })} required /></div>
@@ -108,6 +111,7 @@ export function PackagesTab() {
             <div className="adm-rule"><input id="pk-sign" className="adm-switch" type="checkbox" checked={f.sign} onChange={(e) => setF({ ...f, sign: e.target.checked })} /><div><label htmlFor="pk-sign">Signer le paquet (preuve de provenance)</label></div></div>
             <Picker legend="Actions à inclure" items={aItems} selected={selA} onToggle={(k) => toggle(selA, setSelA, k)} onAll={(on) => setSelA(on ? aItems.map((i) => i.key) : [])} />
             <Picker legend="Workflows à inclure (versions publiées)" items={wItems} selected={selW} onToggle={(k) => toggle(selW, setSelW, k)} onAll={(on) => setSelW(on ? wItems.map((i) => i.key) : [])} />
+            <Picker legend="Formulaires à inclure (versions publiées)" items={fItems} selected={selF} onToggle={(k) => toggle(selF, setSelF, k)} onAll={(on) => setSelF(on ? fItems.map((i) => i.key) : [])} />
             {exp.error && <p role="alert" className="field-error">Erreur : {errorText(exp.error)}</p>}
           </form>
         </Overlay>

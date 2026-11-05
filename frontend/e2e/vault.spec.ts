@@ -66,6 +66,7 @@ test("administration : secrets — choix du coffre, création, remplacement et s
   await dlg.getByLabel("Valeur du secret").fill("valeur-e2e-secrete");
   await expectNoA11yViolations(page);
   await dlg.getByRole("button", { name: "Créer le secret" }).click();
+  await expect(dlg).toHaveCount(0); // la fenêtre se ferme quand le secret est créé
 
   await page.getByLabel("Rechercher un secret").fill(name);
   const row = page.getByRole("row", { name: new RegExp(name) });

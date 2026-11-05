@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, goNav, login, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, goNav, login, menuClick, publishViaApi } from "./helpers";
 
 const uniq = () => `${Date.now()}`.slice(-7);
 const tabLink = (page: Page, name: string) => page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name, exact: true }).click();
-const addTile = (page: Page, label: string) => page.getByRole("button", { name: `Ajouter : ${label}`, exact: true }).click();
+const addTile = async (page: Page, label: string) => { await page.getByLabel("Rechercher un élément").fill(label); await page.getByRole("button", { name: `Ajouter : ${label}`, exact: true }).click(); await page.getByLabel("Rechercher un élément").fill(""); };
 const panelTab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true }).click();
 
 async function createWorkflow(page: Page, name: string) {
@@ -29,7 +29,7 @@ test("concepteur : workflow à 3 étapes avec condition, sans code, publié puis
   await expectNoA11yViolations(page);
 
   // 2) action du catalogue, paramètre relié à l'entrée par le sélecteur de variables
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Statistiques de texte");
   await panelTab(page, "Entrées");
   await page.getByLabel("Insérer une variable pour Texte").selectOption({ label: "Entrée « Texte »" });
@@ -47,13 +47,13 @@ test("concepteur : workflow à 3 étapes avec condition, sans code, publié puis
   await page.getByLabel(/^Secondes/).fill("1");
 
   await expect(page.getByRole("button", { name: /✔ Valide/ })).toBeVisible();
-  await expect(page.getByText("✔ Brouillon enregistré")).toBeVisible({ timeout: 30_000 }); // l'enregistrement automatique est différé puis validé côté serveur
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 30_000 }); // l'enregistrement automatique est différé puis validé côté serveur
   await expect(page.locator(".flow-node")).toHaveCount(3);
   await expectNoA11yViolations(page);
-  await page.getByRole("button", { name: "Vue liste" }).click(); // même contenu, sans canevas
+  await menuClick(page, "Affichage", "Vue liste"); // même contenu, sans canevas
   await expect(page.getByRole("list", { name: "Étapes du workflow" }).locator("li")).toHaveCount(3);
 
-  await tabLink(page, "Historique des versions");
+  await tabLink(page, "Versions");
   const [pub] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/publish/") && r.request().method() === "POST", { timeout: 30_000 }),
     page.getByRole("button", { name: "Publier une nouvelle version" }).click(),
@@ -79,7 +79,7 @@ test("concepteur : tâche script — éditeur de code, test isolé, publication 
   await page.getByLabel(/^Libellé de/).fill("Noms");
   await page.getByRole("checkbox", { name: /obligatoire/ }).check();
 
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Tâche script");
   await panelTab(page, "Entrées/Sorties");
   await page.getByLabel("Nom de la variable 1").count(); // la tâche n'a pas encore d'entrée liée
@@ -116,8 +116,8 @@ test("concepteur : tâche script — éditeur de code, test isolé, publication 
   await page.getByRole("button", { name: "Ajouter une sortie" }).click();
   await page.getByLabel("Nom de la sortie 1").fill("nombre");
   await page.getByLabel("Valeur de la sortie nombre").fill("{{ steps.script.output.total }}");
-  await expect(page.getByText("✔ Brouillon enregistré")).toBeVisible({ timeout: 30_000 }); // l'enregistrement automatique est différé puis validé côté serveur
-  await tabLink(page, "Historique des versions");
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 30_000 }); // l'enregistrement automatique est différé puis validé côté serveur
+  await tabLink(page, "Versions");
   await page.getByRole("button", { name: "Publier une nouvelle version" }).click();
   await expect(page.getByText(/Version 1\.0\.0 publiée/)).toBeVisible();
   await page.getByRole("link", { name: /Lancer v1\.0\.0/ }).click();
@@ -135,8 +135,7 @@ test("clavier seul : ajouter une étape, ouvrir l'éditeur, écrire du code et e
   const slug = `kbd-${uniq()}`;
   await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [], nodes: [{ id: "a", type: "wait", name: "Pause", seconds: 1 }] });
   await page.goto(`/workflows/${slug}/schema`);
-  await page.getByRole("button", { name: "Vue liste" }).focus();
-  await page.keyboard.press("Enter");
+  await menuClick(page, "Affichage", "Vue liste");
   await expect(page.getByRole("list", { name: "Étapes du workflow" })).toBeVisible();
   await page.getByRole("button", { name: "Ajouter : Tâche script", exact: true }).focus();
   await page.keyboard.press("Enter"); // sélectionne la nouvelle étape et ouvre ses propriétés
@@ -234,12 +233,12 @@ test("formulaire d'entrée par étapes : l'assistant guide, bloque et récapitul
 test("tous les onglets d'un workflow sont accessibles (axe) et cohérents", async ({ page }) => {
   await login(page);
   await page.goto("/workflows/redemarrer-vms");
-  for (const name of ["Résumé", "Variables", "Entrées/Sorties", "Schéma", "Suivi", "Formulaire d'entrée", "Historique des versions", "Audit", "Exécutions"]) {
+  for (const name of ["Informations", "Variables", "Entrées/Sorties", "Conception", "Suivi", "Formulaire d'entrée", "Versions", "Activité", "Exécutions"]) {
     await tabLink(page, name);
     await expect(page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
     await expectNoA11yViolations(page);
   }
-  await page.getByRole("button", { name: "Rechercher les dépendances" }).click();
+  await menuClick(page, "Plus d'actions", "Rechercher les dépendances");
   const deps = page.getByRole("dialog", { name: "Dépendances" });
   await expect(deps).toBeVisible();
   await expectNoA11yViolations(page);
@@ -288,7 +287,7 @@ test("un concepteur ne peut pas approuver ; un lecteur ne peut pas éditer", asy
   await expect(viewer.getByText("accès en lecture seule")).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Supprimer" })).toHaveCount(0);
   await expect(viewer.getByRole("button", { name: "Annuler" })).toBeDisabled();
-  await tabLink(viewer, "Historique des versions");
+  await tabLink(viewer, "Versions");
   await expect(viewer.getByRole("button", { name: "Publier une nouvelle version" })).toHaveCount(0);
 });
 
@@ -322,23 +321,43 @@ test("plusieurs exécutions simultanées : suivi sur le schéma, par exécution 
   await expect(page.locator(".flow-node.state-waiting, .flow-node.state-running").first()).toContainText("Pause");
   await expect(page.getByRole("link", { name: /Détail complet/ })).toBeVisible();
   await expectNoA11yViolations(page);
-  page.once("dialog", (d) => void d.accept());
   await page.getByRole("button", { name: "Annuler l'exécution" }).click();
+  await page.getByRole("dialog", { name: /Annuler l'exécution de/ }).getByRole("button", { name: "Annuler l'exécution" }).click();
   await expect(page.getByText("L'exécution a été annulée.")).toBeVisible({ timeout: 30_000 });
 
   // la seconde exécution continue indépendamment
   await expect(picker.getByText("1 en cours")).toBeVisible({ timeout: 20_000 });
-  await tabLink(page, "Schéma"); // le schéma redevient une vue d'édition, sans suivi
+  await tabLink(page, "Conception"); // le schéma redevient une vue d'édition, sans suivi
   await expect(page.getByRole("region", { name: "Suivi des exécutions" })).toHaveCount(0);
 });
 
-test("le bouton Publier de la barre d'actions ouvre le formulaire de publication", async ({ page }) => {
+test("le bouton Publier de la barre d'actions ouvre la fenêtre de publication (sans changer d'onglet)", async ({ page }) => {
   await login(page);
   await page.goto("/workflows/redemarrer-vms/schema");
-  await page.getByRole("link", { name: "Publier", exact: true }).click();
-  await expect(page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Historique des versions" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByLabel("Type de version")).toBeFocused();
-  await expect(page.getByRole("button", { name: "Publier une nouvelle version" })).toBeVisible();
+  await page.getByRole("button", { name: "Publier", exact: true }).click();
+  const dlg = page.getByRole("dialog", { name: "Publier une version" });
+  await expect(dlg).toBeVisible();
+  await expect(dlg.getByRole("radio", { name: /Évolution/ })).toBeChecked();
+  await expect(dlg.getByRole("radio", { name: /Correction/ })).toBeVisible();
+  await expect(dlg.getByRole("radio", { name: /Changement important/ })).toBeVisible();
+  await expectNoA11yViolations(page);
+  await expect(page).toHaveURL(/\/schema$/);
+  await dlg.getByRole("button", { name: "Annuler" }).click();
+  await expect(dlg).toHaveCount(0);
+});
+
+test("publier depuis la fenêtre : la version est créée et annoncée", async ({ page }) => {
+  await login(page);
+  const slug = `pub-${Date.now().toString().slice(-6)}`;
+  expect(await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [], nodes: [{ id: "a", type: "wait", name: "Pause", seconds: 1 }] })).toBe(201);
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.getByRole("button", { name: "Publier", exact: true }).click();
+  const dlg = page.getByRole("dialog", { name: "Publier une version" });
+  await dlg.getByRole("radio", { name: /Correction/ }).check();
+  await dlg.getByLabel("Note de version (facultatif)").fill("depuis la fenêtre");
+  await dlg.getByRole("button", { name: "Publier", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Version 1\.0\.1 publiée/ })).toBeVisible();
+  await expect(dlg).toHaveCount(0);
 });
 
 for (const size of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
@@ -380,7 +399,7 @@ test("déplacer un nœud : il suit la souris pendant le glissement, la position 
   expect(Math.abs(dropped.y - late.y)).toBeLessThan(6);
 
   // enregistré dans le brouillon
-  await expect(page.getByText("✔ Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
   const saved = await page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph.nodes.find((n: { id: string }) => n.id === "a").ui, slug);
   expect(saved.x).toBeGreaterThan(60);
   expect(saved.y).toBeGreaterThan(30);
@@ -418,7 +437,7 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
 
-  await expect(page.getByText("✔ Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
   const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
   const saved = await read();
   expect(saved.layout.start.y).toBeGreaterThan(100);
@@ -428,7 +447,7 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
   await handle.focus();
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await read()).edges[0].ui).toBeUndefined();
-  await page.getByRole("button", { name: "Organiser automatiquement" }).click();
+  await menuClick(page, "Affichage", "Organiser automatiquement");
   await expect.poll(async () => (await read()).layout).toBeUndefined();
   await expectNoA11yViolations(page);
 });
@@ -453,7 +472,7 @@ test("brouillon sans positions : déplacer un nœud ne réorganise pas les autre
   expect(near(await at("Pause C"), before.c)).toBe(true);
   const moved = await at("Pause B");
   expect(moved.y - before.b.y).toBeGreaterThan(80);
-  await expect(page.getByText("✔ Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
   const saved = await page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph.nodes.map((n: { ui?: unknown }) => !!n.ui), slug);
   expect(saved).toEqual([true, true, true]); // une position enregistrée pour CHAQUE nœud
 
@@ -469,6 +488,23 @@ test("brouillon sans positions : déplacer un nœud ne réorganise pas les autre
   const now = await shape();
   expect(Math.abs(now.down - (moved.y - before.a.y) / (before.c.x - before.a.x))).toBeLessThan(0.05);
   expect(Math.abs(now.right - (moved.x - before.a.x) / (before.c.x - before.a.x))).toBeLessThan(0.05);
+});
+
+test("« Aller à… » centre la vue sur l'étape choisie, même très éloignée", async ({ page }) => {
+  await login(page);
+  const slug = `goto-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "z" }],
+    nodes: [{ id: "a", type: "wait", name: "Début lointain", seconds: 1, ui: { x: 0, y: 0 } }, { id: "z", type: "wait", name: "Étape très loin", seconds: 1, ui: { x: 4000, y: 900 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await expect(page.locator(".flow-node").first()).toBeVisible();
+  await page.getByRole("button", { name: "Aller à", exact: false }).click();
+  await page.getByRole("dialog", { name: "Aller à une étape" }).getByRole("button", { name: /Étape très loin/ }).click();
+  const target = page.locator(".flow-node", { hasText: "Étape très loin" });
+  await expect(target).toBeVisible();
+  await expect.poll(async () => {
+    const [n, c] = [await target.boundingBox(), await page.locator(".schema-center").boundingBox()];
+    return n && c ? Math.round(Math.hypot(n.x + n.width / 2 - (c.x + c.width / 2), n.y + n.height / 2 - (c.y + c.height / 2))) : 9999;
+  }, { timeout: 5000 }).toBeLessThan(40); // le nœud est au milieu du schéma
 });
 
 test.describe("éditeur : panneaux gauche et droit", () => {
@@ -489,7 +525,7 @@ test.describe("éditeur : panneaux gauche et droit", () => {
     const canvas = page.locator(".schema-center");
     await expect(palette).toBeVisible();
     const before = await width(canvas);
-    const toggle = page.getByRole("button", { name: "Palette", exact: true });
+    const toggle = page.getByRole("button", { name: "Palette d'éléments", exact: true });
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await toggle.click();
     await expect(palette).toHaveCount(0);
@@ -498,12 +534,14 @@ test.describe("éditeur : panneaux gauche et droit", () => {
     await toggle.click();
     await expect(palette).toBeVisible();
 
+    // choisir une étape ne replie jamais la palette : seul l'utilisateur décide
     await page.locator(".flow-node").click();
+    await expect(palette).toBeVisible();
     const props = page.getByRole("complementary", { name: "Propriétés de l'étape" });
     await expect(props).toBeVisible();
-    await page.getByRole("button", { name: "Propriétés", exact: true }).click();
+    await menuClick(page, "Affichage", "Propriétés");
     await expect(props).toHaveCount(0);
-    await page.getByRole("button", { name: "Propriétés", exact: true }).click();
+    await menuClick(page, "Affichage", "Propriétés");
     await expect(props).toBeVisible();
     await expectNoA11yViolations(page);
   });
@@ -570,7 +608,7 @@ test.describe("éditeur : panneaux gauche et droit", () => {
 test("concepteur : choix multiple — cas ajoutés, sorties à relier, accessibilité", async ({ page }) => {
   await login(page);
   await createWorkflow(page, `Choix E2E ${uniq()}`);
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Choix multiple");
   await panelTab(page, "Cas");
   await page.getByLabel("Condition du cas 1").fill("inputs.env == 'prod'");
@@ -588,7 +626,7 @@ test("concepteur : choix multiple — cas ajoutés, sorties à relier, accessibi
 test("concepteur : requête HTTP — mode test par défaut, réponse lisible par les étapes suivantes, accessibilité", async ({ page }) => {
   await login(page);
   await createWorkflow(page, `Http E2E ${uniq()}`);
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Requête HTTP");
   await panelTab(page, "Requête");
   await expect(page.getByLabel("Mode")).toHaveValue("test");
@@ -606,7 +644,7 @@ test("concepteur : requête HTTP — mode test par défaut, réponse lisible par
 test("concepteur : intégration Slack depuis la palette — opération, paramètres, mode test, accessibilité", async ({ page }) => {
   await login(page);
   await createWorkflow(page, `Slack E2E ${uniq()}`);
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await page.getByLabel("Rechercher un élément").fill("slack");
   await addTile(page, "Slack");
   await panelTab(page, "Requête");
@@ -622,7 +660,7 @@ test("concepteur : intégration Slack depuis la palette — opération, paramèt
 test("concepteur : transformation de données — filtrer, regrouper, fusionner sans code, accessibilité", async ({ page }) => {
   await login(page);
   await createWorkflow(page, `Transformer E2E ${uniq()}`);
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Transformer les données");
   await panelTab(page, "Transformation");
   await page.getByLabel("Liste à traiter").fill("inputs.lignes");
@@ -641,7 +679,7 @@ test("concepteur : transformation de données — filtrer, regrouper, fusionner 
 test("concepteur : données d'une étape — aperçu d'expression, test, épinglage, accessibilité", async ({ page }) => {
   await login(page);
   await createWorkflow(page, `Données E2E ${uniq()}`);
-  await tabLink(page, "Schéma");
+  await tabLink(page, "Conception");
   await addTile(page, "Décision");
   await panelTab(page, "Décision");
   await page.getByLabel("Condition", { exact: true }).fill("1 + 1 == 2");
@@ -665,5 +703,34 @@ test("modèles : partir d'un modèle crée un brouillon prêt à configurer, acc
   await page.getByRole("button", { name: "Utiliser le modèle Notifier un canal Slack" }).click();
   await expect(page).toHaveURL(/\/workflows\/notifier-un-canal-slack[^/]*\/schema/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Notifier un canal Slack");
-  await expect(page.getByRole("option", { name: "Envoyer sur Slack" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Aller à", exact: false }).click(); // sélecteur d'étapes : la liste contient les étapes du modèle
+  await expect(page.getByRole("dialog", { name: "Aller à une étape" }).getByRole("button", { name: /Envoyer sur Slack/ })).toHaveCount(1);
+});
+
+test("concepteur : étape « Envoyer un e-mail » — connexion SMTP, mode test par défaut, accessibilité", async ({ page }) => {
+  const id = uniq();
+  await login(page);
+  // la connexion SMTP (le secret n'est jamais renvoyé) : créée par l'API, comme le ferait l'assistant de connexion
+  const status = await page.evaluate(async (id) => {
+    const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
+    const res = await fetch("/api/v1/workspaces/demo/connections/", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify({ name: `courrier-${id}`, label: `Courrier ${id}`, kind: "smtp", secret_value: "mot-de-passe-application",
+        config: { host: "smtp.exemple.test", port: "465", tls: "ssl", username: "robot@exemple.test", from_address: "robot@exemple.test", from_name: "Fluxonata" } }),
+    });
+    return res.status;
+  }, id);
+  expect(status).toBe(201);
+  await createWorkflow(page, `E-mail E2E ${id}`);
+  await tabLink(page, "Conception");
+  await addTile(page, "Envoyer un e-mail");
+  await panelTab(page, "E-mail");
+  await expect(page.getByLabel("Mode")).toHaveValue("test"); // jamais d'envoi réel sans choix explicite
+  await page.getByLabel("Connexion (serveur SMTP)").selectOption({ label: `Courrier ${id}` });
+  await expect(page.getByText(/Envoi depuis robot@exemple.test/)).toBeVisible();
+  await page.getByLabel("Destinataire(s)").fill("lea@exemple.test");
+  await page.getByLabel("Objet").fill("Panne : {{ inputs.objet }}");
+  await page.getByLabel("Message (texte)").fill("Bonjour,\nLe portail est en panne.");
+  await expect(page.getByLabel("Destinataire(s)")).toHaveValue("lea@exemple.test");
+  await expectNoA11yViolations(page);
 });

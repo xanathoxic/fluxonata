@@ -7,6 +7,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/", skills.SkillDetailView.as_view()),
     path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/versions/", skills.SkillVersionsView.as_view()),
     path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/deprecate/", skills.SkillDeprecateView.as_view()),
+    path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/activate/", skills.SkillActivateView.as_view()),
     path("workspaces/<slug:workspace>/ai/skills/<slug:slug>/dependents/", skills.SkillDependentsView.as_view()),
     path("workspaces/<slug:workspace>/ai/policy/", views.PolicyView.as_view()),
     path("workspaces/<slug:workspace>/ai/providers/", views.ProviderListView.as_view()),

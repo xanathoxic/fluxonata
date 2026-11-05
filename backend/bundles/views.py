@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.models import record
-from runs.artifacts import get_store
+from formbuilder.models import Form
+from runs.artifacts import fetch
 from tenancy.permissions import ADMINISTER, PUBLISH, VIEW, get_workspace
 from vault import signing
 from workflows import access
@@ -28,6 +29,7 @@ class ExportSerializer(serializers.Serializer):
     license = serializers.CharField(default="Apache-2.0", max_length=40)
     actions = RefSerializer(many=True, default=list)
     workflows = RefSerializer(many=True, default=list)
+    forms = RefSerializer(many=True, default=list)
     sign = serializers.BooleanField(default=True)
 
 
@@ -59,6 +61,10 @@ class ExportView(APIView):
         meta = {k: d[k] for k in ("name", "slug", "version", "description", "license")}
         for ref in d["workflows"]:
             access.workflow_or_404(request.user, ws, ref["slug"], PUBLISH)
+        for ref in d["forms"]:
+            form = Form.objects.filter(workspace=ws, slug=ref["slug"]).first()
+            if form is not None:
+                access.require(request.user, ws, form.folder, PUBLISH)
         pv = service.export_package(
             ws,
             request.user,
@@ -66,6 +72,7 @@ class ExportView(APIView):
             actions=[dict(a) for a in d["actions"]],
             workflows=[dict(w) for w in d["workflows"]],
             sign=d["sign"],
+            forms=[dict(f) for f in d["forms"]],
         )
         return Response(PackageVersionSerializer(pv).data, status=201)
 
@@ -88,7 +95,7 @@ class DownloadView(APIView):
         pv = PackageVersion.objects.filter(package__workspace=ws, package__slug=slug, version=version).first()
         if pv is None:
             raise Http404()
-        resp = HttpResponse(get_store().get(pv.archive_key), content_type="application/zip")
+        resp = HttpResponse(fetch(pv.archive_key), content_type="application/zip")
         resp["Content-Disposition"] = f'attachment; filename="{slug}-{version}.zip"'
         resp["X-Content-Type-Options"] = "nosniff"
         return resp

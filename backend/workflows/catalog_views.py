@@ -3,19 +3,43 @@ only if someone allowed to publish said so, and only while it has a published ve
 
 from django.http import Http404
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.models import record
-from tenancy.permissions import PUBLISH, RUN, VIEW, get_workspace, has_perm
+from tenancy.permissions import CATALOG, PUBLISH, RUN, VIEW, get_workspace, has_perm
 
 from . import access
 from .models import Workflow
 
 
+def catalog_workspace(user, slug):
+    """The workspace for someone who may use the catalog: any member with `view`, or the « Catalogue » role (which has nothing else)."""
+    try:
+        return get_workspace(user, slug, VIEW)
+    except PermissionDenied:
+        return get_workspace(user, slug, CATALOG)
+
+
+def catalog_only(user, ws) -> bool:
+    """True for the « Catalogue » role: it sees and launches only what its groups are granted, and never leaves the catalog."""
+    return not has_perm(user, ws, VIEW)
+
+
 def catalog_workflows(ws, user):
     qs = Workflow.objects.filter(workspace=ws, in_catalog=True, deprecated=False)
+    if catalog_only(user, ws):
+        return (
+            qs.filter(catalog_grants__group__members=user, catalog_grants__group__workspace=ws)
+            .distinct()
+            .prefetch_related("versions")
+        )
     return access.visible(qs, user, ws).prefetch_related("versions")
+
+
+def can_launch(user, ws) -> bool:
+    return catalog_only(user, ws) or has_perm(user, ws, RUN)
 
 
 def _card(wf: Workflow, version) -> dict:
@@ -35,7 +59,7 @@ def _card(wf: Workflow, version) -> dict:
 
 class CatalogListView(APIView):
     def get(self, request, workspace):
-        ws = get_workspace(request.user, workspace, VIEW)
+        ws = catalog_workspace(request.user, workspace)
         q = request.query_params.get("q", "").strip().lower()[:100]
         rows = []
         for wf in catalog_workflows(ws, request.user):
@@ -47,7 +71,7 @@ class CatalogListView(APIView):
         return Response(
             {
                 "results": rows,
-                "can_run": has_perm(request.user, ws, RUN),
+                "can_run": can_launch(request.user, ws),
                 "can_publish": has_perm(request.user, ws, PUBLISH),
             }
         )
@@ -55,7 +79,7 @@ class CatalogListView(APIView):
 
 class CatalogDetailView(APIView):
     def get(self, request, workspace, slug):
-        ws = get_workspace(request.user, workspace, VIEW)
+        ws = catalog_workspace(request.user, workspace)
         wf = catalog_workflows(ws, request.user).filter(slug=slug).first()
         v = wf.latest_version() if wf else None
         if v is None:
@@ -66,7 +90,8 @@ class CatalogDetailView(APIView):
                 "input_schema": v.input_schema,
                 "has_form": bool((v.graph or {}).get("form")),
                 "form": (v.graph or {}).get("form"),
-                "can_run": has_perm(request.user, ws, RUN),
+                "input_form": (v.graph or {}).get("input_form"),
+                "can_run": can_launch(request.user, ws),
             }
         )
 

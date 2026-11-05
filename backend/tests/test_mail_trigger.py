@@ -39,9 +39,19 @@ class FakeIMAP:
         assert criterion == "UNSEEN"
         return "OK", [b" ".join(str(i).encode() for i in range(1, len(self.messages) + 1))]
 
-    def fetch(self, uid, what):
+    def fetch(self, nums, what):
         assert "PEEK" in what  # the mailbox is never modified
-        return "OK", [(b"1 (BODY[] {10}", self.messages[int(uid) - 1]), b")"]
+        self.fetches = getattr(self, "fetches", []) + [(nums, what)]
+        out = []
+        for n in str(nums).split(","):
+            raw = self.messages[int(n) - 1]
+            if "HEADER.FIELDS" in what:
+                from email import message_from_bytes
+
+                m = message_from_bytes(raw)
+                raw = f"From: {m['From']}\r\nSubject: {m['Subject']}\r\n\r\n".encode()
+            out += [(f"{n} (BODY[] {{{len(raw)}}}".encode(), raw), b")"]
+        return "OK", out
 
     def logout(self):
         self.closed = True

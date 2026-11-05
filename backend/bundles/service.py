@@ -9,7 +9,11 @@ from rest_framework import serializers
 from audit.models import record
 from catalog.library import SECRET_LIKE, VersionInput
 from catalog.models import Action, ActionVersion
+from core.tags import clean_tags
+from formbuilder import service as formservice
+from formbuilder.models import Form, FormVersion
 from runs.artifacts import get_store
+from triggers import formengine
 from workflows.models import Workflow, WorkflowVersion
 from workflows.validation import validate_graph
 
@@ -61,11 +65,41 @@ def _workflow_payload(wv: WorkflowVersion) -> dict:
     }
 
 
+def _form_payload(fv: FormVersion) -> dict:
+    """What travels: one published version of a library form. Never an address, a limit or an owner."""
+    f = fv.form
+    return {
+        "slug": f.slug,
+        "version": fv.version,
+        "name": f.name,
+        "description": f.description,
+        "tags": f.tags,
+        "changelog": fv.changelog,
+        "definition": fv.definition,
+    }
+
+
 @transaction.atomic
 def export_package(
-    workspace, user, *, meta: dict, actions: list[dict], workflows: list[dict], sign: bool = True
+    workspace,
+    user,
+    *,
+    meta: dict,
+    actions: list[dict],
+    workflows: list[dict],
+    sign: bool = True,
+    forms: list[dict] | None = None,
 ) -> PackageVersion:
-    action_payloads, workflow_payloads = [], []
+    action_payloads, workflow_payloads, form_payloads = [], [], []
+    for ref in forms or []:
+        fv = (
+            FormVersion.objects.filter(form__workspace=workspace, form__slug=ref["slug"], version=ref["version"])
+            .select_related("form")
+            .first()
+        )
+        if fv is None:
+            raise serializers.ValidationError({"forms": f"Formulaire introuvable : {ref['slug']}@{ref['version']}"})
+        form_payloads.append(_form_payload(fv))
     for ref in actions:
         av = (
             ActionVersion.objects.filter(action__workspace=workspace, action__slug=ref["slug"], version=ref["version"])
@@ -86,8 +120,10 @@ def export_package(
         if wv is None:
             raise serializers.ValidationError({"workflows": f"Workflow introuvable : {ref['slug']}@{ref['version']}"})
         workflow_payloads.append(_workflow_payload(wv))
-    if not action_payloads and not workflow_payloads:
-        raise serializers.ValidationError({"actions": "Sélectionnez au moins une action ou un workflow."})
+    if not action_payloads and not workflow_payloads and not form_payloads:
+        raise serializers.ValidationError(
+            {"actions": "Sélectionnez au moins une action, un workflow ou un formulaire."}
+        )
     if (
         Package.objects.filter(workspace=workspace, slug=meta["slug"]).exists()
         and PackageVersion.objects.filter(
@@ -96,7 +132,12 @@ def export_package(
     ):
         raise serializers.ValidationError({"version": "Cette version du paquet existe déjà."})
     data, manifest = archive.build(
-        meta, action_payloads, workflow_payloads, readme=f"# {meta['name']}\n\n{meta['description']}\n", sign=sign
+        meta,
+        action_payloads,
+        workflow_payloads,
+        readme=f"# {meta['name']}\n\n{meta['description']}\n",
+        sign=sign,
+        forms=form_payloads,
     )
     # defence in depth: never ship something that looks like a credential
     for name, content in archive.read(data)[1].items():
@@ -340,3 +381,64 @@ def _process(workspace, user, manifest, files, report, strategy):  # noqa: C901
             created_by=user,
         )
         report["items"].append(_item("workflow", slug, version, "new"))
+
+    for ref in contents.get("forms", []):
+        _process_form(workspace, user, ref, files, report)
+
+
+def _process_form(workspace, user, ref, files, report):
+    slug, version = ref["slug"], ref["version"]
+    try:
+        f = json.loads(files[ref["path"]])
+        definition, name = f["definition"], str(f["name"])[:160]
+    except (KeyError, ValueError):
+        report["items"].append(_item("form", slug, version, "invalid", "Fichier de formulaire illisible."))
+        return
+    if f.get("slug") != slug or f.get("version") != version or not name:
+        report["items"].append(
+            _item("form", slug, version, "invalid", "Le manifeste et le formulaire ne concordent pas.")
+        )
+        return
+    problems = formengine.check_definition(definition)
+    if problems:
+        shown = (f"{k} : {v}" for k, v in list(problems.items())[:3])
+        report["items"].append(_item("form", slug, version, "invalid", *shown))
+        return
+    existing = FormVersion.objects.filter(form__workspace=workspace, form__slug=slug, version=version).first()
+    if existing:
+        same = existing.digest == formservice.digest(definition)
+        report["items"].append(
+            _item(
+                "form",
+                slug,
+                version,
+                "identical" if same else "conflict",
+                *([] if same else ["Une version publiée différente existe déjà : une version publiée est immuable."]),
+            )
+        )
+        return
+    form = Form.objects.filter(workspace=workspace, slug=slug).first() or Form.objects.create(
+        workspace=workspace,
+        slug=slug,
+        name=name,
+        description=str(f.get("description", ""))[:2000],
+        tags=clean_tags(f.get("tags") or []),
+        owner=user,
+        draft_definition=definition,
+    )
+    FormVersion.objects.create(
+        form=form,
+        version=version,
+        definition=definition,
+        digest=formservice.digest(definition),
+        changelog=str(f.get("changelog", ""))[:300],
+        created_by=user,
+    )
+    notes = sorted(
+        {
+            f"Connexion « {fl['source']['connection']} » à créer ou vérifier dans cet espace."
+            for fl in formengine.iter_fields(definition)
+            if fl.get("source")
+        }
+    )
+    report["items"].append(_item("form", slug, version, "new", *notes))

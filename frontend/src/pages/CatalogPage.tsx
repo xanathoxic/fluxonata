@@ -1,21 +1,23 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError, type WorkflowRun } from "../api";
 import { defaultsFor } from "../components/SchemaForm";
 import { WizardForm } from "../workflow/WizardForm";
 import type { FormDef } from "../workflow/types";
+import type { FormDefinition } from "../forms/types";
+import { RunForm } from "../forms/RunForm";
 import { AiNotice, useAiMode } from "../components/AiBox";
 import { Avatar, Badge, SearchBox, usePaged } from "../components/AdminUi";
 import { PageHeader } from "../components/PageHeader";
 import { useApp } from "../context";
-import { formatDate, t } from "../i18n";
+import { formatDate, relativeDate, t } from "../i18n";
 import { errorText } from "../lib";
 import type { JsonSchema } from "../api";
 import { TagFilter, TagList } from "../components/Tags";
 
 interface Card { slug: string; name: string; description: string; folder: string; tags?: string[]; version: string; changelog: string; published_at: string; inputs: number }
-interface Detail extends Card { input_schema: JsonSchema; has_form: boolean; form: FormDef | null; can_run: boolean }
+interface Detail extends Card { input_schema: JsonSchema; has_form: boolean; form: FormDef | null; input_form: FormDefinition | null; can_run: boolean }
 
 /** « Catalogue d'automatisations » : the finished workflows this space chose to offer (not the actions they are built from). */
 export function CatalogPage() {
@@ -102,9 +104,9 @@ export function CatalogPage() {
               <p className="meta">
                 {a.folder && <span className="tag">{a.folder}</span>}
                 <Badge tone="info">{t("catalog.version")} {a.version}</Badge>
-                <span>{a.inputs === 0 ? "aucune information à fournir" : `${a.inputs} information${a.inputs > 1 ? "s" : ""} à fournir`}</span>
+                <span>{a.inputs === 0 ? "aucun champ à renseigner" : `${a.inputs} champ${a.inputs > 1 ? "s" : ""} à renseigner`}</span>
               </p>
-              <p className="cat-foot"><span className="hint">Publiée le {formatDate(a.published_at)}</span><span className="button primary" aria-hidden="true">Ouvrir</span></p>
+              <p className="cat-foot"><span className="hint" title={formatDate(a.published_at)}>Publiée <time dateTime={a.published_at}>{relativeDate(a.published_at)}</time></span><span className="button primary" aria-hidden="true">Ouvrir</span></p>
             </li>
           ))}
         </ul>
@@ -141,11 +143,12 @@ export function CatalogDetailPage() {
 function CatalogRun({ data }: { data: Detail }) {
   const { workspace, environment } = useApp();
   const navigate = useNavigate();
-  const [values, setValues] = useState<Record<string, unknown>>(() => defaultsFor(data.input_schema));
+  const prefill = (useLocation().state as { prefill?: Record<string, unknown>; masked?: string[] } | null) ?? null; // « relaunch with the same data »
+  const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...defaultsFor(data.input_schema), ...(prefill?.prefill ?? {}) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const run = useMutation({
-    mutationFn: () => api<WorkflowRun>(`/workspaces/${workspace.slug}/workflows/${data.slug}/runs/`, { json: { environment, inputs: values } }),
-    onSuccess: (r) => navigate(`/workflows/${data.slug}/follow?run=${r.id}`),
+    mutationFn: (inputs: Record<string, unknown>) => api<WorkflowRun>(`/workspaces/${workspace.slug}/catalog/${data.slug}/runs/`, { json: { environment, inputs } }),
+    onSuccess: (r) => navigate(workspace.permissions.includes("view") ? `/workflows/${data.slug}/follow?run=${r.id}` : `/executions/${r.id}`),
     onError: (e: ApiError) => setErrors(e.status === 400 && e.details ? Object.fromEntries(Object.entries(e.details).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])) : { _: e.message }),
   });
   const none = Object.keys(data.input_schema.properties ?? {}).length === 0;
@@ -154,9 +157,15 @@ function CatalogRun({ data }: { data: Detail }) {
       <nav aria-label={t("breadcrumb")} className="breadcrumb"><Link to="/catalog">{t("nav.catalog")}</Link> / <span aria-current="page">{data.name}</span></nav>
       <PageHeader title={data.name} description={data.description} />
       <p className="hint">Environnement : <strong>{t(`env.${environment}` as never)}</strong></p>
+      {prefill?.prefill && <p role="note" className="notice">Formulaire pré-rempli avec les données d'une exécution précédente : modifiez ce que vous voulez, puis lancez.{(prefill.masked ?? []).length > 0 && ` Ressaisissez ${(prefill.masked ?? []).join(", ")} (masqué${(prefill.masked ?? []).length > 1 ? "s" : ""}).`}</p>}
       {none && <p>Cette automatisation ne demande aucune information : lancez-la directement.</p>}
-      <WizardForm schema={data.input_schema} form={data.form} values={values} onChange={setValues} errors={errors} disabled={!data.can_run} submitLabel={t("action.run")}
-        busy={run.isPending} onSubmit={() => run.mutate()} />
+      {data.input_form ? (
+        <RunForm schema={data.input_schema} definition={data.input_form} workspace={workspace.slug} workflow={data.slug} environment={environment} values={values} onChange={setValues} errors={errors} setErrors={setErrors}
+          disabled={!data.can_run} submitLabel={t("action.run")} busy={run.isPending} onSubmit={(inputs) => run.mutate(inputs)} />
+      ) : (
+        <WizardForm schema={data.input_schema} form={data.form} values={values} onChange={setValues} errors={errors} disabled={!data.can_run} submitLabel={t("action.run")}
+          busy={run.isPending} onSubmit={() => run.mutate(values)} />
+      )}
       {!data.can_run && <p id="no-run" className="hint">{t("action.noRunRight")}</p>}
       <p className="meta">{t("catalog.version")} {data.version} · publiée le {formatDate(data.published_at)}{data.changelog ? ` — ${data.changelog}` : ""}{data.folder ? ` · ${data.folder}` : ""}</p>
     </>

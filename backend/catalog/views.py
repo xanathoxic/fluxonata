@@ -3,7 +3,7 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tenancy.permissions import VIEW, get_workspace
+from tenancy.permissions import EDIT, VIEW, get_workspace, has_perm
 
 from .models import Action
 from .serializers import ActionSerializer
@@ -20,6 +20,11 @@ class ActionListView(ListAPIView):
             .select_related("owner")
             .prefetch_related("versions")
         )
+        # ADR 0025 : les propositions d'assistant n'apparaissent que sur demande (?status=proposed) et seulement pour qui peut modifier
+        if self.request.query_params.get("status") == "proposed" and has_perm(self.request.user, ws, EDIT):
+            qs = qs.filter(status="proposed")
+        else:
+            qs = qs.exclude(status="proposed")
         q = self.request.query_params.get("q")
         if q:
             qs = qs.filter(name__icontains=q) | qs.filter(description__icontains=q)
@@ -39,7 +44,7 @@ class ActionDetailView(RetrieveAPIView):
 
     def get_object(self):
         obj = self.get_queryset().filter(slug=self.kwargs["slug"]).first()
-        if obj is None:
+        if obj is None or (obj.status == "proposed" and not has_perm(self.request.user, obj.workspace, EDIT)):
             raise Http404()
         return obj
 

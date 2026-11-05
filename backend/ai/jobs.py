@@ -154,6 +154,24 @@ def process(job: AiJob) -> None:
             outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
             progress.report("done", "Le plan est prêt : relisez-le.", state="done", pct=100)
             raise _Finished(outcome)
+        if (
+            job.kind == "dryrun"
+        ):  # essai à blanc demandé par le MCP de conception (ADR 0025) : exécuté ICI, jamais dans le process web
+            from workflows import mcp_dryrun
+
+            result = mcp_dryrun.run_job(job)
+            outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
+            progress.report("done", "L'essai est terminé.", state="done", pct=100)
+            raise _Finished(outcome)
+        if (
+            job.kind == "actiontest"
+        ):  # test du CODE d'une action proposée dans le bac à sable (ADR 0025, amendement) : exécuté ICI, jamais dans le process web
+            from workflows import mcp_dryrun
+
+            result = mcp_dryrun.run_action_test(job)
+            outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
+            progress.report("done", "Le test est terminé.", state="done", pct=100)
+            raise _Finished(outcome)
         if job.kind == "edit":
             from workflows.models import Workflow
 

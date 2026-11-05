@@ -15,6 +15,8 @@ declared compensations in reverse order (each may itself fail) and ends the run 
 """
 
 import random
+import shutil
+import subprocess
 import time
 from collections import defaultdict
 from datetime import timedelta
@@ -22,6 +24,7 @@ from datetime import timedelta
 import jsonschema
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from audit.models import record
@@ -31,7 +34,7 @@ from workflows import transforms
 from workflows.expressions import ExpressionError, coerce_inputs, evaluate, resolve
 from workflows.validation import explain_validation_error, topo_order
 
-from . import agent, alerts, http_node, ldap_node, services, sftp_node, sql_node
+from . import agent, alerts, http_node, ldap_node, proposed, services, sftp_node, smtp_node, sql_node
 from .models import Approval, CallbackDelivery, Execution, RunEvent, StepRun, WorkflowRun
 
 R, S = WorkflowRun.Status, StepRun.Status
@@ -94,16 +97,27 @@ _digest_cache: dict = {}
 
 
 def _image_digest(image):
-    if image not in _digest_cache:
-        import subprocess
+    """Empreinte de l'image d'exécution tracée dans la définition d'un run (AR3.8).
 
-        try:
-            out = subprocess.run(
-                ["docker", "image", "inspect", "--format", "{{.Id}}", image], capture_output=True, text=True, timeout=10
-            )
-            _digest_cache[image] = out.stdout.strip() or None
-        except Exception:  # noqa: BLE001
+    1) Une image épinglée par empreinte (`nom@sha256:…`, voir scripts/pin-images.sh) EST son empreinte : aucune interrogation, reproductible, valable dans tous
+       les rôles. 2) Sinon, ce que dit le démon Docker local — seulement si le CLI existe : l'API et l'orchestrateur de la pile de production n'en ont plus (AR2.5)
+       et ne l'appellent donc plus ; la valeur est alors None et la santé de la plateforme le signale (« images non épinglées »)."""
+    if image not in _digest_cache:
+        if "@sha256:" in image:
+            _digest_cache[image] = image.split("@", 1)[1]
+        elif shutil.which("docker") is None:
             _digest_cache[image] = None
+        else:
+            try:
+                out = subprocess.run(
+                    ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                _digest_cache[image] = out.stdout.strip() or None
+            except Exception:  # noqa: BLE001
+                _digest_cache[image] = None
     return _digest_cache[image]
 
 
@@ -140,6 +154,7 @@ def start_run(
             workspace=workspace, environment=environment, workflow_version=workflow_version, user=user, trigger=trigger
         )
     graph = graph_override or workflow_version.graph
+    proposed.refuse_proposed_in_graph(workspace, graph)  # ADR 0025 : aucune proposition non relue n'est exécutée
     pins = {}
     for n in graph["nodes"]:
         if n["type"] == "action":
@@ -250,68 +265,118 @@ def start_run_from_failed(old, user):
 
 
 # ----------------------------------------------------------------------------- advance
-def advance(run_id) -> bool:
-    """One orchestration step for a run. Returns True when the run was processed."""
+# --- Quand repasser sur un run ? (AR4.4) -----------------------------------------------------------------------------------------------------------
+# Mesuré (scripts/loadtest_orchestrator.py) : un passage de `advance` sur un run qui n'a RIEN à faire coûte un verrou de ligne, donc une écriture dans le journal de
+# PostgreSQL et un `fsync` au COMMIT (20-38 ms sur la machine de développement) ; avec 150 runs en attente, un tour durait 5,5 s. On ne repasse donc que lorsqu'il y a
+# une raison :
+#   - attente d'une minuterie ou d'une décision humaine (« wait », « approval ») : à l'échéance, ou au plus tard après IDLE_RECHECK (60 s : à 10 s, 400 runs en attente
+#     coûtaient encore 40 passages par seconde, soit 2,8 s par tour, à 20 ms de COMMIT) ;
+#   - attente d'un résultat de worker (étape « action » en cours) : après EXEC_RECHECK ;
+#   - tout autre état (sous-workflow, boucle, HTTP, agent, nouvelle tentative, run neuf…) : au prochain tour, comme avant.
+# Les événements externes ramènent l'échéance à « maintenant » (`wake`) : l'attente n'est donc pas allongée en fonctionnement normal. Si un chemin oubliait de
+# réveiller le run, le filet ci-dessus borne le retard (jamais de run perdu).
+IDLE_RECHECK = timedelta(
+    seconds=60
+)  # filet de sécurité d'un événement non annoncé ; les événements connus réveillent le run immédiatement
+EXEC_RECHECK = timedelta(seconds=2)
+
+
+def wake(run_id) -> None:
+    """Un événement externe vient d'arriver pour ce run : l'orchestrateur doit repasser dessus au prochain tour."""
+    WorkflowRun.objects.filter(pk=run_id).update(next_check_at=timezone.now())
+
+
+def _schedule_next_check(run) -> None:
+    now = timezone.now()
+    if run.status not in (R.RUNNING, R.COMPENSATING):
+        when = None
+    else:
+        candidates = []
+        for sr in run.steps.exclude(status__in=TERMINAL):
+            if sr.status == S.WAITING and sr.node_type in ("wait", "approval"):
+                due = sr.available_at if sr.node_type == "wait" and sr.available_at else None
+                candidates.append(min(due, now + IDLE_RECHECK) if due else now + IDLE_RECHECK)
+            elif sr.status == S.RUNNING and sr.node_type == "action":
+                candidates.append(now + EXEC_RECHECK)
+            else:
+                candidates.append(now)
+        when = min(candidates) if candidates else now
+    WorkflowRun.objects.filter(pk=run.pk).update(next_check_at=when)
+    run.next_check_at = when
+
+
+def advance(run_id, only_if_due: bool = False) -> bool:
+    """One orchestration step for a run. Returns True when the run was processed.
+
+    `only_if_due` (tour de l'orchestrateur, AR4.5) : ne rien faire si le run n'est plus « dû » une fois le verrou obtenu. Plusieurs orchestrateurs lisent la même liste de runs
+    dus ; celui qui arrive second trouve le run déjà traité (son `next_check_at` est dans le futur) et passe au suivant sans écrire — sans cela chacun referait le travail des autres."""
     with transaction.atomic():
-        run = (
-            WorkflowRun.objects.select_for_update(skip_locked=True)
-            .filter(pk=run_id, status__in=[R.RUNNING, R.COMPENSATING])
-            .first()
+        qs = WorkflowRun.objects.select_for_update(skip_locked=True).filter(
+            pk=run_id, status__in=[R.RUNNING, R.COMPENSATING]
         )
+        if only_if_due:
+            qs = qs.filter(Q(next_check_at__isnull=True) | Q(next_check_at__lte=timezone.now()))
+        run = qs.first()
         if run is None:
             return False
-        graph = run.definition["graph"]
-        nodes, incoming, outgoing, order = _graph_views(graph)
-        steps = {s.node_id: s for s in run.steps.all()}
-        if run.cancel_requested and run.status == R.RUNNING:
-            return _cancel_run(run, steps)
-        if run.status == R.COMPENSATING:
-            _advance_compensation(run, nodes, steps)
+        processed = _advance_locked(run)
+        _schedule_next_check(run)
+        return processed
+
+
+def _advance_locked(run) -> bool:
+    graph = run.definition["graph"]
+    nodes, incoming, outgoing, order = _graph_views(graph)
+    steps = {s.node_id: s for s in run.steps.all()}
+    if run.cancel_requested and run.status == R.RUNNING:
+        return _cancel_run(run, steps)
+    if run.status == R.COMPENSATING:
+        _advance_compensation(run, nodes, steps)
+        return True
+    for _ in range(len(nodes) + 3):  # fixpoint over instantly-resolvable nodes
+        changed = False
+        for nid in order:
+            sr = steps.get(nid)
+            if sr is not None and sr.status not in TERMINAL:
+                changed |= _poll(run, nodes[nid], sr, steps)
+        fatal = _fatal_failure(nodes, outgoing, steps)
+        if fatal:
+            _begin_failure(run, nodes, steps, fatal)
             return True
-        for _ in range(len(nodes) + 3):  # fixpoint over instantly-resolvable nodes
-            changed = False
-            for nid in order:
-                sr = steps.get(nid)
-                if sr is not None and sr.status not in TERMINAL:
-                    changed |= _poll(run, nodes[nid], sr, steps)
-            fatal = _fatal_failure(nodes, outgoing, steps)
-            if fatal:
-                _begin_failure(run, nodes, steps, fatal)
-                return True
-            until = run.definition.get("until")
-            if until and until in steps and steps[until].status in TERMINAL:
-                break
-            for nid in order:
-                if nid in steps:
-                    continue
-                state = _activation(nodes[nid], incoming[nid], steps, nodes)
-                if state == "wait":
-                    continue
-                changed = True
-                if state == "skipped":
-                    steps[nid] = StepRun.objects.create(
-                        run=run, node_id=nid, node_type=nodes[nid]["type"], status=S.SKIPPED, finished_at=timezone.now()
-                    )
-                    add_event(
-                        run,
-                        "step_skipped",
-                        f"Étape « {nodes[nid].get('name', nid)} » ignorée (branche non prise).",
-                        nid,
-                    )
-                else:
-                    steps[nid] = _start(run, nodes[nid], steps)
-            if not changed:
-                break
         until = run.definition.get("until")
         if until and until in steps and steps[until].status in TERMINAL:
-            # « exécuter jusqu'ici » (development): nothing new starts after that step; once the running ones are over the
-            # run ends as a partial success
-            if all(s.status in TERMINAL for s in steps.values()):
-                _complete_partial(run, nodes[until].get("name", until))
-            return True
-        if len(steps) == len(nodes) and all(s.status in TERMINAL for s in steps.values()):
-            _complete(run, steps, graph)
+            break
+        for nid in order:
+            if nid in steps:
+                continue
+            state = _activation(nodes[nid], incoming[nid], steps, nodes)
+            if state == "wait":
+                continue
+            changed = True
+            if state == "skipped":
+                steps[nid] = StepRun.objects.create(
+                    run=run, node_id=nid, node_type=nodes[nid]["type"], status=S.SKIPPED, finished_at=timezone.now()
+                )
+                add_event(
+                    run,
+                    "step_skipped",
+                    f"Étape « {nodes[nid].get('name', nid)} » ignorée (branche non prise).",
+                    nid,
+                )
+            else:
+                steps[nid] = _start(run, nodes[nid], steps)
+        if not changed:
+            break
+    until = run.definition.get("until")
+    if until and until in steps and steps[until].status in TERMINAL:
+        # « exécuter jusqu'ici » (development): nothing new starts after that step; once the running ones are over the
+        # run ends as a partial success
+        if all(s.status in TERMINAL for s in steps.values()):
+            _complete_partial(run, nodes[until].get("name", until))
         return True
+    if len(steps) == len(nodes) and all(s.status in TERMINAL for s in steps.values()):
+        _complete(run, steps, graph)
+    return True
 
 
 def _activation(node, inc, steps, nodes):
@@ -543,6 +608,19 @@ def _start(run, node, steps) -> StepRun:
             else:
                 http_node.queue(sr, spec)
                 add_event(run, "http_queued", f"Fichier SFTP « {label} » en attente d'un travailleur.", node["id"])
+        elif ntype == "smtp":
+            try:
+                spec = smtp_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
+            except smtp_node.SmtpStepError as exc:
+                raise _StepError(exc.code, exc.message, exc.next_step) from None
+            if spec["mode"] == "test":
+                _finish(run, sr, S.SUCCEEDED, output=smtp_node.simulated_output(spec))
+                add_event(
+                    run, "step_succeeded", f"E-mail « {label} » simulé (mode test : rien n'est envoyé).", node["id"]
+                )
+            else:
+                http_node.queue(sr, spec)
+                add_event(run, "http_queued", f"E-mail « {label} » en attente d'un travailleur.", node["id"])
         elif ntype == "ldap":
             try:
                 spec = ldap_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
@@ -887,7 +965,7 @@ def _poll(run, node, sr, steps) -> bool:  # noqa: C901
             _finish(run, sr, S.FAILED, error=outcome[1])
             add_event(run, "step_failed", f"Agent « {label} » échoué : {outcome[1].get('message', '')}", node["id"])
         return True
-    if ntype in ("sql", "ldap", "sftp"):
+    if ntype in ("sql", "ldap", "sftp", "smtp"):
         job = sr.http_job or {}
         if job.get("state") == "running" and http_node.lease_expired(job):
             _finish(
@@ -909,7 +987,9 @@ def _poll(run, node, sr, steps) -> bool:  # noqa: C901
         else:
             _finish(run, sr, S.SUCCEEDED, output=job["result"])
             res = job["result"]
-            what = {"sql": "Requête SQL", "ldap": "Recherche d'annuaire", "sftp": "Fichier SFTP"}[ntype]
+            what = {"sql": "Requête SQL", "ldap": "Recherche d'annuaire", "sftp": "Fichier SFTP", "smtp": "E-mail"}[
+                ntype
+            ]
             detail = f"{res['count']} résultat(s)" if "count" in res else "terminé"
             add_event(run, "step_succeeded", f"{what} « {label} » : {detail}.", node["id"])
         return True
@@ -1323,6 +1403,7 @@ def decide_approval(approval_id, user, approve: bool, comment: str = ""):
     ap.decided_by, ap.comment, ap.decided_at = user, comment[:500], timezone.now()
     ap.save()
     record("approval.decide", actor=user, workspace=ap.workspace, target=ap, approved=approve)
+    wake(run.pk)  # le run attendait cette décision : pas question de la laisser attendre le filet de sécurité
     return ap
 
 
@@ -1362,4 +1443,6 @@ def request_run_cancel(run_id, user):
         run.save()
         add_event(run, "cancel_requested", f"Annulation demandée par {user.username}.")
         record("workflow_run.cancel", actor=user, workspace=run.workspace, target=run)
+        run.next_check_at = timezone.now()
+        run.save(update_fields=["next_check_at"])
     return run

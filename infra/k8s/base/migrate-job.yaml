@@ -1,0 +1,29 @@
+# Migrations : un Job (connexion DIRECTE à PostgreSQL, pas via le pooler), à lancer AVANT de changer l'image des Deployments (« expand » seulement : docs/VERSIONING.md).
+# Pour une nouvelle version : supprimer le Job précédent (`kubectl delete job fluxonata-migrate`), puis l'appliquer avec la nouvelle image.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fluxonata-migrate
+  labels: {app.kubernetes.io/name: fluxonata-migrate, app.kubernetes.io/part-of: fluxonata}
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: fluxonata-migrate, app.kubernetes.io/part-of: fluxonata, fluxonata/egress: "database"}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+      - name: migrate
+        image: fluxonata-backend:local
+        command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
+        envFrom: [{configMapRef: {name: fluxonata-config}}, {secretRef: {name: fluxonata-secrets}}]
+        env:
+        - {name: ORCH_DB_HOST, valueFrom: {secretKeyRef: {name: fluxonata-db-url, key: host}}}   # hôte DIRECT de PostgreSQL
+        - {name: ORCH_DB_PORT, value: "5432"}
+        - {name: ORCH_DB_POOLED, value: "0"}
+        resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 512Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}, runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+        volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {medium: Memory}}]

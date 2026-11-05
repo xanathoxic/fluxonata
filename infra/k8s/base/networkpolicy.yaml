@@ -1,0 +1,56 @@
+# Équivalent Kubernetes de l'isolation par réseaux Docker (ARCHITECTURE.md I3). Refus par défaut de tout trafic SORTANT ; on rouvre au cas par cas.
+# Nécessite un plugin réseau qui applique les NetworkPolicy (Calico, Cilium…) : SANS lui, ces objets n'ont AUCUN effet (non vérifié ici : pas de cluster).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: deny-all-egress}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+    ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-pgbouncer}   # tous les rôles de l'application parlent au pooler, et à lui seul
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/part-of: fluxonata}}
+  policyTypes: [Egress]
+  egress:
+  - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: pgbouncer}}}]
+    ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-database-egress}   # le pooler et le Job de migration parlent à PostgreSQL (à resserrer sur son adresse réelle : `ipBlock`)
+spec:
+  podSelector: {matchLabels: {fluxonata/egress: database}}
+  policyTypes: [Egress]
+  egress:
+  - ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-internet-egress-for-labelled-roles}   # api-ui, runner-gw, worker-aux : OIDC, coffre externe, fournisseurs d'IA, S3, systèmes du client
+spec:
+  podSelector: {matchLabels: {fluxonata/egress: allowed}}
+  policyTypes: [Egress]
+  egress:
+  - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ingress-from-controller-only}   # les rôles d'API ne reçoivent que du contrôleur d'Ingress
+spec:
+  podSelector: {matchExpressions: [{key: app.kubernetes.io/name, operator: In, values: [api-ui, api-ingest, runner-gw]}]}
+  policyTypes: [Ingress]
+  ingress:
+  - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
+    ports: [{protocol: TCP, port: 8000}]

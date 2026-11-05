@@ -160,7 +160,7 @@ test("assistant IA : désactivé par défaut puis brouillon généré (faux four
   await report.getByRole("button", { name: "Ouvrir dans l'éditeur" }).click();
   await expect(designer.getByText(/Ce brouillon a été généré par IA/)).toBeVisible({ timeout: 20_000 });
   await expect(designer.locator(".flow-node").first()).toBeVisible(); // le brouillon généré d'après le plan validé est ouvert
-  await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Historique des versions" }).click();
+  await designer.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Versions" }).click();
   await expect(designer.getByRole("button", { name: "Publier une nouvelle version" })).toBeVisible(); // jamais publié automatiquement
 
   // restore the default (AI off) so other tests/demos start from a clean, safe state
@@ -274,4 +274,33 @@ test("plate-forme refusée à un administrateur d'espace non plate-forme : ni me
   await expect(page.getByRole("heading", { level: 1, name: "Page introuvable" })).toBeVisible();
   const status = await page.evaluate(async () => (await fetch("/api/v1/platform/workers/", { credentials: "same-origin" })).status);
   expect(status).toBe(403); // le serveur refuse, l'interface ne fait que masquer
+});
+
+test("plate-forme : autoriser puis retirer une adresse interne depuis l'interface (confirmation, refus d'une adresse de métadonnées, journal)", async ({ page }) => {
+  const host = `10.77.${Number(uniq().slice(-3)) % 250}.${Number(uniq().slice(-2)) % 250 + 1}`;
+  await login(page, "admin");
+  await nav(page, "Plate-forme");
+  await tab(page, "Réseau");
+  await expectNoA11yViolations(page);
+  await page.getByRole("button", { name: "Autoriser une adresse" }).click();
+  const dlg = page.getByRole("dialog", { name: "Autoriser une adresse interne" });
+  const submit = dlg.getByRole("button", { name: "Autoriser" });
+  await dlg.getByLabel("Nom d'hôte ou adresse IP").fill("169.254.169.254");
+  await expect(submit).toBeDisabled(); // pas de confirmation, pas d'envoi
+  await dlg.getByLabel(/Je confirme/).check();
+  await submit.click();
+  await expect(dlg.getByRole("alert")).toContainText("ne peut pas être autorisée"); // refusé aussi par le serveur
+  await dlg.getByLabel("Nom d'hôte ou adresse IP").fill(host);
+  await dlg.getByLabel(/Note/).fill("Essai E2E");
+  await submit.click();
+  const row = page.getByRole("row").filter({ hasText: host });
+  await expect(row).toContainText("Ajoutée par admin");
+  await expect(row).toContainText("Essai E2E");
+  await expectNoA11yViolations(page);
+  await tab(page, "Journal");
+  await expect(page.getByText("Adresse interne autorisée").first()).toBeVisible();
+  await tab(page, "Réseau");
+  await page.getByRole("button", { name: `Retirer l'adresse ${host}` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Retirer" }).click();
+  await expect(page.getByRole("row").filter({ hasText: host })).toHaveCount(0);
 });

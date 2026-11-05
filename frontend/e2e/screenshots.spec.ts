@@ -1,6 +1,6 @@
 // Generates the illustrated user guide screenshots (fictional demo data). Run with scripts/screenshots.sh (SHOTS=1).
 import { expect, test, type Page } from "@playwright/test";
-import { goNav, login } from "./helpers";
+import { goNav, login, menuClick } from "./helpers";
 
 test.skip(!process.env.SHOTS, "set SHOTS=1 (scripts/screenshots.sh) to regenerate documentation screenshots");
 const OUT = "../docs/img";
@@ -30,14 +30,14 @@ test("capture du guide utilisateur", async ({ browser }) => {
   await nav(page, "Workflows");
   await shot(page, "06-workflows");
   await page.getByRole("link", { name: "Redémarrer des VM", exact: true }).click();
-  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Schéma", exact: true }).click();
+  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Conception", exact: true }).click();
   await shot(page, "07-editeur-schema", true);
-  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Résumé", exact: true }).click();
+  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Informations", exact: true }).click();
   await shot(page, "16-workflow-resume", true);
   await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Entrées/Sorties", exact: true }).click();
   await shot(page, "17-workflow-entrees-sorties", true);
-  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Schéma", exact: true }).click();
-  await page.getByRole("button", { name: "Vue liste" }).click();
+  await page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name: "Conception", exact: true }).click();
+  await menuClick(page, "Affichage", "Vue liste");
   await shot(page, "08-editeur-liste", true);
   await page.getByRole("button", { name: /Reboot_script/ }).first().click();
   await page.getByRole("tab", { name: "Script", exact: true }).click();

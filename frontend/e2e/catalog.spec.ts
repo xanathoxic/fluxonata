@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoA11yViolations, goNav, login, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, goNav, login, menuClick, openMenu, publishViaApi } from "./helpers";
 
 const uniq = () => `${Date.now()}`.slice(-7);
 
@@ -19,8 +19,9 @@ test("un workflow est proposé au catalogue, trouvé, retiré ; un lecteur ne pe
   await expect(page.getByText("Aucune automatisation ne correspond")).toBeVisible();
 
   await page.goto(`/workflows/${slug}/schema`);
-  await page.getByRole("button", { name: "Publier au catalogue" }).click();
-  await expect(page.getByRole("button", { name: "Retirer du catalogue" })).toHaveAttribute("aria-pressed", "true");
+  await menuClick(page, "Plus d'actions", "Publier au catalogue");
+  await expect(await openMenu(page, "Plus d'actions", "Retirer du catalogue")).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await goNav(page, "Catalogue");
   await expect(page.getByRole("heading", { name: "Catalogue d'automatisations" })).toBeVisible();
@@ -41,8 +42,9 @@ test("un workflow est proposé au catalogue, trouvé, retiré ; un lecteur ne pe
 
   // retiré : il disparaît
   await page.goto(`/workflows/${slug}/schema`);
-  await page.getByRole("button", { name: "Retirer du catalogue" }).click();
-  await expect(page.getByRole("button", { name: "Publier au catalogue" })).toBeVisible();
+  await menuClick(page, "Plus d'actions", "Retirer du catalogue");
+  await expect(await openMenu(page, "Plus d'actions", "Publier au catalogue")).toBeVisible();
+  await page.keyboard.press("Escape");
   await reader.reload();
   await goNav(reader, "Catalogue");
   await reader.getByLabel("Rechercher une automatisation").fill(slug);
@@ -58,5 +60,6 @@ test("un workflow jamais publié n'a pas de bouton « Publier au catalogue »", 
   await page.getByLabel("Nom du nouveau workflow").fill(`Brouillon ${uniq()}`);
   await page.getByRole("button", { name: "Créer et ouvrir l'éditeur" }).click();
   await expect(page.getByRole("toolbar", { name: "Actions du workflow" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /catalogue/i })).toHaveCount(0);
+  await page.getByRole("button", { name: "Plus d'actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /catalogue/i })).toHaveCount(0);
 });

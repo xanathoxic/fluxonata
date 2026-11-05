@@ -39,10 +39,10 @@ function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
   );
 }
 function StartNode() {
-  return <div className="flow-endpoint" role="img" aria-label="Début du workflow"><NodeIcon kind="start" size={44} /><Handle type="source" position={Position.Right} /></div>;
+  return <div className="flow-endpoint" role="img" aria-label="Début du workflow"><NodeIcon kind="start" size={44} /><span className="flow-endlabel" aria-hidden="true">Début</span><Handle type="source" position={Position.Right} /></div>;
 }
 function EndNode() {
-  return <div className="flow-endpoint end" role="img" aria-label="Fin du workflow"><NodeIcon kind="end" size={44} /><Handle type="target" position={Position.Left} /></div>;
+  return <div className="flow-endpoint end" role="img" aria-label="Fin du workflow"><NodeIcon kind="end" size={44} /><span className="flow-endlabel" aria-hidden="true">Fin</span><Handle type="target" position={Position.Left} /></div>;
 }
 function NoteNode({ data, selected }: NodeProps<Node<NoteData>>) {
   return <div className={`flow-note${selected ? " selected" : ""}`}><NodeIcon kind="note" size={16} /> {data.text || "Note vide"}</div>;
@@ -95,6 +95,8 @@ interface Props {
   issues: Issue[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** Centre the view on this node (each new `seq` triggers it again, even for the same node). */
+  focus?: { id: string; seq: number } | null;
   onOpen?: (id: string) => void;
   readOnly?: boolean;
   statuses?: Record<string, string>;
@@ -107,8 +109,29 @@ interface Props {
   onDropItem?: (item: PaletteItem, pos: { x: number; y: number }) => void;
 }
 
-function Inner({ graph, issues, selectedId, onSelect, onOpen, readOnly, statuses, counts, onMove, onBendEdge, onConnect, onDeleteNodes, onDeleteEdges, onDropItem }: Props) {
-  const { screenToFlowPosition } = useReactFlow();
+function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, statuses, counts, onMove, onBendEdge, onConnect, onDeleteNodes, onDeleteEdges, onDropItem }: Props) {
+  const { screenToFlowPosition, fitView, getNode, setCenter, getZoom } = useReactFlow();
+  const wrap = useRef<HTMLDivElement>(null);
+  const userMoved = useRef(false);
+  // « Aller à… »: centre the view on the chosen node. Slightly delayed: opening the properties panel resizes the canvas first.
+  useEffect(() => {
+    if (!focus) return;
+    const t = setTimeout(() => {
+      const n = getNode(focus.id);
+      if (!n) return;
+      void setCenter(n.position.x + (n.measured?.width ?? 120) / 2, n.position.y + (n.measured?.height ?? 60) / 2, { zoom: Math.max(getZoom(), 0.9), duration: 300 });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [focus, getNode, setCenter, getZoom]);
+  // A read-only view (an execution) keeps the whole diagram in sight: it is fitted again whenever its box changes size (the page
+  // sizes it after the first paint), until the person pans or zooms by hand.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!readOnly || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { if (!userMoved.current) void fitView({ padding: 0.15, maxZoom: 1, minZoom: 0.02 }); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [readOnly, fitView]);
   const [edgeId, setEdgeId] = useState<string | null>(null); // the line whose route is being adjusted
   const { nodes: graphNodes, edges } = useMemo(() => {
     // a draft written by the AI (or imported) may have no positions: lay them out for display, the saved graph is untouched
@@ -152,7 +175,7 @@ function Inner({ graph, issues, selectedId, onSelect, onOpen, readOnly, statuses
   const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
 
   return (
-    <div className="flow-drop" onDragOver={(e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
+    <div ref={wrap} className="flow-drop" onDragOver={(e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => {
         const raw = e.dataTransfer.getData(DRAG_MIME);
         if (!raw || readOnly || !onDropItem) return;
@@ -160,9 +183,10 @@ function Inner({ graph, issues, selectedId, onSelect, onOpen, readOnly, statuses
         onDropItem(JSON.parse(raw) as PaletteItem, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
       }}>
       <ReactFlow
-        nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} minZoom={0.2} maxZoom={2}
+        nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1, ...(readOnly ? { minZoom: 0.02 } : {}) }} minZoom={readOnly ? 0.02 : 0.2} maxZoom={2}
+        onMoveStart={(e) => { if (e) userMoved.current = true; }}
         nodesConnectable={!readOnly} elementsSelectable zoomOnDoubleClick={false}
-        onNodeClick={(_, n) => { setEdgeId(null); if (!n.id.startsWith("__")) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => setEdgeId(e.id)}
+        onNodeClick={(_, n) => { setEdgeId(null); if (!n.id.startsWith("__") || readOnly) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => setEdgeId(e.id)}
         onNodeDoubleClick={(_, n) => !n.id.startsWith("__") && onOpen?.(n.id)}
         onNodeDragStart={() => { dragging.current = true; }}
         onNodeDragStop={(_, n, dragged) => {

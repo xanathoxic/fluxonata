@@ -6,7 +6,9 @@ import { TestCasesSection } from "./library/TestCases";
 import { Section } from "../components/AdminUi";
 import { DiffView } from "../components/DiffView";
 import { SourceViewer } from "../components/SourceViewer";
-import { Tabs } from "../components/Tabs";
+import { EditorShell } from "../components/EditorShell";
+import { PageTabs } from "../components/PageTabs";
+import { StatusLine } from "../components/StatusLine";
 import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
@@ -24,6 +26,7 @@ export function ActionLibraryPage() {
   const deps = useWsQuery<Dep>(`deps-${slug}`, `/actions/${slug}/dependents/`);
   const known = useWsQuery<{ results: { tags?: string[] }[] }>("actions-tags", "/actions/");
   const deprecate = useWsMutation<{ reason?: string; reinstate?: boolean }>("POST", `/actions/${slug}/deprecate/`, [`action-${slug}`]);
+  const activate = useWsMutation<Record<string, never>>("POST", `/actions/${slug}/activate/`, [`action-${slug}`, `versions-${slug}`, "actions-lib", "actions", "proposals"]);
   const rollback = useWsMutation<{ to_version: string }>("POST", `/actions/${slug}/rollback/`, [`versions-${slug}`, `action-${slug}`]);
   const [pair, setPair] = useState({ a: "", b: "" });
   const [cmp, setCmp] = useState<Cmp | null>(null);
@@ -83,16 +86,24 @@ export function ActionLibraryPage() {
         {a.data.latest_version && <TestCasesSection slug={slug} schema={a.data.latest_version.input_schema} />}
       </>) }] : []),
   ];
+  const lv = a.data.latest_version;
+  const deprecated = a.data.status === "deprecated";
+  const isProposal = a.data.status === "proposed";
   return (
-    <>
-      <nav aria-label="Fil d'Ariane" className="breadcrumb"><Link to="/library">Bibliothèques</Link> / <span aria-current="page">{a.data.name}</span></nav>
-      <h1>{a.data.name}</h1>
-      <p>{a.data.description}</p>
+    <EditorShell backTo="/library" backLabel="Retour aux bibliothèques" title={a.data.name} titleHint={a.data.description || undefined} fill={false}
+      status={<StatusLine published={lv ? `v${lv.version} publiée` : "Jamais publiée"} extra={deprecated ? "Dépréciée" : isProposal ? "Proposition à relire" : undefined} />}
+      actions={!deprecated && !isProposal && <Link className="button primary" to={`/library/actions/${slug}/run`}>Lancer un essai</Link>}
+      tabs={<PageTabs label="Sections de l'action" active={tab} onChange={setTab} tabs={tabs.map((t) => ({ id: t.id, label: t.label }))} />}
+      notices={deprecated ? <p role="note" className="notice">⚠ Action dépréciée : {a.data.deprecation_reason || "aucun motif indiqué"}.</p> : isProposal ? (
+        <div role="note" className="notice">
+          <p>⚠ Proposition d'un assistant : relisez le contrat et le code avant de l'activer. Tant qu'elle n'est pas activée, cette action ne peut pas s'exécuter ni entrer dans un workflow publié.</p>
+          {can("publish") && <button type="button" className="primary" disabled={activate.isPending} onClick={() => activate.mutate({})}>Activer cette action</button>}
+          {activate.error && <span role="alert" className="field-error"> Erreur : {errorText(activate.error)}</span>}
+        </div>) : undefined}>
+      {a.data.description && <p>{a.data.description}</p>}
       <ActionTags slug={slug} tags={a.data.tags ?? []} editable={can("publish")} suggestions={[...new Set((known.data?.results ?? []).flatMap((x) => x.tags ?? []))].sort()} />
-      {a.data.status !== "deprecated" && <p><Link className="button" to={`/library/actions/${slug}/run`}>Lancer un essai</Link></p>}
-      {a.data.status === "deprecated" && <p role="note" className="notice">⚠ Action dépréciée : {a.data.deprecation_reason || "aucun motif indiqué"}.</p>}
-      <div className="action-tabs"><Tabs label="Sections de l'action" active={tab} onChange={setTab} tabs={tabs} /></div>
-    </>
+      <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.id} className="tabpanel action-tabs">{tabs.find((t) => t.id === tab)?.content}</div>
+    </EditorShell>
   );
 }
 
