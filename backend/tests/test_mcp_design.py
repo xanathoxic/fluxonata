@@ -45,6 +45,7 @@ READ_TOOLS = {
     "list_workflows",
     "get_workflow",
     "list_connections",
+    "list_integrations",
     "get_authoring_guide",
 }
 
@@ -207,6 +208,7 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("list_workflows", {}),
         ("get_workflow", {"slug": "salue"}),
         ("list_connections", {}),
+        ("list_integrations", {}),
         ("get_authoring_guide", {}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié

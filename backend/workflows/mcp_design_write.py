@@ -369,14 +369,17 @@ def propose_action(request, ws, args):
         v = _create_version(action, {**d["version"], "version": d["version"].get("version")}, request.user)
     record("action.propose", actor=request.user, workspace=ws, target=action, version=v.version, created=created)
     _touched(request, ws, "propose_action", action, slug=action.slug, version=v.version)
-    return _ok(
-        {
-            "slug": action.slug,
-            "version": v.version,
-            "status": "proposed",
-            "note": "À relire et activer par une personne avant tout usage.",
-        }
-    )
+    from .mcp_design_hints import NETWORK_MESSAGE, uses_network
+
+    out = {
+        "slug": action.slug,
+        "version": v.version,
+        "status": "proposed",
+        "note": "À relire et activer par une personne avant tout usage.",
+    }
+    if uses_network(str(d["version"].get("source", ""))):
+        out["hints"] = [{"code": "network_in_action", "message": NETWORK_MESSAGE}]
+    return _ok(out)
 
 
 def propose_skill(request, ws, args):

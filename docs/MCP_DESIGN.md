@@ -34,7 +34,7 @@ Une demande en langage courant, sans invite, suffit donc aussi ; les invites don
 | Outil | Effet |
 |---|---|
 | `get_authoring_guide` | **à lire en premier** : format exact d'un graphe, d'un formulaire, d'une action et d'un skill, avec des exemples validés par le serveur, et la méthode |
-| `search_actions`, `get_action`, `list_skills`, `get_skill`, `list_forms`, `get_form`, `list_workflows`, `get_workflow`, `list_connections` | lecture ; une connexion ne sort que par son nom, son libellé et son type |
+| `search_actions`, `get_action`, `list_skills`, `get_skill`, `list_forms`, `get_form`, `list_workflows`, `get_workflow`, `list_connections`, `list_integrations` (catalogue statique : services, opérations, paramètres) | lecture ; une connexion ne sort que par son nom, son libellé et son type |
 | `create_workflow`, `update_workflow` | brouillon d'un workflow (révision obligatoire) ; renvoie les problèmes à corriger |
 | `create_form`, `update_form`, `attach_form` | brouillon d'un formulaire ; rattachement au brouillon d'un workflow (référence si publié, copie sinon) |
 | `propose_action`, `propose_skill` | **proposition** : inutilisable tant qu'une personne ne l'a pas relue et activée |

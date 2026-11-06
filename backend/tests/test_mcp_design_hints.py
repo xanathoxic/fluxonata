@@ -127,5 +127,6 @@ def test_the_guide_has_a_decision_section_that_names_the_signals():
 
     text = guide("decision")["guide"]
     assert (
-        text.startswith("ACTION OU SCRIPT") and "used_by" in text and "duplicate_script" in text and "pourquoi" in text
-    )
+        text.startswith("ÉLÉMENT NATIF D'ABORD") and "ACTION OU SCRIPT ?" in text
+    )  # le réseau se règle avant la question
+    assert "used_by" in text and "duplicate_script" in text and "network_in_script" in text and "pourquoi" in text

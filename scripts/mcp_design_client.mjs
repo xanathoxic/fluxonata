@@ -22,7 +22,8 @@ const call = async (c, name, args = {}) => {
 const c = await connect(designFile);
 check(c.getServerVersion()?.name === "fluxonata", "handshake : le serveur se présente");
 const names = (await c.listTools()).tools.map((t) => t.name);
-check(names.length === 21, `catalogue : ${names.length} outils (attendu 21)`);
+check(names.length === 22, `catalogue : ${names.length} outils (attendu 22)`);
+check(names.includes("list_integrations"), "le catalogue d'intégrations est lisible");
 check(!names.some((n) => /publish|^run|activate|approve|delete|promote|secret|trigger/.test(n)), "aucun outil de publication, lancement, activation, approbation, suppression, secret");
 
 check((await call(c, "search_actions", { query: "voyelles" })).data?.count === 0, "l'assistant constate que l'action n'existe pas");

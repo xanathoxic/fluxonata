@@ -10,7 +10,7 @@ METHOD = (
     "Méthode à suivre :\n"
     "1. Appelle get_authoring_guide (formats exacts et méthode).\n"
     "2. Cherche ce qui existe déjà (search_actions, list_skills, list_forms, list_workflows) et RÉUTILISE avant de créer.\n"
-    "3. Pour chaque besoin de logique, décide action réutilisable ou script (rubrique « decision » du guide : tiens compte de `used_by` et des `hints`).\n"
+    "3. Service externe, base, annuaire, fichier distant, e-mail : étape native (`http`, `sql`, `ldap`, `sftp`, `smtp`) avec une connexion de list_connections (pour Slack, Jira, GitHub… : list_integrations) ; prévois la branche `error` des appels réseau ; une action ou un script n'a AUCUN réseau. Pour le reste, décide action réutilisable ou script (rubrique « decision » du guide : tiens compte de `used_by` et des `hints`).\n"
     "4. Crée les brouillons (formulaire, puis workflow), corrige les problèmes renvoyés, rattache le formulaire.\n"
     "4 bis. ESSAIE : start_action_test sur le code de chaque action que tu proposes, puis start_dry_run sur le workflow (un jeu d'essai réaliste par cas métier important) ; lis get_dry_run et corrige jusqu'à zéro problème.\n"
     "5. Ne publie, ne lance et n'active rien : tu ne le peux pas, une personne le fera après relecture.\n"

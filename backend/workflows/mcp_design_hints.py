@@ -13,6 +13,20 @@ BIG_GRAPH = 100
 USAGE_SCAN_LIMIT = 1000  # workflows examinés au plus (borne le coût d'une lecture)
 
 
+# Appels réseau reconnaissables dans du code : un script ou une action n'a AUCUN réseau, l'étape native (`http`, `sql`…) le fait pour lui.
+NETWORK_CALL = re.compile(
+    r"\b(requests\.|urllib|http\.client|httpx|aiohttp|socket\.|smtplib|psycopg|pymysql|ldap3|paramiko|fetch\s*\(|axios|XMLHttpRequest|curl\s|wget\s)"
+)
+NETWORK_MESSAGE = (
+    "Ce code semble appeler le réseau, or un script ou une action n'a aucun accès réseau : il échouera. "
+    "Utilisez une étape native avec une connexion (`http` pour une API, `sql`, `ldap`, `sftp`, `smtp`) et traitez sa sortie dans le code."
+)
+
+
+def uses_network(code: str) -> bool:
+    return bool(NETWORK_CALL.search(code or ""))
+
+
 def _norm(code: str) -> str:
     return re.sub(r"\s+", " ", code or "").strip()
 
@@ -33,6 +47,9 @@ def design_hints(graph: dict) -> list[dict]:
                     "message": f"Le même script apparaît {len(ids)} fois : une action réutilisable (contrat, version, test) évite la duplication.",
                 }
             )
+    for n in nodes:
+        if n.get("type") == "script" and uses_network(str(n.get("script", ""))):
+            hints.append({"code": "network_in_script", "nodes": [n["id"]], "message": NETWORK_MESSAGE})
     for n in nodes:
         if n.get("type") == "script" and len(str(n.get("script", "")).splitlines()) >= LONG_SCRIPT_LINES:
             hints.append(

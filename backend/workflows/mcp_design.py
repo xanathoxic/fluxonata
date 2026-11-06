@@ -283,6 +283,51 @@ def list_connections(request, ws, args):
     return _ok({"count": len(rows), "results": rows[: _limit(args)]})
 
 
+# --- intégrations : description statique des services (aucune donnée de l'espace, aucun secret) ---------------------------
+def list_integrations(request, ws, args):
+    from catalog import integrations
+
+    slug = _text(args, "slug")
+    q = _text(args)
+    if slug:
+        integ = integrations.INDEX.get(slug)
+        if integ is None:
+            raise Http404()
+        return _ok(
+            {
+                "slug": integ["slug"],
+                "name": integ["name"],
+                "connection_kind": integ["connection"]["kind"],
+                "setup": integ["connection"].get("setup", ""),
+                "operations": [
+                    {
+                        "id": o["id"],
+                        "name": o["name"],
+                        "description": o["description"],
+                        "params": [
+                            {k: prm[k] for k in ("name", "label", "type", "required", "example", "help") if k in prm}
+                            for prm in o["params"]
+                        ],
+                    }
+                    for o in integ["operations"]
+                ],
+            }
+        )
+    rows = [
+        {
+            "slug": i["slug"],
+            "name": i["name"],
+            "category": i["category"],
+            "description": i["description"],
+            "connection_kind": i["connection"]["kind"],
+            "operations": [o["id"] for o in i["operations"]],
+        }
+        for i in integrations.INDEX.values()
+        if _match(q, i["slug"], i["name"], i["category"], i["description"])
+    ]
+    return _ok({"count": len(rows), "results": rows[: _limit(args)]})
+
+
 def _spec(name, title, description, props=None, required=None):
     return {
         "name": name,
@@ -394,6 +439,18 @@ TOOLS = {
             },
         ),
         get_authoring_guide,
+    ),
+    "list_integrations": (
+        _spec(
+            "list_integrations",
+            "Lister les intégrations",
+            "Services décrits par la plateforme (Slack, Jira, GitHub, Microsoft 365…) : sans `slug`, la liste avec le type de connexion attendu ; avec `slug`, les opérations et leurs paramètres. "
+            "S'utilise dans une étape `http` {integration, operation, params, connection} (voir get_authoring_guide topic=integrations). Données statiques : aucun secret ni contenu d'espace.",
+            QUERY
+            | LIMIT
+            | {"slug": {"type": "string", "description": "Détail d'une intégration (opérations et paramètres)."}},
+        ),
+        list_integrations,
     ),
     "list_connections": (
         _spec(

@@ -905,6 +905,8 @@ def _node_expressions(n) -> list[str]:
         out += template_expressions([n.get("path", ""), n.get("content", "")])
     if n["type"] == "ldap":
         out += template_expressions(n.get("params") or {})
+    if n["type"] == "throw":
+        out += template_expressions(n.get("message") or "")
     if n["type"] == "agent":
         out += template_expressions(n.get("goal") or "")
     if n["type"] == "sql":

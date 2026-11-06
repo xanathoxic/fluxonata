@@ -12,6 +12,7 @@ from triggers import formengine
 from workflows.mcp_design_guide import (
     ACTION_EXAMPLE,
     BRANCHING_EXAMPLE,
+    ERROR_HANDLING_EXAMPLE,
     FORM_EXAMPLE,
     FORM_RULES_EXAMPLE,
     OTHER_NODES,
@@ -152,7 +153,7 @@ def test_the_guide_tells_which_ai_providers_the_workspace_has_without_exposing_t
         workspace=ws, name="local", kind="local_openai", base_url="http://llm.interne:8080", model="modele-secret-xyz"
     )
     out = call(client_for(world["viewer"]), "get_authoring_guide", {"topic": "workflow"})["structuredContent"]
-    assert out["workspace"] == {"ai_providers": ["local"]}
+    assert out["workspace"] == {"ai_providers": ["local"], "connections_by_kind": {}}
     assert "llm.interne" not in json.dumps(out) and "modele-secret-xyz" not in json.dumps(out)
 
 
@@ -244,3 +245,93 @@ def test_the_guide_makes_the_assistant_test_the_code_of_the_actions_it_proposes(
         and "cas nominal, un cas vide ou limite et un cas d'erreur" in essai
     )
     assert "start_action_test" in guide("method")["guide"]
+
+
+def test_the_guide_teaches_native_steps_and_that_actions_have_no_network(ws):
+    text = guide("all")["guide"]
+    assert "ÉLÉMENT NATIF D'ABORD" in text and "AUCUN réseau" in text and "étape `http`" in text
+    assert all(f"`{t}`" in text for t in ("http", "sql", "ldap", "sftp", "smtp"))
+
+
+def test_the_native_step_examples_pass_the_validator(ws):
+    from vault.models import Connection
+
+    for name, kind in (("svc", "http_bearer"), ("db", "postgres"), ("mail", "smtp")):
+        Connection.objects.create(workspace=ws, name=name, label=name, kind=kind)
+    for key, conn in (
+        ("http (appel d'un service web par une connexion)", "svc"),
+        ("sql (lecture seule)", "db"),
+        ("smtp (envoi d'e-mail)", "mail"),
+    ):
+        node_ = {**OTHER_NODES[key], "connection": conn}
+        g = {"inputs": schema(motif=STR, mail=STR), "nodes": [node_], "edges": [], "outputs": {}}
+        issues = validate(g, ws, "x")
+        assert [i for i in issues if i["level"] == "error"] == [], (key, issues)
+
+
+def test_the_workspace_facts_list_connections_by_kind_without_secrets(ws):
+    from vault.models import Connection
+
+    Connection.objects.create(workspace=ws, name="svc", label="Service", kind="oauth2_client", config={"x": "y"})
+    facts = guide("all", ws)["workspace"]
+    assert facts["connections_by_kind"] == {"oauth2_client": ["svc"]}
+    assert "config" not in json.dumps(facts)
+
+
+def test_a_script_or_action_that_calls_the_network_gets_a_hint():
+    from workflows.mcp_design_hints import design_hints, uses_network
+
+    assert uses_network("import requests\nrequests.get('https://x')") and uses_network("await fetch(u)")
+    assert not uses_network("total = sum(lignes)")
+    g = {"nodes": [{"id": "a", "type": "script", "script": "requests.post(u)"}]}
+    assert "network_in_script" in {h["code"] for h in design_hints(g)}
+
+
+def test_the_expression_help_lists_exactly_the_engine_functions():
+    from workflows.expressions import FUNCS
+
+    text = guide("expressions")["guide"]
+    assert text.startswith("EXPRESSIONS") and all(f"{name}" in text for name in FUNCS) and "default" in text
+    assert "inputs." in text and "steps.<id>.output" in text and "PAS de filtre" in text
+
+
+def test_the_integration_example_passes_the_validator(ws):
+    from vault.models import Connection
+
+    Connection.objects.create(workspace=ws, name="slack-bot", label="Slack", kind="http_bearer")
+    node_ = {**OTHER_NODES["http via une intégration (Slack, Jira, GitHub…)"], "connection": "slack-bot"}
+    g = {"inputs": schema(motif=STR), "nodes": [node_], "edges": [], "outputs": {}}
+    assert [i for i in validate(g, ws, "x") if i["level"] == "error"] == []
+    bad = {**node_, "operation": "n_existe_pas"}
+    assert "bad_http" in {i["code"] for i in validate({**g, "nodes": [bad]}, ws, "x")}
+
+
+def test_the_error_handling_example_passes_the_validator(ws):
+    from vault.models import Connection
+
+    Connection.objects.create(workspace=ws, name="tickets", label="Tickets", kind="http_bearer")
+    g = json.loads(
+        json.dumps(ERROR_HANDLING_EXAMPLE, ensure_ascii=False).replace(
+            "<connexion « Service HTTP » de list_connections>", "tickets"
+        )
+    )
+    assert [i for i in validate(g, ws, "x") if i["level"] == "error"] == [], validate(g, ws, "x")
+    # la branche d'erreur qui lirait la sortie de l'étape en échec est refusée : c'est ce que la rubrique enseigne
+    bad = json.loads(json.dumps(g))
+    bad["nodes"][1]["bindings"] = {"motif": "{{ steps.creer_ticket.output.status }}"}
+    assert "reads_failed_output" in {i["code"] for i in validate(bad, ws, "x")}
+    # idem quand c'est le message d'un `throw` qui lit la sortie de l'étape en échec
+    bad_throw = json.loads(json.dumps(g))
+    bad_throw["nodes"][2]["message"] = "{{ steps.creer_ticket.output.status }}"
+    assert "reads_failed_output" in {i["code"] for i in validate(bad_throw, ws, "x")}
+
+
+def test_list_integrations_gives_the_catalog_then_the_operations_without_secrets(ws, world):
+    c = client_for(world["viewer"])
+    res = call(c, "list_integrations", {"query": "slack"})
+    assert res["isError"] is False and res["structuredContent"]["results"][0]["slug"] == "slack"
+    detail = call(c, "list_integrations", {"slug": "slack"})["structuredContent"]
+    post = next(o for o in detail["operations"] if o["id"] == "post_message")
+    assert {p["name"] for p in post["params"] if p["required"]} == {"channel", "text"}
+    assert detail["connection_kind"] == "http_bearer"
+    assert call(c, "list_integrations", {"slug": "inconnue"})["isError"] is True

@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.7 — 2026-11-06
+
+**Fluxonata 0.4.7 : l'assistant externe (MCP de conception) connaît les étapes natives, expressions, intégrations et erreurs, et lit le catalogue d'intégrations**
+
+- MCP de conception : étapes natives, expressions, intégrations et erreurs dans le guide
+- Banc MCP de conception : 22 outils attendus (list_integrations ajouté)
+
 ## v0.4.6 — 2026-11-06
 
 **Fluxonata 0.4.6 : l'éditeur ne montre plus la dernière exécution d'une étape (fuite possible de secrets), valeurs sensibles masquées dans les aperçus**
