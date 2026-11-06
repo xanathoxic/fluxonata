@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useApp } from "../context";
 import { COMPUTABLE } from "./calc";
 import { controlIcon, fieldForControl, MODES, producesOf, type ControlCard } from "./controls";
+import { LinesField } from "./LinesField";
 import { connectionLabel } from "./serviceParams";
 import { ChoiceSourceOverlay, ServiceOverlay } from "./ServiceOverlay";
 import { FormIcon, IconLabel, type FormIconName } from "./FormIcon";
@@ -114,7 +115,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
           <legend>Choix de la liste</legend>
           <div className="field">
             <label htmlFor="fp-opts">Une option par ligne : valeur | libellé</label>
-            <textarea id="fp-opts" rows={5} value={optionsToText(field.options)} onChange={(e) => set({ options: textToOptions(e.target.value) })} />
+            <LinesField key={`${field.key}-opts`} id="fp-opts" rows={5} items={field.options} toText={optionsToText} fromText={textToOptions} onItems={(options) => set({ options })} />
           </div>
         </fieldset>
       )}
@@ -135,7 +136,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
           {!dynamic ? (
             <div className="field">
               <label htmlFor="fp-opts">Une option par ligne : valeur | libellé</label>
-              <textarea id="fp-opts" rows={5} value={optionsToText(field.options)} onChange={(e) => set({ options: textToOptions(e.target.value) })} />
+              <LinesField key={`${field.key}-opts`} id="fp-opts" rows={5} items={field.options} toText={optionsToText} fromText={textToOptions} onItems={(options) => set({ options })} />
             </div>
           ) : (
             <>
@@ -154,7 +155,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
       {field.type === "datagrid" && (
         <div className="field">
           <label htmlFor="fp-cols">Colonnes, une par ligne : clé | libellé | text ou number</label>
-          <textarea id="fp-cols" rows={4} value={columnsToText(field.columns)} onChange={(e) => set({ columns: textToColumns(e.target.value) })} />
+          <LinesField key={`${field.key}-cols`} id="fp-cols" rows={4} items={field.columns} toText={columnsToText} fromText={textToColumns} onItems={(columns) => set({ columns })} />
         </div>
       )}
       </Sec>

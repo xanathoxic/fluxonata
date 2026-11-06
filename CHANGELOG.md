@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.10 — 2026-11-06
+
+**Fluxonata 0.4.10 : les zones « une ligne par élément » du concepteur de formulaires acceptent la saisie (ajout de colonnes d'un tableau et d'options d'une liste)**
+
+- Formulaires : zones « une ligne par élément » utilisables (colonnes d'un tableau, options d'une liste)
+
 ## v0.4.9 — 2026-11-06
 
 **Fluxonata 0.4.9 : listes dynamiques de formulaire dépendantes d'autres champs et connexion choisie parmi une liste fermée, règles « lecture seule », champs masqués qui libèrent leur place, ETag exposé par l'étape HTTP**
