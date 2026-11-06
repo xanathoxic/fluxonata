@@ -37,28 +37,6 @@ def _run(request, ws, wf):
     return run
 
 
-class DebugContextView(APIView):
-    """Which run feeds the editor's previews, and the outputs of its steps (bounded): what « Épingler » can pin."""
-
-    def get(self, request, workspace, slug):
-        ws = get_workspace(request.user, workspace, EDIT)
-        wf = _workflow(request.user, ws, slug)
-        run = _run(request, ws, wf)
-        if run is None:
-            return Response({"run": None, "outputs": {}})
-        outputs = {
-            sr.node_id: debug._bounded(sr.output)
-            for sr in run.steps.all()
-            if sr.status == "succeeded" and isinstance(sr.output, dict)
-        }
-        return Response(
-            {
-                "run": {"id": str(run.id), "status": run.status, "created_at": run.created_at, "inputs": run.inputs},
-                "outputs": outputs,
-            }
-        )
-
-
 class DebugEvalView(APIView):
     """Value of an expression on the last run's data (and pins). `items` (an expression giving a list) binds its first
     element as `item`, for the per-item expressions of a transformation."""
@@ -82,7 +60,10 @@ class DebugEvalView(APIView):
                     }
                 )
             item = listed["value"][0]
-        return Response({**debug.evaluate_preview(expr, ctx, item), "has_data": bool(where)})
+        res = debug.evaluate_preview(expr, ctx, item)
+        if res["ok"]:
+            res = {**res, "value": debug.redact_for_expr(f"{expr} {items or ''}", res["value"])}
+        return Response({**res, "has_data": bool(where)})
 
 
 class DebugTestStepView(APIView):
@@ -97,7 +78,10 @@ class DebugTestStepView(APIView):
         if node is None:
             raise Http404()
         ctx, where = debug.build_context(graph, _run(request, ws, wf))
-        return Response(debug.test_step(node, ctx, where))
+        res = debug.test_step(node, ctx, where)
+        if res.get("output") is not None:
+            res = {**res, "output": debug.redact(res["output"])}
+        return Response(res)
 
 
 class VersionDiffView(APIView):

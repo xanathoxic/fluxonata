@@ -35,13 +35,9 @@ def _wf(ws, world, name="dbg"):
     return run
 
 
-def test_context_lists_the_last_run_outputs(ws, world):
-    run = _wf(ws, world)
-    r = client_for(world["designer"]).get(f"{BASE}/workflows/dbg/debug/context/")
-    assert (
-        r.status_code == 200 and r.data["run"]["id"] == str(run.id) and r.data["outputs"]["e"] == {"value": "bonjour"}
-    )
-    assert client_for(world["viewer"]).get(f"{BASE}/workflows/dbg/debug/context/").status_code == 403  # editing feature
+def test_context_route_no_longer_exposes_run_outputs(ws, world):
+    _wf(ws, world)  # a run with data exists, yet nothing lists its inputs and outputs (they may hold secrets)
+    assert client_for(world["designer"]).get(f"{BASE}/workflows/dbg/debug/context/").status_code == 404
 
 
 def test_eval_gives_the_value_on_real_data_and_explains_errors(ws, world):
@@ -252,3 +248,16 @@ def test_version_diff_shows_what_changed_and_ignores_layout(ws, world):
     Workflow.objects.filter(workspace=ws, slug="diff").update(draft_graph=v1.graph)
     assert c.get(f"{BASE}/workflows/diff/versions/diff/", {"a": "1.0.0", "b": "draft"}).data["identical"] is True
     assert c.get(f"{BASE}/workflows/diff/versions/diff/", {"a": "9.9.9", "b": "draft"}).status_code == 404
+
+
+def test_previews_mask_sensitive_values_but_still_compute_on_them(ws, world):
+    from workflows import debug
+
+    assert debug.redact({"user": "a", "db_password": "x", "n": [{"apiKey": "k", "ok": 1}]}) == {
+        "user": "a",
+        "db_password": debug.MASK,
+        "n": [{"apiKey": debug.MASK, "ok": 1}],
+    }
+    assert debug.redact_for_expr("inputs.token", "abc") == debug.MASK
+    assert debug.redact_for_expr("inputs.token == 'abc'", True) is True
+    assert debug.redact_for_expr("inputs.t", "bonjour") == "bonjour"

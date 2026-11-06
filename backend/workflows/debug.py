@@ -4,6 +4,7 @@ Nothing here runs a step that has an effect: expressions and pure steps (decisio
 with the real evaluator on real data; other kinds answer with their pin, their last output, or nothing."""
 
 import json
+import re
 
 from . import transforms
 from .expressions import ExpressionError, evaluate, resolve
@@ -12,6 +13,30 @@ MAX_PINS = 20
 MAX_PIN_BYTES = 64 * 1024
 MAX_PREVIEW_BYTES = 20 * 1024
 PURE = ("condition", "switch", "transform")
+
+# Display only: the editor never shows values stored under such names (the evaluation itself still uses the real data).
+SENSITIVE = re.compile(
+    r"pass(word|wd|phrase)?|pwd|mot[_-]?de[_-]?passe|secret|token|api[_-]?key|authorization|credential|private[_-]?key|bearer|cookie",
+    re.IGNORECASE,
+)
+MASK = "••••••"
+
+
+def redact(value):
+    """Copy of `value` where whatever sits under a sensitive key name is replaced by a mask (preview display only)."""
+    if isinstance(value, dict):
+        return {k: MASK if SENSITIVE.search(str(k)) else redact(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact(v) for v in value]
+    return value
+
+
+def redact_for_expr(expr, value):
+    """Display value of an expression result: masked when the expression reads a sensitive field (booleans and numbers,
+    e.g. the result of a comparison, are kept)."""
+    if SENSITIVE.search(str(expr)) and not isinstance(value, (bool, int, float, type(None))):
+        return MASK
+    return redact(value)
 
 
 def validate_pins(pins, node_ids: set) -> list[str]:

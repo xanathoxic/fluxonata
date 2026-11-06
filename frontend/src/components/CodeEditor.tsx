@@ -45,8 +45,10 @@ const theme = EditorView.theme({
   ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: "1.5" },
   ".cm-gutters": { backgroundColor: "var(--card)", color: "var(--muted)", borderRight: "1px solid var(--border)" },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" },
-  ".cm-content": { caretColor: "var(--fg)" },
-});
+  ".cm-content": { caretColor: "#ffffff" },
+  // drawSelection() draws its own caret (.cm-cursor, black by default): white on the dark editor background.
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#ffffff", borderLeftWidth: "2px" },
+}, { dark: true });
 
 /**
  * Accessible code editor (CodeMirror 6). Tab indents like in any code editor, so Escape is the documented way out:

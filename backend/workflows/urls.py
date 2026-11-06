@@ -27,7 +27,6 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/export/", tpl.WorkflowExportView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/save-as-template/", tpl.SaveAsTemplateView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/versions/diff/", dbg.VersionDiffView.as_view()),
-    path("workspaces/<slug:workspace>/workflows/<slug:slug>/debug/context/", dbg.DebugContextView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/debug/eval/", dbg.DebugEvalView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/debug/test-step/", dbg.DebugTestStepView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/delete/", x.WorkflowDeleteView.as_view()),

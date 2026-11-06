@@ -138,7 +138,6 @@
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/comments/",
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/compare/",
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/contract/",
-  "GET /api/v1/workspaces/{workspace}/workflows/{slug}/debug/context/",
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/dependencies/",
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/dependents/",
   "GET /api/v1/workspaces/{workspace}/workflows/{slug}/export/",

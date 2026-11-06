@@ -8833,43 +8833,6 @@
                 }
             }
         },
-        "/api/v1/workspaces/{workspace}/workflows/{slug}/debug/context/": {
-            "get": {
-                "operationId": "workspaces_workflows_debug_context_retrieve",
-                "description": "Which run feeds the editor's previews, and the outputs of its steps (bounded): what « Épingler » can pin.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "slug",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "workspace",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "security": [
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "No response body"
-                    }
-                }
-            }
-        },
         "/api/v1/workspaces/{workspace}/workflows/{slug}/debug/eval/": {
             "post": {
                 "operationId": "workspaces_workflows_debug_eval_create",

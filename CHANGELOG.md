@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.6 — 2026-11-06
+
+**Fluxonata 0.4.6 : l'éditeur ne montre plus la dernière exécution d'une étape (fuite possible de secrets), valeurs sensibles masquées dans les aperçus**
+
+- Concepteur : retrait de « Dernière exécution » (fuite possible de secrets), masquage des valeurs sensibles dans les aperçus, curseur blanc de l'éditeur de code
+
 ## v0.4.5 — 2026-11-05
 
 **Fluxonata 0.4.5 : constructeur de formulaires et contrôles personnalisés, étape e-mail, refonte UX, lots d'architecture, assistant externe (MCP de conception) avec jetons personnels**
