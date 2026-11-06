@@ -47,6 +47,12 @@ class Handler(BaseHTTPRequestHandler):
             if STATE["flaky"] == 1:
                 return self._json(503, {"error": "busy"}, {"Retry-After": "1"})
             return self._json(200, {"ok": True})
+        if parts.path == "/versioned":
+            if self.command == "GET":
+                return self._json(200, {"v": 1}, {"ETag": '"v1"'})
+            if self.headers.get("If-Match") != '"v1"':  # the content changed since it was read
+                return self._json(412, {"error": "precondition failed"})
+            return self._json(200, {"written": True, "if_match": self.headers.get("If-Match")})
         if self.path.startswith("/missing"):
             code, out = 404, {"error": "absent"}
         else:
@@ -271,3 +277,60 @@ def test_multipart_form_and_text_files(ws, world):
         slug="m3",
     )
     assert SEEN[-1]["ctype"] == "application/x-www-form-urlencoded" and SEEN[-1]["body"] == "a=1+2&b=%C3%A9"
+
+
+def test_the_etag_of_a_reading_is_exposed_and_a_write_can_depend_on_it(ws, world):
+    """Lire, puis écrire « seulement si rien n'a changé » : l'ETag de la lecture alimente l'en-tête If-Match de l'écriture."""
+    user = world["designer"]
+    v = publish(
+        ws,
+        "versioned",
+        [
+            node("r", "http", connection="svc", mode="reel", path="/versioned"),
+            node(
+                "w",
+                "http",
+                connection="svc",
+                mode="reel",
+                method="POST",
+                path="/versioned",
+                body={"x": 1},
+                headers={"If-Match": "{{ steps.r.output.headers.etag }}"},
+            ),
+        ],
+        [edge("r", "w")],
+        user=user,
+    )
+    run = drain(launch(ws, v, user))
+    assert run.status == "succeeded", run.error
+    assert run.steps.get(node_id="r").output["headers"] == {"content-type": "application/json", "etag": '"v1"'}
+    assert run.steps.get(node_id="w").output["body"] == {"written": True, "if_match": '"v1"'}
+
+
+def test_a_write_with_a_stale_version_fails_and_a_reply_without_etag_exposes_none(ws, world):
+    user = world["designer"]
+    stale = publish(
+        ws,
+        "stale",
+        [
+            node(
+                "w",
+                "http",
+                connection="svc",
+                mode="reel",
+                method="POST",
+                path="/versioned",
+                body={"x": 1},
+                headers={"If-Match": '"v0"'},
+            )
+        ],
+        [],
+        user=user,
+    )
+    run = drain(launch(ws, stale, user))
+    assert run.status == "failed" and "412" in str(run.steps.get(node_id="w").error)
+    plain = publish(ws, "plain", [node("r", "http", connection="svc", mode="reel", path="/ping")], [], user=user)
+    run = drain(launch(ws, plain, user))
+    assert run.steps.get(node_id="r").output["headers"] == {
+        "content-type": "application/json"
+    }  # pas d'ETag : rien d'inventé

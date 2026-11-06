@@ -127,3 +127,45 @@ describe("heights: a long text is worth two short ones", () => {
     expect(m.get("c")?.row).toBe(3);
   });
 });
+
+describe("un champ masqué laisse la place : ceux du dessous remontent, colonne par colonne", () => {
+  // la disposition d'un vrai formulaire : colonne de gauche (5 colonnes) à côté d'un champ de 7 lignes à droite
+  const all = [
+    f("action", 1, 1, 12), f("groupe", 2, 1, 5), area("membres", 2, 6, 7, 7), area("texte", 3, 1, 5, 2),
+    f("utilisateur", 5, 1, 5), area("motif", 6, 1, 5, 2), f("bloc", 9, 1, 12),
+  ];
+  const rows = (hidden: string[]) => {
+    const shown = all.filter((x) => !hidden.includes(x.key));
+    const m = visibleRows(shown, all);
+    return Object.fromEntries(shown.map((x) => [x.key, m.get(x.key)?.row]));
+  };
+
+  it("ne bouge rien quand rien n'est masqué", () => {
+    expect(rows([])).toEqual({ action: 1, groupe: 2, membres: 2, texte: 3, utilisateur: 5, motif: 6, bloc: 9 });
+  });
+  it("fait remonter le champ du dessous, même à côté d'un champ haut qui garde ses lignes", () => {
+    expect(rows(["utilisateur"])).toMatchObject({ texte: 3, motif: 5, membres: 2, bloc: 9 });
+  });
+  it("fait remonter en cascade tout ce qui est dessous", () => {
+    expect(rows(["groupe"])).toMatchObject({ texte: 2, utilisateur: 4, motif: 5 });
+  });
+  it("redonne la place d'un champ haut quand il est masqué : le bloc pleine largeur remonte sous la colonne de gauche", () => {
+    expect(rows(["membres"])).toMatchObject({ motif: 6, bloc: 8 });
+  });
+  it("remet chaque champ à sa place quand il redevient visible", () => {
+    expect(rows(["utilisateur"]).motif).toBe(5);
+    expect(rows([]).motif).toBe(6); // le calcul part toujours de la disposition d'origine
+  });
+  it("conserve une ligne vide laissée volontairement à côté d'un champ haut (rien n'est masqué)", () => {
+    const l = [f("a", 1, 1, 6), area("t", 1, 7, 6, 4), f("b", 4, 1, 6)];
+    const m = visibleRows(l, l);
+    expect(m.get("a")?.row).toBe(1);
+    expect(m.get("b")?.row).toBe(4);
+  });
+  it("ne rapproche pas des champs décalés exprès dans deux colonnes", () => {
+    const l = [f("a", 2, 1, 5), f("b", 3, 6, 7)];
+    const m = visibleRows(l, l);
+    expect([m.get("a")?.row, m.get("b")?.row]).toEqual([1, 2]);
+  });
+});
+

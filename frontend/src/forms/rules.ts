@@ -10,11 +10,11 @@ export interface Cond { field?: string; template?: string; op: CondOp; value?: S
 export interface Group { op: "all" | "any"; items: Node[] }
 export type Node = Cond | Group;
 export type TextTarget = "label" | "help" | "placeholder";
-export type Effect = { do: "show" } | { do: "hide" } | { do: "require" } | { do: "optional" } | { do: "text"; target: TextTarget; text: string } | { do: "options"; values: string[] } | { do: "fill"; value: string } | { do: "load"; what: LoadKind };
+export type Effect = { do: "show" } | { do: "hide" } | { do: "require" } | { do: "optional" } | { do: "readonly" } | { do: "editable" } | { do: "text"; target: TextTarget; text: string } | { do: "options"; values: string[] } | { do: "fill"; value: string } | { do: "load"; what: LoadKind };
 export interface Rule { id?: string; name?: string; when: Node; then: Effect[]; else?: Effect[] }
 /** What a « load » effect lets a custom control read from its service (see triggers/formrules.py). */
 export type LoadKind = "options" | "prefill";
-export interface State { load: LoadKind[]; visible: boolean; required: boolean; label: string | null; help: string | null; placeholder: string | null; options: string[] | null; fill: string | null }
+export interface State { load: LoadKind[]; visible: boolean; required: boolean; readonly: boolean; label: string | null; help: string | null; placeholder: string | null; options: string[] | null; fill: string | null }
 
 export const isGroup = (n: Node): n is Group => "items" in n;
 type Values = Record<string, unknown>;
@@ -78,13 +78,14 @@ export const TOKEN_RE = /\{([A-Za-z_][A-Za-z0-9_]{0,63})\}/g;
 const TOKEN = TOKEN_RE;
 export const render = (template: string, values: Values): string => template.replace(TOKEN, (_, k: string) => textOf(values[k]));
 
-export const initialState = (f: Pick<FormField, "required">): State => ({ visible: true, required: Boolean(f.required), label: null, help: null, placeholder: null, options: null, fill: null, load: [] });
+export const initialState = (f: Pick<FormField, "required">): State => ({ visible: true, required: Boolean(f.required), readonly: false, label: null, help: null, placeholder: null, options: null, fill: null, load: [] });
 
 export function applyRules(f: Pick<FormField, "rules">, values: Values, state: State): State {
   for (const rule of f.rules ?? []) {
     for (const e of (evalNode(rule.when, values) ? rule.then : rule.else) ?? []) {
       if (e.do === "show" || e.do === "hide") state.visible = e.do === "show";
       else if (e.do === "require" || e.do === "optional") state.required = e.do === "require";
+      else if (e.do === "readonly" || e.do === "editable") state.readonly = e.do === "readonly";
       else if (e.do === "text") state[e.target] = render(e.text, values);
       else if (e.do === "fill") state.fill = render(e.value, values);
       else if (e.do === "load") { if (!state.load.includes(e.what)) state.load.push(e.what); }
@@ -145,6 +146,8 @@ export const describeEffect = (e: Effect): string => {
     case "hide": return "masquer le champ";
     case "require": return "le rendre obligatoire";
     case "optional": return "le rendre facultatif";
+    case "readonly": return "le mettre en lecture seule";
+    case "editable": return "le rendre modifiable";
     case "text": return `${{ label: "libellé", help: "aide", placeholder: "texte d'exemple" }[e.target]} : « ${e.text} »`;
     case "fill": return `remplir le champ avec « ${e.value} »`;
     case "load": return e.what === "options" ? "charger les options depuis le service" : "précharger la valeur depuis le service";

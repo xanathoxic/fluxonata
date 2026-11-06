@@ -5,6 +5,7 @@ import { HelpTip } from "../components/HelpTip";
 import { useApp } from "../context";
 import type { ControlPrefill, ControlSpec } from "./controls";
 import { FormIcon, IconLabel, type FormIconName } from "./FormIcon";
+import { choicesToText, textToChoices, withChooser } from "./serviceParams";
 import type { DataSource } from "./types";
 
 type Kind = "options" | "prefill";
@@ -80,26 +81,57 @@ const putter = (value: Reading, onChange: (v: Reading) => void) => (key: string,
   onChange(next as unknown as Reading);
 };
 
-/** The « Appel » section: which connection, which path, which fields of the form the path reads. */
-export function CallCard({ idPrefix, value, connections, onChange }: { idPrefix: string; value: Reading; connections: string[]; onChange: (v: Reading) => void }) {
+/** The « Appel » section: which connection, which path, which fields of the form the path reads. With `choices`, the connection can depend
+ * on the value of a field of the form, among a CLOSED list written here: the person filling the form never names a connection. */
+export function CallCard({ idPrefix, value, connections, onChange, choices = false }: { idPrefix: string; value: Reading; connections: string[]; onChange: (v: Reading) => void; choices?: boolean }) {
   const rec = value as unknown as Record<string, string>;
+  const source = value as DataSource;
   const put = putter(value, onChange);
   const id = (k: string) => `${idPrefix}-${k}`;
+  const byField = choices && source.connection_from !== undefined;
+  const [lines, setLines] = useState(() => choicesToText(source.connections));
+  const toggle = (on: boolean) => {
+    const { connection_from: _f, connections: _c, ...rest } = source;
+    onChange((on ? { ...rest, connection: "", connection_from: "", connections: {} } : { ...rest, connection: connections[0] ?? "" }) as Reading);
+    if (!on) setLines("");
+  };
   return (
     <section className="sv-card" aria-label="Appel">
       <datalist id={id("conns")}>{connections.map((c) => <option key={c} value={c} />)}</datalist>
       <h3><FormIcon name="link" size={16} /> Appel</h3>
       <div className="sv-grid">
-        <Labelled id={id("connection")} icon="lock" label="Connexion" help="Connexion HTTP de l'espace : le serveur appelle le service avec elle (aucun secret côté navigateur).">
-          <input id={id("connection")} list={id("conns")} value={rec.connection ?? ""} placeholder="demo-api" maxLength={300} aria-invalid={!rec.connection || undefined} onChange={(e) => put("connection", e.target.value, false)} />
-        </Labelled>
+        {!byField && (
+          <Labelled id={id("connection")} icon="lock" label="Connexion" help="Connexion HTTP de l'espace : le serveur appelle le service avec elle (aucun secret côté navigateur).">
+            <input id={id("connection")} list={id("conns")} value={rec.connection ?? ""} placeholder="demo-api" maxLength={300} aria-invalid={!rec.connection || undefined} onChange={(e) => put("connection", e.target.value, false)} />
+          </Labelled>
+        )}
         <Labelled id={id("params")} icon="braces" label="Champs lus" help="Noms des champs du formulaire utilisés dans le chemin ou dans la liste, séparés par des virgules (ex. recherche, marque).">
           <input id={id("params")} defaultValue={(value.params ?? []).join(", ")} key={(value.params ?? []).join(",")} placeholder="recherche"
             onBlur={(e) => { const params = toList(e.target.value); const { params: _old, ...rest } = value; onChange((params.length ? { ...rest, params } : rest) as Reading); }} />
         </Labelled>
-        <Labelled id={id("path")} icon="source" label="Chemin" wide help="Commence par « / ». {champ} est remplacé par la valeur d'un autre champ du formulaire : c'est ce qui permet les listes en cascade.">
+        <Labelled id={id("path")} icon="source" label="Chemin" wide help="Commence par « / ». {champ} est remplacé par la valeur d'un autre champ du formulaire (listes en cascade), ex. /acl/{champ1}/org/{champ2} : déclarez chaque champ dans « Champs lus ». La liste attend que les champs placés avant le « ? » soient renseignés ; après le « ? » ils peuvent rester vides.">
           <input id={id("path")} value={rec.path ?? ""} placeholder="/marques?q={recherche}" maxLength={300} aria-invalid={!rec.path?.startsWith("/") || undefined} onChange={(e) => put("path", e.target.value, false)} />
         </Labelled>
+        {choices && (
+          <div className="field field-inline sv-f wide">
+            <input id={id("by-field")} type="checkbox" checked={byField} onChange={(e) => toggle(e.target.checked)} />
+            <label htmlFor={id("by-field")}>La connexion dépend d'un champ du formulaire</label>
+            <HelpTip label="Aide : connexion selon un champ">Pour lire un autre service selon un choix fait plus haut (ex. un environnement). Vous fixez la liste des connexions permises : la personne ne peut choisir que parmi elles, toute autre valeur est refusée.</HelpTip>
+          </div>
+        )}
+        {byField && (
+          <>
+            <Labelled id={id("from")} icon="braces" label="Champ qui choisit" help="Clé d'un champ placé avant dans le formulaire. Sa valeur choisit la connexion dans la liste ci-dessous. Elle est ajoutée aux champs lus (elle doit être envoyée au serveur).">
+              <input id={id("from")} value={source.connection_from ?? ""} placeholder="environnement" maxLength={64} aria-invalid={!source.connection_from || undefined}
+                onChange={(e) => onChange({ ...source, connection_from: e.target.value.trim() } as Reading)}
+                onBlur={() => onChange(withChooser(source) as Reading)} />
+            </Labelled>
+            <Labelled id={id("allowed")} icon="lock" label="Connexions permises" wide help="Une ligne par choix : valeur du champ | nom de la connexion (10 au plus). Les valeurs sont celles des options du champ qui choisit. Une valeur qui n'est pas dans la liste est refusée : aucun appel n'est fait.">
+              <textarea id={id("allowed")} rows={4} className="mono" value={lines} placeholder={"prod | tailnet-prod\ntest | tailnet-test"} aria-invalid={Object.keys(source.connections ?? {}).length === 0 || undefined}
+                onChange={(e) => { setLines(e.target.value); onChange({ ...source, connections: textToChoices(e.target.value) } as Reading); }} />
+            </Labelled>
+          </>
+        )}
       </div>
     </section>
   );
@@ -128,7 +160,7 @@ export function SpotsCard({ idPrefix, kind, value, onChange }: { idPrefix: strin
 export function ServiceReading({ idPrefix, kind, value, connections, onChange }: { idPrefix: string; kind: Kind; value: Reading; connections: string[]; onChange: (v: Reading) => void }) {
   return (
     <div className="sv-form">
-      <CallCard idPrefix={idPrefix} value={value} connections={connections} onChange={onChange} />
+      <CallCard idPrefix={idPrefix} value={value} connections={connections} onChange={onChange} choices={kind === "options"} />
       <SpotsCard idPrefix={idPrefix} kind={kind} value={value} onChange={onChange} />
       {kind === "options" && <ShapingCard idPrefix={idPrefix} value={value as DataSource} onChange={(v) => onChange(v)} />}
     </div>

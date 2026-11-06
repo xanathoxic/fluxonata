@@ -245,8 +245,11 @@ def run_lookup(lookup: FormLookup) -> None:
     source = source_in(definition, lookup.field_key, lookup.kind)
     if source is None:
         raise ValueError("gone")
-    conn = http_node.find_connection(workspace_id, environment_id, source.get("connection", ""))
-    if conn is None:
+    name = shaping.connection_for(source, lookup.params)
+    conn = http_node.find_connection(workspace_id, environment_id, name) if name else None
+    if (
+        conn is None
+    ):  # also when the visitor's value is not one of the connections the designer allowed: nothing is called
         raise ValueError("connection")
     url = build_url(conn, source, lookup.params)
     url_sent = url

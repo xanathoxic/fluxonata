@@ -6,6 +6,7 @@ import { detailsOf, hasDetails, itemsOf, MAX_ROWS, regroup, rowDefinition, seedO
 import { FormIcon, IconButton, IconLabel } from "./FormIcon";
 import { isEmpty } from "./logic";
 import { validateDefinition } from "./logic";
+import { waitingFor } from "./serviceParams";
 import { isBlock, type DataSource, type FormField } from "./types";
 
 type Row = Record<string, unknown>;
@@ -21,9 +22,11 @@ const paramsOf = (names: string[] | undefined, values: Row): Record<string, stri
 /** The options a service gives (after the fixed ones), asked of the server, which asks the service. */
 function useServiceItems(key: string, source: DataSource | undefined, values: Row, lookup: LookupFn | undefined, enabled: boolean) {
   const params = JSON.stringify(paramsOf(source?.params, values));
+  const waiting = waitingFor(source, values);
+  const waitKey = waiting.join(",");
   const [state, setState] = useState<{ items: ControlItem[]; loading: boolean; error: string }>({ items: [], loading: false, error: "" });
   useEffect(() => {
-    if (!source || !lookup || !enabled) { setState({ items: [], loading: false, error: "" }); return; }
+    if (!source || !lookup || !enabled || waitKey) { setState({ items: [], loading: false, error: "" }); return; }
     let live = true;
     setState((s) => ({ ...s, loading: true, error: "" }));
     const timer = window.setTimeout(() => {
@@ -32,8 +35,8 @@ function useServiceItems(key: string, source: DataSource | undefined, values: Ro
         .catch((e: unknown) => { if (live) setState({ items: [], loading: false, error: e instanceof Error ? e.message : "La liste n'a pas pu être chargée." }); });
     }, 300);
     return () => { live = false; window.clearTimeout(timer); };
-  }, [key, Boolean(source), lookup, params, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
-  return state;
+  }, [key, Boolean(source), lookup, params, enabled, waitKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { ...state, waiting: enabled ? waiting : [] };
 }
 
 /** The whole value a service pre-fills the control with, while the person has not touched it; they may ask for it again. */
@@ -78,9 +81,10 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
   const allItems: ControlItem[] = regroup([...fixed, ...service.items.filter((o) => !fixed.some((f) => f.value === o.value))]);
   const status = (
     <>
+      {field.source && lookup && service.waiting.length > 0 && !service.loading && <p className="hint" role="status">Les options apparaîtront quand « {service.waiting.join(", ")} » sera renseigné.</p>}
       {field.source && lookup && service.loading && <p className="hint" role="status">Chargement des options…</p>}
       {field.source && lookup && service.error && <p className="hint" role="status">{service.error}</p>}
-      {field.source && !lookup && <p className="hint">Options lues depuis « {field.source.connection} » : elles sont chargées dans le formulaire publié.</p>}
+      {field.source && !lookup && <p className="hint">Options lues depuis {field.source.connection_from ? `la connexion choisie par « ${field.source.connection_from} »` : `« ${field.source.connection} »`} : elles sont chargées dans le formulaire publié.</p>}
       {field.prefill && !lookup && <p className="hint">Ce contrôle se remplit depuis « {field.prefill.connection} » dans le formulaire publié.</p>}
       {field.prefill && lookup && prefill.error && <p className="hint" role="status">{prefill.error}</p>}
     </>

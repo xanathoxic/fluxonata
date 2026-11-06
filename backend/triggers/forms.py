@@ -23,7 +23,7 @@ from tenancy.permissions import PUBLISH, ROLE_PERMISSIONS, RUN, VIEW, get_worksp
 from workflows import access
 from workflows.models import Workflow
 
-from . import formengine, lookups
+from . import formengine, lookups, shaping
 from .models import FormLookup, FormSubmission, PublicForm
 
 MAX_BODY = 64 * 1024
@@ -257,9 +257,12 @@ class FormAttachView(FormDetailView):
         problems = formengine.check_against_inputs(definition, version.input_schema, mapping)
         if not problems:
             for key, src in formengine.iter_sources(definition):
-                name = src.get("connection", "")
-                if not http_node.find_connection(ws.pk, form.environment_id, name):
-                    problems[key] = f"Connexion « {name} » introuvable pour cet environnement (type « Service HTTP »)."
+                for name in shaping.connection_names(src):
+                    if not http_node.find_connection(ws.pk, form.environment_id, name):
+                        problems[key] = (
+                            f"Connexion « {name} » introuvable pour cet environnement (type « Service HTTP »)."
+                        )
+                        break
         if problems:
             raise serializers.ValidationError(problems)
         form.library_version = lib_version

@@ -3,6 +3,7 @@ import { ControlInput } from "./ControlInput";
 import { IconButton, IconLabel } from "./FormIcon";
 import { orderedFields, readingOrder, visibleRows } from "./layout";
 import { visibleState } from "./logic";
+import { waitingFor } from "./serviceParams";
 import { canLoad, fillValue, type State } from "./rules";
 import { styleProps } from "./style";
 import { isBlock, type FieldOption, type FormDefinition, type FormField } from "./types";
@@ -40,7 +41,7 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
     let next: Values | null = null;
     for (const f of orderedFields(definition)) {
       const fill = states.get(f.key)?.fill;
-      if (fill != null && shown.has(f.key)) {  // a rule fills the field: show what the server will keep
+      if (fill != null) {  // a rule fills the field: show what the server will keep. Also when the same rule hides it: that is how a rule empties what was typed before the field went away (the server drops a hidden field's value anyway)
         const want = fillValue(f.type, fill);
         if (values[f.key] !== want) next = { ...(next ?? values), [f.key]: want };
         continue;
@@ -65,7 +66,8 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
           the browser reads it as nested rules, so nothing can reach outside the form. */}
       {definition.css && <style>{`.${scope} {\n${definition.css}\n}`}</style>}
       {definition.sections.map((s, i) => {
-        const fields = readingOrder(s.fields).filter((f) => shown.has(f.key));
+        const everyField = readingOrder(s.fields);
+        const fields = everyField.filter((f) => shown.has(f.key));
         if (inline) {
           const cols = readingOrder(s.fields).filter((f) => !isBlock(f.type));
           return (
@@ -79,7 +81,7 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
           );
         }
         if (fields.length === 0 && s.fields.length > 0) return null;
-        const rows = visibleRows(fields);
+        const rows = visibleRows(fields, everyField); // the fields under a hidden one move up into its place
         return (
           <fieldset key={s.id ?? i} className="fb-section">
             {s.title && <legend>{s.title}</legend>}
@@ -121,9 +123,12 @@ function useOptions(field: FormField, values: Values, search: string, lookup?: L
   const params: Record<string, string> = {};
   for (const p of source?.params ?? []) params[p] = p === "q" ? search : values[p] === undefined || values[p] === null ? "" : String(values[p]);
   const signature = JSON.stringify(params);
+  const waiting = waitingFor(source, values);
+  const waitKey = waiting.join(",");
   useEffect(() => {
     if (!source || !lookup) return;
     const mine = ++seq.current;
+    if (waitKey) { setState({ options: [], loading: false, error: "" }); return; }
     setState((s) => ({ ...s, loading: true, error: "" }));
     const timer = window.setTimeout(() => {
       lookup(field.key, JSON.parse(signature) as Record<string, string>)
@@ -131,19 +136,32 @@ function useOptions(field: FormField, values: Values, search: string, lookup?: L
         .catch((e: unknown) => { if (mine === seq.current) setState({ options: [], loading: false, error: e instanceof Error ? e.message : "La liste n'a pas pu être chargée." }); });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [field.key, source, lookup, signature]);
-  return state;
+  }, [field.key, source, lookup, signature, waitKey]);
+  return { ...state, waiting };
 }
 
 interface FieldProps { idPrefix?: string; field: FormField; state?: State; value: unknown; values: Values; error?: string; disabled?: boolean; lookup?: LookupFn; onChange: (v: unknown) => void }
 
-function FieldInput({ field: base, state, value, values, error, disabled, lookup, onChange, idPrefix = "" }: FieldProps) {
+function FieldInput({ field: base, state, value, values, error, disabled: lockedByForm, lookup, onChange, idPrefix = "" }: FieldProps) {
+  // a rule may put the field in read-only: shown with its value, not editable (a presentation effect: the server does not enforce it)
+  const disabled = lockedByForm || Boolean(state?.readonly);
   // the rules may change the texts, make the field obligatory or limit its choices
   const field: FormField = { ...base, label: state?.label ?? base.label, help: state?.help ?? base.help, placeholder: state?.placeholder ?? base.placeholder, required: state?.required ?? base.required };
   const id = `${idPrefix}fb-${field.key}`;
   const [search, setSearch] = useState("");
   const loaded = useOptions(base, values, search, lookup);
-  const { loading, error: loadError } = loaded;
+  const { loading, error: loadError, waiting } = loaded;
+  // A list that depends on another field: what was chosen under the previous value of that field is no longer offered, so it is dropped
+  // (otherwise the old members of another group would stay ticked, invisible, and be sent).
+  const dependent = Boolean(lookup) && (base.source?.params ?? []).some((p) => p !== "q");
+  useEffect(() => {
+    if (!dependent || loading || loadError) return;
+    const offered = new Set(loaded.options.map((o) => o.value));
+    if (Array.isArray(value)) {
+      const kept = (value as string[]).filter((v) => offered.has(v));
+      if (kept.length !== value.length) onChange(kept);
+    } else if (typeof value === "string" && value !== "" && !offered.has(value)) onChange("");
+  }, [dependent, loading, loadError, loaded.options]); // eslint-disable-line react-hooks/exhaustive-deps
   const options = state?.options ? loaded.options.filter((o) => (state.options as string[]).includes(o.value)) : loaded.options;
   const describedBy = [field.help ? `${id}-help` : "", error ? `${id}-err` : ""].filter(Boolean).join(" ") || undefined;
   const filled = state?.fill != null || Boolean(base.compute);  // filled by a rule: shown, not editable (the server keeps the rule's value)
@@ -188,7 +206,8 @@ function FieldInput({ field: base, state, value, values, error, disabled, lookup
     <div className={`field fb-field${error ? " has-error" : ""}`}>
       {labelled ? <span id={`${id}-l`} className="fb-label">{label}</span> : <label htmlFor={id}>{label}</label>}
       {control}
-      {field.source && !lookup && <p className="hint">Liste dynamique : les choix sont chargés depuis « {field.source.connection} » dans le formulaire publié.</p>}
+      {field.source && !lookup && <p className="hint">Liste dynamique : les choix sont chargés depuis {field.source.connection_from ? `la connexion choisie par « ${field.source.connection_from} »` : `« ${field.source.connection} »`} dans le formulaire publié.</p>}
+      {waiting.length > 0 && !loading && <p className="hint" role="status">Les choix apparaîtront quand « {waiting.join(", ")} » sera renseigné.</p>}
       {loading && <p className="hint" role="status">Chargement de la liste…</p>}
       {loadError && <p className="hint" role="status">{loadError}</p>}
       {field.help && <p id={`${id}-help`} className="hint">{field.help}</p>}

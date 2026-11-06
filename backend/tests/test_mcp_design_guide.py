@@ -436,3 +436,13 @@ def test_the_listes_topic_teaches_the_shape_driven_choice_and_the_cascade():
         w in text for w in ("items_as", "entries", "where", "label_expr", "{champ}")
     )
     assert "form_source" in guide("all")["examples"] and "topic `listes`" in guide("form")["guide"]
+
+
+def test_the_listes_topic_describes_the_closed_list_of_connections():
+    text = guide("listes")["guide"]
+    assert (
+        "connection_from" in text
+        and "connections" in text
+        and "FERMÉE" in text
+        and "jamais un nom de connexion saisi" in text
+    )

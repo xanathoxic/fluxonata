@@ -62,4 +62,36 @@ describe("ChoiceSourceOverlay", () => {
     await u.type(screen.getByLabelText("Chemin"), "/politique");
     expect((screen.getByRole("button", { name: "Appliquer" }) as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it("permet de faire dépendre la connexion d'un champ, parmi une liste fermée, et ajoute ce champ aux champs lus", async () => {
+    const u = userEvent.setup();
+    const onApply = vi.fn();
+    render(<ChoiceSourceOverlay field={field} connections={["tailnet-prod", "tailnet-test"]} onApply={onApply} onClose={() => {}} />);
+    expect(screen.queryByLabelText("Connexions permises")).toBeNull(); // option fermée par défaut
+    await u.click(screen.getByLabelText("La connexion dépend d'un champ du formulaire"));
+    expect(screen.queryByLabelText("Connexion")).toBeNull(); // la connexion fixe disparaît
+    expect((screen.getByRole("button", { name: "Appliquer" }) as HTMLButtonElement).disabled).toBe(true); // ni champ ni liste : pas applicable
+    await u.type(screen.getByLabelText("Champ qui choisit"), "env");
+    expect((screen.getByRole("button", { name: "Appliquer" }) as HTMLButtonElement).disabled).toBe(true); // liste vide
+    await u.type(screen.getByLabelText("Connexions permises"), "prod | tailnet-prod\ntest | tailnet-test");
+    expect((screen.getByRole("button", { name: "Appliquer" }) as HTMLButtonElement).disabled).toBe(false);
+    await u.click(screen.getByRole("button", { name: "Appliquer" }));
+    expect(onApply).toHaveBeenCalledWith({
+      ...field,
+      source: { ...field.source, connection: "", connection_from: "env", connections: { prod: "tailnet-prod", test: "tailnet-test" }, params: ["env"] },
+    });
+  });
+
+  it("revient à une connexion fixe en décochant l'option", async () => {
+    const u = userEvent.setup();
+    const onApply = vi.fn();
+    const withChoice: FormField = { ...field, source: { connection: "", path: "/politique", params: ["env"], connection_from: "env", connections: { prod: "tailnet-prod" } } };
+    render(<ChoiceSourceOverlay field={withChoice} connections={["tailnet-prod"]} onApply={onApply} onClose={() => {}} />);
+    await u.click(screen.getByLabelText("La connexion dépend d'un champ du formulaire"));
+    await u.click(screen.getByRole("button", { name: "Appliquer" }));
+    const applied = onApply.mock.calls[0]?.[0] as FormField;
+    expect(applied.source?.connection_from).toBeUndefined();
+    expect(applied.source?.connections).toBeUndefined();
+    expect(applied.source?.connection).toBe("tailnet-prod");
+  });
 });

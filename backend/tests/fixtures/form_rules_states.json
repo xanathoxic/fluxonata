@@ -683,5 +683,160 @@
   "expected": {
    "load": []
   }
+ },
+ {
+  "name": "lecture seule si — vrai",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "ajouter"
+     },
+     "then": [
+      {
+       "do": "readonly"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "ajouter"
+  },
+  "expected": {
+   "readonly": true,
+   "visible": true
+  }
+ },
+ {
+  "name": "lecture seule si — faux : modifiable par défaut",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "ajouter"
+     },
+     "then": [
+      {
+       "do": "readonly"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "retirer"
+  },
+  "expected": {
+   "readonly": false
+  }
+ },
+ {
+  "name": "lecture seule puis modifiable (sinon)",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "ajouter"
+     },
+     "then": [
+      {
+       "do": "readonly"
+      }
+     ],
+     "else": [
+      {
+       "do": "editable"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "retirer"
+  },
+  "expected": {
+   "readonly": false
+  }
+ },
+ {
+  "name": "une règle suivante peut rendre à nouveau modifiable",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "ajouter"
+     },
+     "then": [
+      {
+       "do": "readonly"
+      }
+     ]
+    },
+    {
+     "when": {
+      "field": "a",
+      "op": "is_true"
+     },
+     "then": [
+      {
+       "do": "editable"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "ajouter"
+  },
+  "expected": {
+   "readonly": true
+  }
+ },
+ {
+  "name": "lecture seule n'empêche ni l'obligation ni l'affichage",
+  "field": {
+   "key": "x",
+   "type": "text",
+   "required": true,
+   "rules": [
+    {
+     "when": {
+      "field": "a",
+      "op": "equals",
+      "value": "ajouter"
+     },
+     "then": [
+      {
+       "do": "readonly"
+      }
+     ]
+    }
+   ]
+  },
+  "values": {
+   "a": "ajouter"
+  },
+  "expected": {
+   "readonly": true,
+   "required": true,
+   "visible": true
+  }
  }
 ]

@@ -35,7 +35,11 @@ MAX_SECTIONS, MAX_FIELDS, MAX_OPTIONS, MAX_COLUMNS, MAX_ROWS = 20, 100, 200, 12,
 MAX_TEXT, MAX_LONG_TEXT = 1000, 10_000
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-SOURCE_KEYS = {"connection", "path", "items_path", "label_path", "value_path", "params"} | shaping.SHAPING_KEYS
+SOURCE_KEYS = (
+    {"connection", "path", "items_path", "label_path", "value_path", "params"}
+    | shaping.SHAPING_KEYS
+    | shaping.CONNECTION_KEYS
+)
 FIELD_KEYS = {
     "key",
     "label",

@@ -7,6 +7,8 @@ export const EFFECT_KINDS: { id: Effect["do"]; label: string; icon: FormIconName
   { id: "hide", label: "Masquer le champ", icon: "eyeOff" },
   { id: "require", label: "Rendre obligatoire", icon: "check" },
   { id: "optional", label: "Rendre facultatif", icon: "close" },
+  { id: "readonly", label: "Mettre en lecture seule", icon: "lock" },
+  { id: "editable", label: "Rendre modifiable", icon: "edit" },
   { id: "text", label: "Changer un texte", icon: "paragraph" },
   { id: "fill", label: "Remplir le champ", icon: "edit" },
   { id: "options", label: "Limiter les choix", icon: "list2" },
@@ -26,6 +28,7 @@ export function blankEffect(kind: Effect["do"], field: FormField): Effect {
 /** Why an effect cannot be offered for this field (a block has no value, only a static list can be limited…). */
 export function unavailable(kind: Effect["do"], field: FormField): string {
   if (isBlock(field.type) && (kind === "require" || kind === "optional")) return "Un bloc de contenu n'a pas de valeur.";
+  if (isBlock(field.type) && (kind === "readonly" || kind === "editable")) return "Un bloc de contenu n'a pas de valeur à verrouiller.";
   if (kind === "fill" && !FILLABLE.includes(field.type)) return "Ce type de champ ne peut pas être rempli par une règle.";
   if (kind === "load" && !(field.type === "custom" && (field.source || field.prefill))) return "Ce champ ne lit pas de service : réglez d'abord « Données depuis un service » dans ses propriétés.";
   if (kind === "options" && !(field.options && !field.source && ["select", "radio", "combobox", "checkbox_list"].includes(field.type))) return "Seule une liste dont les options sont saisies dans le formulaire peut être limitée.";

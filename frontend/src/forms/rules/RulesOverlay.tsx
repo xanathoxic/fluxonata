@@ -27,6 +27,7 @@ const TEMPLATES: Template[] = [
   { id: "show", label: "Afficher seulement si…", icon: "eye", build: (f) => ({ when: group(f), then: [{ do: "show" }], else: [{ do: "hide" }] }) },
   { id: "hide", label: "Masquer si…", icon: "eyeOff", build: (f) => ({ when: group(f), then: [{ do: "hide" }] }) },
   { id: "require", label: "Rendre obligatoire si…", icon: "check", build: (f) => ({ when: group(f), then: [{ do: "require" }], else: [{ do: "optional" }] }) },
+  { id: "readonly", label: "Lecture seule si…", icon: "lock", build: (f) => ({ when: group(f), then: [{ do: "readonly" }], else: [{ do: "editable" }] }) },
   { id: "text", label: "Changer un texte si…", icon: "paragraph", build: (f, field) => ({ when: group(f), then: [blankEffect("text", field)] }) },
   { id: "options", label: "Limiter les choix si…", icon: "list2", build: (f, field) => ({ when: group(f), then: [blankEffect("options", field)] }) },
   { id: "load", label: "Charger les données du service si…", icon: "link", build: (f, field) => ({ when: group(f), then: [blankEffect("load", field)] }) },
@@ -114,7 +115,8 @@ export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply,
               <p className="rl-sentence" role="status" aria-label="Résumé de la règle"><strong>Quand</strong> {sentence(rule.when, label)}<br /><strong>alors</strong> {rule.then.length ? rule.then.map(describeEffect).join(" · ") : "…"}{rule.else?.length ? <><br /><strong>sinon</strong> {rule.else.map(describeEffect).join(" · ")}</> : null}</p>
               <div className="field"><label htmlFor="rl-name">Nom de la règle (facultatif)</label><input id="rl-name" value={rule.name ?? ""} maxLength={120} placeholder="ex. Seulement pour la France" onChange={(e) => set({ ...rule, name: e.target.value || undefined })} /></div>
               <h3><FormIcon name="rule" size={16} /> Quand</h3>
-              {isGroup(rule.when) && earlier.length > 0 && <GroupEditor group={rule.when} fields={earlier} path={[]} onChange={(w) => set({ ...rule, when: w })} />}
+              {/* a rule written as ONE condition (the simple form the server and the MCP accept) is edited as a group of one */}
+              {earlier.length > 0 && <GroupEditor group={isGroup(rule.when) ? rule.when : { op: "all", items: [rule.when] }} fields={earlier} path={[]} onChange={(w) => set({ ...rule, when: w })} />}
               <h3><FormIcon name="check" size={16} /> Alors</h3>
               <EffectList label="Alors" effects={rule.then} field={field} earlier={earlier} onChange={(then) => set({ ...rule, then })} />
               <h3><button type="button" className="rl-disclose" aria-expanded={showElse || Boolean(rule.else?.length)} onClick={() => setShowElse(!showElse)}><FormIcon name={showElse || rule.else?.length ? "down" : "right"} size={14} /> Sinon</button></h3>

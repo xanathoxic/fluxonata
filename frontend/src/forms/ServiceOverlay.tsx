@@ -5,10 +5,15 @@ import type { ControlPrefill, ControlSpec } from "./controls";
 import { FormIcon } from "./FormIcon";
 import { ModeTabs } from "./ModeTabs";
 import { CallCard, ServiceReading, ServiceTry, ShapingCard, SpotsCard } from "./ServiceFields";
+import { withChooser } from "./serviceParams";
 import type { DataSource, FormField } from "./types";
 
 interface Props { field: FormField; connections: string[]; onApply: (next: FormField) => void; onClose: () => void }
-const valid = (c: { connection: string; path: string } | undefined): boolean => !c || (c.connection.trim() !== "" && c.path.startsWith("/"));
+const valid = (c: { connection: string; path: string; connection_from?: string; connections?: Record<string, string> } | undefined): boolean => {
+  if (!c) return true;
+  const connected = c.connection_from === undefined ? c.connection.trim() !== "" : c.connection_from.trim() !== "" && Object.keys(c.connections ?? {}).length > 0;
+  return connected && c.path.startsWith("/");
+};
 
 /** « Données depuis un service », in a window centred on the screen like the conditions: what the FIELD reads from a web service (the
  * control is reused by many forms, which each read their own): its options (if the control takes them) and/or its pre-filled value.
@@ -24,7 +29,7 @@ export function ServiceOverlay({ field, connections, onApply, onClose }: Props) 
   const ok = valid(source) && valid(prefill);
   const apply = () => {
     const { source: _s, prefill: _p, ...rest } = field;
-    onApply({ ...rest, ...(source ? { source } : {}), ...(prefill ? { prefill } : {}) });
+    onApply({ ...rest, ...(source ? { source: withChooser(source) } : {}), ...(prefill ? { prefill } : {}) });
     onClose();
   };
   const tabs = [
@@ -79,7 +84,7 @@ export function ChoiceSourceOverlay({ field, connections, onApply, onClose }: Pr
   const [source, setSource] = useState<DataSource>(field.source ?? { connection: connections[0] ?? "", path: "/" });
   const ok = valid(source);
   const shaped = Boolean(source.items_as === "entries" || source.where || source.label_expr || source.sort);
-  const apply = () => { onApply({ ...field, source }); onClose(); };
+  const apply = () => { onApply({ ...field, source: withChooser(source) }); onClose(); };
   const tabs = [
     { id: "call", label: `Appel${ok ? "" : " ⚠"}`, icon: "link" as const },
     { id: "read", label: "Réponse", icon: "search" as const },
@@ -96,7 +101,7 @@ export function ChoiceSourceOverlay({ field, connections, onApply, onClose }: Pr
         <HelpTip label="Aide : liste dynamique">Les choix sont lus dans un service au moment où la personne remplit le formulaire. Propre à ce formulaire : le serveur appelle le service par une connexion de l'espace (aucun secret côté navigateur). Les valeurs reçues ne sont contrôlées que dans leur forme : le workflow doit les traiter comme non vérifiées. Rien n'est modifié avant « Appliquer ».</HelpTip>
         {!ok && <span role="alert" className="field-error sv-bad"><FormIcon name="warn" size={14} /> Connexion et chemin (« / … ») requis</span>}
       </div>
-      {pane("call", <CallCard idPrefix="fp-choice" value={source} connections={connections} onChange={(v) => setSource(v as DataSource)} />)}
+      {pane("call", <CallCard idPrefix="fp-choice" value={source} connections={connections} onChange={(v) => setSource(v as DataSource)} choices />)}
       {pane("read", <SpotsCard idPrefix="fp-choice" kind="options" value={source} onChange={(v) => setSource(v as DataSource)} />)}
       {pane("shape", <ShapingCard idPrefix="fp-choice" value={source} onChange={setSource} />)}
       {pane("try", <ServiceTry kind="options" spec={CHOICE_SPEC} config={source} />)}

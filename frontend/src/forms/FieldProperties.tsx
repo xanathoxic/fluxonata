@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useApp } from "../context";
 import { COMPUTABLE } from "./calc";
 import { controlIcon, fieldForControl, MODES, producesOf, type ControlCard } from "./controls";
+import { connectionLabel } from "./serviceParams";
 import { ChoiceSourceOverlay, ServiceOverlay } from "./ServiceOverlay";
 import { FormIcon, IconLabel, type FormIconName } from "./FormIcon";
 import { describeEffect, sentence } from "./rules";
@@ -120,7 +121,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
       {field.type === "custom" && field.control && !part && (
         <fieldset>
           <legend><FormIcon name="link" size={14} /> Données depuis un service</legend>
-          {field.source && <p className="fb-rsum" title={field.source.path}><strong>Options :</strong> {field.source.connection || "(connexion ?)"} · <code>{field.source.path}</code></p>}
+          {field.source && <p className="fb-rsum" title={field.source.path}><strong>Options :</strong> {connectionLabel(field.source)} · <code>{field.source.path}</code></p>}
           {field.prefill && <p className="fb-rsum" title={field.prefill.path}><strong>Valeur préremplie :</strong> {field.prefill.connection || "(connexion ?)"} · <code>{field.prefill.path}</code></p>}
           {!field.source && !field.prefill && <p className="hint">Aucun service : {field.control.spec.dynamic ? "options fixes du contrôle, valeur saisie." : "la valeur est saisie."}</p>}
           <button type="button" onClick={() => setServiceOpen(true)} aria-haspopup="dialog"><IconLabel icon="link">{field.source || field.prefill ? "Gérer les données d'un service" : "Lire les données d'un service"}</IconLabel></button>
@@ -138,7 +139,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
             </div>
           ) : (
             <>
-              <p className="fb-rsum" title={src.path}><strong>Service :</strong> {src.connection || "(connexion ?)"} · <code>{src.path}</code></p>
+              <p className="fb-rsum" title={src.path}><strong>Service :</strong> {connectionLabel(src)} · <code>{src.path}</code></p>
               <p className="hint">{[
                 src.items_as === "entries" ? "clés d'un objet" : src.items_path ? `liste « ${src.items_path} »` : "réponse = liste",
                 src.where ? "filtrée" : "", src.label_expr ? "libellé calculé" : "", src.sort ? "triée" : "",

@@ -457,10 +457,13 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
         body = sse_last_json(text) if sse_last_json(text) is not None else text
     elif "xml" in ctype.lower() and len(raw) <= limit:
         body = xml_to_data(text) if xml_to_data(text) is not None else text
+    out_headers = {"content-type": ctype[:200]}
+    if lower.get("etag"):  # the version of what was read: a later write can ask « only if still this one » (If-Match)
+        out_headers["etag"] = lower["etag"][:200]
     result = {
         "status": status,
         "ok": 200 <= status < 300,
-        "headers": {"content-type": ctype[:200]},
+        "headers": out_headers,
         "body": _mask(body, secrets),
         "simulated": False,
     }

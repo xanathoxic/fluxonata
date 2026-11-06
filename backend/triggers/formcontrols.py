@@ -47,16 +47,20 @@ SPEC_KEYS = {
     "dynamic",
 }
 ITEM_KEYS = {"value", "label", "parts", "group", "disabled"}
-SOURCE_KEYS = {
-    "connection",
-    "path",
-    "items_path",
-    "label_path",
-    "value_path",
-    "group_path",
-    "disabled_path",
-    "params",
-} | shaping.SHAPING_KEYS
+SOURCE_KEYS = (
+    {
+        "connection",
+        "path",
+        "items_path",
+        "label_path",
+        "value_path",
+        "group_path",
+        "disabled_path",
+        "params",
+    }
+    | shaping.SHAPING_KEYS
+    | shaping.CONNECTION_KEYS
+)
 PREFILL_KEYS = {"connection", "path", "value_path", "params"}
 DISPLAYS = {"repeat": ("cards", "table"), "choice": ("select", "radio", "dropdown"), "items": ("list", "dropdown")}
 CONTROL_KEYS = {"ref", "version", "name", "icon", "spec"}
@@ -127,10 +131,10 @@ def _check_service(cfg, keys: set, path: str) -> dict[str, str]:
     """A reading of a web service: a connection, a path (placeholders = fields of the form) and where to read in the reply."""
     if not isinstance(cfg, dict) or set(cfg) - keys:
         return {path: "Lecture d'un service invalide."}
-    for name in sorted(keys - {"params"}):
+    for name in sorted(keys - {"params", "connections"}):
         if not _short(cfg.get(name, ""), 300):
             return {f"{path}.{name}": "Texte de 300 caractères au plus."}
-    if not cfg.get("connection") or not str(cfg.get("path", "")).startswith("/"):
+    if not (cfg.get("connection") or cfg.get("connection_from")) or not str(cfg.get("path", "")).startswith("/"):
         return {path: "Indiquez la connexion et un chemin qui commence par « / »."}
     params = cfg.get("params", [])
     if not isinstance(params, list) or len(params) > 5 or not all(_short(p, 64) and p for p in params):

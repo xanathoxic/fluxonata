@@ -1299,20 +1299,21 @@ def _validate_input_form(definition, inputs, workspace) -> list[dict]:
     out = [issue(None, "bad_input_form", f"Formulaire d'entrée : {k} : {v}") for k, v in list(problems.items())[:5]]
     if problems or workspace is None:
         return out
+    from triggers import shaping
     from vault.auth import HTTP_KINDS
     from vault.models import Connection
 
     for key, src in formengine.iter_sources(definition):
-        name = src.get("connection", "")
-        if not Connection.objects.filter(workspace=workspace, name=name, kind__in=HTTP_KINDS).exists():
-            out.append(
-                issue(
-                    None,
-                    "input_form_connection",
-                    f"Formulaire d'entrée : « {key} » lit un service par la connexion « {name} », introuvable.",
-                    "warning",
+        for name in shaping.connection_names(src):
+            if not Connection.objects.filter(workspace=workspace, name=name, kind__in=HTTP_KINDS).exists():
+                out.append(
+                    issue(
+                        None,
+                        "input_form_connection",
+                        f"Formulaire d'entrée : « {key} » lit un service par la connexion « {name} », introuvable.",
+                        "warning",
+                    )
                 )
-            )
     return out
 
 

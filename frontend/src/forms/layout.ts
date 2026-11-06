@@ -94,11 +94,37 @@ export function append(fields: FormField[], field: FormField): FormField[] {
   return finalize([...readingOrder(fields), { ...field, layout: { row: rowCount(fields) + 1, ...FULL, ...(h ? { height: h } : {}) } }]);
 }
 
-/** Rows used by the fields that are shown, renumbered without holes (a hidden row leaves no empty space). */
-export function visibleRows(fields: FormField[]): Map<string, Layout> {
-  const shown = fields.map((f) => ({ key: f.key, l: f.layout as Layout }));
+const overlapsCols = (a: Layout, b: Layout) => a.col <= b.col + b.span - 1 && b.col <= a.col + a.span - 1;
+const coversRow = (l: Layout, r: number) => l.row <= r && r <= bottom(l);
+
+/**
+ * Rows used by the fields that are shown, renumbered without holes (a hidden row leaves no empty space).
+ *
+ * A field that sits under the space a hidden field left moves up into it, column by column: with a tall field on the right, the fields
+ * on the left still follow one another. Only space that was OCCUPIED in the design is given back: an empty row the designer left on
+ * purpose stays, and nothing moves when nothing is hidden. The result is computed from the designed placement each time, so a field
+ * that is shown again takes its own place back.
+ *
+ * `shown` are the fields to place (in reading order); `all` every field of the section, hidden ones included (default: `shown`).
+ */
+export function visibleRows(shown: FormField[], all: FormField[] = shown): Map<string, Layout> {
+  const designed = all.map((f) => ({ key: f.key, l: f.layout as Layout }));
+  const placed: Layout[] = [];
+  const moved: { key: string; l: Layout }[] = [];
+  for (const f of shown) {
+    const l = f.layout as Layout;
+    let up = 0;
+    for (let r = l.row - 1; r >= 1; r--) {
+      const wasTaken = designed.some((d) => d.key !== f.key && overlapsCols(d.l, l) && coversRow(d.l, r));
+      const isTaken = placed.some((p) => overlapsCols(p, l) && coversRow(p, r));
+      if (wasTaken && !isTaken) up++; else break;
+    }
+    const at = { ...l, row: l.row - up };
+    placed.push(at);
+    moved.push({ key: f.key, l: at });
+  }
   const covered = new Set<number>();
-  for (const { l } of shown) for (let r = l.row; r <= bottom(l); r++) covered.add(r);
+  for (const { l } of moved) for (let r = l.row; r <= bottom(l); r++) covered.add(r);
   const order = [...covered].sort((a, b) => a - b);
-  return new Map(shown.map(({ key, l }) => [key, { ...l, row: order.indexOf(l.row) + 1 }]));
+  return new Map(moved.map(({ key, l }) => [key, { ...l, row: order.indexOf(l.row) + 1 }]));
 }

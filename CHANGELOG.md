@@ -2,6 +2,18 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.9 — 2026-11-06
+
+**Fluxonata 0.4.9 : listes dynamiques de formulaire dépendantes d'autres champs et connexion choisie parmi une liste fermée, règles « lecture seule », champs masqués qui libèrent leur place, ETag exposé par l'étape HTTP**
+
+- Formulaires : listes dépendantes d'autres champs (attente des champs lus, purge, chemin composé)
+- Formulaires : la connexion d'une liste dynamique peut dépendre d'un champ, parmi une liste fermée
+- Étape HTTP : l'ETag de la réponse est exposé (steps.<id>.output.headers.etag)
+- Règles de formulaire : effet « lecture seule » et éditeur du « Quand » pour une condition simple
+- Fixtures des règles : retour au format d'origine (un espace d'indentation)
+- Formulaires : un champ masqué libère sa place, ceux du dessous remontent (colonne par colonne)
+- Formulaires : « remplir le champ » s'applique aussi quand la même règle masque le champ
+
 ## v0.4.8 — 2026-11-06
 
 **Fluxonata 0.4.8 : listes dynamiques de formulaire mises en forme depuis la réponse d'un service (objet, filtre, libellé calculé, tri, liste dépendante) dans une fenêtre à onglets, déclencheurs et listes dans le guide de l'assistant externe**

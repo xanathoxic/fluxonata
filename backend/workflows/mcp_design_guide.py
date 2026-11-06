@@ -465,7 +465,7 @@ def guide(topic: str, workspace=None) -> dict:
             "`where` : expression sur `item` qui garde les éléments vrais (ex. `len(item.value) > 0`, `starts_with(item.key, 'group:')`) ; `label_expr` : expression qui compose le libellé (ex. `item.prenom + ' ' + item.nom`) ; `sort` : `label` ou `label_desc`, avant la coupe à 200. "
             "Seul `item` est connu de ces expressions, 300 caractères au plus, mêmes fonctions que les autres expressions (topic `expressions`). "
             "LISTE QUI DÉPEND D'UNE AUTRE : mettez `{champ}` dans `path` (le service filtre) ou dans `items_path` (on lit la bonne partie d'une réponse déjà complète, ex. `groups.{groupe}`), et déclarez ce champ dans `params` ; le champ lu doit venir AVANT dans le formulaire. "
-            "La valeur choisie vient d'un service tiers : le workflow la traite comme une entrée non vérifiée ; le serveur ne contrôle que sa forme (texte non vide, 200 caractères au plus). "
+            "CONNEXION SELON UN CHAMP : pour lire un autre service selon un choix fait plus haut, `source` accepte `connection_from` (clé d'un champ placé avant, aussi dans `params`) et `connections` ({valeur du champ: nom de connexion}, 10 au plus, liste FERMÉE que vous écrivez ; `connection` devient inutile) ; jamais un nom de connexion saisi par la personne. Toutes les connexions listées doivent exister. Pour de simples environnements, une connexion du même nom par environnement suffit. La valeur choisie vient d'un service tiers : le workflow la traite comme une entrée non vérifiée ; le serveur ne contrôle que sa forme (texte non vide, 200 caractères au plus). "
             "Ne devinez pas la forme d'une réponse : si vous ne la connaissez pas, dites-le et demandez un exemple de réponse à la personne ; une personne l'essaiera dans le concepteur de formulaires (« Essai » avec une réponse collée). "
             "Une connexion inconnue est refusée au rattachement (attach_form) ; si elle n'existe pas, dites quelle connexion créer (menu Connexions) et laissez le nom attendu. Rien n'a été appelé : ni create_form ni validate ne contactent le service."
         ),
@@ -475,9 +475,9 @@ def guide(topic: str, workspace=None) -> dict:
             "Les champs `select`, `radio`, `combobox`, `checkbox_list` exigent `options` OU une `source` lue dans un service (topic `listes`). Pas de clé `id` sur un champ. "
             "Pour qu'un formulaire alimente un workflow, chaque entrée obligatoire du workflow doit être demandée par un champ de même nom (sinon `map` : "
             "{entrée du workflow: clé du champ}) et de type compatible (attach_form le vérifie). "
-            "CONDITIONS : sur un champ, `rules:[{when: <condition>, then:[{do:show|hide|require|…}], else:[…], name?}]` ; une condition est {field, op, value} avec op parmi equals, not_equals, "
+            "CONDITIONS : sur un champ, `rules:[{when: <condition>, then:[{do:show|hide|require|optional|readonly|editable|…}], else:[…], name?}]` ; une condition est {field, op, value} avec op parmi equals, not_equals, "
             "contains, starts_with, ends_with, gt, gte, lt, lte, is_empty, not_empty, is_true, is_false, in_list{values}, ou {op:all|any, items:[…]} pour combiner (voir `examples.form_rules`). "
-            "Un champ masqué par une règle ne doit pas correspondre à une entrée OBLIGATOIRE du workflow : déclarez-la facultative."
+            "Un champ masqué par une règle ne doit pas correspondre à une entrée OBLIGATOIRE du workflow : déclarez-la facultative. `readonly` (lecture seule) est un effet de PRÉSENTATION que le serveur ne fait pas respecter : pour imposer une valeur, utilisez `fill` ou un champ calculé."
         ),
         "action": (
             "ACTION (proposition). {slug, name, description (30 caractères au moins : ce que fait l'action), version:{runtime, source, input_schema, output_schema, side_effects, "

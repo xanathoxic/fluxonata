@@ -18,11 +18,62 @@ import re
 from workflows import expressions as ex
 
 SHAPING_KEYS = {"items_as", "where", "label_expr", "sort"}
+CONNECTION_KEYS = {"connection_from", "connections"}
+MAX_CONNECTIONS = 10
 ITEMS_AS = ("list", "entries")
 SORTS = ("label", "label_desc")
 MAX_EXPR = 300
 MAX_SCAN = 10_000  # items examined at most, whatever the size of the reply
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]{0,63})\}")
+
+
+_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def connection_for(source: dict, params: dict) -> str | None:
+    """The connection a request uses. A reading has ONE connection, or a CLOSED list the designer wrote (`connections`: {value of the
+    field → connection name}) of which the value of the field `connection_from` picks one. A value that is not in the list gives None:
+    the visitor never names a connection, he can only choose among the ones the designer chose."""
+    field = source.get("connection_from")
+    if not field:
+        return source.get("connection", "")
+    value = params.get(field) if isinstance(params, dict) else None
+    choices = source.get("connections")
+    return choices.get(value) if isinstance(value, str) and isinstance(choices, dict) else None
+
+
+def connection_names(source: dict) -> list[str]:
+    """Every connection a reading may use (to check they exist when the form is attached)."""
+    if source.get("connection_from"):
+        return list(dict.fromkeys(str(n) for n in (source.get("connections") or {}).values()))
+    return [source.get("connection", "")]
+
+
+def check_connection_choice(cfg: dict, path: str) -> dict[str, str]:
+    """{path: message} for `connection_from` / `connections`: both or neither, the field is one of the fields read (`params`, so that its
+    value reaches the server), a few choices at most, each a text."""
+    has_from, has_map = "connection_from" in cfg, "connections" in cfg
+    if not has_from and not has_map:
+        return {}
+    if has_from != has_map:
+        return {
+            f"{path}.connections": "Indiquez le champ qui choisit la connexion ET la liste des connexions permises."
+        }
+    field, choices = cfg["connection_from"], cfg["connections"]
+    if not isinstance(field, str) or not _KEY.match(field):
+        return {f"{path}.connection_from": "Clé d'un champ du formulaire attendue."}
+    if field not in cfg.get("params", []):
+        return {
+            f"{path}.connection_from": f"« {field} » doit figurer dans les champs lus (sa valeur est envoyée au serveur)."
+        }
+    if not isinstance(choices, dict) or not 1 <= len(choices) <= MAX_CONNECTIONS:
+        return {f"{path}.connections": f"Entre 1 et {MAX_CONNECTIONS} connexions permises."}
+    for value, name in choices.items():
+        if not isinstance(value, str) or not value.strip() or len(value) > 200:
+            return {f"{path}.connections": "Chaque valeur du champ est un texte non vide de 200 caractères au plus."}
+        if not isinstance(name, str) or not name.strip() or len(name) > 300:
+            return {f"{path}.connections": "Chaque connexion est un nom non vide de 300 caractères au plus."}
+    return {}
 
 
 def placeholders(path) -> list[str]:
@@ -60,7 +111,7 @@ def _compile(src: str, what: str):
 
 def check(cfg: dict, path: str) -> dict[str, str]:
     """{path: message} for the shaping keys of a reading (options only); {} when they are well formed."""
-    out: dict[str, str] = {}
+    out: dict[str, str] = dict(check_connection_choice(cfg, path))
     declared = cfg.get("params", [])
     for name in placeholders(cfg.get("items_path")):
         if name not in declared:

@@ -38,7 +38,7 @@ export function Tryout({ rule, field, fields }: { rule: Rule; field: FormField; 
       <p className={`rl-verdict ${holds ? "yes" : "no"}`} role="status"><FormIcon name={holds ? "check" : "close"} size={14} /> La condition est {holds ? "vraie" : "fausse"}</p>
       <p className="rl-result" role="status">
         {branch.length === 0 ? "Aucun effet dans ce cas." : <>Effets : {branch.map(describeEffect).join(" · ")}</>}
-        <br /><small>Résultat : {state.visible ? "affiché" : "masqué"} · {state.required ? "obligatoire" : "facultatif"}{state.label !== null ? ` · libellé « ${state.label} »` : ""}{state.help !== null ? ` · aide « ${state.help} »` : ""}{state.placeholder !== null ? ` · exemple « ${state.placeholder} »` : ""}{state.fill !== null ? ` · valeur « ${state.fill} »` : ""}{state.options ? ` · choix : ${state.options.join(", ") || "aucun"}` : ""}</small>
+        <br /><small>Résultat : {state.visible ? "affiché" : "masqué"} · {state.required ? "obligatoire" : "facultatif"}{state.readonly ? " · lecture seule" : ""}{state.label !== null ? ` · libellé « ${state.label} »` : ""}{state.help !== null ? ` · aide « ${state.help} »` : ""}{state.placeholder !== null ? ` · exemple « ${state.placeholder} »` : ""}{state.fill !== null ? ` · valeur « ${state.fill} »` : ""}{state.options ? ` · choix : ${state.options.join(", ") || "aucun"}` : ""}</small>
       </p>
     </section>
   );

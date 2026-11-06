@@ -393,3 +393,34 @@ def test_a_rule_may_put_the_loading_of_a_service_under_conditions():
     bad = _load_field("options", source=svc)
     bad["rules"][0]["then"][0]["extra"] = 1
     assert formengine.check_definition(form(field("a"), bad))
+
+
+def test_readonly_and_editable_are_effects_without_parameter_and_not_for_blocks():
+    ok = form(
+        field("a"),
+        field(
+            "b", rules=[rule(cond("a", "equals", value="x"), [{"do": "readonly"}], **{"else": [{"do": "editable"}]})]
+        ),
+    )
+    assert formengine.check_definition(ok) == {}
+    assert formengine.check_definition(
+        form(field("a"), field("b", rules=[rule(cond("a", "not_empty"), [{"do": "readonly", "x": 1}])]))
+    )
+    block = {"key": "note", "type": "paragraph", "label": "Texte"}
+    assert formengine.check_definition(
+        form(field("a"), {**block, "rules": [rule(cond("a", "not_empty"), [{"do": "readonly"}])]})
+    )
+
+
+def test_readonly_is_a_presentation_effect_the_server_does_not_enforce():
+    """Le serveur n'a pas de valeur de référence pour comparer ce qui est envoyé : pour IMPOSER une valeur, « fill » ou un champ calculé."""
+    d = form(
+        field("a"),
+        field("b", rules=[rule(cond("a", "equals", value="x"), [{"do": "readonly"}])]),
+    )
+    state = formrules.apply_rules(
+        d["sections"][0]["fields"][1], {"a": "x"}, formrules.initial_state(d["sections"][0]["fields"][1])
+    )
+    assert state["readonly"] is True
+    kept, problems = formengine.validate_submission(d, {"a": "x", "b": "valeur envoyée"})
+    assert problems == {} and kept["b"] == "valeur envoyée"  # limite connue et documentée, pas une garantie

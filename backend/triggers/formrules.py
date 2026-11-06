@@ -26,7 +26,9 @@ UNARY = {"is_empty", "not_empty", "is_true", "is_false"}
 LISTED = {"in_list", "includes_any"}
 BINARY = {"equals", "not_equals", "contains", "not_contains", "starts_with", "ends_with", "gt", "gte", "lt", "lte"}
 OPERATORS = UNARY | LISTED | BINARY
-EFFECTS = {"show", "hide", "require", "optional", "text", "options", "fill", "load"}
+# « readonly » / « editable » are a PRESENTATION effect: the form shows the field locked. The server keeps no extra check for it (it has no
+# baseline to compare a sent value with): to IMPOSE a value, use « fill » or a calculated field, which the server enforces.
+EFFECTS = {"show", "hide", "require", "optional", "readonly", "editable", "text", "options", "fill", "load"}
 LOADS = ("options", "prefill")  # what a « load » effect lets a custom control read from its service
 FILLABLE = {"text", "textarea", "email", "date", "number", "select", "radio", "combobox", "checkbox"}
 TEXT_TARGETS = {"label", "help", "placeholder"}
@@ -126,6 +128,7 @@ def initial_state(field: dict) -> dict:
     return {
         "visible": True,
         "required": bool(field.get("required")),
+        "readonly": False,
         "label": None,
         "help": None,
         "placeholder": None,
@@ -156,6 +159,8 @@ def _apply(effect: dict, values: dict, state: dict) -> None:
         state["visible"] = kind == "show"
     elif kind in ("require", "optional"):
         state["required"] = kind == "require"
+    elif kind in ("readonly", "editable"):
+        state["readonly"] = kind == "readonly"
     elif kind == "text":
         state[effect["target"]] = render(effect["text"], values)
     elif kind == "fill":
@@ -290,6 +295,10 @@ def _check_effect(effect, path: str, field: dict, earlier: dict[str, dict]) -> d
     if kind in ("require", "optional"):
         if is_block:
             return {path: "Un bloc de contenu ne peut pas être obligatoire."}
+        return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
+    if kind in ("readonly", "editable"):
+        if is_block:
+            return {path: "Un bloc de contenu n'a pas de valeur à verrouiller."}
         return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
     if kind == "text":
         if set(effect) != {"do", "target", "text"} or effect["target"] not in TEXT_TARGETS:
