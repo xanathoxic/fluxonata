@@ -406,6 +406,7 @@ def _dig(value, path: str):
 def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tuple[dict | None, dict | None, dict]:
     """One call. Returns (result, error, response headers). `signer` signs this very request (SigV4)."""
     body_bytes = spec.get("_body_bytes") or (spec["body"].encode() if spec["body"] else None)
+    limit = int(spec.get("max_bytes") or MAX_RESPONSE)  # a reading of a service for a form may allow a bigger reply
     if signer is not None:
         headers = signer(spec["method"], url, headers, body_bytes)
     try:
@@ -415,7 +416,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
             headers=headers,
             body=body_bytes,
             timeout=spec["timeout"],
-            max_bytes=(MAX_FILE if spec.get("save_file") else MAX_RESPONSE) + 1,
+            max_bytes=(MAX_FILE if spec.get("save_file") else limit) + 1,
         )
     except netsec.UnsafeURL as exc:
         err = {"code": "HTTP_BLOCKED", "message": f"Adresse refusée : {exc}", "next_step": "Vérifiez la connexion."}
@@ -445,7 +446,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
             "simulated": False,
         }
         return {**result, "_raw": raw}, None, lower
-    text = raw[:MAX_RESPONSE].decode("utf-8", "replace").replace("\x00", "\ufffd")  # PostgreSQL JSON refuses NUL
+    text = raw[:limit].decode("utf-8", "replace").replace("\x00", "\ufffd")  # PostgreSQL JSON refuses NUL
     body: object = text
     if "json" in ctype.lower():
         try:
@@ -454,7 +455,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
             body = text
     elif "event-stream" in ctype.lower():
         body = sse_last_json(text) if sse_last_json(text) is not None else text
-    elif "xml" in ctype.lower() and len(raw) <= MAX_RESPONSE:
+    elif "xml" in ctype.lower() and len(raw) <= limit:
         body = xml_to_data(text) if xml_to_data(text) is not None else text
     result = {
         "status": status,
@@ -463,7 +464,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
         "body": _mask(body, secrets),
         "simulated": False,
     }
-    if len(raw) > MAX_RESPONSE:
+    if len(raw) > limit:
         result["truncated"] = True
     if lower.get("retry-after", "").isdigit():
         result["retry_after"] = int(lower["retry-after"])

@@ -18,6 +18,7 @@ from django.utils import timezone
 from runs import http_node
 from vault import auth
 
+from . import shaping
 from .models import FormLookup
 
 log = logging.getLogger("fluxonata.forms.lookups")
@@ -26,6 +27,7 @@ KEEP_FOR = timedelta(minutes=10)
 STALE_AFTER = timedelta(minutes=2)
 MAX_QUEUED_PER_FORM = 20
 MAX_PARAMS, MAX_PARAM_LEN, MAX_OPTIONS = 5, 200, 200
+LOOKUP_MAX_BYTES = 1024 * 1024  # a reply may be big (a policy file, a directory); beyond this it is refused whole
 GENERIC_ERROR = "La liste n'a pas pu être chargée. Réessayez plus tard."
 
 
@@ -164,14 +166,20 @@ def _data(item, keys) -> dict:
     return out
 
 
-def to_options(body, source: dict, limit: int = MAX_OPTIONS, keys=()) -> list[dict]:
-    items = http_node._dig(body, source.get("items_path", "")) if source.get("items_path") else body
-    if not isinstance(items, list):
-        raise ValueError("items")
+def to_options(body, source: dict, limit: int = MAX_OPTIONS, keys=(), params: dict | None = None) -> list[dict]:
+    """The options a reply gives with a reading (see `shaping`): items, filter, value, label, group, disabled, sort, at most `limit`."""
+    rows = shaping.items(body, source, params)
+    where, label_expr = shaping.compiled(source)
+    entries = source.get("items_as") == "entries"
+    value_path = source.get("value_path") or ("key" if entries else "")
     out, seen = [], set()
-    for item in items:
-        value = http_node._dig(item, source["value_path"]) if source.get("value_path") else item
-        label = http_node._dig(item, source["label_path"]) if source.get("label_path") else value
+    for item in rows:
+        if not shaping.keeps(where, item):
+            continue
+        value = http_node._dig(item, value_path) if value_path else item
+        label = shaping.label_of(
+            label_expr, item, http_node._dig(item, source["label_path"]) if source.get("label_path") else value
+        )
         if isinstance(value, bool) or not isinstance(value, (str, int, float)) or value == "":
             continue
         value = str(value)[:200]
@@ -188,9 +196,9 @@ def to_options(body, source: dict, limit: int = MAX_OPTIONS, keys=()) -> list[di
         if data:
             option["data"] = data
         out.append(option)
-        if len(out) >= limit:
-            break
-    return out
+        if len(out) >= limit and not source.get("sort"):
+            break  # without a sort the first ones are the ones kept; with a sort every item is read first
+    return shaping.ordered(out, source.get("sort", ""))[:limit]
 
 
 MAX_PREFILL = 100_000
@@ -210,6 +218,28 @@ def to_value(body, cfg: dict, field: dict):
     return kept
 
 
+_MISS = object()
+
+
+def _reply_key(connection_id, url: str) -> str:
+    return "lookup-reply:" + hashlib.sha256(f"{connection_id}|{url}".encode()).hexdigest()
+
+
+def _cached_reply(connection_id, url: str):
+    """The reply of this very request made a moment ago (the same connection, the same address, no credentials in the key): the
+    two lists of a cascade often read the same big file, which is fetched once."""
+    from django.core.cache import cache
+
+    return cache.get(_reply_key(connection_id, url), _MISS)
+
+
+def _keep_reply(connection_id, url: str, body) -> None:
+    from django.core.cache import cache
+
+    if isinstance(body, (dict, list)):
+        cache.set(_reply_key(connection_id, url), body, int(CACHE_FOR.total_seconds()))
+
+
 def run_lookup(lookup: FormLookup) -> None:
     definition, workspace_id, environment_id = _context(lookup)
     source = source_in(definition, lookup.field_key, lookup.kind)
@@ -219,19 +249,26 @@ def run_lookup(lookup: FormLookup) -> None:
     if conn is None:
         raise ValueError("connection")
     url = build_url(conn, source, lookup.params)
+    url_sent = url
     creds = auth.credentials(conn)
-    if creds.query:
-        url = http_node._with_query(url, creds.query)
-    spec = {"method": "GET", "body": None, "timeout": 10}
-    result, error, _ = http_node._send(
-        spec, url, {"Accept": "application/json", **creds.headers}, creds.secrets, creds.signer
-    )
-    if error is not None or result is None or not result["ok"] or result.get("truncated"):
-        raise ValueError("upstream")
+    body = _cached_reply(conn.pk, url)
+    if body is _MISS:
+        if creds.query:
+            url_sent = http_node._with_query(url, creds.query)
+        spec = {"method": "GET", "body": None, "timeout": 10, "max_bytes": LOOKUP_MAX_BYTES}
+        result, error, _ = http_node._send(
+            spec, url_sent, {"Accept": "application/json", **creds.headers}, creds.secrets, creds.signer
+        )
+        if error is not None or result is None or not result["ok"] or result.get("truncated"):
+            raise ValueError("upstream")
+        body = result["body"]
+        _keep_reply(conn.pk, url, body)
     if lookup.kind == "prefill":
-        lookup.options = to_value(result["body"], source, field_in(definition, lookup.field_key) or {})
+        lookup.options = to_value(body, source, field_in(definition, lookup.field_key) or {})
     else:
-        lookup.options = to_options(result["body"], source, keys=detail_keys(field_in(definition, lookup.field_key)))
+        lookup.options = to_options(
+            body, source, keys=detail_keys(field_in(definition, lookup.field_key)), params=lookup.params
+        )
 
 
 def claim_next(worker_id: str) -> FormLookup | None:

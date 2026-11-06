@@ -498,7 +498,7 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .sv-f.wide { grid-column: 1 / -1; }
 .sv-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .sv-h label { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); font-weight: 600; margin: 0; }
-.sv-f input { width: 100%; min-height: 36px; }
+.sv-f input, .sv-f select { width: 100%; min-height: 36px; }
 .sv-try textarea { width: 100%; }
 .sv-result { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: var(--fs-sm); }
 .sv-result li { display: flex; align-items: center; gap: 6px; }

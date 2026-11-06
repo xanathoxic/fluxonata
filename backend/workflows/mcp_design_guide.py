@@ -234,6 +234,71 @@ ERROR_HANDLING_EXAMPLE = {
     ],
     "outputs": {},
 }
+FORM_SOURCE_EXAMPLE = {
+    "version": 1,
+    "sections": [
+        {
+            "id": "s1",
+            "title": "Accès",
+            "fields": [
+                {
+                    "key": "groupe",
+                    "type": "select",
+                    "label": "Groupe",
+                    "required": True,
+                    "source": {
+                        "connection": "<nom d'une connexion « Service HTTP » de list_connections>",
+                        "path": "/politique",
+                        "items_path": "groups",
+                        "items_as": "entries",
+                        "where": "len(item.value) > 0",
+                        "label_expr": "item.key + ' (' + str(len(item.value)) + ')'",
+                        "sort": "label",
+                    },
+                },
+                {
+                    "key": "membre",
+                    "type": "select",
+                    "label": "Membre du groupe",
+                    "required": True,
+                    "source": {
+                        "connection": "<nom d'une connexion « Service HTTP » de list_connections>",
+                        "path": "/politique",
+                        "params": ["groupe"],
+                        "items_path": "groups.{groupe}",
+                        "sort": "label",
+                    },
+                },
+            ],
+        }
+    ],
+}
+TRIGGER_INPUTS_EXAMPLES = {
+    "webhook (fournisseur github, gitlab, jira ou jeton)": {
+        "type": "object",
+        "required": ["payload"],
+        "properties": {
+            "payload": {"type": "object", "title": "Contenu de l'événement"},
+            "event": {"type": "string", "title": "Nom de l'événement"},
+            "delivery": {"type": "string", "title": "Identifiant de livraison"},
+        },
+    },
+    "interrogation, un élément par exécution": {
+        "type": "object",
+        "required": ["item"],
+        "properties": {"item": {"type": "object", "title": "Nouvel élément"}},
+    },
+    "interrogation, un lot": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {"items": {"type": "array", "title": "Nouveaux éléments"}},
+    },
+    "planification (valeurs fixes saisies dans la planification)": {
+        "type": "object",
+        "required": [],
+        "properties": {"perimetre": {"type": "string", "title": "Périmètre"}},
+    },
+}
 FORM_RULES_EXAMPLE = {
     "version": 1,
     "sections": [
@@ -376,10 +441,38 @@ def guide(topic: str, workspace=None) -> dict:
             "lisez alors `steps.<id>.output.ok` / `.status` dans une `condition`. Un REFUS d'approbation fait aussi échouer l'étape (arête `error` de l'approbation). "
             "Les appels réseau ne sont pas rejoués automatiquement quand ils écrivent (SMTP, SFTP en écriture) : ne bouclez pas dessus. Dites dans votre récapitulatif quelles étapes ont une branche `error` et lesquelles n'en ont pas, et pourquoi."
         ),
+        "declencheurs": (
+            "DÉCLENCHEURS. Un workflow ne démarre pas tout seul : une PERSONNE le lance, ou crée un déclencheur (menu Déclencheurs). Vous ne pouvez ni créer, ni activer, ni lancer un déclencheur : "
+            "vous concevez le workflow pour qu'il leur convienne, et vous dites dans le récapitulatif lequel créer et avec quels réglages. list_triggers montre ceux qui existent (sans adresse, jeton ni valeur). "
+            "COMMUN : le workflow doit avoir une version PUBLIÉE (promue en production selon la gouvernance) ; sans elle la planification est ignorée (`skipped_unpublished`) et le webhook répond « Aucune version publiée ». "
+            "Le déclencheur fournit des entrées PAR NOM ; toute entrée obligatoire qu'il ne fournit pas empêche son enregistrement ou le lancement : déclarez-la facultative ou faites-la fournir. "
+            "PLANIFICATION : cron à 5 champs (minute heure jour-du-mois mois jour-de-semaine), fuseau IANA (défaut Europe/Paris), `inputs` FIXES saisis dans la planification (ils doivent couvrir les entrées obligatoires) ; "
+            "chevauchement `skip` (défaut) ou `allow` ; occurrence manquée `skip` ou `run_once`. Pas d'utilisateur à l'écran : aucune approbation ni formulaire de reprise n'y trouve preneur sans prévoir qui décide. "
+            "WEBHOOK ENTRANT : fournisseur `fluxonata` (appel signé par la plateforme), `github`, `gitlab`, `jira` ou `token` (jeton porteur), avec filtre d'événements, signature et anti-rejeu vérifiés par le serveur. "
+            "Le workflow doit déclarer une entrée `payload` (objet) pour tout fournisseur autre que `fluxonata` ; `event` (texte) et `delivery` (texte) ne sont fournis que s'ils sont DÉCLARÉS. Le contenu vient d'un tiers : traitez-le comme non vérifié. "
+            "INTERROGATION : la plateforme relève à intervalle régulier un service web (connexion « Service HTTP »), une boîte e-mail IMAP ou un dossier SFTP et lance le workflow pour chaque NOUVEL élément. "
+            "Le workflow déclare `item` (objet, une exécution par élément) ou `items` (liste, un lot) et AUCUNE autre entrée obligatoire ; le premier relevé mémorise l'existant sans rien lancer ; l'identifiant de chaque élément se lit par `id_path`. "
+            "FORMULAIRE PUBLIC : une page sans connexion (`/f/<jeton>`) démarre le workflow ; les champs du formulaire alimentent les entrées par nom ou par `map` (voir attach_form) ; plafond d'envois par heure, date de fin et nombre d'usages maximum. Le visiteur est anonyme : ne lui faites rien confiance. "
+            "ATTENTE : `wait` avec reprise `webhook` ou `form` n'est PAS un déclencheur : c'est une étape qui reprend un run déjà lancé. "
+            "À FAIRE : choisissez le déclencheur d'après le besoin (« chaque matin » = planification ; « quand GitHub signale… » = webhook ; « dès qu'un ticket apparaît » = interrogation ; « une demande saisie par un public » = formulaire public), "
+            "écrivez le schéma d'entrées du workflow en conséquence (`examples.trigger_inputs`), et terminez par une ligne par déclencheur à créer : type, workflow, cron/fournisseur/intervalle, connexion, entrées fixes. N'inventez pas d'horaire ni de seuil : demandez-les ou listez-les en hypothèse."
+        ),
+        "listes": (
+            "LISTES DYNAMIQUES. Au lieu de `options`, un champ `select`, `radio`, `combobox` ou `checkbox_list` peut porter `source` (soit l'un, soit l'autre) pour lire ses choix dans un service au moment où la personne remplit le formulaire : "
+            '{connection: <nom pris dans list_connections, type « Service HTTP »>, path: "/…" (commence par « / » ; `{champ}` = valeur d\'un autre champ du formulaire), params: [champs lus, 5 au plus], '
+            "items_path, value_path, label_path, items_as, where, label_expr, sort} (voir `examples.form_source`). L'appel est fait par un worker avec la connexion (jamais par le navigateur), en GET, sans pagination ; réponse de 1 Mo au plus (sinon refusée en entier), 200 options au plus. "
+            "Choisissez la lecture d'après la FORME de la réponse : une LISTE d'éléments → `items_path` vers la liste, `value_path` et `label_path` dans chaque élément ; un OBJET dont les clés sont les choix (des groupes, des identifiants) → `items_as: \"entries\"` : chaque élément est alors `{key, value}`, valeur et libellé valent la clé par défaut. "
+            "`where` : expression sur `item` qui garde les éléments vrais (ex. `len(item.value) > 0`, `starts_with(item.key, 'group:')`) ; `label_expr` : expression qui compose le libellé (ex. `item.prenom + ' ' + item.nom`) ; `sort` : `label` ou `label_desc`, avant la coupe à 200. "
+            "Seul `item` est connu de ces expressions, 300 caractères au plus, mêmes fonctions que les autres expressions (topic `expressions`). "
+            "LISTE QUI DÉPEND D'UNE AUTRE : mettez `{champ}` dans `path` (le service filtre) ou dans `items_path` (on lit la bonne partie d'une réponse déjà complète, ex. `groups.{groupe}`), et déclarez ce champ dans `params` ; le champ lu doit venir AVANT dans le formulaire. "
+            "La valeur choisie vient d'un service tiers : le workflow la traite comme une entrée non vérifiée ; le serveur ne contrôle que sa forme (texte non vide, 200 caractères au plus). "
+            "Ne devinez pas la forme d'une réponse : si vous ne la connaissez pas, dites-le et demandez un exemple de réponse à la personne ; une personne l'essaiera dans le concepteur de formulaires (« Essai » avec une réponse collée). "
+            "Une connexion inconnue est refusée au rattachement (attach_form) ; si elle n'existe pas, dites quelle connexion créer (menu Connexions) et laissez le nom attendu. Rien n'a été appelé : ni create_form ni validate ne contactent le service."
+        ),
         "form": (
             "FORMULAIRE. Définition = {version:1, sections:[{id, title, fields:[{key, type, label, required?, help?, placeholder?, default?, options?, visible_if?}]}]}. "
             f"Types de champ : {_types(formengine.FIELD_TYPES)} ; blocs de mise en page : {_types(formengine.BLOCK_TYPES)}. `key` : lettre ou _, puis lettres/chiffres/_ (64 max). "
-            "Les champs `select`, `radio`, `combobox`, `checkbox_list` exigent `options`. Pas de clé `id` sur un champ. "
+            "Les champs `select`, `radio`, `combobox`, `checkbox_list` exigent `options` OU une `source` lue dans un service (topic `listes`). Pas de clé `id` sur un champ. "
             "Pour qu'un formulaire alimente un workflow, chaque entrée obligatoire du workflow doit être demandée par un champ de même nom (sinon `map` : "
             "{entrée du workflow: clé du champ}) et de type compatible (attach_form le vérifie). "
             "CONDITIONS : sur un champ, `rules:[{when: <condition>, then:[{do:show|hide|require|…}], else:[…], name?}]` ; une condition est {field, op, value} avec op parmi equals, not_equals, "
@@ -407,6 +500,8 @@ def guide(topic: str, workspace=None) -> dict:
             "branching": BRANCHING_EXAMPLE,
             "other_nodes": OTHER_NODES,
             "error_handling": ERROR_HANDLING_EXAMPLE,
+            "trigger_inputs": TRIGGER_INPUTS_EXAMPLES,
+            "form_source": FORM_SOURCE_EXAMPLE,
             "form": FORM_EXAMPLE,
             "form_rules": FORM_RULES_EXAMPLE,
             "action": ACTION_EXAMPLE,

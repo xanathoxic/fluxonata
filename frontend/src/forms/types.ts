@@ -19,7 +19,7 @@ export interface FormStyle {
 }
 
 export interface FieldOption { value: string; label?: string }
-export interface DataSource { connection: string; path: string; items_path?: string; label_path?: string; value_path?: string; group_path?: string; disabled_path?: string; params?: string[] }
+export interface DataSource { connection: string; path: string; items_path?: string; label_path?: string; value_path?: string; group_path?: string; disabled_path?: string; items_as?: "list" | "entries"; where?: string; label_expr?: string; sort?: "label" | "label_desc"; params?: string[] }
 export interface GridColumn { key: string; label?: string; type?: "text" | "number" }
 export interface FormField {
   key: string;

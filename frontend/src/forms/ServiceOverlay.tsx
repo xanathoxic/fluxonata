@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { HelpTip } from "../components/HelpTip";
 import { Overlay } from "../components/Overlay";
-import type { ControlPrefill } from "./controls";
+import type { ControlPrefill, ControlSpec } from "./controls";
 import { FormIcon } from "./FormIcon";
 import { ModeTabs } from "./ModeTabs";
-import { ServiceReading, ServiceTry } from "./ServiceFields";
+import { CallCard, ServiceReading, ServiceTry, ShapingCard, SpotsCard } from "./ServiceFields";
 import type { DataSource, FormField } from "./types";
 
 interface Props { field: FormField; connections: string[]; onApply: (next: FormField) => void; onClose: () => void }
@@ -62,6 +62,44 @@ export function ServiceOverlay({ field, connections, onApply, onClose }: Props) 
           )}
         </div>
       )}
+    </Overlay>
+  );
+}
+
+/** What the preview of a reading needs from a control; a plain choice field has none, so it is tried as an empty, dynamic choice. */
+const CHOICE_SPEC: ControlSpec = { version: 1, mode: "choice", parts: [], dynamic: true };
+
+type ChoiceTab = "call" | "read" | "shape" | "try";
+
+/** « Liste dynamique » of a plain choice field (list, radio buttons, search box, boxes), in the same centred window as the services of a
+ * custom control: one tab per step: the call, where to read in the reply, how to shape it, and a try on a sample reply (no call is made).
+ * The panes stay mounted so a pasted sample survives a change of tab. Nothing changes until « Appliquer ». */
+export function ChoiceSourceOverlay({ field, connections, onApply, onClose }: Props) {
+  const [tab, setTab] = useState<ChoiceTab>("call");
+  const [source, setSource] = useState<DataSource>(field.source ?? { connection: connections[0] ?? "", path: "/" });
+  const ok = valid(source);
+  const shaped = Boolean(source.items_as === "entries" || source.where || source.label_expr || source.sort);
+  const apply = () => { onApply({ ...field, source }); onClose(); };
+  const tabs = [
+    { id: "call", label: `Appel${ok ? "" : " ⚠"}`, icon: "link" as const },
+    { id: "read", label: "Réponse", icon: "search" as const },
+    { id: "shape", label: `Mise en forme${shaped ? " ✓" : ""}`, icon: "sort" as const },
+    { id: "try", label: "Essai", icon: "play" as const },
+  ];
+  // `hidden` seul ne suffit pas : `.sv-pane { display: grid }` l'emporte sur la feuille de style du navigateur, tous les panneaux resteraient affichés
+  const pane = (id: ChoiceTab, children: ReactNode) => <div className="sv-pane" role="tabpanel" hidden={tab !== id} style={tab === id ? undefined : { display: "none" }}>{children}</div>;
+  return (
+    <Overlay variant="modal" wide title={`Liste dynamique — « ${field.label || field.key} »`} onClose={onClose}
+      footer={<><button type="button" onClick={onClose}>Annuler</button><button type="button" className="primary" onClick={apply} disabled={!ok}>Appliquer</button></>}>
+      <div className="sv-top">
+        <div className="cc-tabs"><ModeTabs label="Étapes de la liste dynamique" active={tab} onChange={(t) => setTab(t as ChoiceTab)} tabs={tabs} /></div>
+        <HelpTip label="Aide : liste dynamique">Les choix sont lus dans un service au moment où la personne remplit le formulaire. Propre à ce formulaire : le serveur appelle le service par une connexion de l'espace (aucun secret côté navigateur). Les valeurs reçues ne sont contrôlées que dans leur forme : le workflow doit les traiter comme non vérifiées. Rien n'est modifié avant « Appliquer ».</HelpTip>
+        {!ok && <span role="alert" className="field-error sv-bad"><FormIcon name="warn" size={14} /> Connexion et chemin (« / … ») requis</span>}
+      </div>
+      {pane("call", <CallCard idPrefix="fp-choice" value={source} connections={connections} onChange={(v) => setSource(v as DataSource)} />)}
+      {pane("read", <SpotsCard idPrefix="fp-choice" kind="options" value={source} onChange={(v) => setSource(v as DataSource)} />)}
+      {pane("shape", <ShapingCard idPrefix="fp-choice" value={source} onChange={setSource} />)}
+      {pane("try", <ServiceTry kind="options" spec={CHOICE_SPEC} config={source} />)}
     </Overlay>
   );
 }

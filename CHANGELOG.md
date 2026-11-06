@@ -2,6 +2,15 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.8 — 2026-11-06
+
+**Fluxonata 0.4.8 : listes dynamiques de formulaire mises en forme depuis la réponse d'un service (objet, filtre, libellé calculé, tri, liste dépendante) dans une fenêtre à onglets, déclencheurs et listes dans le guide de l'assistant externe**
+
+- Formulaires : mettre en forme la réponse d'un service pour les listes dynamiques (ADR 0026)
+- MCP de conception : déclencheurs (list_triggers) et listes dynamiques de formulaire dans le guide
+- Banc MCP de conception : 23 outils attendus (list_triggers, seul nom autorisé contenant « trigger »)
+- Formulaires : liste dynamique d'un champ à choix simple dans une fenêtre à onglets
+
 ## v0.4.7 — 2026-11-06
 
 **Fluxonata 0.4.7 : l'assistant externe (MCP de conception) connaît les étapes natives, expressions, intégrations et erreurs, et lit le catalogue d'intégrations**

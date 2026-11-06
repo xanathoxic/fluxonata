@@ -11,7 +11,7 @@ from datetime import date
 
 from workflows.expressions import ExpressionError, evaluate_ast, parse, paths_in
 
-from . import formcalc, formcontrols, formcss, formrules
+from . import formcalc, formcontrols, formcss, formrules, shaping
 
 FIELD_TYPES = {
     "text": "string",
@@ -35,7 +35,7 @@ MAX_SECTIONS, MAX_FIELDS, MAX_OPTIONS, MAX_COLUMNS, MAX_ROWS = 20, 100, 200, 12,
 MAX_TEXT, MAX_LONG_TEXT = 1000, 10_000
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-SOURCE_KEYS = {"connection", "path", "items_path", "label_path", "value_path", "params"}
+SOURCE_KEYS = {"connection", "path", "items_path", "label_path", "value_path", "params"} | shaping.SHAPING_KEYS
 FIELD_KEYS = {
     "key",
     "label",
@@ -403,7 +403,7 @@ def _check_choices(field: dict, path: str) -> dict[str, str]:
         params = source.get("params", [])
         if not isinstance(params, list) or len(params) > 5 or not all(_text(p, 64) for p in params):
             return {f"{path}.source.params": "Cinq paramètres au plus."}
-        return {}
+        return shaping.check(source, f"{path}.source")
     if not isinstance(options, list) or not 1 <= len(options) <= MAX_OPTIONS:
         return {f"{path}.options": f"Entre 1 et {MAX_OPTIONS} options."}
     values = set()

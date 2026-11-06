@@ -15,8 +15,10 @@ from workflows.mcp_design_guide import (
     ERROR_HANDLING_EXAMPLE,
     FORM_EXAMPLE,
     FORM_RULES_EXAMPLE,
+    FORM_SOURCE_EXAMPLE,
     OTHER_NODES,
     SKILL_EXAMPLE,
+    TRIGGER_INPUTS_EXAMPLES,
     WORKFLOW_EXAMPLE,
     guide,
 )
@@ -335,3 +337,102 @@ def test_list_integrations_gives_the_catalog_then_the_operations_without_secrets
     assert {p["name"] for p in post["params"] if p["required"]} == {"channel", "text"}
     assert detail["connection_kind"] == "http_bearer"
     assert call(c, "list_integrations", {"slug": "inconnue"})["isError"] is True
+
+
+def test_the_declencheurs_topic_names_every_trigger_kind_and_its_input_rule():
+    text = guide("declencheurs")["guide"]
+    assert text.startswith("DÉCLENCHEURS") and all(
+        w in text for w in ("PLANIFICATION", "WEBHOOK", "INTERROGATION", "FORMULAIRE PUBLIC")
+    )
+    assert "`payload`" in text and "`item`" in text and "`items`" in text and "list_triggers" in text
+    assert "trigger_inputs" in guide("all")["examples"]
+
+
+def test_the_trigger_input_examples_satisfy_the_real_trigger_rules():
+    """Les schémas du guide sont acceptés par les mêmes contrôles que la création d'un déclencheur."""
+    from types import SimpleNamespace
+
+    from rest_framework import serializers
+
+    from triggers import polls
+    from triggers.models import PollTrigger
+
+    ex = TRIGGER_INPUTS_EXAMPLES
+    one = SimpleNamespace(input_schema=ex["interrogation, un élément par exécution"])
+    batch = SimpleNamespace(input_schema=ex["interrogation, un lot"])
+    polls._check_inputs(one, {"mode": PollTrigger.Mode.PER_ITEM, "id_path": "id"})
+    polls._check_inputs(batch, {"mode": PollTrigger.Mode.BATCH, "id_path": "id"})
+    # le piège enseigné : une autre entrée obligatoire fait refuser le déclencheur
+    extra = SimpleNamespace(input_schema={**one.input_schema, "required": ["item", "autre"]})
+    with pytest.raises(serializers.ValidationError):
+        polls._check_inputs(extra, {"mode": PollTrigger.Mode.PER_ITEM, "id_path": "id"})
+    hook = ex["webhook (fournisseur github, gitlab, jira ou jeton)"]
+    assert "payload" in hook["properties"] and set(hook["properties"]) == {"payload", "event", "delivery"}
+
+
+def test_list_triggers_shows_what_exists_without_any_secret_address_or_value(ws, world):
+    from tenancy.models import Environment
+    from triggers.models import PollTrigger, PublicForm, Schedule, Webhook
+    from workflows.models import Workflow
+
+    wf, _ = Workflow.objects.get_or_create(workspace=ws, slug="salue", defaults={"name": "salue"})
+    env = Environment.objects.get(workspace=ws, kind="test")
+    common = {"workspace": ws, "workflow": wf, "environment": env}
+    Schedule.objects.create(**common, name="matin", cron="0 7 * * *", inputs={"cle": "valeur-confidentielle"})
+    hook = Webhook.objects.create(**common, name="gh", provider="github")
+    PollTrigger.objects.create(
+        **common, name="tickets", request={"connection": "svc", "path": "/secret-chemin"}, id_path="id"
+    )
+    form = PublicForm.objects.create(**common, name="pub", title="Demande")
+    c = client_for(world["viewer"])
+    res = call(c, "list_triggers")
+    assert res["isError"] is False
+    rows = {r["kind"]: r for r in res["structuredContent"]["results"]}
+    assert set(rows) == {"schedule", "webhook", "poll", "public_form"}
+    assert rows["schedule"]["cron"] == "0 7 * * *" and rows["schedule"]["fixed_inputs"] == ["cle"]
+    dump = json.dumps(res["structuredContent"])
+    assert all(x not in dump for x in (str(hook.pk), form.token, "valeur-confidentielle", "secret-chemin"))
+    only = call(c, "list_triggers", {"kind": "webhook"})["structuredContent"]["results"]
+    assert [r["kind"] for r in only] == ["webhook"]
+
+
+def test_list_triggers_hides_triggers_of_private_folders(ws, world):
+    from tenancy.models import Environment
+    from triggers.models import Schedule
+    from workflows.models import FolderAccess, Workflow
+
+    wf, _ = Workflow.objects.get_or_create(workspace=ws, slug="salue", defaults={"name": "salue", "folder": "RH/Prive"})
+    FolderAccess.objects.create(workspace=ws, folder="RH")  # liste d'accès sans le lecteur : dossier privé
+    Schedule.objects.create(
+        workspace=ws,
+        workflow=wf,
+        environment=Environment.objects.get(workspace=ws, kind="test"),
+        name="m",
+        cron="0 7 * * *",
+    )
+    assert call(client_for(world["viewer"]), "list_triggers")["structuredContent"]["results"] == []
+
+
+def test_the_dynamic_list_example_is_a_valid_form_and_reads_a_real_shaped_reply():
+    """L'exemple du guide passe la validation des formulaires, et sa lecture donne bien groupes puis membres sur une réponse type."""
+    from triggers import lookups
+
+    assert formengine.check_definition(FORM_SOURCE_EXAMPLE) == {}
+    groupe, membre = (f["source"] for f in FORM_SOURCE_EXAMPLE["sections"][0]["fields"])
+    reply = {"groups": {"group:ops": ["bob@ex.fr", "alice@ex.fr"], "group:vide": [], "group:dev": ["carl@ex.fr"]}}
+    assert [o["label"] for o in lookups.to_options(reply, groupe)] == [
+        "group:dev (1)",
+        "group:ops (2)",
+    ]  # « vide » écarté, trié
+    assert [o["value"] for o in lookups.to_options(reply, membre, params={"groupe": "group:ops"})] == [
+        "alice@ex.fr",
+        "bob@ex.fr",
+    ]
+
+
+def test_the_listes_topic_teaches_the_shape_driven_choice_and_the_cascade():
+    text = guide("listes")["guide"]
+    assert text.startswith("LISTES DYNAMIQUES") and all(
+        w in text for w in ("items_as", "entries", "where", "label_expr", "{champ}")
+    )
+    assert "form_source" in guide("all")["examples"] and "topic `listes`" in guide("form")["guide"]

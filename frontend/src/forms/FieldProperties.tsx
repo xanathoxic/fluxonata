@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useApp } from "../context";
 import { COMPUTABLE } from "./calc";
 import { controlIcon, fieldForControl, MODES, producesOf, type ControlCard } from "./controls";
-import { ServiceOverlay } from "./ServiceOverlay";
+import { ChoiceSourceOverlay, ServiceOverlay } from "./ServiceOverlay";
 import { FormIcon, IconLabel, type FormIconName } from "./FormIcon";
 import { describeEffect, sentence } from "./rules";
 import { RulesOverlay } from "./rules/RulesOverlay";
@@ -36,6 +36,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
   const published = useQuery({ queryKey: ["control-library-published", workspace.slug], enabled: field.type === "custom", queryFn: () => api<{ results: ControlCard[] }>(`/workspaces/${workspace.slug}/control-library/?published=1`) });
   const [rulesOpen, setRulesOpen] = useState<false | "rules" | "calc">(false);
   const [serviceOpen, setServiceOpen] = useState(false);
+  const [choiceOpen, setChoiceOpen] = useState(false);
   const set = (patch: Partial<FormField>) => onChange({ ...field, ...patch });
   const isChoice = CHOICE_TYPES.includes(field.type);
   const dynamic = field.source !== undefined;
@@ -51,7 +52,6 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
   };
   const upgrade = field.type === "custom" && field.control ? (published.data?.results ?? []).find((c) => c.slug === field.control?.ref && c.published && c.published.version !== field.control.version) : undefined;
   const src: DataSource = field.source ?? { connection: "", path: "/" };
-  const setSource = (patch: Partial<DataSource>) => set({ source: { ...src, ...patch } });
   const label = (key: string) => earlier.find((f) => f.key === key)?.label || key;
   const canCalc = (COMPUTABLE as string[]).includes(field.type);
   const count = (field.rules?.length ?? 0) + (field.visible_if && !field.rules?.length ? 1 : 0);
@@ -138,12 +138,14 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
             </div>
           ) : (
             <>
-              <div className="field"><label htmlFor="fp-conn">Connexion (service HTTP)</label><input id="fp-conn" list="fp-conns" value={src.connection} onChange={(e) => setSource({ connection: e.target.value })} /><datalist id="fp-conns">{connections.map((c) => <option key={c} value={c} />)}</datalist></div>
-              <div className="field"><label htmlFor="fp-path">Chemin (commence par « / »)</label><input id="fp-path" value={src.path} onChange={(e) => setSource({ path: e.target.value })} placeholder="/personnes?recherche={q}" /><p className="hint">{"{q}"} = ce que la personne tape dans une liste avec recherche ; {"{clé}"} = valeur d'un autre champ (à lister ci-dessous).</p></div>
-              <div className="field"><label htmlFor="fp-items">Où se trouve la liste dans la réponse</label><input id="fp-items" value={src.items_path ?? ""} onChange={(e) => setSource({ items_path: e.target.value })} placeholder="data.resultats" /></div>
-              <div className="field"><label htmlFor="fp-vp">Valeur de chaque élément</label><input id="fp-vp" value={src.value_path ?? ""} onChange={(e) => setSource({ value_path: e.target.value })} placeholder="id" /></div>
-              <div className="field"><label htmlFor="fp-lp">Libellé de chaque élément</label><input id="fp-lp" value={src.label_path ?? ""} onChange={(e) => setSource({ label_path: e.target.value })} placeholder="nom" /></div>
-              <div className="field"><label htmlFor="fp-params">Paramètres du chemin (séparés par des virgules)</label><input id="fp-params" value={(src.params ?? []).join(", ")} onChange={(e) => setSource({ params: e.target.value.split(",").map((p) => p.trim()).filter(Boolean) })} placeholder="q, pays" /></div>
+              <p className="fb-rsum" title={src.path}><strong>Service :</strong> {src.connection || "(connexion ?)"} · <code>{src.path}</code></p>
+              <p className="hint">{[
+                src.items_as === "entries" ? "clés d'un objet" : src.items_path ? `liste « ${src.items_path} »` : "réponse = liste",
+                src.where ? "filtrée" : "", src.label_expr ? "libellé calculé" : "", src.sort ? "triée" : "",
+                src.params?.length ? `lit ${src.params.join(", ")}` : "",
+              ].filter(Boolean).join(" · ")}</p>
+              <button type="button" onClick={() => setChoiceOpen(true)} aria-haspopup="dialog"><IconLabel icon="link">Configurer la liste dynamique</IconLabel></button>
+              {choiceOpen && <ChoiceSourceOverlay field={field} connections={connections} onApply={onChange} onClose={() => setChoiceOpen(false)} />}
             </>
           )}
         </fieldset>

@@ -25,6 +25,8 @@ a form field can do, a part can do (nested controls excepted).
 
 import re
 
+from . import shaping
+
 MODES = ("group", "repeat", "items", "choice")
 PART_TYPES = {"text", "textarea", "number", "email", "date", "select", "radio", "checkbox", "checkbox_list", "custom"}
 BLOCK_PARTS = {"heading", "paragraph", "divider"}
@@ -45,7 +47,16 @@ SPEC_KEYS = {
     "dynamic",
 }
 ITEM_KEYS = {"value", "label", "parts", "group", "disabled"}
-SOURCE_KEYS = {"connection", "path", "items_path", "label_path", "value_path", "group_path", "disabled_path", "params"}
+SOURCE_KEYS = {
+    "connection",
+    "path",
+    "items_path",
+    "label_path",
+    "value_path",
+    "group_path",
+    "disabled_path",
+    "params",
+} | shaping.SHAPING_KEYS
 PREFILL_KEYS = {"connection", "path", "value_path", "params"}
 DISPLAYS = {"repeat": ("cards", "table"), "choice": ("select", "radio", "dropdown"), "items": ("list", "dropdown")}
 CONTROL_KEYS = {"ref", "version", "name", "icon", "spec"}
@@ -124,7 +135,7 @@ def _check_service(cfg, keys: set, path: str) -> dict[str, str]:
     params = cfg.get("params", [])
     if not isinstance(params, list) or len(params) > 5 or not all(_short(p, 64) and p for p in params):
         return {f"{path}.params": "Cinq paramètres au plus (noms de champs du formulaire)."}
-    return {}
+    return shaping.check(cfg, path) if "items_path" in keys else {}
 
 
 def _check_items(spec: dict, mode: str, path: str, draft: bool) -> dict[str, str]:

@@ -15,7 +15,7 @@ METHOD = (
     "4 bis. ESSAIE : start_action_test sur le code de chaque action que tu proposes, puis start_dry_run sur le workflow (un jeu d'essai réaliste par cas métier important) ; lis get_dry_run et corrige jusqu'à zéro problème.\n"
     "5. Ne publie, ne lance et n'active rien : tu ne le peux pas, une personne le fera après relecture.\n"
     "6. Termine par un récapitulatif court : ce qui existait et que tu as réutilisé ; ce que tu as créé et pourquoi une action plutôt qu'un script ; "
-    "ce qu'une personne doit relire, activer ou publier ; tes hypothèses (règles métier, taux, seuils : ne les invente pas, demande-les si tu peux, sinon liste-les) ; ce que l'essai a couvert et ce qu'il ne couvre pas."
+    "ce qu'une personne doit relire, activer ou publier, et les déclencheurs à créer (type, réglages : topic « declencheurs » du guide, list_triggers pour ce qui existe) ; tes hypothèses (règles métier, taux, seuils : ne les invente pas, demande-les si tu peux, sinon liste-les) ; ce que l'essai a couvert et ce qu'il ne couvre pas."
 )
 
 
@@ -46,7 +46,7 @@ PROMPTS = {
             }
         ],
         "build": lambda a: (
-            f"Je veux un formulaire pour ceci :\n\n{_need(a)}\n\nLis d'abord get_authoring_guide (topic=form), regarde list_forms pour ne pas dupliquer un formulaire existant, "
+            f"Je veux un formulaire pour ceci :\n\n{_need(a)}\n\nLis d'abord get_authoring_guide (topic=form ; topic=listes si un choix doit venir d'un service), regarde list_forms pour ne pas dupliquer un formulaire existant, "
             "puis crée-le en brouillon avec create_form. Ne publie rien. Termine en résumant les champs et les conditions, et ce qu'une personne doit relire."
         ),
     },

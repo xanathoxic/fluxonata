@@ -281,6 +281,9 @@ class SourcePreviewSerializer(serializers.Serializer):
     spec = serializers.JSONField()
     config = serializers.JSONField()  # the reading of the service, as a FORM field holds it (the control carries none)
     sample = serializers.JSONField()
+    params = serializers.DictField(
+        child=serializers.CharField(max_length=200), required=False, default=dict
+    )  # values of the `{champ}` placeholders
 
 
 class ControlSourcePreviewView(APIView):
@@ -291,7 +294,7 @@ class ControlSourcePreviewView(APIView):
 
     def post(self, request, workspace):
         from runs import http_node
-        from triggers import lookups
+        from triggers import lookups, shaping
 
         get_workspace(request.user, workspace, EDIT)
         ser = SourcePreviewSerializer(data=request.data)
@@ -311,10 +314,26 @@ class ControlSourcePreviewView(APIView):
             return Response({"problems": problems})
         try:
             if kind == "options":
-                items = http_node._dig(sample, cfg["items_path"]) if cfg.get("items_path") else sample
-                if not isinstance(items, list):
-                    return Response({"problem": "Le chemin des éléments ne mène pas à une liste dans cette réponse."})
-                return Response({"options": lookups.to_options(sample, cfg, keys=lookups.detail_keys(field))})
+                params = lookups.clean_params(ser.validated_data["params"], cfg.get("params", []))
+                try:
+                    shaping.items(sample, cfg, params)
+                except ValueError:
+                    entries = cfg.get("items_as") == "entries"
+                    return Response(
+                        {
+                            "problem": "Le chemin des éléments ne mène pas à "
+                            + ("un objet" if entries else "une liste")
+                            + " dans cette réponse"
+                            + (
+                                " (renseignez une valeur d'essai pour chaque {champ} du chemin)."
+                                if "{" in cfg.get("items_path", "")
+                                else "."
+                            )
+                        }
+                    )
+                return Response(
+                    {"options": lookups.to_options(sample, cfg, keys=lookups.detail_keys(field), params=params)}
+                )
             value = http_node._dig(sample, cfg["value_path"]) if cfg.get("value_path") else sample
             if value is None:
                 return Response({"problem": "Le chemin de la valeur ne mène à rien dans cette réponse."})

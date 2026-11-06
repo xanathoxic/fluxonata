@@ -46,6 +46,7 @@ READ_TOOLS = {
     "get_workflow",
     "list_connections",
     "list_integrations",
+    "list_triggers",
     "get_authoring_guide",
 }
 
@@ -120,7 +121,7 @@ def test_handshake_and_the_tool_list(ws, world):
         n
         for n in by
         if any(w in n for w in forbidden)
-        and n not in {"list_connections", "start_dry_run", "get_dry_run", "start_action_test"}
+        and n not in {"list_connections", "list_triggers", "start_dry_run", "get_dry_run", "start_action_test"}
     ] == []
 
 
@@ -209,6 +210,7 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("get_workflow", {"slug": "salue"}),
         ("list_connections", {}),
         ("list_integrations", {}),
+        ("list_triggers", {}),
         ("get_authoring_guide", {}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié

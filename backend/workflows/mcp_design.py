@@ -283,6 +283,73 @@ def list_connections(request, ws, args):
     return _ok({"count": len(rows), "results": rows[: _limit(args)]})
 
 
+# --- déclencheurs : ce qui existe, sans adresse, jeton ni valeur --------------------------------------------------------
+def _trigger_rows(request, ws) -> list[dict]:
+    from triggers.models import PollTrigger, PublicForm, Schedule, Webhook
+
+    def rows(model, kind, extra):
+        qs = model.objects.filter(workspace=ws).select_related("workflow", "environment").order_by("name", "id")
+        for t in access.visible(qs, request.user, ws, "workflow__folder"):
+            yield {
+                "kind": kind,
+                "name": t.name,
+                "workflow": t.workflow.slug,
+                "environment": t.environment.kind,
+                "enabled": t.enabled,
+                "published": t.workflow.latest_version() is not None,
+                **extra(t),
+            }
+
+    # Jamais l'identifiant d'un webhook ni le jeton d'un formulaire (ce sont des adresses secrètes), ni les entrées fixes, ni la requête.
+    return [
+        *rows(
+            Schedule,
+            "schedule",
+            lambda t: {
+                "cron": t.cron,
+                "timezone": t.timezone,
+                "overlap": t.overlap_policy,
+                "missed": t.missed_policy,
+                "fixed_inputs": sorted(t.inputs or {}),
+                "last_note": t.last_note,
+            },
+        ),
+        *rows(Webhook, "webhook", lambda t: {"provider": t.provider, "events": list(t.events or [])}),
+        *rows(
+            PollTrigger,
+            "poll",
+            lambda t: {
+                "source": t.source,
+                "interval_seconds": t.interval_seconds,
+                "mode": t.mode,
+                "last_ok": t.last_ok,
+                "last_note": t.last_note,
+            },
+        ),
+        *rows(
+            PublicForm,
+            "public_form",
+            lambda t: {
+                "title": t.title,
+                "max_per_hour": t.max_per_hour,
+                "uses": t.uses,
+                "closed_reason": t.closed_reason,
+            },
+        ),
+    ]
+
+
+def list_triggers(request, ws, args):
+    q = _text(args)
+    kind = _text(args, "kind")
+    out = [
+        r
+        for r in _trigger_rows(request, ws)
+        if (not kind or r["kind"] == kind) and _match(q, r["name"], r["workflow"], r["kind"])
+    ]
+    return _ok({"count": len(out), "results": out[: _limit(args)]})
+
+
 # --- intégrations : description statique des services (aucune donnée de l'espace, aucun secret) ---------------------------
 def list_integrations(request, ws, args):
     from catalog import integrations
@@ -439,6 +506,24 @@ TOOLS = {
             },
         ),
         get_authoring_guide,
+    ),
+    "list_triggers": (
+        _spec(
+            "list_triggers",
+            "Lister les déclencheurs",
+            "Planifications, webhooks, interrogations et formulaires publics de l'espace : type, workflow, état et réglages publics. Jamais d'adresse, de jeton ni de valeur d'entrée. "
+            "Vous ne pouvez pas en créer : concevez le workflow pour eux (get_authoring_guide topic=declencheurs) et listez ce qu'une personne doit créer.",
+            QUERY
+            | LIMIT
+            | {
+                "kind": {
+                    "type": "string",
+                    "enum": ["schedule", "webhook", "poll", "public_form"],
+                    "description": "Filtrer par type.",
+                }
+            },
+        ),
+        list_triggers,
     ),
     "list_integrations": (
         _spec(
