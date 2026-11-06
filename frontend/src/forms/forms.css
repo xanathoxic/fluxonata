@@ -535,3 +535,19 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .fb-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; } .fb-tgroup { flex: none; }
 .fb-tslot { position: sticky; top: 0; z-index: 6; background: var(--card); } .fb-tslot > .fb-toolbar { position: static; margin: 0; padding: 0; }
 .fb-previewframe { margin: 8px auto 0; } .fb-previewframe[data-width="phone"], .fb-previewframe[data-width="tablet"] { border: 1px solid var(--border-mid); border-radius: 12px; padding: 12px; background: var(--surface); }
+
+/* liste double : disponibles à gauche, sélectionnés à droite (mis en ordre) */
+.fb-dual { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px 12px; align-items: stretch; }
+.fb-dual.invalid { outline: 2px solid var(--danger, #b00020); outline-offset: 3px; border-radius: 8px; }
+.fb-dual-pane { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.fb-dual-pane h4 { margin: 0; font-size: var(--fs-sm); }
+.fb-dual-pane input[type="search"] { width: 100%; min-height: 34px; }
+.fb-dual select[multiple] { width: 100%; min-height: 12rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; }
+.fb-dual-actions { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.fb-dual-actions button, .fb-dual-order button { min-width: 2.4rem; min-height: 2.2rem; }
+.fb-dual-order { display: flex; gap: 6px; flex-wrap: wrap; }
+.fb-dual-count { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 720px) {
+  .fb-dual { grid-template-columns: 1fr; }
+  .fb-dual-actions { flex-direction: row; justify-content: center; }
+}

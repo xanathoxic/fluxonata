@@ -16,7 +16,7 @@ export type ControlMode = "group" | "repeat" | "items" | "choice";
 export interface ControlPrefill { connection: string; path: string; value_path?: string; params?: string[] }
 /** `data`: values an option read from a service carries for the fields it opens (by key); they pre-fill the details when it is chosen */
 export interface ControlItem extends FieldOption { parts?: FormField[]; group?: string; disabled?: boolean; data?: Record<string, unknown> }
-export type ControlDisplay = "cards" | "table" | "select" | "radio" | "list" | "dropdown";
+export type ControlDisplay = "cards" | "table" | "select" | "radio" | "list" | "dropdown" | "dual";
 export interface ControlSpec {
   version: 1;
   mode: ControlMode;
@@ -35,6 +35,9 @@ export interface ControlSpec {
   placeholder?: string;
   /** items / choice: the options are supplied by the form that uses the control (its field reads a service for them) */
   dynamic?: boolean;
+  /** items shown as a dual list: the titles of its two columns (default: « Disponibles » / « Sélectionnés ») */
+  available_label?: string;
+  chosen_label?: string;
 }
 export interface ControlRef { ref: string; version: string; name?: string; icon?: string; spec: ControlSpec }
 export interface ControlCard {

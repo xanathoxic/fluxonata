@@ -60,9 +60,16 @@ FIELD_KEYS = {
     "compute",
     "control",
     "prefill",
+    "display",
+    "available_label",
+    "chosen_label",
 }
 BLOCK_KEYS = {"key", "label", "type", "visible_if", "layout", "level", "rules"}
 SECTION_KEYS = {"id", "title", "description", "fields"}
+CHECKBOX_DISPLAYS = (
+    "list",
+    "dual",
+)  # « dual » : two lists (available / chosen) where the chosen ones can be put in order
 
 
 def _text(value, limit) -> bool:
@@ -291,6 +298,18 @@ def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:  # noq
             out.update(_check_choices(field, path))
     elif "control" in field or "prefill" in field:
         out[f"{path}.control"] = "Seul un contrôle personnalisé porte un contrôle et un remplissage par un service."
+    for name in ("available_label", "chosen_label"):
+        if name in field and (
+            kind != "checkbox_list"
+            or field.get("display") != "dual"
+            or not _text(field[name], formcontrols.MAX_TITLE)
+            or not field[name].strip()
+        ):
+            out[f"{path}.{name}"] = (
+                f"Titre de colonne de {formcontrols.MAX_TITLE} caractères au plus, pour la liste double seulement."
+            )
+    if "display" in field and (kind != "checkbox_list" or field["display"] not in CHECKBOX_DISPLAYS):
+        out[f"{path}.display"] = "Affichage : « list » ou « dual » (liste double), pour les cases multiples seulement."
     if kind in CHOICE_TYPES:
         out.update(_check_choices(field, path))
     elif kind != "custom" and ("options" in field or "source" in field):

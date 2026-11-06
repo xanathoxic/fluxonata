@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ControlInput } from "./ControlInput";
+import { DualList } from "./DualList";
 import { IconButton, IconLabel } from "./FormIcon";
 import { orderedFields, readingOrder, visibleRows } from "./layout";
 import { visibleState } from "./logic";
@@ -193,6 +194,7 @@ function FieldInput({ field: base, state, value, values, error, disabled: locked
     case "checkbox": control = <label className="fb-choice"><input {...common} type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} /> {field.placeholder || "Oui"}</label>; break;
     case "checkbox_list": {
       const picked = Array.isArray(value) ? (value as string[]) : [];
+      if (field.display === "dual") { control = <DualList id={id} labelledBy={`${id}-l`} describedBy={describedBy} options={options} value={picked} onChange={onChange} disabled={disabled} invalid={Boolean(error)} availableLabel={field.available_label} chosenLabel={field.chosen_label} />; break; }
       control = (
         <div role="group" aria-labelledby={`${id}-l`} aria-describedby={describedBy} className="fb-choices">
           {options.map((o, i) => <label key={o.value} className="fb-choice"><input type="checkbox" id={i === 0 ? id : undefined} disabled={disabled} checked={picked.includes(o.value)} onChange={(e) => onChange(e.target.checked ? [...picked, o.value] : picked.filter((p) => p !== o.value))} /> {choice(o)}</label>)}

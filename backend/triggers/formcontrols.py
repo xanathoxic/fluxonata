@@ -31,6 +31,7 @@ MODES = ("group", "repeat", "items", "choice")
 PART_TYPES = {"text", "textarea", "number", "email", "date", "select", "radio", "checkbox", "checkbox_list", "custom"}
 BLOCK_PARTS = {"heading", "paragraph", "divider"}
 MAX_PARTS, MAX_ROWS, MAX_ITEMS, MAX_DEPTH = 30, 50, 100, 3
+MAX_TITLE = 60  # the title of a column of a dual list
 SPEC_KEYS = {
     "version",
     "mode",
@@ -45,6 +46,8 @@ SPEC_KEYS = {
     "totals",
     "placeholder",
     "dynamic",
+    "available_label",
+    "chosen_label",
 }
 ITEM_KEYS = {"value", "label", "parts", "group", "disabled"}
 SOURCE_KEYS = (
@@ -62,7 +65,11 @@ SOURCE_KEYS = (
     | shaping.CONNECTION_KEYS
 )
 PREFILL_KEYS = {"connection", "path", "value_path", "params"}
-DISPLAYS = {"repeat": ("cards", "table"), "choice": ("select", "radio", "dropdown"), "items": ("list", "dropdown")}
+DISPLAYS = {
+    "repeat": ("cards", "table"),
+    "choice": ("select", "radio", "dropdown"),
+    "items": ("list", "dropdown", "dual"),
+}
 CONTROL_KEYS = {"ref", "version", "name", "icon", "spec"}
 REF_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
 ICON_RE = re.compile(r"^[A-Za-z0-9_]{1,40}$")
@@ -225,6 +232,20 @@ def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, st
         )
     if "display" in spec and spec["display"] not in DISPLAYS.get(mode, ()):
         out[f"{path}.display"] = "Affichage non proposé pour ce type de contrôle."
+    elif spec.get("display") == "dual" and has_details(spec):
+        out[f"{path}.display"] = (
+            "La liste double ne porte pas de détails par option : retirez les sous-champs ou choisissez un autre affichage."
+        )
+    for name in ("available_label", "chosen_label"):
+        if name in spec and (
+            mode != "items"
+            or spec.get("display") != "dual"
+            or not _short(spec[name], MAX_TITLE)
+            or not spec[name].strip()
+        ):
+            out[f"{path}.{name}"] = (
+                f"Titre de colonne de {MAX_TITLE} caractères au plus, pour la liste double seulement."
+            )
     if "placeholder" in spec and (mode not in ("items", "choice") or not _short(spec["placeholder"], 120)):
         out[f"{path}.placeholder"] = "Texte d'invite de 120 caractères au plus (liste à cocher et choix)."
     if "totals" in spec:
@@ -389,8 +410,12 @@ def process(field: dict, value):  # noqa: C901
                 picked[v] = {"value": v, **(kept or {})}
             else:
                 picked[v] = {"value": v}
-        ordered = [picked[v] for v in items if v in picked]  # in the order of the list, whatever order was sent
-        ordered += [p for v, p in picked.items() if v not in items]  # options of the service: in the order sent
+        # the dual list lets the person ORDER what they chose: the order sent is the value
+        if spec.get("display") == "dual":
+            ordered = list(picked.values())
+        else:
+            ordered = [picked[v] for v in items if v in picked]  # in the order of the list, whatever order was sent
+            ordered += [p for v, p in picked.items() if v not in items]  # options of the service: in the order sent
         what, result = "choix", ordered if details else [p["value"] for p in ordered]
     if len(result) < floor:
         return result, f"Au moins {floor} {what}(s)."

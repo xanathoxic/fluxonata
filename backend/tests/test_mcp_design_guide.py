@@ -446,3 +446,8 @@ def test_the_listes_topic_describes_the_closed_list_of_connections():
         and "FERMÉE" in text
         and "jamais un nom de connexion saisi" in text
     )
+
+
+def test_the_form_topic_teaches_the_dual_list_display():
+    text = guide("form")["guide"]
+    assert 'display: "dual"' in text and "liste double" in text and "available_label" in text and "chosen_label" in text

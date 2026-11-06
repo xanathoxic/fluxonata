@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { TagInput } from "../../components/Tags";
-import { CONTROL_ICONS, MAX_ITEMS, MAX_ROWS, MODES, producesOf, type ControlItem, type ControlSpec } from "../../forms/controls";
+import { CONTROL_ICONS, MAX_ITEMS, MAX_ROWS, MODES, producesOf, type ControlDisplay, type ControlItem, type ControlSpec } from "../../forms/controls";
 import { DefinitionEditor } from "../../forms/DefinitionEditor";
 import { FormIcon, IconLabel, type FormIconName } from "../../forms/FormIcon";
 import { isBlock, type FormDefinition, type FormField } from "../../forms/types";
@@ -43,6 +43,8 @@ export function ControlDesigner({ meta, cfg, row, edit, problems, onMeta, onCfg,
   const produced = { object: "un objet", array: "une liste", string: "un texte (ou un objet si des options ont des détails)" }[producesOf({ ...cfg, parts })];
   const kind = MODES.find((m) => m.id === cfg.mode);
   const items: ControlItem[] = cfg.items ?? [];
+  // the dual list holds no details per option (the value is a plain list of the chosen values)
+  const dualOk = cfg.mode === "items" && (cfg.display === "dual" || ![...parts, ...items.flatMap((i) => i.parts ?? [])].some((p) => !isBlock(p.type)));
   const cap = cfg.mode === "repeat" ? MAX_ROWS : MAX_ITEMS;
   const bad = problems?.length ?? 0;
   const model = { id: "fields" as const, icon: "design" as const, label: listy ? "Modèle d'une option" : table ? "Colonnes" : "Champs", count: parts.filter((p) => !isBlock(p.type)).length };
@@ -109,10 +111,17 @@ export function ControlDesigner({ meta, cfg, row, edit, problems, onMeta, onCfg,
               <OptionsEditor items={items} edit={edit} onChange={(next) => patch({ items: next })} />
               <div className="cd-grid2">
                 <Card icon="eye" title="Affichage">
-                  <ChoiceCards name="cs-display" label="Affichage" columns={cfg.mode === "choice" ? 3 : 2} value={cfg.display ?? (cfg.mode === "choice" ? "select" : "list")} onChange={(d) => patch({ display: d === "list" || d === "select" ? undefined : d })} disabled={!edit}
+                  <ChoiceCards name="cs-display" label="Affichage" columns={cfg.mode === "choice" || dualOk ? 3 : 2} value={cfg.display ?? (cfg.mode === "choice" ? "select" : "list")} onChange={(d) => patch({ display: d === "list" || d === "select" ? undefined : (d as ControlDisplay), ...(d === "dual" ? {} : { available_label: undefined, chosen_label: undefined }) })} disabled={!edit}
                     options={cfg.mode === "choice"
                       ? [{ id: "select", title: "Liste déroulante", hint: "Un menu" }, { id: "dropdown", title: "Menu avec recherche", hint: "Recherche et groupes" }, { id: "radio", title: "Boutons radio", hint: "Tout visible" }]
-                      : [{ id: "list", title: "Liste", hint: "Toutes les cases visibles" }, { id: "dropdown", title: "Menu avec recherche", hint: "Recherche, groupes, pastilles" }]} />
+                      : [{ id: "list", title: "Liste", hint: "Toutes les cases visibles" }, { id: "dropdown", title: "Menu avec recherche", hint: "Recherche, groupes, pastilles" }, ...(dualOk ? [{ id: "dual", title: "Liste double", hint: "Disponibles / sélectionnés, avec ordre" }] : [])]} />
+                  {cfg.mode === "items" && !dualOk && <p className="hint">La liste double n'est pas proposée quand les options ouvrent des détails.</p>}
+                  {cfg.mode === "items" && cfg.display === "dual" && (
+                    <>
+                      <div className="field"><label htmlFor="cs-dual-left">Titre de la colonne de gauche</label><input id="cs-dual-left" value={cfg.available_label ?? ""} maxLength={60} placeholder="Disponibles" disabled={!edit} onChange={(e) => patch({ available_label: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="cs-dual-right">Titre de la colonne de droite</label><input id="cs-dual-right" value={cfg.chosen_label ?? ""} maxLength={60} placeholder="Sélectionnés" disabled={!edit} onChange={(e) => patch({ chosen_label: e.target.value })} /></div>
+                    </>
+                  )}
                   {cfg.display === "dropdown" && <div className="field"><label htmlFor="cs-ph">Texte du champ de recherche</label><input id="cs-ph" value={cfg.placeholder ?? ""} maxLength={120} placeholder="Rechercher…" onChange={(e) => patch({ placeholder: e.target.value })} /></div>}
                 </Card>
                 <Card icon="sliders" title="Comportement">

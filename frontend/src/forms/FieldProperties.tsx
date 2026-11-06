@@ -48,6 +48,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
   const setType = (type: FieldType) => {
     const next: FormField = { ...field, type };
     delete next.min; delete next.max;
+    if (type !== "checkbox_list") { delete next.display; delete next.available_label; delete next.chosen_label; }
     if (!CHOICE_TYPES.includes(type)) { delete next.options; delete next.source; } else if (!next.options && !next.source) next.options = [{ value: "option-1", label: "Option 1" }];
     if (type === "datagrid") next.columns = field.columns ?? [{ key: "colonne1", label: "Colonne 1", type: "text" }]; else delete next.columns;
     onChange(next);
@@ -148,6 +149,22 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
               ].filter(Boolean).join(" · ")}</p>
               <button type="button" onClick={() => setChoiceOpen(true)} aria-haspopup="dialog"><IconLabel icon="link">Configurer la liste dynamique</IconLabel></button>
               {choiceOpen && <ChoiceSourceOverlay field={field} connections={connections} onApply={onChange} onClose={() => setChoiceOpen(false)} />}
+            </>
+          )}
+          {field.type === "checkbox_list" && (
+            <div className="field">
+              <label htmlFor="fp-display">Affichage</label>
+              <select id="fp-display" value={field.display ?? "list"} onChange={(e) => set(e.target.value === "dual" ? { display: "dual" } : { display: undefined, available_label: undefined, chosen_label: undefined })}>
+                <option value="list">Cases à cocher</option>
+                <option value="dual">Liste double</option>
+              </select>
+              {field.display === "dual" && <p className="hint">Avec la recherche de chaque côté ; la valeur remise au workflow suit l'ordre choisi.</p>}
+            </div>
+          )}
+          {field.type === "checkbox_list" && field.display === "dual" && (
+            <>
+              <div className="field"><label htmlFor="fp-dual-left">Titre de la colonne de gauche</label><input id="fp-dual-left" value={field.available_label ?? ""} maxLength={60} placeholder="Disponibles" onChange={(e) => set({ available_label: e.target.value || undefined })} /></div>
+              <div className="field"><label htmlFor="fp-dual-right">Titre de la colonne de droite</label><input id="fp-dual-right" value={field.chosen_label ?? ""} maxLength={60} placeholder="Sélectionnés" onChange={(e) => set({ chosen_label: e.target.value || undefined })} /></div>
             </>
           )}
         </fieldset>

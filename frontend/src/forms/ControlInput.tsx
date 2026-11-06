@@ -1,6 +1,7 @@
 import { DefinitionForm } from "./DefinitionForm";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { LookupFn } from "./DefinitionForm";
+import { DualList } from "./DualList";
 import { OptionPicker } from "./OptionPicker";
 import { detailsOf, hasDetails, itemsOf, MAX_ROWS, regroup, rowDefinition, seedOf, type ControlItem, type ControlPrefill } from "./controls";
 import { FormIcon, IconButton, IconLabel } from "./FormIcon";
@@ -206,6 +207,15 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
       onChange(details ? ordered.map((o) => ({ ...(next.get(o.value) as Row), value: o.value })) : ordered.map((o) => o.value));
     };
     const max = spec.max ?? items.length;
+    if (spec.display === "dual" && !details) {
+      // the value is the list of the chosen values IN THE ORDER the person put them (the server keeps that order for this display)
+      return (
+        <div className="ctl ctl-items" role="group" aria-labelledby={`${id}-l`}>
+          <DualList id={id} labelledBy={`${id}-l`} options={items} value={[...picked.keys()]} onChange={(next) => onChange(next)} disabled={disabled} max={spec.max} invalid={Boolean(error)} availableLabel={spec.available_label} chosenLabel={spec.chosen_label} />
+          {(spec.min || field.required) && <p className="hint"><FormIcon name="boxes" size={14} /> au moins {Math.max(spec.min ?? 0, field.required ? 1 : 0)}</p>}
+        </div>
+      );
+    }
     const dropdown = spec.display === "dropdown";
     const seed = (v: string): Row => (details ? seedOf(spec, items.find((o) => o.value === v)) : {});
     const toggle = (v: string, on: boolean) => { const n = new Map(picked); if (on) n.set(v, seed(v)); else n.delete(v); emit(n); };

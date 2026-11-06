@@ -32,6 +32,11 @@ export interface FormField {
   max?: number;
   visible_if?: string;
   options?: FieldOption[];
+  /** « Cases multiples » only: the usual list of boxes, or a dual list (available / chosen, the chosen ones in order) */
+  display?: "list" | "dual";
+  /** the titles of the two columns of a dual list (default: « Disponibles » / « Sélectionnés ») */
+  available_label?: string;
+  chosen_label?: string;
   source?: DataSource;
   columns?: GridColumn[];
   layout?: Layout;

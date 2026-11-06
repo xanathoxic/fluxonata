@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.11 — 2026-11-06
+
+**Fluxonata 0.4.11 : liste double (disponibles / sélectionnés, mise en ordre) pour les cases multiples et les contrôles « liste à cocher » des formulaires**
+
+- Formulaires : liste double (disponibles / sélectionnés, mise en ordre) pour les cases multiples et les contrôles « liste à cocher »
+
 ## v0.4.10 — 2026-11-06
 
 **Fluxonata 0.4.10 : les zones « une ligne par élément » du concepteur de formulaires acceptent la saisie (ajout de colonnes d'un tableau et d'options d'une liste)**

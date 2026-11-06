@@ -472,7 +472,7 @@ def guide(topic: str, workspace=None) -> dict:
         "form": (
             "FORMULAIRE. Définition = {version:1, sections:[{id, title, fields:[{key, type, label, required?, help?, placeholder?, default?, options?, visible_if?}]}]}. "
             f"Types de champ : {_types(formengine.FIELD_TYPES)} ; blocs de mise en page : {_types(formengine.BLOCK_TYPES)}. `key` : lettre ou _, puis lettres/chiffres/_ (64 max). "
-            "Les champs `select`, `radio`, `combobox`, `checkbox_list` exigent `options` OU une `source` lue dans un service (topic `listes`). Pas de clé `id` sur un champ. "
+            'Les champs `select`, `radio`, `combobox`, `checkbox_list` exigent `options` OU une `source` lue dans un service (topic `listes`). Pas de clé `id` sur un champ. Un champ `checkbox_list` peut porter `display: "dual"` (liste double : disponibles / sélectionnés, avec recherche et mise en ordre ; la valeur suit l\'ordre choisi ; titres de colonnes facultatifs `available_label` / `chosen_label`, 60 caractères au plus, avec `display: "dual"` seulement) ; `display: "list"` ou rien = cases à cocher ; aucun autre type de champ n\'a de `display`. '
             "Pour qu'un formulaire alimente un workflow, chaque entrée obligatoire du workflow doit être demandée par un champ de même nom (sinon `map` : "
             "{entrée du workflow: clé du champ}) et de type compatible (attach_form le vérifie). "
             "CONDITIONS : sur un champ, `rules:[{when: <condition>, then:[{do:show|hide|require|optional|readonly|editable|…}], else:[…], name?}]` ; une condition est {field, op, value} avec op parmi equals, not_equals, "
