@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.12 — 2026-11-07
+
+**Fluxonata 0.4.12 : tracé libre des liens dans l'éditeur de workflow (points de passage glissés ou placés au clavier)**
+
+- Éditeur de workflow : tracé libre des liens par points de passage
+
 ## v0.4.11 — 2026-11-06
 
 **Fluxonata 0.4.11 : liste double (disponibles / sélectionnés, mise en ordre) pour les cases multiples et les contrôles « liste à cocher » des formulaires**

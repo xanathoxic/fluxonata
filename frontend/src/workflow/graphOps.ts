@@ -1,6 +1,7 @@
 import type { Action, JsonSchema } from "../api";
 import type { EdgeLabel, Graph, GraphEdge, GraphNode, Issue, NodeType } from "./types";
 import { NODE_LABELS } from "./types";
+import { cleanPoints, type Pt } from "./edgeRoute";
 
 export const emptyGraph = (): Graph => ({ inputs: { type: "object", properties: {}, required: [] }, variables: [], form: null, notes: [], nodes: [], edges: [], outputs: {} });
 
@@ -116,15 +117,16 @@ export function relabel(graph: Graph, from: string, to: string, label: EdgeLabel
   };
 }
 
-/** Moves the vertical segment of a line (cx), or restores the automatic routing (cx = null). */
-export function bendEdge(graph: Graph, from: string, to: string, cx: number | null): Graph {
+/** Sets the points a line goes through (free routing), or restores the automatic routing (null or no point). The older `cx` is dropped. */
+export function setEdgePoints(graph: Graph, from: string, to: string, points: Pt[] | null): Graph {
+  const kept = points ? cleanPoints(points) : [];
   return {
     ...graph,
     edges: graph.edges.map((e) => {
       if (e.from !== from || e.to !== to) return e;
       const { ui: _ui, ...rest } = e;
       void _ui;
-      return cx === null ? rest : { ...rest, ui: { cx: Math.round(cx) } };
+      return kept.length === 0 ? rest : { ...rest, ui: { points: kept } };
     }),
   };
 }

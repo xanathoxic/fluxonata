@@ -188,7 +188,7 @@ export interface WorkflowRun {
   cancel_requested: boolean;
   steps?: StepRun[];
   events?: RunEvent[];
-  graph?: { nodes: { id: string; name: string; type: string; ui: { x: number; y: number } | null }[]; edges: { from: string; to: string; label?: string; ui?: { cx: number } }[]; notes?: { id: string; text: string; ui: { x: number; y: number } }[]; layout?: { start?: { x: number; y: number }; end?: { x: number; y: number } } | null };
+  graph?: { nodes: { id: string; name: string; type: string; ui: { x: number; y: number } | null }[]; edges: { from: string; to: string; label?: string; ui?: { cx?: number; points?: { x: number; y: number }[] } }[]; notes?: { id: string; text: string; ui: { x: number; y: number } }[]; layout?: { start?: { x: number; y: number }; end?: { x: number; y: number } } | null };
   inspector?: RunInspector;
   runtime?: { image?: string; digest?: string | null };
 }

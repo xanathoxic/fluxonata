@@ -427,24 +427,45 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
   const after = (await start.boundingBox())!;
   expect(after.y - before.y).toBeGreaterThan(100);
 
-  // la ligne A → B : sélection, poignée, flèche droite (alternative au glissement)
-  const handle = page.getByRole("button", { name: /Déplacer la ligne vers « Pause B »/ });
+  // la ligne A → B : sélection, puis tracé libre (points de passage)
+  const add = page.getByRole("button", { name: /Ajouter un point de passage à la ligne vers « Pause B »/ });
   await expect(async () => { // la sélection d'une ligne peut perdre la course avec l'ajustement de la vue : on réessaie
     await page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-interaction').dispatchEvent("click");
-    await expect(handle).toBeVisible({ timeout: 2_000 });
+    await expect(add).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 15_000 });
-  await handle.focus();
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowRight");
-
-  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
   const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
-  const saved = await read();
-  expect(saved.layout.start.y).toBeGreaterThan(100);
-  expect(saved.edges[0].ui.cx).toBeGreaterThan(0);
 
-  // Échap sur la poignée : routage automatique de nouveau
-  await handle.focus();
+  // clavier : Entrée pose un point au milieu, les flèches le déplacent dans les deux axes (Maj : 1 pixel)
+  await add.focus();
+  await page.keyboard.press("Enter");
+  const point = page.getByRole("button", { name: /Point de passage 1 sur 1 de la ligne vers « Pause B »/ });
+  await expect(point).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(1);
+  const first = (await read()).edges[0].ui.points[0];
+  expect((await read()).layout.start.y).toBeGreaterThan(100);
+
+  // souris : glisser la poignée « + » d'un segment crée un point où on la dépose, y compris en diagonale
+  const seg = page.getByRole("button", { name: /Ajouter un point de passage à la ligne vers « Pause B »/ }).first();
+  const box = (await seg.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y - 90, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(2);
+  const pts = (await read()).edges[0].ui.points;
+  expect(pts.some((q: { x: number; y: number }) => q.x !== first.x || q.y !== first.y)).toBe(true);
+
+  await expectNoA11yViolations(page); // poignées visibles : nom accessible, contraste, ordre de tabulation
+
+  // Suppr retire le point ; Échap remet le tracé automatique
+  await page.getByRole("button", { name: /Point de passage 1 sur 2/ }).focus();
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(1);
+  await page.getByRole("button", { name: /Point de passage 1 sur 1/ }).focus();
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await read()).edges[0].ui).toBeUndefined();
   await menuClick(page, "Affichage", "Organiser automatiquement");

@@ -1,6 +1,6 @@
 import type { GraphNode } from "./types";
 import type { Action } from "../api";
-import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, bendEdge, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, setEdgePoints, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -74,17 +74,27 @@ describe("graph operations", () => {
     expect(g.nodes.map((n) => n.ui?.y)).toEqual([0, 0, 0]);
   });
 
-  it("remembers the hand-placed endpoints and bent lines, and a fresh layout forgets them", () => {
+  it("remembers the hand-placed endpoints and the points of a line, and a fresh layout forgets them", () => {
     let g = chain();
     const e = g.edges[0] as { from: string; to: string };
-    g = bendEdge(moveEndpoint(moveEndpoint(g, "start", -50.4, 12), "end", 900, 3), e.from, e.to, 123.6);
+    g = setEdgePoints(moveEndpoint(moveEndpoint(g, "start", -50.4, 12), "end", 900, 3), e.from, e.to, [{ x: 100.4, y: 80.6 }, { x: 150, y: -40 }]);
     expect(g.layout).toEqual({ start: { x: -50, y: 12 }, end: { x: 900, y: 3 } });
-    expect(g.edges[0]?.ui).toEqual({ cx: 124 });
-    expect(relabel(g, e.from, e.to, "error").edges[0]).toEqual({ from: e.from, to: e.to, label: "error", ui: { cx: 124 } });
-    expect(bendEdge(g, e.from, e.to, null).edges[0]?.ui).toBeUndefined();
+    expect(g.edges[0]?.ui).toEqual({ points: [{ x: 100, y: 81 }, { x: 150, y: -40 }] });
+    expect(relabel(g, e.from, e.to, "error").edges[0]).toEqual({ from: e.from, to: e.to, label: "error", ui: { points: [{ x: 100, y: 81 }, { x: 150, y: -40 }] } });
+    expect(g.edges.slice(1).every((x) => x.ui === undefined)).toBe(true); // only the chosen line changes
+    expect(setEdgePoints(g, e.from, e.to, null).edges[0]?.ui).toBeUndefined();
+    expect(setEdgePoints(g, e.from, e.to, []).edges[0]?.ui).toBeUndefined();
     const fresh = autoLayout(g);
     expect(fresh.layout).toBeUndefined();
     expect(fresh.edges.every((x) => x.ui === undefined)).toBe(true);
+  });
+
+  it("replaces the older horizontal setting (cx) once points are placed, and keeps it until then", () => {
+    const g = chain();
+    const e = g.edges[0] as { from: string; to: string };
+    const old = { ...g, edges: g.edges.map((x, i) => (i === 0 ? { ...x, ui: { cx: 120 } } : x)) };
+    expect(relabel(old, e.from, e.to, "error").edges[0]?.ui).toEqual({ cx: 120 });
+    expect(setEdgePoints(old, e.from, e.to, [{ x: 10, y: 10 }]).edges[0]?.ui).toEqual({ points: [{ x: 10, y: 10 }] });
   });
 
   it("checks type compatibility (integer fits number)", () => {

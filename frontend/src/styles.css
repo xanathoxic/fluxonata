@@ -149,7 +149,13 @@ img, pre { max-width: 100%; }
 .bind-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.7fr); } .bind-extra { grid-column: 1 / -1; display: flex; gap: 4px; } .bind-extra select { flex: 1; max-width: none; } .bind-row input { min-width: 0; } .bind-row.out select { max-width: none; }
 .canvas { position: relative; } .flow-drop { width: 100%; height: 100%; }
 .run-schema .canvas, .run-schema .flow-drop { height: 380px; min-height: 380px; }
-.edge-handle { position: absolute; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: #fff; cursor: ew-resize; pointer-events: all; }
+.edge-handle { position: absolute; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: #fff; pointer-events: all; touch-action: none; }
+.edge-point { width: 16px; height: 16px; background: var(--accent); border-color: #fff; box-shadow: 0 0 0 2px var(--accent); cursor: grab; }
+.edge-point:active { cursor: grabbing; }
+.edge-add { width: 14px; height: 14px; cursor: copy; opacity: .75; }
+.edge-add::before, .edge-add::after { content: ""; position: absolute; left: 50%; top: 50%; background: var(--accent); transform: translate(-50%, -50%); }
+.edge-add::before { width: 6px; height: 2px; } .edge-add::after { width: 2px; height: 6px; }
+.edge-add:hover, .edge-add:focus-visible { opacity: 1; }
 .edge-handle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .gen-progress { display: flex; flex-direction: column; gap: 10px; }
 .gen-current { margin: 0; }

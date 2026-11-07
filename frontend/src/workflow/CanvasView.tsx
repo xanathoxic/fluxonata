@@ -6,6 +6,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Action } from "../api";
 import { placeNewNodes, wouldCreateCycle } from "./graphOps";
+import { labelPoint, MAX_POINTS, roundedPath, segmentMidpoints, type Pt } from "./edgeRoute";
 import { BrandIcon } from "../components/BrandIcon";
 import { NodeIcon } from "./icons";
 import { DRAG_MIME, type PaletteItem } from "./Palette";
@@ -49,39 +50,126 @@ function NoteNode({ data, selected }: NodeProps<Node<NoteData>>) {
 }
 const nodeTypes = { step: StepNode, start: StartNode, end: EndNode, note: NoteNode };
 
-interface RoutedData extends Record<string, unknown> { cx?: number; editable: boolean; name: string; onBend: (cx: number | null) => void }
+interface RoutedData extends Record<string, unknown> { cx?: number; points?: Pt[]; editable: boolean; name: string; onRoute: (points: Pt[] | null) => void }
+/** Après une action au clavier, le focus doit rester sur la poignée : le schéma se remonte quelques fois juste après un changement
+ *  (re-mesure des étapes), ce qui recrée les poignées. On redonne donc le focus pendant un court instant, jusqu'à un clic ailleurs ou Tab. */
+let pendingFocus: { id: string; until: number } | null = null;
+function keepFocus(id: string) {
+  pendingFocus = { id, until: Date.now() + 2500 };
+  document.addEventListener("pointerdown", () => { pendingFocus = null; }, { once: true, capture: true });
+}
 
-/** A line whose vertical segment the person can move (drag the handle, or use the arrow keys; double-click / Échap resets it). */
+interface Drag { index: number; pt: Pt; from: Pt; inserted: boolean; moved: boolean }
+
+/** Une poignée du tracé : se glisse n'importe où, se manie aussi au clavier (voir les libellés). */
+function RouteHandle({ id, kind, pos, label, onPointerDown, onKeyDown, onDoubleClick }: {
+  id: string; kind: "point" | "add"; pos: Pt; label: string;
+  onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void; onDoubleClick?: () => void;
+}) {
+  return (
+    <button type="button" id={id} className={`edge-handle edge-${kind} nodrag nopan`} style={{ transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)` }}
+      aria-label={label} onPointerDown={onPointerDown} onKeyDown={onKeyDown} onDoubleClick={onDoubleClick} />
+  );
+}
+
+/** Un lien dont la personne place le tracé comme elle veut : des points de passage qu'on glisse (ou déplace aux flèches), un « + » au milieu
+ *  de chaque segment pour en ajouter un ; Suppr retire le point, Échap remet le tracé automatique. */
 function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, label, style, selected, data }: EdgeProps<Edge<RoutedData>>) {
   const { screenToFlowPosition } = useReactFlow();
-  const [drag, setDrag] = useState<number | null>(null);
-  const cx = drag ?? data?.cx;
-  const [path, lx, ly] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, centerX: cx });
-  const x = cx ?? lx;
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const saved = useMemo(() => data?.points ?? [], [data?.points]);
+  const points = useMemo(() => {
+    if (!drag) return saved;
+    const next = [...saved];
+    if (drag.inserted) next.splice(drag.index, 0, drag.pt); else next[drag.index] = drag.pt;
+    return next;
+  }, [saved, drag]);
+  useEffect(() => { // see keepFocus: runs at every render, the handles may have been recreated since the last keyboard action
+    if (!pendingFocus) return;
+    if (Date.now() > pendingFocus.until) { pendingFocus = null; return; }
+    const el = document.getElementById(pendingFocus.id);
+    if (el && document.activeElement !== el) el.focus();
+  });
+  const source = { x: sourceX, y: sourceY };
+  const target = { x: targetX, y: targetY };
+  const custom = points.length > 0;
+  const chain = [source, ...points, target];
+  const [smooth, sx, sy] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, centerX: data?.cx });
+  const mid = labelPoint(chain);
+  const [path, lx, ly] = custom ? [roundedPath(chain), mid.x, mid.y] : [smooth, sx, sy];
+  const adds = custom ? segmentMidpoints(chain) : [{ x: data?.cx ?? sx, y: sy }];
   const editable = !!data?.editable;
-  const step = (dx: number) => data?.onBend(Math.round((cx ?? lx) + dx));
+  const name = data?.name ?? "";
+  const route = (next: Pt[] | null) => data?.onRoute(next && next.length > 0 ? next : null);
+  // The drag is followed on the window, not on the handle: the handle may be taken off the page while it is dragged (the other « + » are hidden,
+  // the diagram can be rebuilt), and it would lose the pointer and never see it released.
+  const dragRef = useRef<Drag | null>(null);
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const grab = (start: Omit<Drag, "from" | "moved">) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const first: Drag = { ...start, from: start.pt, moved: false };
+    dragRef.current = first;
+    setDrag(first);
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const p = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      const pt = { x: Math.round(p.x), y: Math.round(p.y) };
+      const next = { ...d, pt, moved: d.moved || Math.hypot(pt.x - d.from.x, pt.y - d.from.y) > 3 };
+      dragRef.current = next;
+      setDrag(next);
+    };
+    const onEnd = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (d?.moved) {
+        const next = [...savedRef.current];
+        if (d.inserted) next.splice(d.index, 0, d.pt); else next[d.index] = d.pt;
+        routeRef.current(next);
+      }
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+  };
+  const full = points.length >= MAX_POINTS;
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} label={label} labelX={lx} labelY={ly} />
       {editable && selected && (
         <EdgeLabelRenderer>
-          <button
-            type="button" className="edge-handle nodrag nopan" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${ly}px)` }}
-            aria-label={`Déplacer la ligne vers « ${data?.name ?? ""} » : glisser, ou flèches gauche et droite ; Échap pour la remettre en automatique`}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              setDrag(x);
-            }}
-            onPointerMove={(e) => { if (drag !== null) setDrag(Math.round(screenToFlowPosition({ x: e.clientX, y: e.clientY }).x)); }}
-            onPointerUp={() => { if (drag !== null) data?.onBend(drag); setDrag(null); }}
-            onDoubleClick={() => data?.onBend(null)}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowLeft") { e.preventDefault(); step(-10); }
-              else if (e.key === "ArrowRight") { e.preventDefault(); step(10); }
-              else if (e.key === "Escape") { e.preventDefault(); data?.onBend(null); }
-            }}
-          />
+          {points.map((p, i) => (
+            <RouteHandle key={`p${i}`} id={`${id}-pt-${i}`} kind="point" pos={p}
+              label={`Point de passage ${i + 1} sur ${points.length} de la ligne vers « ${name} » : glisser, ou flèches pour le déplacer (Maj : 1 pixel) ; Suppr pour le retirer ; Échap pour remettre la ligne en automatique`}
+              onPointerDown={grab({ index: i, pt: p, inserted: false })}
+              onDoubleClick={() => { route(saved.filter((_, k) => k !== i)); }}
+              onKeyDown={(e) => {
+                const step = e.shiftKey ? 1 : 10;
+                const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+                if (delta) { e.preventDefault(); keepFocus(`${id}-pt-${i}`); route(saved.map((q, k) => (k === i ? { x: q.x + (delta[0] ?? 0), y: q.y + (delta[1] ?? 0) } : q))); }
+                else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); e.stopPropagation(); if (saved.length > 1) keepFocus(`${id}-pt-${Math.max(0, i - 1)}`); route(saved.filter((_, k) => k !== i)); }
+                else if (e.key === "Tab") pendingFocus = null;
+                else if (e.key === "Escape") { e.preventDefault(); route(null); }
+              }} />
+          ))}
+          {!full && !drag && adds.map((m, k) => (
+            <RouteHandle key={`a${k}`} id={`${id}-add-${k}`} kind="add" pos={m}
+              label={`Ajouter un point de passage à la ligne vers « ${name} »${adds.length > 1 ? `, segment ${k + 1} sur ${adds.length}` : ""} : glisser, ou Entrée pour en poser un au milieu`}
+              onPointerDown={grab({ index: k, pt: { x: Math.round(m.x), y: Math.round(m.y) }, inserted: true })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); keepFocus(`${id}-pt-${k}`); const next = [...saved]; next.splice(k, 0, { x: Math.round(m.x), y: Math.round(m.y) }); route(next); }
+                else if (e.key === "Escape") { e.preventDefault(); route(null); }
+              }} />
+          ))}
         </EdgeLabelRenderer>
       )}
     </>
@@ -102,14 +190,14 @@ interface Props {
   statuses?: Record<string, string>;
   counts?: Record<string, number>;
   onMove?: (moves: { id: string; x: number; y: number }[]) => void;
-  onBendEdge?: (from: string, to: string, cx: number | null) => void;
+  onRouteEdge?: (from: string, to: string, points: Pt[] | null) => void;
   onConnect?: (from: string, to: string) => void;
   onDeleteNodes?: (ids: string[]) => void;
   onDeleteEdges?: (edges: { from: string; to: string }[]) => void;
   onDropItem?: (item: PaletteItem, pos: { x: number; y: number }) => void;
 }
 
-function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, statuses, counts, onMove, onBendEdge, onConnect, onDeleteNodes, onDeleteEdges, onDropItem }: Props) {
+function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, statuses, counts, onMove, onRouteEdge, onConnect, onDeleteNodes, onDeleteEdges, onDropItem }: Props) {
   const { screenToFlowPosition, fitView, getNode, setCenter, getZoom } = useReactFlow();
   const wrap = useRef<HTMLDivElement>(null);
   const userMoved = useRef(false);
@@ -158,20 +246,25 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
       ...entries.map((n) => ({ id: `s->${n.id}`, source: "__start__", target: n.id, markerEnd: mark, selectable: false, deletable: false })),
       ...graph.edges.map((e) => ({
         id: `${e.from}->${e.to}`, source: e.from, target: e.to, markerEnd: mark, type: "routed", selected: edgeId === `${e.from}->${e.to}`,
-        data: { cx: e.ui?.cx, editable: !readOnly, name: graph.nodes.find((n) => n.id === e.to)?.name ?? e.to, onBend: (cx: number | null) => onBendEdge?.(e.from, e.to, cx) } as RoutedData,
+        data: { cx: e.ui?.cx, points: e.ui?.points, editable: !readOnly, name: graph.nodes.find((n) => n.id === e.to)?.name ?? e.to, onRoute: (points: Pt[] | null) => onRouteEdge?.(e.from, e.to, points) } as RoutedData,
         label: e.label ? edgeText(e.label) : undefined, className: e.label === "error" ? "edge-error" : undefined,
         style: e.label === "error" ? { strokeDasharray: "6 4" } : undefined,
       })),
       ...sinks.map((n) => ({ id: `${n.id}->e`, source: n.id, target: "__end__", markerEnd: mark, selectable: false, deletable: false })),
     ];
     return { nodes: rfNodes, edges: rfEdges };
-  }, [graph, issues, selectedId, readOnly, statuses, counts, onBendEdge, edgeId]);
+  }, [graph, issues, selectedId, readOnly, statuses, counts, onRouteEdge, edgeId]);
 
   // React Flow works on a local copy of the nodes: positions follow the pointer WHILE dragging; the graph (draft, undo
   // history, autosave) is updated once, when the node is dropped.
   const [nodes, setNodes] = useState<Node[]>(graphNodes);
   const dragging = useRef(false); // a re-render of the page must never snap a node back while it is being dragged
-  useEffect(() => { if (!dragging.current) setNodes(graphNodes); }, [graphNodes]);
+  // The nodes are rebuilt at every render of the page (autosave, validation…): keep the sizes already measured, otherwise React Flow forgets where
+  // the connection points are, takes the lines off and puts them back after measuring again (which also recreates their handles).
+  useEffect(() => {
+    if (dragging.current) return;
+    setNodes((prev) => graphNodes.map((n) => { const old = prev.find((p) => p.id === n.id); return old?.measured ? { ...n, measured: old.measured } : n; }));
+  }, [graphNodes]);
   const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
 
   return (

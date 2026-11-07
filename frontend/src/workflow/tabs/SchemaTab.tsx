@@ -5,7 +5,7 @@ import { useAiMode } from "../../components/AiBox";
 import { AiChat } from "../AiChat";
 import { CanvasView } from "../CanvasView";
 import { useDraft } from "../DraftContext";
-import { addNode, autoLayout, bendEdge, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
+import { addNode, autoLayout, setEdgePoints, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
 import { ListView } from "../ListView";
 import { NodePanel } from "../NodePanel";
 import { PaneResizer } from "../PaneResizer";
@@ -154,7 +154,7 @@ export function SchemaTab() {
             <CanvasView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={pick} focus={focus} readOnly={!editable}
               onOpen={(id) => graph.nodes.find((n) => n.id === id)?.type === "script" && setScriptOpen(id)}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
-              onBendEdge={(f, t, cx) => editable && setGraph(bendEdge(graph, f, t, cx))}
+              onRouteEdge={(f, t, points) => editable && setGraph(setEdgePoints(graph, f, t, points))}
               onConnect={(f, t) => editable && setGraph(connect(graph, f, t, (() => { const src = graph.nodes.find((n) => n.id === f); return src ? defaultLabel(graph, src) : "next"; })()))}
               onDeleteNodes={(ids) => editable && del(ids)} onDeleteEdges={(es) => editable && setGraph(es.reduce((g, e) => disconnect(g, e.from, e.to), graph))}
               onDropItem={(item, pos) => add(item, pos)} />

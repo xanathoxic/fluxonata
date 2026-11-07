@@ -102,8 +102,9 @@ export interface GraphEdge {
   from: string;
   to: string;
   label?: EdgeLabel;
-  /** routing chosen by the person: x of the vertical segment (the line is drawn automatically when absent) */
-  ui?: { cx: number };
+  /** routing chosen by the person: the points the line goes through (drawn automatically when absent). `cx` (x of the vertical
+   *  segment) is the older, horizontal-only setting: still drawn, replaced as soon as the person places a point. */
+  ui?: { cx?: number; points?: { x: number; y: number }[] };
 }
 
 export interface Variable { name: string; type: VarType; value: unknown; description?: string; env_values?: Partial<Record<"dev" | "test" | "prod", unknown>> }
