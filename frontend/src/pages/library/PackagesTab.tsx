@@ -4,6 +4,7 @@ import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { Badge, Confirm, EmptyRow, SearchBox, Section, usePaged, type Tone } from "../../components/AdminUi";
+import { CopyBlock } from "../../components/CopyBlock";
 import { Overlay } from "../../components/Overlay";
 import { Kpi } from "../OpsCharts";
 
@@ -148,14 +149,23 @@ function TrustedKeys() {
   const del = useWsMutation<{ id: number }>("DELETE", (i) => `/packages/trusted-keys/${i.id}/`, ["trusted"]);
   const [k, setK] = useState({ name: "", public_key: "" });
   const [open, setOpen] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [toDel, setToDel] = useState<{ id: number; name: string } | null>(null);
   return (
-    <Section title="Éditeurs de confiance" hint={<>Clé publique de cette instance (à communiquer aux autres instances pour qu'elles fassent confiance à vos paquets) : <code>{q.data?.instance_public_key}</code></>}
-      actions={<button type="button" onClick={() => { add.reset(); setOpen(true); }}>Ajouter un éditeur</button>}>
+    <Section title="Éditeurs de confiance" hint="Pour qu'une autre instance fasse confiance à vos paquets, communiquez-lui la clé publique de cette instance (affichée ci-dessous) ; elle l'ajoute chez elle avec « Ajouter un éditeur »."
+      actions={<><button type="button" onClick={() => setShowKey(true)} disabled={!q.data?.instance_public_key}>Clé de cette instance</button><button type="button" onClick={() => { add.reset(); setOpen(true); }}>Ajouter un éditeur</button></>}>
       <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Éditeurs de confiance</caption>
         <thead><tr><th scope="col">Éditeur</th><th scope="col">Empreinte de la clé</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{q.data?.results.map((r) => <tr key={r.id}><td><strong>{r.name}</strong></td><td className="mono">{r.key_id}</td><td><button type="button" onClick={() => setToDel({ id: r.id, name: r.name })} aria-label={`Ne plus faire confiance à ${r.name}`}>Retirer</button></td></tr>)}
           {(q.data?.results.length ?? 0) === 0 && <EmptyRow cols={3}>Aucun éditeur de confiance : seuls vos propres paquets sont reconnus comme signés par vous.</EmptyRow>}</tbody></table></div>
+      {showKey && q.data && (
+        <Overlay variant="modal" title="Clé publique de cette instance" description="À communiquer aux autres instances pour qu'elles fassent confiance aux paquets que celle-ci signe." onClose={() => setShowKey(false)}>
+          <div className="field"><label htmlFor="tk-self">Clé publique (base64)</label>
+            <CopyBlock id="tk-self" label="Clé publique de cette instance" text={q.data.instance_public_key} /></div>
+          <p className="hint">Empreinte : <span className="mono">{q.data.instance_key_id}</span></p>
+          <p className="hint">Sur l'autre instance, un administrateur l'ajoute avec « Ajouter un éditeur » (nom de l'éditeur, puis cette clé). Cette clé est publique : elle ne permet que de vérifier une signature, jamais d'en créer une.</p>
+        </Overlay>
+      )}
       {toDel && <Confirm title="Ne plus faire confiance à cet éditeur ?" confirmLabel="Retirer l'éditeur" busy={del.isPending} onCancel={() => setToDel(null)} onConfirm={() => { del.mutate({ id: toDel.id }); setToDel(null); }}><p>Les paquets signés par <strong>{toDel.name}</strong> ne seront plus reconnus comme venant d'un éditeur de confiance.</p></Confirm>}
       {open && (
         <Overlay variant="modal" title="Ajouter un éditeur de confiance" description="Collez la clé publique que cet éditeur vous a communiquée." onClose={() => setOpen(false)}

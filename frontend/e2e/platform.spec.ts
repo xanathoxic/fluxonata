@@ -169,6 +169,30 @@ test("assistant IA : désactivé par défaut puis brouillon généré (faux four
   await expect(admin.getByText("Enregistré.")).toBeVisible();
 });
 
+test("paquets : la clé publique de l'instance s'ouvre dans une fenêtre, copiable (administrateur), absente pour un concepteur", async ({ page, browser }) => {
+  await login(page, "admin");
+  await nav(page, "Bibliothèques");
+  await tab(page, "Paquets");
+  await expect(page.getByLabel("Clé publique de cette instance", { exact: true })).toHaveCount(0); // pas affichée tant qu'on ne la demande pas
+  await page.getByRole("button", { name: "Clé de cette instance" }).click();
+  const dlg = page.getByRole("dialog", { name: "Clé publique de cette instance" });
+  const key = dlg.getByLabel("Clé publique de cette instance", { exact: true });
+  await expect(key).toHaveText(/^[A-Za-z0-9+/]{43}=$/); // clé Ed25519 en base64 (32 octets)
+  await expect(dlg.getByRole("button", { name: "Copier" })).toBeVisible();
+  await expect(dlg.getByText(/Empreinte :/)).toBeVisible();
+  await expectNoA11yViolations(page);
+  await dlg.getByRole("button", { name: "Fermer" }).click();
+  await expect(dlg).toHaveCount(0);
+
+  const designer = await (await browser.newContext()).newPage(); // un concepteur n'administre pas l'espace : ni section ni clé
+  await login(designer, "alice");
+  await nav(designer, "Bibliothèques");
+  await tab(designer, "Paquets");
+  await expect(designer.getByRole("button", { name: "Exporter un paquet" })).toBeVisible();
+  await expect(designer.getByRole("button", { name: "Clé de cette instance" })).toHaveCount(0);
+  await designer.context().close();
+});
+
 test("paquet : export puis aperçu d'import (éléments identiques) sans rien modifier", async ({ page }) => {
   const id = uniq();
   await login(page, "alice");

@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.4.13 — 2026-11-07
+
+**Fluxonata 0.4.13 : la clé publique de l'instance s'affiche dans une fenêtre copiable depuis l'onglet Paquets**
+
+- Paquets : la clé publique de l'instance s'affiche dans une fenêtre, avec un bouton Copier
+
 ## v0.4.12 — 2026-11-07
 
 **Fluxonata 0.4.12 : tracé libre des liens dans l'éditeur de workflow (points de passage glissés ou placés au clavier)**

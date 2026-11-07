@@ -5,6 +5,7 @@ import { useApp } from "../context";
 import { errorText, useWsQuery } from "../lib";
 import { Badge, Section } from "./AdminUi";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { CopyBlock } from "./CopyBlock";
 import { Overlay } from "./Overlay";
 import { SegmentedControl } from "./SegmentedControl";
 
@@ -37,19 +38,6 @@ export function connectionSnippets(url: string, token: string) {
 function failure(e: unknown): string {
   const t = errorText(e as ApiError);
   return t && t !== "Erreur" ? t : "Le serveur n'a pas pu traiter la demande. Rechargez la page ; si cela continue, prévenez un administrateur.";
-}
-
-function CopyBlock({ text, label, id }: { text: string; label: string; id?: string }) {
-  const [done, setDone] = useState<boolean | null>(null);
-  const copy = async () => { try { await navigator.clipboard.writeText(text); setDone(true); } catch { setDone(false); } };
-  return (
-    <div className="mcp-copy">
-      <pre id={id} tabIndex={0} aria-label={label}>{text}</pre>
-      <button type="button" onClick={() => void copy()}>Copier</button>
-      {done === true && <span role="status" className="hint"> Copié.</span>}
-      {done === false && <span role="alert" className="field-error"> Copie impossible : sélectionnez le texte à la main.</span>}
-    </div>
-  );
 }
 
 function Connect({ created, url, onClose }: { created: Created; url: string; onClose: () => void }) {
