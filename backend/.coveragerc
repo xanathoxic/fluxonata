@@ -1,0 +1,14 @@
+# Mesure de couverture (informative, aucun seuil) — scripts/coverage.sh.
+[run]
+source = .
+branch = True
+relative_files = True
+omit =
+    tests/*
+    */migrations/*
+    manage.py
+
+[report]
+exclude_also =
+    if TYPE_CHECKING:
+    raise NotImplementedError

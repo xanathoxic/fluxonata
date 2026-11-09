@@ -192,6 +192,7 @@ git reset --hard origin/main   # remplace les fichiers suivis par Git ; .env, in
 Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.prod.yml`), refaites ces modifications ensuite. Un `git clone` neuf avec recopie de `infra/.env.prod` convient aussi : les volumes Docker sont conservés tant que le nom de projet reste `fluxonata-prod`.
 
 ### 7.4 À savoir pour la v0.4
+- **Depuis une version antérieure à la v0.4.5** : la migration `tenancy/0014` (jetons personnels) retient brièvement des verrous sur trois tables ; suivez [docs/MISE_A_NIVEAU_0014.md](MISE_A_NIVEAU_0014.md) (préconditions, étape préalable avec limite d'attente du verrou, contrôles, récupération) entre les étapes 2 et 3 ci-dessus.
 - Trois migrations **additives** (jeux de test des actions, secret de signature des webhooks, coffre externe) : rien n'est supprimé.
 - Le **coffre externe** (HashiCorp Vault) est désactivé tant qu'il n'est pas configuré (Plate-forme → Coffre externe). Pour un Vault du réseau interne, ajoutez son adresse à `ORCH_EGRESS_ALLOWLIST` dans `infra/.env.prod`.
 - Les boutons « Générer avec l'IA » (workflows, actions, skills) n'apparaissent que si l'assistant IA est activé (Administration → Assistant IA).

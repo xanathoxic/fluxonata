@@ -17,7 +17,7 @@ RUN useradd --system --uid 10001 --home /nonexistent fluxonata && mkdir -p /app/
 USER fluxonata
 WORKDIR /app/backend
 ENV DJANGO_SETTINGS_MODULE=fluxonata.settings ORCH_KEY_DIR=/keys ORCH_ARTIFACTS_DIR=/app/var/artifacts ORCH_VERSION=$ORCH_VERSION ORCH_REVISION=$ORCH_REVISION
-CMD ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+CMD ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-", "--logger-class", "core.gunicorn_logging.RedactingLogger"]
 
 FROM runtime AS exec
 USER root

@@ -45,6 +45,7 @@ export function RunInspectorPanel({ run, selectedId }: { run: WorkflowRun; selec
         {step.error && <p className="field-error">{step.error.message}{step.error.next_step ? ` — ${step.error.next_step}` : ""}</p>}
         <VariableBlock title="Entrées" data={insp.nodes[selectedId]?.inputs} empty="Cette étape ne reçoit aucune entrée paramétrée." />
         <VariableBlock title="Sorties" data={step.output} empty={step.status === "succeeded" ? "Cette étape ne produit aucune sortie." : "Pas de sortie pour le moment."} />
+        {step.logs && <section className="inspector-block" aria-label="Journal de l'étape"><h4>Journal</h4><pre tabIndex={0} aria-label={`Journal de ${step.name}`}>{step.logs}</pre></section>}
       </>
     );
   } else {

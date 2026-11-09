@@ -2,6 +2,28 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-11-09
+
+**Journaux et secrets : masquage des jetons et des représentations dérivées, nginx, e-mails d'erreur, compatibilité et couverture ; mise à niveau de la migration 0014**
+
+- Rétablir le journal de l'étape dans le panneau de suivi
+- Rendre les tests de topologie indépendants de la configuration locale
+- Mesure de couverture : environnement isolé, interpréteur signalé, ignorés et omissions journalisés
+- Test de compatibilité : sonde « jeton personnel » et exécution indépendante du .env du dépôt
+- Journaux d'une tentative : un secret coupé par la limite ou contenu dans un autre n'est plus laissé en clair
+- Masquage des secrets : représentations courantes (base64, URL, JSON) et étape HTTP alignée
+- Journaux : jetons « capacité » d'adresse masqués (application, gunicorn, nginx livré)
+- Documentation : procédure de mise à niveau pour la migration tenancy/0014
+- Sonde de compatibilité : identité authentifiée vérifiée et refus d'un jeton inconnu
+- Journaux : l'enregistreur django.server garde son gestionnaire (correction d'un commit précédent)
+- Rapports d'erreur pour ADMINS : jeton d'adresse et valeurs POST masqués dans tout le message
+- nginx : journal d'erreurs limité à crit sur les routes à jeton, journal d'accès enrichi
+- Tests de masquage : valeur synthétique marquée pour le scan de secrets
+- nginx par rôles : correction des tests de routage après la limitation d'error_log (régression d'un commit précédent)
+- Mise à niveau 0014 : document public autonome ; l'export refuse les renvois vers des fichiers non publiés
+- Jetons d'adresse : routes écrites avec encodage en pourcent, barres doublées ou autre casse masquées ; traces d'exception JSON masquées
+- Masquage des jetons d'adresse : temps linéaire sur de longues suites de barres (régression du commit précédent)
+
 ## v0.4.13 — 2026-11-07
 
 **Fluxonata 0.4.13 : la clé publique de l'instance s'affiche dans une fenêtre copiable depuis l'onglet Paquets**

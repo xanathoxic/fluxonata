@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from audit.models import record
 from core import netsec
+from vault.injection import mask_text
 
 from . import files
 from .models import StepRun
@@ -374,10 +375,7 @@ def claim_next() -> StepRun | None:
 
 def _mask(value, secrets: list):
     if isinstance(value, str):
-        for secret in secrets:
-            if secret and len(secret) >= 4:
-                value = value.replace(secret, "***")
-        return value
+        return mask_text(value, [secret for secret in secrets if secret and len(secret) >= 4])
     if isinstance(value, dict):
         return {k: _mask(v, secrets) for k, v in value.items()}
     if isinstance(value, list):

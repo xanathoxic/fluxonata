@@ -227,14 +227,55 @@ ORCH_MAX_RESULT_BYTES = 1024 * 1024
 
 ORCH_LOG_FORMAT = env("ORCH_LOG_FORMAT", "json")  # json | text
 ORCH_METRICS_TOKEN = env("ORCH_METRICS_TOKEN", "")  # empty -> /metrics disabled
+# Rapports d'erreur : valeurs POST masquées (voir core/logging.py).
+DEFAULT_EXCEPTION_REPORTER_FILTER = "core.logging.MaskedPostReporterFilter"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"ctx": {"()": "core.logging.ContextFilter"}},
+    "filters": {
+        "ctx": {"()": "core.logging.ContextFilter"},
+        "redact_url_tokens": {"()": "core.logging.RedactUrlTokensFilter"},  # jetons d'adresse : voir core/urlredact.py
+        "require_debug_true": {"()": "django.utils.log.RequireDebugTrue"},
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+    },
     "formatters": {
+        "django_server": {
+            "()": "django.utils.log.ServerFormatter",
+            "format": "[{server_time}] {message}",
+            "style": "{",
+        },
         "json": {"()": "core.logging.JsonFormatter"},
         "text": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
     },
-    "handlers": {"console": {"class": "logging.StreamHandler", "filters": ["ctx"], "formatter": ORCH_LOG_FORMAT}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["ctx", "redact_url_tokens"],
+            "formatter": ORCH_LOG_FORMAT,
+        },
+        # Mêmes gestionnaires que ceux que Django attache à son enregistreur « django » par défaut (django.utils.log.DEFAULT_LOGGING), avec le
+        # masquage en plus : sans cela ils écrivent « Internal Server Error: <adresse> » (et envoient le même texte par e-mail si ADMINS est réglé) tels quels.
+        "django_server": {
+            "class": "logging.StreamHandler",
+            "formatter": "django_server",
+            "filters": ["redact_url_tokens"],
+        },
+        "django_console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "filters": ["require_debug_true", "redact_url_tokens"],
+        },
+        "django_mail_admins": {
+            "class": "core.logging.RedactingAdminEmailHandler",
+            "level": "ERROR",
+            "filters": ["require_debug_false", "redact_url_tokens"],
+        },
+    },
     "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django": {"handlers": ["django_console", "django_mail_admins"], "level": "INFO"},
+        # Serveur de développement (runserver) : même configuration que DEFAULT_LOGGING de Django (gestionnaire propre, sans propagation), masquage en plus.
+        # Redéclarée en entier : une entrée de LOGGING qui ne cite pas ses gestionnaires retire ceux de Django, et ses messages seraient perdus.
+        "django.server": {"handlers": ["django_server"], "level": "INFO", "propagate": False},
+    },
 }

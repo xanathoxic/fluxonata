@@ -1,0 +1,101 @@
+{
+ "_doc": "Baseline de couverture (scripts/coverage.sh --write-baseline), informative : aucun seuil. Lignes + branches, code applicatif du backend hors tests et migrations ; seul le processus pytest est mesuré (les processus lancés par les tests ne le sont pas).",
+ "commit": "1181ba7",
+ "measured_at": "2026-11-08",
+ "python": "3.14.4",
+ "coverage_version": "7.17.2",
+ "pytest": "2136 passés, 19 ignorés, 1 xfailed (raisons des ignorés non journalisées lors de cette mesure)",
+ "total": {
+  "statements": 20688,
+  "covered": 18884,
+  "branches": 7154,
+  "covered_branches": 5969,
+  "percent": 89.26
+ },
+ "packages": {
+  "ai": {
+   "statements": 3604,
+   "covered": 3224,
+   "branches": 1374,
+   "covered_branches": 1147,
+   "percent": 87.81
+  },
+  "audit": {
+   "statements": 19,
+   "covered": 19,
+   "branches": 2,
+   "covered_branches": 2,
+   "percent": 100.0
+  },
+  "bundles": {
+   "statements": 585,
+   "covered": 533,
+   "branches": 180,
+   "covered_branches": 151,
+   "percent": 89.41
+  },
+  "catalog": {
+   "statements": 1047,
+   "covered": 870,
+   "branches": 320,
+   "covered_branches": 232,
+   "percent": 80.61
+  },
+  "core": {
+   "statements": 489,
+   "covered": 468,
+   "branches": 150,
+   "covered_branches": 140,
+   "percent": 95.15
+  },
+  "fluxonata": {
+   "statements": 216,
+   "covered": 207,
+   "branches": 54,
+   "covered_branches": 43,
+   "percent": 92.59
+  },
+  "formbuilder": {
+   "statements": 565,
+   "covered": 534,
+   "branches": 116,
+   "covered_branches": 93,
+   "percent": 92.07
+  },
+  "runs": {
+   "statements": 4495,
+   "covered": 4096,
+   "branches": 1308,
+   "covered_branches": 1080,
+   "percent": 89.2
+  },
+  "tenancy": {
+   "statements": 1488,
+   "covered": 1412,
+   "branches": 332,
+   "covered_branches": 264,
+   "percent": 92.09
+  },
+  "triggers": {
+   "statements": 3310,
+   "covered": 3035,
+   "branches": 1530,
+   "covered_branches": 1334,
+   "percent": 90.27
+  },
+  "vault": {
+   "statements": 1173,
+   "covered": 1065,
+   "branches": 284,
+   "covered_branches": 215,
+   "percent": 87.85
+  },
+  "workflows": {
+   "statements": 3697,
+   "covered": 3421,
+   "branches": 1504,
+   "covered_branches": 1268,
+   "percent": 90.16
+  }
+ }
+}
