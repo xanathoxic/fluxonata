@@ -2,6 +2,24 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-11-12
+
+**Tests E2E remis d'aplomb, message de recherche vide de « Mes exécutions »**
+
+- E2E exécutions : la pagination crée ses propres exécutions au lieu de supposer plus de 10 lignes existantes
+- E2E contrôles : l'alignement des zones d'une rangée ne suppose plus quels champs la partagent
+- E2E runners : le 403 d'un concepteur est vérifié dans l'espace de démonstration, le 404 d'un espace inconnu est ajouté
+- E2E Git : la configuration passe par la fenêtre « Configurer le dépôt » (interface du 2026-11-05)
+- E2E utilisateurs : le test crée le second espace dont il a besoin au lieu de supposer qu'il existe
+- Mes exécutions : une recherche sans résultat affiche « ne correspond à ces filtres », pas « Aucune exécution pour l'instant »
+- Mes exécutions : test des quatre états de la liste (absence totale, filtre sans résultat, résultats, « Tout effacer »)
+- UX : le seuil de 55 % du canevas s'applique palette masquée par la personne
+- Mes exécutions : test des quatre états — accès indexé typé (le build strict refusait le test précédent)
+- Mes exécutions : pas de message « ne correspond à ces filtres » quand le serveur est en erreur (revue indépendante)
+- E2E contrôles : l'alignement compare les paires attendues sur une même rangée, même sans chevauchement (témoin négatif de 80 px)
+- UX : la palette reste contrôlée par la personne, le seuil de 55 % du canevas s'applique lorsqu'elle est masquée (commentaire du test autonome)
+- E2E : les données créées par les scénarios et les relances sur une même base sont documentées ; export : références d'ADR retirées du journal public
+
 ## 2026-11-09
 
 **Journaux et secrets : masquage des jetons et des représentations dérivées, nginx, e-mails d'erreur, compatibilité et couverture ; mise à niveau de la migration 0014**

@@ -14,6 +14,14 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   const name = `usr${uniq()}`;
   const mine = `Mon-mot-de-passe-${uniq()}`;
   await login(page, "admin");
+  // préparation : la démonstration n'a qu'un espace, or le test place la personne dans deux espaces (« Ajouter un espace »
+  // reste grisé sans espace libre) ; on crée donc un second espace, nommé et unique, sans dépendre d'autres données.
+  const second = await page.evaluate(async (id) => {
+    const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
+    const r = await fetch("/api/v1/platform/workspaces/", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ slug: `e2e-${id}`, name: `Espace E2E ${id}` }) });
+    return r.status;
+  }, uniq());
+  expect(second).toBe(201);
   await goNav(page, "Plate-forme");
   await page.getByRole("tab", { name: "Utilisateurs" }).click();
   await expect(page.getByRole("cell", { name: /alice/ }).first()).toBeVisible();

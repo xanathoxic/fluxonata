@@ -65,6 +65,8 @@ export function ExecutionsPage() {
     to && { k: "to", label: `Jusqu'au ${to}`, clear: () => reset(setTo)("") },
     minDur && { k: "dur", label: `Durée ≥ ${minDur} s`, clear: () => reset(setMinDur)("") },
   ].filter(Boolean) as { k: string; label: string; clear: () => void }[];
+  // le texte, le statut, la période et la durée sont filtrés côté serveur (le type, côté client) : « aucune ligne » avec un filtre actif n'est pas « aucune exécution »
+  const filtered = active.length > 0 || status !== "";
   const clearAll = () => { setQ(""); setKind(""); setEnv(""); setFrom(""); setTo(""); setMinDur(""); setStatus(""); setPage(1); };
   return (
     <>
@@ -105,7 +107,7 @@ export function ExecutionsPage() {
       </section>
       {loading && <p role="status">{t("common.loading")}</p>}
       {(actions.isError || flows.isError) && <p role="alert">{t("common.error")}</p>}
-      {!loading && rows.length === 0 && <p className="empty-state">{t("exec.empty")}</p>}
+      {!loading && !actions.isError && !flows.isError && rows.length === 0 && !filtered && <p className="empty-state">{t("exec.empty")}</p>}
       {rows.length > 0 && (
         <div className="table-wrap xtable">
           <table>
@@ -126,7 +128,7 @@ export function ExecutionsPage() {
           </table>
         </div>
       )}
-      {rows.length > 0 && shownAll.length === 0 && (
+      {!loading && !actions.isError && !flows.isError && shownAll.length === 0 && (rows.length > 0 || filtered) && (
         <div className="ops-empty"><strong>Aucune exécution ne correspond à ces filtres</strong><p className="hint">Essayez un autre mot, une autre période ou retirez un filtre.</p><button type="button" className="primary" onClick={clearAll}>Tout effacer</button></div>
       )}
       {shownAll.length > 0 && <Pagination total={shownAll.length} page={cur} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} label="Pagination des exécutions" />}

@@ -60,16 +60,21 @@ test("Git : configuration, opération exécutée par le worker et erreur claire 
   expect(created).toBe(201);
   await goNav(page, "Administration");
   await page.getByRole("tab", { name: "Git", exact: true }).click();
-  await page.getByLabel("Dépôt", { exact: true }).fill("exemple/depot");
-  await page.getByLabel("Connexion (jeton d'accès)").selectOption({ label: `Forge ${id}` });
+  // sans configuration, l'onglet propose d'ouvrir la fenêtre « Configurer le dépôt »
+  await page.getByRole("button", { name: "Configurer le dépôt" }).click();
+  const config = page.getByRole("dialog", { name: "Configurer le dépôt" });
+  await config.getByLabel("Dépôt", { exact: true }).fill("exemple/depot");
+  await config.getByLabel("Connexion (jeton d'accès)").selectOption({ label: `Forge ${id}` });
   await expectNoA11yViolations(page);
-  await page.getByRole("button", { name: "Enregistrer la configuration" }).click();
+  await config.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(config).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Proposer les modifications (demande de fusion)" })).toBeVisible();
   await page.getByRole("button", { name: "Tester l'accès" }).click();
   // le worker prend l'opération ; ce dépôt n'existe pas : elle échoue avec un message clair (et sans jamais afficher le jeton)
   await expect(page.getByRole("row", { name: /Test d'accès.*Échouée/ }).first()).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("jeton-de-test-12345")).toHaveCount(0);
-  await page.getByRole("button", { name: "Retirer la configuration" }).click();
+  await page.getByRole("button", { name: "Modifier le dépôt" }).click();
+  await page.getByRole("dialog", { name: "Modifier le dépôt" }).getByRole("button", { name: "Retirer la configuration" }).click();
   await expect(page.getByRole("button", { name: "Tester l'accès" })).toHaveCount(0);
 });
 
