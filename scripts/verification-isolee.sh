@@ -80,9 +80,14 @@ ENVEOF
 set -a; . "$TREE/.env"; set +a
 PY="$TREE/.venv/bin/python"; mkdir -p "$W/keys" "$W/work"
 ( cd "$TREE/backend" && "$PY" manage.py migrate --noinput && "$PY" manage.py seed_demo --reset-accounts ) > "$OUT/preparation.log" 2>&1 || { say "préparation en échec (voir preparation.log)"; exit 4; }
-start() { n=$1; shift; setsid nohup "$@" > "$OUT/$n.log" 2>&1 < /dev/null & PIDS+=("$!"); }
-( cd "$TREE/backend" && start api "$PY" manage.py runserver "127.0.0.1:$API" --noreload; start orchestrator "$PY" manage.py run_orchestrator; start worker "$PY" manage.py run_worker )
-( cd "$TREE/frontend" && { [ -d node_modules ] || npm ci --no-audit --no-fund > "$OUT/npm-ci.log" 2>&1; } && start web npm run dev -- --host 127.0.0.1 --port "$WEB" )
+# Chaque service dans sa propre session ; commande simple en arrière-plan dans le shell principal (un sous-shell perdrait PIDS, et `$!`
+# y désignerait un enveloppeur, pas le chef du groupe que `cleanup` arrête).
+start() { n=$1; d=$2; shift 2; pushd "$d" >/dev/null; setsid nohup "$@" > "$OUT/$n.log" 2>&1 < /dev/null & PIDS+=("$!"); popd >/dev/null; }
+start api "$TREE/backend" "$PY" manage.py runserver "127.0.0.1:$API" --noreload
+start orchestrator "$TREE/backend" "$PY" manage.py run_orchestrator
+start worker "$TREE/backend" "$PY" manage.py run_worker
+[ -d "$TREE/frontend/node_modules" ] || ( cd "$TREE/frontend" && npm ci --no-audit --no-fund > "$OUT/npm-ci.log" 2>&1 )
+start web "$TREE/frontend" npm run dev -- --host 127.0.0.1 --port "$WEB"
 for _ in $(seq 1 60); do curl -s -o /dev/null "http://127.0.0.1:$API/api/v1/health/ready/" && curl -s -o /dev/null "http://127.0.0.1:$WEB/" && break; sleep 2; done
 LIBS="$ROOT/.run/libs/root/usr/lib/x86_64-linux-gnu"; [ -d "$LIBS" ] && export LD_LIBRARY_PATH="$LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 say "début ci.sh ${SKIP[*]:-}"

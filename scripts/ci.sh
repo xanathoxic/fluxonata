@@ -13,7 +13,7 @@ step "typage mypy (tout le backend applicatif ; baseline vide ; toute erreur est
 step "règles d'alerte Prometheus (promtool, séries synthétiques)"; scripts/alerts-test.sh
 step "migrations sûres pour une mise à jour progressive"; "$PY/python" scripts/lint_migrations.py
 step "migrations à jour";     (cd backend && "$PY/python" manage.py makemigrations --check --dry-run)
-step "pytest";                (cd backend && "$PY/python" -m pytest)
+step "pytest (-rs : raisons des tests ignorés consignées)"; (cd backend && "$PY/python" -m pytest -rs)
 # Optionnels (chacun rejoue une suite complète, ≈ 4 à 12 min) : COMPAT_BASE_REF=<tag ou commit> (AR0.5), CI_POOLER=1 (AR1.2).
 [ -z "${COMPAT_BASE_REF:-}" ] || { step "compatibilité : code $COMPAT_BASE_REF sur le schéma courant"; scripts/compat-test.sh "$COMPAT_BASE_REF"; }
 [ "${CI_POOLER:-0}" != 1 ] || { step "pytest derrière PgBouncer (mode transaction)"; scripts/pooler-test.sh; }

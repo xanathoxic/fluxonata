@@ -16,5 +16,11 @@ jobs:
       - run: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt -c backend/constraints.txt -r backend/requirements-dev.txt
       - run: cd frontend && npm ci
       - run: docker pull python:3.13-slim
-      - run: docker compose -f infra/docker-compose.yml -p fluxonata up -d --wait db
-      - run: scripts/ci.sh
+      - run: docker compose -f infra/docker-compose.yml -p fluxonata up -d --wait db testsvc
+      - run: scripts/ci.sh --skip-e2e
+      # Chromium et ses bibliothèques système (sudo apt du runner), pour la version Playwright épinglée du projet
+      - run: cd frontend && npx playwright install --with-deps chromium
+      # E2E sur la base jetable du job : migrations, puis données de démonstration, services prêts, tests (scripts/ci-e2e.sh)
+      - run: scripts/ci-e2e.sh
+        env:
+          CI_DISPOSABLE_DB: "1"

@@ -4,6 +4,16 @@ Changements notables de Fluxonata, du plus récent au plus ancien.
 
 ## 2026-11-13
 
+**CI : tests navigateur sur une base jetable migrée**
+
+- Les tests navigateur (E2E) échouaient dans l'intégration continue avant de démarrer : la base du job est vide, aucune migration n'y était appliquée et aucun service n'était lancé. Le nouveau script `scripts/ci-e2e.sh` enchaîne désormais base disponible, migrations de cette base, services prêts (API, orchestrateur, worker, web), données de démonstration, puis tests et contrôles d'accessibilité.
+- Garde-fous : le script applique des migrations, il refuse donc de partir sans la déclaration explicite d'une base jetable (`CI_DISPOSABLE_DB=1`) ou si les ports de l'API ou du web sont déjà occupés, et il n'arrête que les services qu'il a lancés. `scripts/ci.sh` (usage de développement) n'applique toujours aucune migration.
+- Le workflow démarre aussi le service de test local, installe Chromium avec ses bibliothèques système, et la suite backend journalise désormais la raison des tests ignorés.
+- Le script de vérification isolée arrête maintenant correctement les services qu'il démarre.
+- Validation : exécutée localement sur une base vide jetable (E2E : 159 réussis, 1 ignoré) ; le déroulement complet dans GitHub Actions n'a pas encore été observé.
+
+## 2026-11-13
+
 **Consolidation : qualité du code, typage, tests, accessibilité, contrat d'API, exploitation et chaîne d'approvisionnement (sans nouvelle version de l'application)**
 
 Qualité du code et typage
