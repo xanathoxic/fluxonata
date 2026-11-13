@@ -1,5 +1,6 @@
 import { AiJobsTray } from "./components/AiJobsTray";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { useHeadingTitle } from "./components/useHeadingTitle";
 import { PHONE, useMediaQuery } from "./components/useMediaQuery";
 import { ToastProvider } from "./components/Toast";
 import { CatalogRunDetailPage, CatalogRunsPage } from "./pages/catalog/CatalogRuns";
@@ -58,12 +59,14 @@ function store(key: string, value: string) {
 
 export function App() {
   const qc = useQueryClient();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPath, setMenuPath] = useState<string | null>(null); // page sur laquelle le menu a été ouvert : un changement de page le referme
   const [searching, setSearching] = useState(false);
   const phone = useMediaQuery(PHONE);
   const [collapsed, setCollapsed] = useState(stored("orch.sidebar") === "collapsed"); // desktop: icon-only rail
   const location = useLocation();
-  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useHeadingTitle();
+  const menuOpen = menuPath === location.pathname;
+  const setMenuOpen = (open: boolean) => setMenuPath(open ? location.pathname : null);
   const meQuery = useQuery<Me, ApiError>({
     queryKey: ["me"],
     queryFn: () => api<Me>("/auth/me/"),
@@ -82,7 +85,7 @@ export function App() {
     if (!phone) return;
     const label = () => document.querySelectorAll("table.adm-table").forEach((t) => {
       const heads = [...t.querySelectorAll("thead th")].map((h) => (h.querySelector(".sr-only") ? "" : (h.textContent ?? "").trim()));
-      t.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => { if (td instanceof HTMLElement && td.dataset.label !== (heads[i] ?? "")) td.dataset.label = heads[i] ?? ""; }));
+      t.querySelectorAll("tbody tr").forEach((tr) => { [...tr.children].forEach((td, i) => { if (td instanceof HTMLElement && td.dataset.label !== (heads[i] ?? "")) td.dataset.label = heads[i] ?? ""; }); });
     });
     label();
     const mo = new MutationObserver(label);

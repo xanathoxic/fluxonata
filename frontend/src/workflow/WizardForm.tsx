@@ -52,6 +52,7 @@ export function WizardForm({ schema, form, values, onChange, errors = {}, disabl
         <nav className="wizard-steps" aria-label="Étapes du formulaire">
           <ol>
             {steps.map((s, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
               <li key={i} aria-current={i === idx ? "step" : undefined} className={i === idx ? "current" : ""}>
                 <span aria-hidden="true">{done.has(i) ? "✔" : i + 1}</span> <span>{s.title}{done.has(i) ? <span className="sr-only"> (terminée)</span> : null}</span>
               </li>

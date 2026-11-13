@@ -16,7 +16,12 @@ import { RunnersPanel } from "./runners/RunnersPanel";
 export function AdminPage() {
   const { can, workspace } = useApp();
   const [tab, setTab] = useState("health");
-  if (!can("administer")) return <p role="alert">L'administration est réservée aux administrateurs et responsables d'espace.</p>;
+  if (!can("administer")) return (
+    <>
+      <PageHeader title="Administration" />
+      <p role="alert">L'administration est réservée aux administrateurs et responsables d'espace.</p>
+    </>
+  );
   return (
     <>
       <PageHeader title="Administration" description={`Espace « ${workspace.name} » : membres, jetons, politiques, journal d'audit et assistant IA.`} />

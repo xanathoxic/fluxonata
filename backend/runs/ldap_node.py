@@ -9,6 +9,7 @@ import base64
 import logging
 import re
 import time
+from typing import Literal
 
 from audit.models import record
 from core import netsec
@@ -16,7 +17,7 @@ from vault.external import ExternalVaultError
 
 log = logging.getLogger("fluxonata.ldap")
 MAX_ROWS = 1000
-SCOPES = {"sub": "SUBTREE", "one": "LEVEL", "base": "BASE"}
+SCOPES: dict[str, Literal["BASE", "LEVEL", "SUBTREE"]] = {"sub": "SUBTREE", "one": "LEVEL", "base": "BASE"}
 PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 
 
@@ -169,7 +170,7 @@ def execute(sr) -> tuple[dict | None, dict | None]:
             size_limit=spec["max_rows"] + 1,
             time_limit=spec["timeout"],
         )
-        entries = [e for e in ldap.response if e.get("type") == "searchResEntry"]
+        entries = [e for e in ldap.response or [] if e.get("type") == "searchResEntry"]
         ldap.unbind()
     except LDAPException as exc:
         name = type(exc).__name__

@@ -119,6 +119,7 @@ export function TestTab({ name, slug, spec: draft }: { name: string; slug: strin
         <ControlInput field={field} id="fb-test" value={value} lookup={lookup} error={result.problem || undefined} onChange={setValue} /></div>
       {result.problem ? <p role="status" className="field-error">{result.problem}</p> : <p role="status" className="hint">Valeur acceptée.</p>}
       <h3>Valeur remise au workflow</h3>
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
       <pre className="ctl-json" aria-label="Valeur produite par le test">{pretty(result.value ?? null)}</pre>
     </section>
   );

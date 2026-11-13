@@ -168,7 +168,7 @@ function refsOf(n: Node, out: Set<string>): Set<string> {
   if (n.k === "ref") out.add(n.v);
   else if (n.k === "neg") refsOf(n.a, out);
   else if (n.k === "bin") { refsOf(n.a, out); refsOf(n.b, out); }
-  else if (n.k === "call") n.args.forEach((a) => refsOf(a, out));
+  else if (n.k === "call") n.args.forEach((a) => { refsOf(a, out); });
   return out;
 }
 

@@ -7,7 +7,7 @@ from django.utils import timezone
 from ai import jobs
 from ai.models import AiJob, AiPolicy
 from tests.conftest import client_for, make_user
-from tests.test_ai import BASE, ai_ws, cfg  # noqa: F401
+from tests.test_ai import BASE
 from workflows.models import Workflow
 
 URL = f"{BASE}/ai/draft-jobs/"

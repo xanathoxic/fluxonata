@@ -222,7 +222,7 @@ def _check_parts(raw) -> list:
         )
     out = []
     for f in raw:
-        item = {k: str(f[k])[:200] for k in ("field", "filename", "content_type") if f.get(k)}
+        item: dict[str, str | None] = {k: str(f[k])[:200] for k in ("field", "filename", "content_type") if f.get(k)}
         if f.get("file"):
             item["file_id"] = files.file_id_of(f["file"])
             if item["file_id"] is None:
@@ -368,7 +368,7 @@ def claim_next() -> StepRun | None:
         )
         if sr is None:
             return None
-        sr.http_job = {**sr.http_job, "state": "running", "claimed_at": timezone.now().isoformat()}
+        sr.http_job = {**(sr.http_job or {}), "state": "running", "claimed_at": timezone.now().isoformat()}
         sr.save(update_fields=["http_job"])
         return sr
 
@@ -492,7 +492,7 @@ def xml_to_data(text: str):
     if "<!DOCTYPE" in head or "<!ENTITY" in text.upper():
         return None
     try:
-        root = ElementTree.fromstring(text)  # noqa: S314
+        root = ElementTree.fromstring(text)  # noqa: S314 - DOCTYPE et ENTITY refusés ci-dessus ; réponse bornée par max_bytes
     except ElementTree.ParseError:
         return None
 
@@ -545,6 +545,8 @@ def _paginate(spec: dict, url: str, headers: dict, secrets: list, signer=None) -
         result, error, lower = _send(spec, target, headers, secrets, signer)
         if error:
             return None, error
+        if result is None:
+            return None, {"code": "HTTP_ERROR", "message": "Aucune réponse reçue.", "next_step": "Réessayez."}
         last = result
         if not result["ok"]:
             return result, None  # the failing page is returned as it is (status, body)
@@ -573,7 +575,12 @@ def _paginate(spec: dict, url: str, headers: dict, secrets: list, signer=None) -
                 break
         if n == max_pages:
             last["truncated"] = True
-    assert last is not None
+    if last is None:  # inatteignable : max_pages est validé entre 1 et MAX_PAGES ; garde explicite plutôt qu'assertion
+        return None, {
+            "code": "PAGINATION_EMPTY",
+            "message": "Aucune page n'a été lue.",
+            "next_step": "Vérifiez la pagination de l'étape.",
+        }
     return {**last, "body": items, "pages": n}, None
 
 
@@ -593,6 +600,8 @@ def _fail_if(rule: dict, result: dict) -> dict | None:
 
 def execute(sr: StepRun) -> tuple[dict | None, dict | None]:
     """Sends the request of a step. Returns (result, error)."""
+    if sr.http_job is None:
+        raise ValueError("L'étape n'a pas de requête à envoyer.")
     return execute_spec(sr.http_job["spec"], sr.run.workspace, sr.run.environment_id, sr.run, step_id=sr.node_id)
 
 
@@ -704,14 +713,16 @@ def process_one() -> bool:
         result, error = None, {"code": "HTTP_ERROR", "message": "Erreur interne pendant l'appel.", "next_step": ""}
     # only a step still waiting for this very call takes the outcome (a cancelled run keeps its own state)
     StepRun.objects.filter(pk=sr.pk, status=StepRun.Status.WAITING, http_job__state="running").update(
-        http_job={**sr.http_job, "state": "done", "result": result, "error": error}
+        http_job={**(sr.http_job or {}), "state": "done", "result": result, "error": error}
     )
     return True
 
 
 def lease_expired(job: dict) -> bool:
     at = job.get("claimed_at")
-    return bool(at) and timezone.now() - datetime.fromisoformat(at) > LEASE
+    if not at:
+        return False
+    return timezone.now() - datetime.fromisoformat(at) > LEASE
 
 
 def run_loop(worker_id: str, stop=None, poll_seconds: float = 1.0) -> None:

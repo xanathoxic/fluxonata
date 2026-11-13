@@ -203,6 +203,7 @@ export function ServiceTry({ kind, spec, config }: { kind: Kind; spec: ControlSp
           {r.options.length === 0 && <li>Aucune option dans cette réponse.</li>}
         </ul>
       )}
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
       {!problem && r && "value" in r && <pre className="ctl-json" aria-label="Valeur lue">{JSON.stringify(r.value ?? null, null, 2)}</pre>}
     </section>
   );

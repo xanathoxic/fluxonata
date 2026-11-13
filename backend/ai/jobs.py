@@ -151,7 +151,7 @@ def process(job: AiJob) -> None:
                 provider_name=payload.get("provider"),
             )
             result = {"outline": outline, "usage": service.usage_since(job.workspace, before)}
-            outcome = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
+            outcome: dict[str, object] = {"status": AiJob.Status.SUCCEEDED, "result": result, "error": None}
             progress.report("done", "Le plan est prêt : relisez-le.", state="done", pct=100)
             raise _Finished(outcome)
         if (

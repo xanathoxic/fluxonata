@@ -124,7 +124,10 @@ def test_run_filters_export_and_comparison(ws, world):
     bad = publish(ws, "cassee", [node("s", action="boom")], [], user=user)
     failed = drain(launch(ws, bad, user))
     c = client_for(user)
-    ids = lambda **q: {r["id"] for r in c.get(f"{BASE}/workflow-runs/", q).data["results"]}  # noqa: E731
+
+    def ids(**q):
+        return {r["id"] for r in c.get(f"{BASE}/workflow-runs/", q).data["results"]}
+
     assert ids(status="failed") == {str(failed.id)}
     assert (
         ids(q="cass") == {str(failed.id)}

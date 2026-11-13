@@ -54,6 +54,7 @@ export function FormTab() {
         {enabled && (
           <>
             {steps.map((s, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
               <fieldset key={i} className="card-lite">
                 <legend>Étape {i + 1}</legend>
                 <div className="field"><label htmlFor={`fs-t-${i}`}>Titre de l'étape</label><input id={`fs-t-${i}`} value={s.title} onChange={(e) => patch(i, { title: e.target.value })} /></div>

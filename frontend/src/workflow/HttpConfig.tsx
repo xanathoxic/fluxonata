@@ -50,7 +50,8 @@ export function ParamField({ prm, value, onChange }: { prm: IntegrationParam; va
 }
 
 function IntegrationConfig({ node, onUpdate, integ, conns }: { node: GraphNode; onUpdate: (patch: Partial<GraphNode>) => void; integ: Integration; conns: { name: string; label: string; kind: string }[] }) {
-  const op = integ.operations.find((o) => o.id === node.operation) ?? integ.operations[0]!;
+  const op = integ.operations.find((o) => o.id === node.operation) ?? integ.operations[0];
+  if (!op) return null; // une intégration sans opération n'a rien à configurer
   const usable = conns.filter((c) => c.kind === integ.connection.kind);
   const params = node.params ?? {};
   return (
@@ -65,7 +66,7 @@ function IntegrationConfig({ node, onUpdate, integ, conns }: { node: GraphNode; 
         {usable.length === 0 && <p className="hint">Aucune connexion de ce type : créez-en une dans Connexions (type « {integ.connection.kind} », adresse {integ.connection.config.base_url}).</p>}</div>
       <div className="field">
 <HelpTip>{op.description} ({op.method} {op.path})</HelpTip><label htmlFor="int-op">Opération</label>
-        <select id="int-op" value={op.id} onChange={(e) => { const o = integ.operations.find((x) => x.id === e.target.value)!; onUpdate({ operation: o.id, params: {}, name: `${integ.name} — ${o.name}` }); }}>
+        <select id="int-op" value={op.id} onChange={(e) => { const o = integ.operations.find((x) => x.id === e.target.value); if (!o) return; onUpdate({ operation: o.id, params: {}, name: `${integ.name} — ${o.name}` }); }}>
           {integ.operations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select></div>
       {op.params.map((prm) => <ParamField key={`${op.id}-${prm.name}`} prm={prm} value={params[prm.name]} onChange={(v) => { const next = { ...params }; if (v === undefined) delete next[prm.name]; else next[prm.name] = v; onUpdate({ params: next }); }} />)}
@@ -86,6 +87,7 @@ export function HttpConfig({ node, onUpdate }: { node: GraphNode; onUpdate: (pat
   const current = http.find((c) => c.name === node.connection);
   const integ = node.integration ? integrations.data?.results.find((i) => i.slug === node.integration) : undefined;
   if (integ) return <IntegrationConfig node={node} onUpdate={onUpdate} integ={integ} conns={http} />;
+  const pg = node.pagination;
   return (
     <>
       <div className="field">
@@ -123,16 +125,16 @@ export function HttpConfig({ node, onUpdate }: { node: GraphNode; onUpdate: (pat
           <option value="cursor">Par curseur</option>
           <option value="link">Par lien « suivant » (en-tête Link)</option>
         </select></div>
-      {node.pagination && (
+      {pg && (
         <>
           <div className="field"><label htmlFor="http-pg-items">Chemin de la liste dans la réponse (vide si la réponse est la liste)</label>
-            <input id="http-pg-items" value={node.pagination.items_path ?? ""} placeholder="data.items" onChange={(e) => onUpdate({ pagination: { ...node.pagination!, items_path: e.target.value } })} /></div>
-          {node.pagination.type === "cursor" && <div className="field"><label htmlFor="http-pg-next">Chemin du curseur suivant dans la réponse</label>
-            <input id="http-pg-next" value={node.pagination.next_path ?? ""} placeholder="meta.next" onChange={(e) => onUpdate({ pagination: { ...node.pagination!, next_path: e.target.value } })} /></div>}
-          {(node.pagination.type === "page" || node.pagination.type === "offset") && <div className="field"><label htmlFor="http-pg-size">Taille de page (facultatif)</label>
-            <input id="http-pg-size" type="number" min={1} value={node.pagination.page_size ?? ""} onChange={(e) => onUpdate({ pagination: { ...node.pagination!, page_size: e.target.value ? Number(e.target.value) : undefined } })} /></div>}
+            <input id="http-pg-items" value={pg.items_path ?? ""} placeholder="data.items" onChange={(e) => onUpdate({ pagination: { ...pg, items_path: e.target.value } })} /></div>
+          {pg.type === "cursor" && <div className="field"><label htmlFor="http-pg-next">Chemin du curseur suivant dans la réponse</label>
+            <input id="http-pg-next" value={pg.next_path ?? ""} placeholder="meta.next" onChange={(e) => onUpdate({ pagination: { ...pg, next_path: e.target.value } })} /></div>}
+          {(pg.type === "page" || pg.type === "offset") && <div className="field"><label htmlFor="http-pg-size">Taille de page (facultatif)</label>
+            <input id="http-pg-size" type="number" min={1} value={pg.page_size ?? ""} onChange={(e) => onUpdate({ pagination: { ...pg, page_size: e.target.value ? Number(e.target.value) : undefined } })} /></div>}
           <div className="field"><label htmlFor="http-pg-max">Nombre maximal de pages (1 à 50)</label>
-            <input id="http-pg-max" type="number" min={1} max={50} value={node.pagination.max_pages ?? 10} onChange={(e) => onUpdate({ pagination: { ...node.pagination!, max_pages: Number(e.target.value) } })} /></div>
+            <input id="http-pg-max" type="number" min={1} max={50} value={pg.max_pages ?? 10} onChange={(e) => onUpdate({ pagination: { ...pg, max_pages: Number(e.target.value) } })} /></div>
         </>
       )}
       <div className="field">

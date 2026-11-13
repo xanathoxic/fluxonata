@@ -2,6 +2,7 @@
 
 import json
 from datetime import timedelta
+from typing import Any, cast
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -304,7 +305,9 @@ class PromotionSerializer(serializers.ModelSerializer):
 
     def get_can_decide(self, obj) -> bool:
         u = self.context["request"].user
-        policies = self.context.setdefault(
+        policies = cast(
+            "dict[str, Any]", self.context
+        ).setdefault(  # DRF fournit toujours un dict ; le stub le type en Mapping
             "_policies", {}
         )  # AR1.6 : la politique est lue une fois par espace, pas une fois par demande
         if obj.workspace_id not in policies:

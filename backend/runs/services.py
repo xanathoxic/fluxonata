@@ -22,7 +22,7 @@ from . import proposed
 from .models import Attempt, Execution, ExecutionEvent
 
 S = Execution.Status
-ALLOWED = {
+ALLOWED: dict[str, set[str]] = {
     S.QUEUED: {S.RUNNING, S.CANCELLED},
     S.RUNNING: {S.QUEUED, S.SUCCEEDED, S.FAILED, S.CANCELLED},
     S.SUCCEEDED: set(),

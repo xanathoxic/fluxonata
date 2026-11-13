@@ -2,6 +2,43 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-11-13
+
+**Consolidation : qualité du code, typage, tests, accessibilité, contrat d'API, exploitation et chaîne d'approvisionnement (sans nouvelle version de l'application)**
+
+Qualité du code et typage
+- Le typage Python (mypy) couvre désormais tout le backend applicatif, sans erreur connue et avec une base de référence vide ; une erreur de l'outil n'est jamais lue comme une absence de régression.
+- Le linter du frontend (Biome) est en place et bloquant sur tout le code TypeScript ; quelques suppressions locales restent justifiées au cas par cas dans le code.
+- Les règles de lint Python s'appliquent aussi aux scripts, workers, tests et exemples, et les exemptions globales ont été réduites ; les alertes de sécurité du linter (règles S) restent visibles et ne sont pas toutes traitées.
+- Des cas limites jusque-là implicites (états inattendus, connexions sans secret, adresses d'outils non http/https) sont rendus explicites et testés.
+
+Tests
+- Ajout de tests pour les comportements modifiés, avec des contrôles négatifs pour les principaux correctifs ; les essais E2E enregistrent leurs données de façon reproductible sur base neuve.
+- La couverture du frontend est mesurée à titre informatif, sans seuil.
+
+Accessibilité
+- Zones de lecture défilantes nommées et atteignables au clavier, groupes de contrôles nommés, titre de document propre à chaque page, focus des dialogues et retour à l'ouvreur corrigés, commandes segmentées et séparateurs utilisables au clavier.
+- Limite : aucun essai avec un lecteur d'écran réel n'a été fait ; les contrôles automatisés (axe) et les tests clavier ne le remplacent pas.
+
+Contrat d'API
+- Le schéma OpenAPI (`docs/openapi.json`) est complété et régénéré ; seize réponses y étaient décrites par le schéma de la requête et le sont maintenant par leur réponse réelle, vérifiée contre les réponses des points d'accès. Aucun comportement ni nom publié n'est modifié.
+- Limite : 22 avertissements de nommage (énumérations, identifiants d'opération en double) subsistent ; les corriger renommerait des types ou méthodes de clients générés.
+
+Exploitation
+- Règles d'alerte Prometheus et configuration d'exemple, testées sur des séries synthétiques.
+- Exercice de restauration sur une base jetable, avec conteneur de base paramétrable (valeur par défaut inchangée).
+- Notification d'échec des tâches planifiées (sauvegarde, essai de restauration) : script et modèle systemd fournis, testés contre une destination factice, non activés par défaut.
+- Les écritures de brouillon de l'éditeur sont mises en file, ce qui évite un conflit avec lui-même sur un serveur lent.
+
+Sécurité et chaîne d'approvisionnement
+- Actions GitHub épinglées par empreinte, droits minimaux (`contents: read`) pour le workflow de CI, dépendances Python exactes dans l'image et la CI, fichier `.env` créé en 600.
+- Images de base des Dockerfiles et images externes des fichiers Compose épinglées par condensat, avec un script de contrôle et de rafraîchissement.
+- Limite connue, inchangée : en topologie compacte et par rôles, le worker détient à la fois le socket Docker et la clé du coffre ; seule la topologie par agents sépare ces deux privilèges (voir `docs/ARCHITECTURE.md`). Ce journal ne prétend à aucune garantie de sécurité absolue.
+
+Mise à niveau
+- PostgreSQL passe à l'image 17-alpine épinglée (version 17.12) et Python à 3.13-slim épinglée (3.13.18) : au prochain `docker compose up`, le conteneur de base est recréé une fois, le volume est conservé. Un retour à une version mineure antérieure de PostgreSQL sur un volume déjà démarré n'est pas pris en charge : sauvegardez avant la mise à niveau.
+- Validation : exécutée localement, dans un environnement isolé (suite backend, suite frontend, E2E avec axe, audits des dépendances, analyse de secrets). L'intégration continue distante n'a pas encore été consultée pour ce commit.
+
 ## 2026-11-12
 
 **Tests E2E remis d'aplomb, message de recherche vide de « Mes exécutions »**

@@ -78,7 +78,8 @@ describe("McpAssistantSection", () => {
     });
     mount();
     await userEvent.click(await screen.findByRole("button", { name: "Révoquer" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "Révoquer" }).at(-1)!);
+    const revoke = screen.getAllByRole("button", { name: "Révoquer" });
+    await userEvent.click(revoke[revoke.length - 1] as HTMLElement);
     await waitFor(() => expect(calls.some((c) => c.startsWith("DELETE") && c.endsWith("/me/mcp-tokens/7/"))).toBe(true));
   });
 });

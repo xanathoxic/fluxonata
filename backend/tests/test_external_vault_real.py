@@ -39,7 +39,7 @@ def _api(address, method, path, body=None, token=ROOT):
         data=json.dumps(body).encode() if body is not None else None,
         headers={"X-Vault-Token": token, "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 - serveur Vault de test, adresse issue de l'environnement du test
         raw = resp.read()
     return json.loads(raw) if raw else {}
 

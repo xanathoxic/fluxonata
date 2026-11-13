@@ -1,0 +1,16 @@
+{
+  "bloquants": [
+    "core/",
+    "fluxonata/",
+    "catalog/",
+    "formbuilder/",
+    "tenancy/",
+    "vault/",
+    "workflows/",
+    "triggers/",
+    "runs/",
+    "bundles/",
+    "ai/"
+  ],
+  "fichiers": {}
+}

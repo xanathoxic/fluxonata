@@ -1,3 +1,4 @@
+import { keyed } from "./keyed";
 /** Page numbers with ellipses, previous / next and a page-size choice. 1-based pages; shows « 26–50 sur 130 ». */
 export function Pagination({ total, page, pageSize, onPage, onPageSize, sizes = [10, 25, 50, 100], label = "Pagination" }: {
   total: number; page: number; pageSize: number; onPage: (p: number) => void; onPageSize: (n: number) => void; sizes?: number[]; label?: string;
@@ -16,9 +17,9 @@ export function Pagination({ total, page, pageSize, onPage, onPageSize, sizes = 
       <span className="pager-info" role="status">{from}–{to} sur {total}</span>
       <div className="pager-nums">
         <button type="button" onClick={() => onPage(cur - 1)} disabled={cur <= 1} aria-label="Page précédente">‹</button>
-        {nums.map((n, i) => n === "…"
-          ? <span key={`e${i}`} className="pager-gap" aria-hidden="true">…</span>
-          : <button key={n} type="button" className={n === cur ? "pager-cur" : ""} aria-current={n === cur ? "page" : undefined} aria-label={`Page ${n}`} onClick={() => onPage(n)}>{n}</button>)}
+        {keyed(nums, (n) => String(n)).map(({ item: n, key }) => n === "…"
+          ? <span key={key} className="pager-gap" aria-hidden="true">…</span>
+          : <button key={key} type="button" className={n === cur ? "pager-cur" : ""} aria-current={n === cur ? "page" : undefined} aria-label={`Page ${n}`} onClick={() => onPage(n)}>{n}</button>)}
         <button type="button" onClick={() => onPage(cur + 1)} disabled={cur >= pages} aria-label="Page suivante">›</button>
       </div>
       <label className="pager-size">Par page

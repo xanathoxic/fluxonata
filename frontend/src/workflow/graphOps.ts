@@ -208,7 +208,7 @@ export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<st
 
   // 1. order inside each layer: barycentre of the neighbours' rank, a few sweeps down then up
   const rank = new Map<string, number>();
-  const rerank = (l: string[]) => l.forEach((id, i) => rank.set(id, i));
+  const rerank = (l: string[]) => { l.forEach((id, i) => { rank.set(id, i); }); };
   layers.forEach(rerank);
   const mean = (xs: number[], fallback: number) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : fallback);
   const sweep = (idxs: number[], nb: Map<string, string[]>) => {
@@ -227,11 +227,11 @@ export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<st
   const place = (l: string[], want: (id: string, i: number) => number) => {
     const ws = l.map(want);
     const ys: number[] = [];
-    ws.forEach((w, i) => ys.push(i === 0 ? w : Math.max(w, (ys[i - 1] ?? 0) + GRID_Y)));
+    ws.forEach((w, i) => { ys.push(i === 0 ? w : Math.max(w, (ys[i - 1] ?? 0) + GRID_Y)); });
     const shift = mean(ws.map((w, i) => w - (ys[i] ?? w)), 0); // pushed apart: recentre the layer on what its nodes wanted
-    l.forEach((id, i) => y.set(id, (ys[i] ?? 0) + shift));
+    l.forEach((id, i) => { y.set(id, (ys[i] ?? 0) + shift); });
   };
-  layers.forEach((l, li) => place(l, (id, i) => (li % bandLayers === 0 ? i * GRID_Y : mean((preds.get(id) ?? []).filter((p) => y.has(p)).map((p) => y.get(p) ?? 0), i * GRID_Y))));
+  layers.forEach((l, li) => { place(l, (id, i) => (li % bandLayers === 0 ? i * GRID_Y : mean((preds.get(id) ?? []).filter((p) => y.has(p)).map((p) => y.get(p) ?? 0), i * GRID_Y))); });
   for (let li = depth - 2; li >= 0; li--) {
     if (li % bandLayers === bandLayers - 1) continue; // the next layer is on another band
     const l = layers[li] ?? [];

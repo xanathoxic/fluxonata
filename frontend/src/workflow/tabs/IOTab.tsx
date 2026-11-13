@@ -25,6 +25,7 @@ export function IOTab() {
             <thead><tr><th scope="col">Identifiant</th><th scope="col">Libellé</th><th scope="col">Type</th><th scope="col">Obligatoire</th><th scope="col">Valeur par défaut</th><th scope="col">Description</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {rows.map((r, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
                 <tr key={i}>
                   <td><label className="sr-only" htmlFor={`in-n-${i}`}>Identifiant technique de l'entrée {i + 1}</label><input id={`in-n-${i}`} value={r.name} pattern="[a-z][a-z0-9_]*" onChange={(e) => write(rows.map((x, k) => (k === i ? { ...x, name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") } : x)))} /></td>
                   <td><label className="sr-only" htmlFor={`in-t-${i}`}>Libellé de {r.name}</label><input id={`in-t-${i}`} value={r.schema.title ?? ""} onChange={(e) => patchRow(i, { schema: { title: e.target.value } })} /></td>
@@ -46,6 +47,7 @@ export function IOTab() {
       </Section>
       <Section title="Sorties" hint="Valeurs renvoyées à la fin du workflow (expressions sur les résultats des étapes).">
         {outputs.map(([k, v], i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
           <div className="edge-row" key={i}>
             <label className="sr-only" htmlFor={`out-k-${i}`}>Nom de la sortie {i + 1}</label>
             <input id={`out-k-${i}`} value={k} onChange={(e) => setGraph({ ...graph, outputs: Object.fromEntries(outputs.map(([kk, vv], j) => (j === i ? [e.target.value, vv] : [kk, vv]))) })} />

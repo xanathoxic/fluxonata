@@ -154,6 +154,7 @@ export function OpsPage() {
   const d = q.data;
   const overview = (
     <>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <div className="ops-filters" role="group" aria-label="Filtres">
         <div className="field"><label htmlFor="op-d">Période</label><select id="op-d" value={days} onChange={(e) => setDays(Number(e.target.value))}><option value={1}>24 heures</option><option value={7}>7 jours</option><option value={30}>30 jours</option><option value={90}>90 jours</option></select></div>
         <div className="field"><label htmlFor="op-e">Environnement</label><select id="op-e" value={env} onChange={(e) => setEnv(e.target.value)}><option value="">Tous</option><option value="prod">Production</option><option value="test">Recette</option><option value="dev">Développement</option></select></div>

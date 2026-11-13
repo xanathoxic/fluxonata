@@ -50,6 +50,7 @@ describe("liste double : champ « Cases multiples »", () => {
     const u = userEvent.setup();
     const def: FormDefinition = { version: 1, sections: [{ id: "s", title: "S", fields: [
       { key: "mode", type: "select", label: "Mode", options: [{ value: "edit", label: "Modifier" }, { value: "lock", label: "Verrouiller" }] },
+      // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
       { key: "m", type: "checkbox_list", label: "Membres", display: "dual", options: OPTIONS, rules: [{ when: { field: "mode", op: "equals", value: "lock" }, then: [{ do: "readonly" }], else: [{ do: "editable" }] }] },
     ] }] };
     render(<Harness definition={def} />);
@@ -105,20 +106,21 @@ describe("liste double : contrôle personnalisé « liste à cocher »", () => {
   });
 });
 
+const ws = { slug: "team-a", name: "Équipe A", role: "designer", permissions: ["view", "edit"], environments: [] };
+const ctx = { me: { username: "dana", is_platform_admin: false, workspaces: [ws] }, workspace: ws, environment: "test", setWorkspace: () => undefined, setEnvironment: () => undefined, can: () => true } as Ctx;
+function Props({ start }: { start: FormField }) {
+  const [field, setField] = useState<FormField>(start);
+  return (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AppContext.Provider value={ctx}>
+        <FieldProperties field={field} earlier={[]} inputs={[]} connections={[]} onChange={setField} />
+        <output aria-label="champ">{JSON.stringify(field)}</output>
+      </AppContext.Provider>
+    </QueryClientProvider>
+  );
+}
+
 describe("propriétés d'un champ « Cases multiples »", () => {
-  const ws = { slug: "team-a", name: "Équipe A", role: "designer", permissions: ["view", "edit"], environments: [] };
-  const ctx = { me: { username: "dana", is_platform_admin: false, workspaces: [ws] }, workspace: ws, environment: "test", setWorkspace: () => undefined, setEnvironment: () => undefined, can: () => true } as Ctx;
-  function Props({ start }: { start: FormField }) {
-    const [field, setField] = useState<FormField>(start);
-    return (
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <AppContext.Provider value={ctx}>
-          <FieldProperties field={field} earlier={[]} inputs={[]} connections={[]} onChange={setField} />
-          <output aria-label="champ">{JSON.stringify(field)}</output>
-        </AppContext.Provider>
-      </QueryClientProvider>
-    );
-  }
   const current = () => JSON.parse(screen.getByLabelText("champ").textContent ?? "{}") as FormField;
 
   it("propose l'affichage en liste double, et le retire en revenant aux cases à cocher", async () => {

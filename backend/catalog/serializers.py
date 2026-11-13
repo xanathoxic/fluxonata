@@ -33,7 +33,7 @@ class ActionVersionSerializer(serializers.ModelSerializer):
 class ActionSerializer(serializers.ModelSerializer):
     latest_version = serializers.SerializerMethodField()
     contract_complete = serializers.SerializerMethodField()
-    owner = serializers.SlugRelatedField(slug_field="username", read_only=True)
+    owner: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="username", read_only=True)
 
     class Meta:
         model = Action

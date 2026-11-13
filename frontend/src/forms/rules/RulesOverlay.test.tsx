@@ -6,6 +6,7 @@ import { RulesOverlay } from "./RulesOverlay";
 
 const action: FormField = { key: "action", type: "radio", label: "Action", options: [{ value: "ajouter", label: "Ajouter" }, { value: "retirer", label: "Retirer" }] };
 // la forme SIMPLE d'une condition : un seul {champ, opérateur, valeur}, sans groupe (ce que le serveur et le MCP acceptent)
+// biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
 const simple: FormField = { key: "membres", type: "checkbox_list", label: "Membres", rules: [{ name: "Pas pour un ajout", when: { field: "action", op: "equals", value: "ajouter" }, then: [{ do: "hide" }], else: [{ do: "show" }] }] };
 
 describe("RulesOverlay", () => {
@@ -20,7 +21,7 @@ describe("RulesOverlay", () => {
     // et la modifier fonctionne (la règle devient un groupe d'une condition)
     await u.selectOptions(screen.getByLabelText("Condition 1 : valeur"), "retirer");
     await u.click(screen.getByRole("button", { name: "Appliquer" }));
-    const rule = (onApply.mock.calls[0]?.[0] as FormField).rules?.[0];
+    const rule = (onApply.mock.calls[0]?.[0] as FormField | undefined)?.rules?.[0];
     expect(rule?.when).toEqual({ op: "all", items: [{ field: "action", op: "equals", value: "retirer" }] });
   });
 
@@ -32,7 +33,7 @@ describe("RulesOverlay", () => {
     expect(screen.getAllByRole("button", { name: "Ajouter : Mettre en lecture seule" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Ajouter : Rendre modifiable" }).length).toBeGreaterThan(0);
     await u.click(screen.getByRole("button", { name: "Appliquer" }));
-    const rule = (onApply.mock.calls[0]?.[0] as FormField).rules?.[0];
+    const rule = (onApply.mock.calls[0]?.[0] as FormField | undefined)?.rules?.[0];
     expect(rule?.then).toEqual([{ do: "readonly" }]);
     expect(rule?.else).toEqual([{ do: "editable" }]);
   });

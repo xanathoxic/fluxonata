@@ -1,5 +1,6 @@
 [Unit]
 Description=Sauvegarde planifiée de Fluxonata (base + artefacts, avec rotation)
+OnFailure=fluxonata-notify@%n.service
 After=docker.service
 
 [Service]

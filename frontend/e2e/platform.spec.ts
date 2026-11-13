@@ -47,6 +47,7 @@ test("administrateur : compte de service et jeton affiché une seule fois, puis 
   await tokDlg.getByRole("button", { name: "Créer le jeton" }).click();
   const box = page.locator(".onetime");
   await expect(box).toContainText("ne sera plus jamais affiché");
+  // biome-ignore lint/performance/useDomNodeTextContent: méthode Playwright `innerText()` (texte rendu, tel que la personne le lit), pas la propriété DOM — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
   const token = (await box.locator("code").innerText()).trim();
   expect(token.startsWith("orch_")).toBe(true);
   await expectNoA11yViolations(page);

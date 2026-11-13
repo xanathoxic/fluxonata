@@ -202,7 +202,7 @@ def _nginx_map(text: str, header: str, value: str) -> str:
         if m:
             return re.sub(
                 r"\$\{(\w+)\}",
-                lambda g: m.group(g.group(1)) if g.group(1) in m.groupdict() else "[jeton]",
+                lambda g, m=m: m.group(g.group(1)) if g.group(1) in m.groupdict() else "[jeton]",
                 replacement.strip('"'),
             )
     return value

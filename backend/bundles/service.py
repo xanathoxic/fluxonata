@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from typing import TypedDict
 
 from django.db import transaction
 from rest_framework import serializers
@@ -177,10 +178,19 @@ def _item(kind, slug, version, status, *messages):
     return {"kind": kind, "slug": slug, "version": version, "status": status, "messages": list(messages)}
 
 
-def import_package(workspace, user, data: bytes, *, apply: bool, strategy: str = "abort") -> dict:
+class _Rapport(TypedDict, total=False):
+    package: dict | None
+    items: list[dict]
+    errors: list[str]
+    applied: bool
+    can_apply: bool
+    signature: dict
+
+
+def import_package(workspace, user, data: bytes, *, apply: bool, strategy: str = "abort") -> _Rapport:
     """Validate (and optionally apply) an archive. Always returns a report; raises ImportRefused only inside
     the transaction machinery to roll back."""
-    report = {"package": None, "items": [], "errors": [], "applied": False}
+    report: _Rapport = {"package": None, "items": [], "errors": [], "applied": False}
     try:
         manifest, files = archive.read(data)
     except archive.PackageError as exc:

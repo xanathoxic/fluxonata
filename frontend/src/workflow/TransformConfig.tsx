@@ -23,6 +23,7 @@ function Rows({ label, rows, onChange, hint, valueLabel }: { label: string; rows
   return (
     <fieldset className="bare"><legend>{label}</legend>
       {entries.map(([k, v], i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
         <div key={i} className="field field-inline">
           <input aria-label={`Nom du champ ${i + 1}`} value={k} placeholder="nom" onChange={(e) => rename(k, e.target.value)} />
           <input aria-label={`${valueLabel} du champ ${i + 1}`} value={String(v ?? "")} placeholder="{{ item.valeur }}" onChange={(e) => onChange({ ...rows, [k]: e.target.value })} />
@@ -64,6 +65,7 @@ export function TransformConfig({ node, onUpdate }: { node: GraphNode; onUpdate:
         <Text items={node.items} id="tr-gby" label="Regrouper selon" value={node.by} onChange={(v) => set({ by: v })} placeholder="item.service" hint={per} />
         <fieldset className="bare"><legend>Calculs par groupe (le nombre d'éléments est toujours fourni : count)</legend>
           {aggs.map((a, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <div key={i} className="field field-inline">
               <input aria-label={`Nom du calcul ${i + 1}`} value={a.name} placeholder="total" onChange={(e) => set({ aggregates: aggs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
               <select aria-label={`Fonction du calcul ${i + 1}`} value={a.fn} onChange={(e) => set({ aggregates: aggs.map((x, j) => (j === i ? { ...x, fn: e.target.value } : x)) })}>{FNS.map((f) => <option key={f}>{f}</option>)}</select>

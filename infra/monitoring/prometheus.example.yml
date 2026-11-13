@@ -1,0 +1,19 @@
+# Exemple de configuration Prometheus pour Fluxonata (à adapter). Le jeton est celui de `ORCH_METRICS_TOKEN`,
+# lu dans un fichier à droits restreints : jamais écrit ici.
+global:
+  scrape_interval: 30s
+rule_files:
+  - fluxonata.rules.yml
+scrape_configs:
+  - job_name: fluxonata
+    metrics_path: /api/v1/metrics/
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/fluxonata-metrics-token
+    static_configs:
+      - targets: ["fluxonata.example.org:443"]   # adresse publique de l'API (ou du service nginx)
+    scheme: https
+# Destinataires : à déclarer dans Alertmanager (e-mail, chat, astreinte) ; ce dépôt n'en configure aucun.
+# alerting:
+#   alertmanagers:
+#     - static_configs: [{ targets: ["alertmanager:9093"] }]

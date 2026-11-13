@@ -22,7 +22,7 @@ x-pooled: &pooled   # api, orchestrator, worker : via PgBouncer (mode transactio
   ORCH_DB_POOLED: "1"
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
     restart: unless-stopped
     environment:
       POSTGRES_DB: fluxonata
@@ -127,7 +127,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}   # same path on host and in the container: the daemon mounts it into action containers
   testsvc:
-    image: python:3.13-slim
+    image: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
     restart: unless-stopped
     command: ["python", "/srv/server.py"]
     volumes: ["./testsvc/server.py:/srv/server.py:ro"]

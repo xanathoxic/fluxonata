@@ -31,6 +31,7 @@ export function Overlay({ title, onClose, children, variant = "drawer", footer, 
   useInertBackground(); // declared before the focus trap: inert is lifted before focus returns to the opener
   useFocusTrap(ref, onClose);
   return createPortal(
+    // biome-ignore lint/a11y/noStaticElementInteractions: rideau cliquable pour fermer à la souris ; au clavier, Échap ferme via useFocusTrap
     <div className={`overlay-backdrop overlay-${variant}${wide ? " overlay-wide" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={description ? `${id}-d` : undefined} tabIndex={-1} className="overlay-panel">
         <header className="overlay-head">

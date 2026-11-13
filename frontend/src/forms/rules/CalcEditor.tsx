@@ -65,6 +65,7 @@ export function CalcEditor({ field, others, formula, onFormula }: Props) {
 
         <h3><FormIcon name="braces" size={14} /> Fonctions</h3>
         {groups.map((g) => (
+          // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
           <div key={g} className="cc-fgroup" role="group" aria-label={g}>
             <span className="cc-gname">{g}</span>
             {FUNCTION_DOCS.filter((d) => d.group === g).map((d) => <button key={d.name} type="button" className="rl-chip" title={`${d.usage} — ${d.help} Ex. ${d.example}`} onClick={() => insert(`${d.name}(`)}>{d.name}</button>)}

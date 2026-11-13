@@ -1,6 +1,5 @@
 """What a step hands to a called workflow must satisfy THAT workflow's contract (a run would be refused otherwise)."""
 
-from tests.test_engine import ws  # noqa: F401  (fixture)
 from tests.wf_helpers import STR, node, publish, schema
 from workflows.validation import validate_graph
 

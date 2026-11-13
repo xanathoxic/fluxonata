@@ -5,8 +5,8 @@ Authorization is decided here, never by the UI."""
 import re
 
 from django.http import Http404
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
-from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -80,6 +80,28 @@ def _row(run: WorkflowRun) -> dict:
     }
 
 
+# --- Réponse réelle d'un lancement, décrite pour le schéma OpenAPI (documentation seulement) ---
+class CatalogRunWorkflowSerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    version = serializers.CharField()
+
+
+class CatalogRunProgressSerializer(serializers.Serializer):
+    done = serializers.IntegerField()
+    total = serializers.IntegerField()
+
+
+class CatalogRunRowSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    workflow = CatalogRunWorkflowSerializer()
+    status = serializers.CharField()
+    status_label = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    finished_at = serializers.DateTimeField(allow_null=True)
+    progress = CatalogRunProgressSerializer()
+
+
 def _mine(user, ws):
     return (
         WorkflowRun.objects.filter(workspace=ws, requested_by=user, parent_step__isnull=True)
@@ -88,12 +110,10 @@ def _mine(user, ws):
     )
 
 
-class CatalogRunListView(ListAPIView):
-    """Your own runs, most recent first."""
+class CatalogRunListView(APIView):
+    """Your own runs, most recent first (a plain object `{results}`, not paginated)."""
 
-    pagination_class = None
-
-    def list(self, request, workspace):
+    def get(self, request, workspace):
         ws = catalog_workspace(request.user, workspace)
         return Response({"results": [_row(r) for r in _mine(request.user, ws)[:200]]})
 
@@ -118,6 +138,7 @@ class CatalogRunDetailView(APIView):
         )
 
 
+@extend_schema_serializer(component_name="CatalogRunStart")
 class StartSerializer(serializers.Serializer):
     environment = serializers.ChoiceField(choices=["test", "prod", "dev"])
     inputs = serializers.JSONField(default=dict)
@@ -129,6 +150,7 @@ class CatalogStartView(APIView):
 
     serializer_class = StartSerializer
 
+    @extend_schema(responses={200: CatalogRunRowSerializer, 202: CatalogRunRowSerializer})
     def post(self, request, workspace, slug):
         ws = catalog_workspace(request.user, workspace)
         ser = StartSerializer(data=request.data)

@@ -9,7 +9,9 @@ const definition: FormDefinition = {
   version: 1,
   sections: [{ id: "s", title: "S", fields: [
     { key: "mode", type: "select", label: "Mode", options: [{ value: "edit", label: "Modifier" }, { value: "lock", label: "Verrouiller" }] },
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     { key: "nom", type: "text", label: "Nom", rules: [{ when: { field: "mode", op: "equals", value: "lock" }, then: [{ do: "readonly" }], else: [{ do: "editable" }] }] },
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     { key: "choix", type: "radio", label: "Choix", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], rules: [{ when: { field: "mode", op: "equals", value: "lock" }, then: [{ do: "readonly" }] }] },
   ] }],
 };

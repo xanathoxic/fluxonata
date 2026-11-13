@@ -6,6 +6,7 @@ import { Overlay } from "../../components/Overlay";
 import { formatDate } from "../../i18n";
 import { errorText } from "../../lib";
 import { Kpi } from "../OpsCharts";
+import { ReadRegion } from "../../components/ReadRegion";
 
 interface Cfg {
   address: string; namespace: string; kv_mount: string; base_prefix: string; auth_mount: string; role_id: string; secret_id_set: boolean; ca_set: boolean;
@@ -114,7 +115,7 @@ export function VaultTab() {
       )}
       {guide && (
         <Overlay wide title="Mettre Vault en place pour Fluxonata" description="À lancer par la personne qui administre Vault. Adaptez les chemins à vos moteurs." onClose={() => setGuide(false)} footer={<button type="button" className="primary" onClick={() => setGuide(false)}>Fermer</button>}>
-          <pre tabIndex={0} aria-label="Commandes Vault" className="adm-json">{GUIDE}</pre>
+          <ReadRegion className="adm-json" label="Commandes Vault">{GUIDE}</ReadRegion>
           <p className="hint">Le <code>secret_id</code> obtenu est un identifiant sensible : saisissez-le ici, il est chiffré par Fluxonata. Pensez à le renouveler selon votre politique (TTL du secret_id).</p>
         </Overlay>
       )}
@@ -123,6 +124,7 @@ export function VaultTab() {
           footer={<><button type="button" onClick={() => setEditing(null)}>Annuler</button><button type="button" className="primary" disabled={saveGrants.isPending} onClick={() => saveGrants.mutate({ workspace: editing.workspace, grants: rows.filter((r) => r.pattern.trim()).map((r) => ({ pattern: r.pattern.trim(), writable: r.writable })) })}>Enregistrer les accès</button></>}>
           {rows.length === 0 && <p className="hint">Aucun accès supplémentaire : cet espace ne voit que sa zone propre.</p>}
           {rows.map((r, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <div className="vt-grant" key={i}>
               <div className="field"><label htmlFor={`vg-${i}`}>Motif {i + 1}</label><input id={`vg-${i}`} className="mono" value={r.pattern} placeholder="secret/equipe-a/*" onChange={(e) => setRows(rows.map((x, k) => (k === i ? { ...x, pattern: e.target.value } : x)))} /></div>
               <label className="ss-mode"><input type="checkbox" checked={r.writable} onChange={(e) => setRows(rows.map((x, k) => (k === i ? { ...x, writable: e.target.checked } : x)))} /> Écriture</label>

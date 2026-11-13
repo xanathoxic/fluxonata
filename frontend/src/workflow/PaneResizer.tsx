@@ -8,6 +8,7 @@ export function PaneResizer({ side, value, min, max, label, def, onChange }: {
   const start = useRef<{ x: number; v: number } | null>(null);
   const grow = side === "left" ? 1 : -1; // moving the pointer right grows the left pane, shrinks the right one
   return (
+    // biome-ignore lint/a11y/useSemanticElements: séparateur déplaçable : le rôle `separator` focalisable n'a pas d'équivalent natif (<hr> n'est pas interactif)
     <div
       role="separator" aria-orientation="vertical" aria-label={label} aria-valuenow={value} aria-valuemin={min} aria-valuemax={max} tabIndex={0}
       className="pane-resizer" title="Glisser pour redimensionner ; double-clic : largeur par défaut"

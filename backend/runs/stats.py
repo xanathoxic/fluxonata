@@ -1,6 +1,7 @@
 """Operations figures for the dashboard (computed on demand from runs; bounded)."""
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from django.db.models import Sum
@@ -16,6 +17,14 @@ MAX_ROWS = 20000
 
 def _scoped(qs, workspace, user):
     return qs if user is None else access.visible_runs(qs, user, workspace)
+
+
+@dataclass
+class _Wf:
+    name: str = ""
+    runs: int = 0
+    failed: int = 0
+    d: list[float] = field(default_factory=list)
 
 
 def _pct(values: list[float], p: float):
@@ -49,29 +58,25 @@ def dashboard(workspace, days: int = 7, environment: str = "", user=None) -> dic
             "error",
         )[:MAX_ROWS]
     )
-    durations, by_wf, failing_steps = [], defaultdict(lambda: {"name": "", "runs": 0, "failed": 0, "d": []}), Counter()
+    durations: list[float] = []
+    by_wf: defaultdict[str, _Wf] = defaultdict(_Wf)
+    failing_steps: Counter = Counter()
     for slug, name, status, a, b, error in rows:
+        if b is None:  # le filtre `finished_at__isnull=False` l'exclut déjà
+            continue
         sec = (b - a).total_seconds()
         durations.append(sec)
         w = by_wf[slug]
-        w["name"], w["runs"] = name, w["runs"] + 1
-        w["d"].append(sec)
+        w.name, w.runs = name, w.runs + 1
+        w.d.append(sec)
         if status == "failed":
-            w["failed"] += 1
+            w.failed += 1
             if isinstance(error, dict) and error.get("failed_step"):
                 failing_steps[(slug, error["failed_step"])] += 1
-    top_failing = sorted(
-        (
-            {"workflow": s, "name": w["name"], "runs": w["runs"], "failed": w["failed"]}
-            for s, w in by_wf.items()
-            if w["failed"]
-        ),
-        key=lambda r: (-r["failed"], r["workflow"]),
-    )[:8]
-    slowest = sorted(
-        ({"workflow": s, "name": w["name"], "runs": w["runs"], "p95_s": _pct(w["d"], 0.95)} for s, w in by_wf.items()),
-        key=lambda r: (-(r["p95_s"] or 0), r["workflow"]),
-    )[:8]
+    failing = sorted(((s, w) for s, w in by_wf.items() if w.failed), key=lambda sw: (-sw[1].failed, sw[0]))[:8]
+    top_failing = [{"workflow": s, "name": w.name, "runs": w.runs, "failed": w.failed} for s, w in failing]
+    slow = sorted(by_wf.items(), key=lambda sw: (-(_pct(sw[1].d, 0.95) or 0), sw[0]))[:8]
+    slowest = [{"workflow": s, "name": w.name, "runs": w.runs, "p95_s": _pct(w.d, 0.95)} for s, w in slow]
     ai = {"tokens": 0, "calls": 0}
     try:
         from ai.models import AiCall

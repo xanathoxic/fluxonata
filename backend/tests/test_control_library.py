@@ -106,7 +106,10 @@ def test_a_sample_reply_shows_what_a_forms_reading_of_a_service_would_give_witho
     spec = {"version": 1, "mode": "items", "dynamic": True}
     sample = {"rows": [{"id": "a", "n": "A", "g": "G"}, {"id": "b", "n": "B"}], "sel": ["a"]}
     url = f"{URL}source-preview/"
-    ask = lambda **k: c.post(url, {"spec": spec, "sample": sample, **k}, format="json")  # noqa: E731
+
+    def ask(**k):
+        return c.post(url, {"spec": spec, "sample": sample, **k}, format="json")
+
     r = ask(kind="options", config=src)
     assert r.status_code == 200 and r.data["options"] == [
         {"value": "a", "label": "A", "group": "G"},

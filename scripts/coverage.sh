@@ -23,7 +23,7 @@ case "$("$PY" -c 'import platform;print(platform.python_version())')" in
   *) echo "ATTENTION : interpréteur $("$PY" --version) alors que la CI vise Python ${CI_PY:-?} ; la mesure n'est pas celle de la CI (COV_PYTHON=...)." >&2 ;;
 esac
 "$PY" -m venv "$TMP/venv"
-"$TMP/venv/bin/pip" install -q --disable-pip-version-check -r "$WT/backend/requirements.txt" -r "$WT/backend/requirements-dev.txt" -r "$ROOT/backend/requirements-coverage.txt"
+"$TMP/venv/bin/pip" install -q --disable-pip-version-check -r "$WT/backend/requirements.txt" -c "$WT/backend/constraints.txt" -r "$WT/backend/requirements-dev.txt" -r "$ROOT/backend/requirements-coverage.txt"
 PW="$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')"
 docker run -d --name "$NAME" --label fluxonata-coverage="$$" -e POSTGRES_USER=fluxonata -e POSTGRES_PASSWORD="$PW" -e POSTGRES_DB=fluxonata -p 127.0.0.1::5432 postgres:17-alpine >/dev/null
 PORT="$(docker port "$NAME" 5432/tcp | head -1 | sed 's/.*://')"

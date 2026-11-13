@@ -154,7 +154,9 @@ def _order(ip: str) -> tuple[int, str]:
 
 def resolve(host: str) -> list[str]:
     try:
-        return sorted({info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)}, key=_order)
+        return sorted(
+            {str(info[4][0]) for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)}, key=_order
+        )
     except socket.gaierror:
         raise UnsafeURL("Nom d'hôte introuvable.") from None
 

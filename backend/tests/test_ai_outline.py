@@ -1,7 +1,5 @@
 """The plan the assistant envisages BEFORE generating: cheap, plain words, validated/edited/refused by the person."""
 
-import json
-
 import pytest
 
 from ai import jobs, service
@@ -9,7 +7,7 @@ from ai.models import AiJob, AiPolicy
 from ai.providers import FakeProvider
 from ai.speclint import NAME_TYPED
 from tests.conftest import client_for
-from tests.test_ai import BASE, ai_ws, cfg  # noqa: F401
+from tests.test_ai import BASE, cfg
 from tests.test_ai_edit import Scripted
 
 OUTLINE = {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, login } from "./helpers";
+import { expectNoA11yViolations, login, boxOf } from "./helpers";
 
 /** Enregistrement automatique des éditeurs (contrôle et formulaire) : enregistré tout seul, conflit, reprise locale, publication après modification. */
 
@@ -93,7 +93,8 @@ test("formulaire : la fenêtre de publication résume les changements et suggèr
   await call(page, "POST", "/form-library/", { slug, name: `Résumé ${slug}`, definition: two });
   expect((await call(page, "POST", `/form-library/${slug}/publish/`, {})).status).toBe(201);
   const cur = (await call(page, "GET", `/form-library/${slug}/`)).data;
-  const one = { ...two, sections: [{ ...two.sections[0]!, fields: [two.sections[0]!.fields[0]] }] };
+  const section = two.sections[0];
+  const one = { ...two, sections: [{ ...section, fields: [section?.fields[0]] }] };
   expect((await call(page, "PATCH", `/form-library/${slug}/`, { definition: one, revision: cur.draft_revision })).status).toBe(200);
   await page.goto(`/library/forms/${slug}/design`);
   await page.getByRole("button", { name: "Publier", exact: true }).click();
@@ -125,10 +126,10 @@ test("éditeur de formulaire : sélectionner un champ ne décale pas la grille ;
   await page.goto(`/library/forms/${slug}/design`);
   const grid = page.getByRole("group", { name: "Grille de la section Demande" });
   await expect(grid).toBeVisible();
-  const y0 = (await grid.boundingBox())!.y;
+  const y0 = (await boxOf(grid)).y;
   await page.getByRole("button", { name: /^Sujet/ }).click();
   await expect(page.getByLabel("Libellé", { exact: true })).toBeVisible();
-  expect((await grid.boundingBox())!.y).toBe(y0); // la barre d'outils garde sa place : rien ne bouge
+  expect((await boxOf(grid)).y).toBe(y0); // la barre d'outils garde sa place : rien ne bouge
   const panel = page.getByRole("complementary", { name: "Propriétés" });
   for (const g of ["Contenu", "Validation", "Logique"]) await expect(panel.locator("summary", { hasText: g })).toBeVisible();
   await expect(panel.getByRole("button", { name: /conditions/i })).toBeVisible();
@@ -165,4 +166,32 @@ test("contrôle : « Aperçu & test » avec mode développeur (JSON masqué par 
   await expect(page.getByRole("region", { name: "Test du contrôle" })).toHaveCount(0);
   await page.goto("/library/controls");
   await expect(page.getByRole("row", { name: new RegExp(`Fusion ${slug}`) })).toContainText("1 formulaire");
+});
+
+test("workflow : un serveur lent n'est pas pris pour un conflit (une seule écriture à la fois, aucun refus 409)", async ({ page }) => {
+  await login(page);
+  const slug = `lent-${Date.now().toString().slice(-6)}`;
+  await call(page, "POST", "/workflows/", { slug, name: `Lent ${slug}` });
+  // chaque écriture du brouillon met 3 s à répondre, plus que le délai de l'enregistrement automatique (1,2 s)
+  let inflight = 0;
+  let maxInflight = 0;
+  const statuses: number[] = [];
+  await page.route(`**/workflows/${slug}/draft/`, async (route) => {
+    if (route.request().method() !== "PUT") return route.continue();
+    inflight += 1;
+    maxInflight = Math.max(maxInflight, inflight);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const response = await route.fetch();
+    inflight -= 1;
+    statuses.push(response.status());
+    await route.fulfill({ response });
+  });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.getByLabel("Rechercher un élément").fill("Attente simulée");
+  await page.getByRole("button", { name: "Ajouter : Attente simulée", exact: true }).click();
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Quelqu'un d'autre a enregistré ce brouillon/)).toHaveCount(0);
+  expect(maxInflight, "une seule écriture à la fois").toBe(1);
+  expect(statuses.length, "au moins une écriture a eu lieu").toBeGreaterThan(0);
+  expect(statuses.every((s) => s === 200), `aucun refus : ${statuses.join(",")}`).toBe(true);
 });

@@ -13,7 +13,9 @@ const isPublic = location.pathname.startsWith("/f/") || location.pathname.starts
 
 /** Public form addresses load only the form page: no session call, and none of the application's code is sent to a visitor. */
 async function start() {
-  const root = createRoot(document.getElementById("root")!);
+  const rootElement = document.getElementById("root");
+  if (!rootElement) throw new Error("Élément #root introuvable dans la page.");
+  const root = createRoot(rootElement);
   const page = isPublic ? (
     <Routes>
       <Route path="/f/:token" element={<PublicFormPage />} />
@@ -21,7 +23,8 @@ async function start() {
     </Routes>
   ) : (
     (() => {
-      const { App } = app!;
+      if (!app) throw new Error("L'application n'est pas chargée.");
+      const { App } = app;
       return <App />;
     })()
   );

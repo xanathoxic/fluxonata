@@ -89,6 +89,7 @@ export function Palette({ actions, integrations = [], selectedName, onAdd }: Pro
         <input id="pal-q" type="search" placeholder="Rechercher un élément" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {f === "" && (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="seg" role="group" aria-label="Type d'élément">
           {sections.map((s) => <button key={s.id} type="button" className="seg-btn" aria-pressed={section === s.id} onClick={() => setSection(s.id)}>{s.label}<span className="seg-n">{s.id === "steps" ? "" : s.n}</span></button>)}
         </div>

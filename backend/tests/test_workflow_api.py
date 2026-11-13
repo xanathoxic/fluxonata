@@ -151,7 +151,6 @@ def test_unbounded_loop_and_recursion(ws, world):
 
 def test_cross_workspace_action_is_not_visible(ws, world):
     make_action(world["ws_b"], "echo")
-    other = Workflow  # noqa: F841
     # an action that only exists in team-b must be unknown from team-a
     from catalog.models import Action
 

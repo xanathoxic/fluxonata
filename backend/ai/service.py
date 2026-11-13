@@ -12,6 +12,7 @@ import ast
 import json
 import re
 from datetime import timedelta
+from typing import Any, NotRequired, TypedDict
 
 import jsonschema
 from django.db import transaction
@@ -103,7 +104,16 @@ STEP_TYPES_RULES = (
     "(déclarée en sortie, la liste en liaison), puis {{ steps.<id>.output.ips_texte }} ; fournis aussi toutes les entrées "
     "obligatoires du workflow appelé (workflows du bloc context : inputs, required)."
 )
-PROMPTS = {
+
+
+class _Invite(TypedDict):
+    version: str
+    format: str
+    instr: str
+    min_tokens: NotRequired[int]
+
+
+PROMPTS: dict[str, _Invite] = {
     "catalog_search": {
         "version": "1.0",
         "format": '{"matches":[{"slug":"...","reason":"..."}]}',
@@ -380,9 +390,10 @@ def build_provider(cfg: AiProvider):
     if cfg.kind == AiProvider.Kind.LOCAL_OPENAI:
         return OpenAICompatProvider(cfg.base_url, cfg.model, _api_key(cfg))
     if cfg.kind == AiProvider.Kind.CLOUD_ANTHROPIC:
-        if cfg.secret is None:
+        key = _api_key(cfg) if cfg.secret is not None else None
+        if key is None:
             raise AiRefused("PROVIDER_NO_KEY", "Aucune clé n'est configurée pour ce fournisseur cloud.")
-        return AnthropicProvider(cfg.model, _api_key(cfg), cfg.base_url or "https://api.anthropic.com")
+        return AnthropicProvider(cfg.model, key, cfg.base_url or "https://api.anthropic.com")
     raise AiRefused("PROVIDER_UNKNOWN", "Type de fournisseur inconnu.")
 
 
@@ -447,9 +458,9 @@ def run_prompt(
     try:
         parsed = _parse_json(comp.text)
     except AiRefused as invalid:
-        exc = invalid
+        refusal = invalid
         if comp.output_tokens >= limit * 0.95:  # the model ran out of room: say so, the fix is a setting, not a retry
-            exc = AiRefused(
+            refusal = AiRefused(
                 "MODEL_OUTPUT_TRUNCATED",
                 "La réponse du modèle a été coupée (limite de longueur atteinte) : demandez un workflow plus court "
                 "ou augmentez « jetons maximum » du fournisseur dans Administration → Assistant IA.",
@@ -463,10 +474,10 @@ def run_prompt(
             spec,
             comp=comp,
             status="invalid",
-            code=exc.code,
+            code=refusal.code,
             content={"output": comp.text} if pol.log_content else None,
         )
-        raise exc from None
+        raise refusal from None
     _log(
         workspace,
         user,
@@ -522,7 +533,7 @@ def catalog_search(workspace, user, query: str, **kw):
     ctx = {"catalog": _offered_workflows(workspace, user)}
     out = run_prompt(workspace, user, "catalog_search", data=query[:500], context=ctx, **kw)
     known = {a["slug"]: a for a in ctx["catalog"]}
-    matches = []
+    matches: list[dict] = []
     for m in (out.get("matches") if isinstance(out, dict) else None) or []:
         if isinstance(m, dict) and m.get("slug") in known and len(matches) < 5:  # unknown slugs are discarded
             matches.append(
@@ -565,7 +576,10 @@ def run_diagnosis(run) -> dict:
     steps = list(StepRun.objects.filter(run=run).order_by("seq", "id"))
     by_node = {st.node_id: st for st in steps}
     failed = next((st for st in reversed(steps) if st.status == "failed"), None)
-    name = lambda nid: nodes.get(nid, {}).get("name") or nid  # noqa: E731
+
+    def name(nid):
+        return nodes.get(nid, {}).get("name") or nid
+
     diag: dict = {
         "timeline": [{"step": name(st.node_id), "status": st.status} for st in steps][:25],
         "not_reached": [name(i) for i in nodes if i not in by_node and nodes[i]["type"] not in ("start", "end")][:10],
@@ -618,7 +632,7 @@ def run_diagnosis(run) -> dict:
 def explain_error(
     workspace, user, *, code: str, message: str, step_name: str = "", diagnosis: dict | None = None, **kw
 ):
-    ctx = {"code": code[:40], "step": step_name[:100]}
+    ctx: dict[str, object] = {"code": code[:40], "step": step_name[:100]}
     if diagnosis:
         ctx["diagnosis"] = diagnosis
     out = run_prompt(workspace, user, "explain_error", data=message[:600], context=ctx, **kw)
@@ -636,6 +650,18 @@ def _spans(source: str, edits: list) -> str:
         head, tail = lines[l1 - 1][:c1], lines[l2 - 1][c2:]
         lines[l1 - 1 : l2] = [head + text.encode() + tail]
     return b"\n".join(lines).decode()
+
+
+def _list_of(d: dict, key: str) -> list:
+    """`d[key]` si c'est une liste, sinon une liste vide (sortie de modèle : rien n'est garanti)."""
+    value = d.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _dict_of(d: dict, key: str) -> dict:
+    """`d[key]` si c'est un objet, sinon un objet vide."""
+    value = d.get(key)
+    return value if isinstance(value, dict) else {}
 
 
 def _autofix_script(d: dict) -> dict:
@@ -664,9 +690,9 @@ def _autofix_script(d: dict) -> dict:
             tree = ast.parse(code)
         except SyntaxError:
             return d
-        edits = []
+        edits: list[tuple[int, int, int, int, str]] = []
         for x in ast.walk(tree):
-            if not isinstance(x, ast.Attribute) or x.end_lineno is None:
+            if not isinstance(x, ast.Attribute) or x.end_lineno is None or x.end_col_offset is None:
                 continue
             mid = x.value
             if (
@@ -681,17 +707,19 @@ def _autofix_script(d: dict) -> dict:
                 edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, f"{mid.id}['{x.attr}']"))
         declared = {o["name"] for o in d["outputs"]}
         for x in ast.walk(tree):  # outputs['total'] = v  (the output IS the variable `total`)
-            key = x.slice if isinstance(x, ast.Subscript) else None
+            if not isinstance(x, ast.Subscript):
+                continue
+            key = x.slice
             if (
-                key is not None
-                and isinstance(x.ctx, ast.Store)
+                isinstance(x.ctx, ast.Store)
                 and isinstance(x.value, ast.Name)
                 and x.value.id == "outputs"
                 and isinstance(key, ast.Constant)
                 and key.value in declared
                 and x.end_lineno is not None
+                and x.end_col_offset is not None
             ):
-                edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, key.value))
+                edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, str(key.value)))
         if edits:
             code = _spans(code, edits)
     else:
@@ -706,10 +734,10 @@ def _draft_script(n: dict) -> dict:
     workflow cannot be published until a person has read it (validation rule `ai_review_required`)."""
     outs = [
         {"name": str(o["name"])[:60], "type": o.get("type") if isinstance(o.get("type"), str) else "string"}
-        for o in (n.get("outputs") if isinstance(n.get("outputs"), list) else [])[:10]
+        for o in _list_of(n, "outputs")[:10]
         if isinstance(o, dict) and isinstance(o.get("name"), str)
     ]
-    binds = n.get("bindings") if isinstance(n.get("bindings"), dict) else {}
+    binds = _dict_of(n, "bindings")
     timeout = n.get("timeout_seconds")
     return _autofix_script(
         {
@@ -828,7 +856,7 @@ def sanitize_draft(raw, workspace, slug: str):
     """Reduce an untrusted model graph to a safe structure. Never trust types, sizes or references."""
     if not isinstance(raw, dict):
         raise AiRefused("MODEL_OUTPUT_INVALID", "Le brouillon proposé n'est pas un objet.", 502)
-    nodes_in = raw.get("nodes") if isinstance(raw.get("nodes"), list) else []
+    nodes_in = _list_of(raw, "nodes")
     if not nodes_in or len(nodes_in) > MAX_DRAFT_NODES:
         raise AiRefused("MODEL_OUTPUT_INVALID", f"Le brouillon doit comporter 1 à {MAX_DRAFT_NODES} étapes.", 502)
     nodes = []
@@ -896,7 +924,10 @@ def _catalog_with_io(workspace) -> list[dict]:
     for c in _catalog_context(workspace):
         act = Action.objects.get(workspace=workspace, slug=c["slug"])
         v = act.latest_version()
-        props = lambda sch: {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}  # noqa: E731
+
+        def props(sch):
+            return {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}
+
         rows.append(
             {
                 **c,
@@ -941,7 +972,10 @@ def _skills_context(workspace) -> list[dict]:
         v = sk.latest_version()
         if v is None:
             continue
-        props = lambda sch: {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}  # noqa: E731
+
+        def props(sch):
+            return {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}
+
         rows.append(
             {"slug": sk.slug, "name": sk.name, "inputs": props(v.input_schema), "outputs": props(v.output_schema)}
         )
@@ -961,7 +995,10 @@ def _blocking(issues) -> list[dict]:
 
 def _touched(old: dict, new: dict) -> set:
     """Steps the model added or changed: only the problems it caused are its to repair."""
-    rows = lambda g: {r["id"]: r for r in _compact_graph(g)["nodes"]}  # noqa: E731  (what the model sees of each step)
+
+    def rows(g):
+        return {r["id"]: r for r in _compact_graph(g)["nodes"]}  # what the model sees of each step
+
     before = rows(old)
     return {i for i, r in rows(new).items() if before.get(i) != r}
 
@@ -1036,19 +1073,22 @@ def _review(workspace, user, graph: dict, request: str, ctx: dict, kw: dict, cha
     if not isinstance(raw, dict):
         return None
     ids = {n.get("id") for n in graph.get("nodes", [])}
-    step = lambda v: v if v in ids else None  # noqa: E731
+
+    def step(v):
+        return v if v in ids else None
+
     coverage, findings = [], []
-    for c in (raw.get("coverage") if isinstance(raw.get("coverage"), list) else [])[:20]:
+    for c in _list_of(raw, "coverage")[:20]:
         if isinstance(c, dict) and isinstance(c.get("requirement"), str) and c.get("status") in REVIEW_STATUSES:
             coverage.append(
                 {"requirement": c["requirement"].strip()[:200], "status": c["status"], "step": step(c.get("step"))}
             )
-    for f in (raw.get("findings") if isinstance(raw.get("findings"), list) else [])[:10]:
+    for f in _list_of(raw, "findings")[:10]:
         if isinstance(f, dict) and isinstance(f.get("message"), str) and f["message"].strip():
             sev = "error" if f.get("severity") == "error" else "warning"
             findings.append({"step": step(f.get("step")), "severity": sev, "message": f["message"].strip()[:300]})
-    for sc in (raw.get("scripts") if isinstance(raw.get("scripts"), list) else [])[:20]:
-        for o in (sc.get("outputs") if isinstance(sc, dict) and isinstance(sc.get("outputs"), list) else [])[:10]:
+    for sc in _list_of(raw, "scripts")[:20]:
+        for o in (_list_of(sc, "outputs") if isinstance(sc, dict) else [])[:10]:
             if isinstance(o, dict) and o.get("matches_request") is False and isinstance(o.get("name"), str):
                 why = str(o.get("why") or "").strip()[:200]
                 findings.append(
@@ -1147,14 +1187,12 @@ def _clean_samples(raw, graph: dict) -> list[dict]:
     """Samples the model proposed, kept only when they satisfy the workflow's input schema (a wrong one is dropped)."""
     ids = {n.get("id") for n in graph.get("nodes", [])}
     out = []
-    for s in (raw.get("samples") if isinstance(raw, dict) and isinstance(raw.get("samples"), list) else [])[
-        :MAX_SAMPLES
-    ]:
+    for s in (_list_of(raw, "samples") if isinstance(raw, dict) else [])[:MAX_SAMPLES]:
         if not isinstance(s, dict) or not dryrun.valid_inputs(graph.get("inputs"), s.get("inputs")):
             continue
         expected = [
             {"step": e["step"], "field": e["field"], "value": e["value"]}
-            for e in (s.get("expected") if isinstance(s.get("expected"), list) else [])[:8]
+            for e in _list_of(s, "expected")[:8]
             if isinstance(e, dict) and e.get("step") in ids and isinstance(e.get("field"), str) and "value" in e
         ]
         out.append({"label": str(s.get("label") or "essai")[:60], "inputs": s["inputs"], "expected": expected})
@@ -1458,7 +1496,10 @@ def _clean_outline(raw) -> dict:
     """The plan a model proposed, reduced to a bounded, plain structure the person can edit (everything is just text)."""
     if not isinstance(raw, dict):
         raise AiRefused("OUTLINE_INVALID", "Le plan proposé n'est pas exploitable.", 502)
-    rows = lambda key: raw.get(key) if isinstance(raw.get(key), list) else []  # noqa: E731
+
+    def rows(key):
+        return raw.get(key) if isinstance(raw.get(key), list) else []
+
     inputs = []
     for i in rows("inputs")[:12]:
         name = re.sub(r"[^a-z0-9_]", "_", _clip(i.get("name") if isinstance(i, dict) else "", 40).lower()).strip("_")
@@ -1520,7 +1561,7 @@ def make_outline(workspace, user, request_text: str, previous=None, feedback=Non
             for k in _skills_context(workspace)
         ],
     }
-    data = {"request": request_text[:MAX_REQUEST]}
+    data: dict[str, object] = {"request": request_text[:MAX_REQUEST]}
     if isinstance(previous, dict):
         data["previous"] = _clean_outline(previous) if previous.get("steps") else previous
     if feedback:
@@ -1559,7 +1600,7 @@ def outline_to_request(request_text: str, outline: dict) -> str:
         lines.append("Hypothèses validées par l'utilisateur :\n" + "\n".join(f"- {a}" for a in o["assumptions"]))
     answered = [
         (_clip(a.get("question"), 220), _clip(a.get("answer"), 300))
-        for a in (outline.get("answers") if isinstance(outline.get("answers"), list) else [])[:6]
+        for a in _list_of(outline, "answers")[:6]
         if isinstance(a, dict) and _clip(a.get("answer"), 300)
     ]
     if answered:
@@ -1569,7 +1610,7 @@ def outline_to_request(request_text: str, outline: dict) -> str:
 
 def build_draft(workspace, user, request_text: str, slug: str, **kw):
     """Generate, validate, correct and check a draft WITHOUT storing anything. Returns (graph, issues, check, cfg)."""
-    ctx = {
+    ctx: dict[str, list | dict] = {
         "catalog": _catalog_with_io(workspace),
         "workflows": _callable_workflows(workspace, slug, user),
         "skills": _skills_context(workspace),
@@ -1852,7 +1893,8 @@ def _clean_node(n: dict) -> dict:
 
 def _clean_cases(raw) -> list:
     """The cases of a multi-way choice: an id (what labels its exit) and a condition, in order; ids made valid and unique."""
-    out, seen = [], set()
+    out: list[dict] = []
+    seen: set[str] = set()
     for c in (raw if isinstance(raw, list) else [])[:MAX_CASES]:
         if not isinstance(c, dict):
             continue
@@ -1877,7 +1919,7 @@ def _clean_step(n: dict) -> dict:
     workflow, skill or provider exists is left to the validator every human goes through."""
     t = n["type"]
     out: dict = {}
-    inputs = n.get("inputs") if isinstance(n.get("inputs"), dict) else {}
+    inputs = _dict_of(n, "inputs")
     if t == "wait":
         out["seconds"] = _int_between(n.get("seconds"), 1, 30 * 86400) or 60
     elif t == "approval":
@@ -1963,7 +2005,7 @@ def _clean_http(n: dict) -> dict:
     integ, op = integrations.find(_text(n.get("integration"), 40), _text(n.get("operation"), 40))
     if op is not None:
         declared = {p["name"] for p in op["params"]}
-        given = n.get("params") if isinstance(n.get("params"), dict) else {}
+        given = _dict_of(n, "params")
         out.update(
             integration=integ["slug"],
             operation=op["id"],
@@ -2025,7 +2067,7 @@ def _clean_transform(n: dict) -> dict:
         }
     aggs = [
         {"name": _text(a.get("name"), 60), "fn": a.get("fn"), "expr": _bare_expr(_text(a.get("expr"), 200)) or "item"}
-        for a in (n.get("aggregates") if isinstance(n.get("aggregates"), list) else [])[:10]
+        for a in _list_of(n, "aggregates")[:10]
         if isinstance(a, dict) and a.get("fn") in transforms.AGGREGATES and _text(a.get("name"), 60)
     ]
     if aggs:
@@ -2175,7 +2217,7 @@ def sanitize_edit(raw, original: dict, workspace, slug: str):
     inputs = _draft_inputs(given) if isinstance(given, dict) and given else original.get("inputs")
     # existing workflow outputs are not the model's to rewrite (it may only add some)
     outputs = {
-        **(raw.get("outputs") if isinstance(raw.get("outputs"), dict) else {}),
+        **_dict_of(raw, "outputs"),
         **(original.get("outputs") or {}),
     }
     graph = {**original, "inputs": inputs or _draft_inputs(None), "nodes": nodes, "edges": edges, "outputs": outputs}
@@ -2302,7 +2344,7 @@ def edit_workflow(
     if kw.get("cfg") is None:
         _, kw["cfg"] = select_provider(workspace, kw.pop("provider_name", None))
     mark = _mark(workspace)
-    ctx = {
+    ctx: dict[str, list | dict] = {
         "catalog": _catalog_with_io(workspace),
         "workflows": _callable_workflows(workspace, workflow.slug, user),
         "skills": _skills_context(workspace),
@@ -2327,7 +2369,9 @@ def edit_workflow(
         proposed, op_errors = _proposal(raw, graph)
         ops = raw.get("ops") if isinstance(raw, dict) and isinstance(raw.get("ops"), list) else None
         deep = ops is None or len(ops) > 2 or any(isinstance(o, dict) and o.get("op") == "add_step" for o in ops)
-        new_graph, issues, changes = None, [], []
+        new_graph: dict | None = None
+        issues: list = []
+        changes: list = []
         if proposed is not None:
             new_graph, issues = sanitize_edit(proposed, graph, workspace, workflow.slug)
             changes = describe_changes(graph, new_graph)
@@ -2338,8 +2382,14 @@ def edit_workflow(
             if op_errors
             else NO_CHANGE_FEEDBACK
         )
-    result = {"reply": reply or "Je n'ai pas de modification à proposer.", "graph": None, "changes": [], "issues": []}
-    if changes:
+    # enveloppe JSON de la réponse : valeurs de natures différentes (texte, graphe, listes, essai à blanc, relecture)
+    result: dict[str, Any] = {
+        "reply": reply or "Je n'ai pas de modification à proposer.",
+        "graph": None,
+        "changes": [],
+        "issues": [],
+    }
+    if changes and new_graph is not None:
         check = None
         shown = {(i["step"], i["code"]) for i in ctx["issues"] if i["level"] == "error"}
         if _touched(graph, new_graph):  # a note or a variable alone is not worth a second reading
@@ -2443,7 +2493,7 @@ def _existing_slugs(model, workspace) -> list[dict]:
     return list(model.objects.filter(workspace=workspace).values("slug", "name")[:200])
 
 
-def _unique_slug(model, workspace, slug: str, fallback: str) -> tuple[str, bool]:
+def _unique_slug(model, workspace, slug: str | None, fallback: str) -> tuple[str, bool]:
     base = slug_id(str(slug or fallback), "nouveau").replace("_", "-")[:44]
     taken = set(model.objects.filter(workspace=workspace, slug__startswith=base).values_list("slug", flat=True))
     if base not in taken:
@@ -2511,7 +2561,7 @@ def propose_action(workspace, user, need: str, *, runtime: str = "python", previ
     and publishes it (the creation endpoint requires the « reviewed » confirmation for generated code)."""
     if runtime not in ACTION_RUNTIMES:
         raise AiRefused("RUNTIME_UNSUPPORTED", "Langage non proposé par l'assistant (Python ou Node.js).", 400)
-    ctx = {"runtime": runtime, "existing": _existing_slugs(Action, workspace)}
+    ctx: dict[str, object] = {"runtime": runtime, "existing": _existing_slugs(Action, workspace)}
     if isinstance(previous, dict):
         ctx["previous"] = {
             k: previous.get(k)

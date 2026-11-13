@@ -201,8 +201,12 @@ def test_the_control_field_itself_is_checked_and_typed_for_the_workflow():
 
 
 def test_conditions_may_only_test_whether_a_control_is_filled():
-    rule = lambda op, **k: [{"when": {"field": "c", "op": op, **k}, "then": [{"do": "hide"}]}]  # noqa: E731
-    d = lambda rules: definition(custom("c", ADDRESS), field("x", rules=rules))  # noqa: E731
+    def rule(op, **k):
+        return [{"when": {"field": "c", "op": op, **k}, "then": [{"do": "hide"}]}]
+
+    def d(rules):
+        return definition(custom("c", ADDRESS), field("x", rules=rules))
+
     assert formengine.check_definition(d(rule("not_empty"))) == {}
     assert formengine.check_definition(d(rule("equals", value="a")))
     ref = [{"when": {"field": "x", "op": "equals", "ref": "c"}, "then": [{"do": "hide"}]}]

@@ -80,7 +80,7 @@ describe("Mes exécutions : les états de la liste", () => {
     await screen.findByText("Redémarrer des VM");
     await userEvent.type(screen.getByLabelText("Rechercher", { exact: true }), "zzz-introuvable");
     await screen.findByText(NO_MATCH);
-    await userEvent.click(screen.getAllByRole("button", { name: "Tout effacer" })[0]!);
+    await userEvent.click(screen.getAllByRole("button", { name: "Tout effacer" })[0] as HTMLElement);
     expect(await screen.findByText("Redémarrer des VM")).toBeInTheDocument();
     expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Rechercher", { exact: true })).toHaveValue("");
@@ -89,7 +89,7 @@ describe("Mes exécutions : les états de la liste", () => {
     serve(RUNS);
     show();
     await screen.findByText("Redémarrer des VM");
-    const ok = apiAll.getMockImplementation()!;
+    const ok = apiAll.getMockImplementation() as (url?: string) => Promise<unknown>;
     apiAll.mockImplementation(async (url?: string) => { if (url?.includes("q=vm")) throw new Error("panne"); return ok(url); });
     await userEvent.type(screen.getByLabelText("Rechercher", { exact: true }), "vm");
     expect(await screen.findByRole("alert")).toBeInTheDocument();

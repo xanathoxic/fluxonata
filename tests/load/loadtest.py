@@ -64,13 +64,9 @@ def stop(p):
 class Client:
     def __init__(self):
         self.jar = http.cookiejar.CookieJar()
-        self.op = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self.jar)
-        )
+        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.op.open(f"{BASE}/auth/csrf/").read()
-        self.call(
-            "POST", "/auth/login/", {"username": "alice", "password": "demo-fluxonata"}
-        )
+        self.call("POST", "/auth/login/", {"username": "alice", "password": "demo-fluxonata"})
 
     def csrf(self):
         return next((c.value for c in self.jar if c.name == "csrftoken"), "")
@@ -138,7 +134,7 @@ def report(name, lat, errors, dur, ok):
 
 def main():
     results = []
-    api = spawn(
+    spawn(
         [
             f"{ROOT}/.venv/bin/gunicorn",
             "fluxonata.wsgi",
@@ -157,9 +153,7 @@ def main():
         except Exception:  # noqa: BLE001
             time.sleep(0.5)
     try:
-        lat, err, dur = run_load(
-            2000, 20, lambda c, i: c.call("GET", f"/workspaces/{WS}/actions/")
-        )
+        lat, err, dur = run_load(2000, 20, lambda c, i: c.call("GET", f"/workspaces/{WS}/actions/"))
         results.append(
             report(
                 "O1 lecture catalogue (20 clients)",
@@ -171,13 +165,9 @@ def main():
         )
 
         main_client = Client()
-        before = (
-            running_ids(main_client) or set()
-        )  # paused runs of the demo space must not count as load
+        before = running_ids(main_client) or set()  # paused runs of the demo space must not count as load
         slug = f"load-{int(time.time())}"
-        main_client.call(
-            "POST", f"/workspaces/{WS}/workflows/", {"slug": slug, "name": slug}
-        )
+        main_client.call("POST", f"/workspaces/{WS}/workflows/", {"slug": slug, "name": slug})
         graph = {
             "inputs": {"type": "object", "properties": {}, "required": []},
             "edges": [],
@@ -197,18 +187,17 @@ def main():
             f"/workspaces/{WS}/workflows/{slug}/draft/",
             {"graph": graph, "revision": 1},
         )
-        status, _, _ = main_client.call(
-            "POST", f"/workspaces/{WS}/workflows/{slug}/publish/", {}
-        )
+        status, _, _ = main_client.call("POST", f"/workspaces/{WS}/workflows/{slug}/publish/", {})
         assert status == 201, "publication du workflow de charge impossible"
-        start = lambda c, i: c.call(
-            "POST",
-            f"/workspaces/{WS}/workflows/{slug}/runs/",
-            {"environment": "test", "inputs": {}},
-        )  # noqa: E731
-        run_load(
-            10, 5, start
-        )  # warm-up: cold gunicorn workers / DB connections are not what O2 measures
+
+        def start(c, i):
+            return c.call(
+                "POST",
+                f"/workspaces/{WS}/workflows/{slug}/runs/",
+                {"environment": "test", "inputs": {}},
+            )
+
+        run_load(10, 5, start)  # warm-up: cold gunicorn workers / DB connections are not what O2 measures
         lat, err, dur = run_load(60, 10, start)
         results.append(
             report(
@@ -223,16 +212,12 @@ def main():
         # O3: drain queue first (the 200 runs of O2 are already queued) so that measurements start from an empty system
         orch = spawn([PY, "manage.py", "run_orchestrator"])
         drain = [spawn([PY, "manage.py", "run_worker"]) for _ in range(4)]
-        wait_idle(
-            main_client, before
-        )  # the 200 runs of O2 are processed here, outside the measurement
+        wait_idle(main_client, before)  # the 200 runs of O2 are processed here, outside the measurement
         for p in drain:
             stop(p)
         throughputs = {}
         for n_workers in (1, 4):
-            ws_procs = [
-                spawn([PY, "manage.py", "run_worker"]) for _ in range(n_workers)
-            ]
+            ws_procs = [spawn([PY, "manage.py", "run_worker"]) for _ in range(n_workers)]
             wait_idle(main_client, before)
             ids, t0 = submit_batch(main_client, slug, 24), time.perf_counter()
             done = wait_done(main_client, ids)
@@ -249,16 +234,12 @@ def main():
             for p in ws_procs:
                 stop(p)
         ratio = throughputs[4] / throughputs[1]
-        print(
-            f"[{'OK' if ratio >= 1.8 else 'KO'}] O3 passage à l'échelle 1→4 workers : ×{ratio:.2f} (objectif ≥ 1,8)"
-        )
+        print(f"[{'OK' if ratio >= 1.8 else 'KO'}] O3 passage à l'échelle 1→4 workers : ×{ratio:.2f} (objectif ≥ 1,8)")
         results.append(ratio >= 1.8)
         # O4 (informatif, sans objectif) : débit du moteur seul, sans conteneur, avec 1 orchestrateur et 1 worker.
         # Mesure ce que la plateforme absorbe quand le démarrage d'un conteneur (≈ 4,7 s, non extensible ici) n'est pas en cause.
         slug2 = f"{slug}-moteur"
-        main_client.call(
-            "POST", f"/workspaces/{WS}/workflows/", {"slug": slug2, "name": slug2}
-        )
+        main_client.call("POST", f"/workspaces/{WS}/workflows/", {"slug": slug2, "name": slug2})
         steps = [
             {
                 "id": f"s{i}",
@@ -280,9 +261,7 @@ def main():
             f"/workspaces/{WS}/workflows/{slug2}/draft/",
             {"graph": graph2, "revision": 1},
         )
-        status, _, _ = main_client.call(
-            "POST", f"/workspaces/{WS}/workflows/{slug2}/publish/", {}
-        )
+        status, _, _ = main_client.call("POST", f"/workspaces/{WS}/workflows/{slug2}/publish/", {})
         assert status == 201, "publication du workflow du moteur impossible"
         w1 = spawn([PY, "manage.py", "run_worker"])
         wait_idle(main_client, before)
@@ -300,11 +279,7 @@ def main():
     finally:
         for p in procs:
             stop(p)
-    print(
-        "\nObjectifs atteints."
-        if all(results)
-        else "\nCertains objectifs ne sont PAS atteints (voir ci-dessus)."
-    )
+    print("\nObjectifs atteints." if all(results) else "\nCertains objectifs ne sont PAS atteints (voir ci-dessus).")
     sys.exit(0 if all(results) else 1)
 
 

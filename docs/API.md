@@ -1,6 +1,6 @@
 # API
 
-Spécification complète : `docs/openapi.json` (OpenAPI 3, générée par `manage.py spectacular --format openapi-json`, 0 erreur de génération) ; en direct : `GET /api/v1/schema/`.
+Spécification complète : `docs/openapi.json` (OpenAPI 3, générée par `manage.py spectacular --format openapi-json`, 0 erreur de génération, 210 avertissements de schéma non traités : authentificateurs sans extension, serializers absents ; un test vérifie qu'il est à jour) ; en direct : `GET /api/v1/schema/`.
 Les vues sans schéma détaillé y sont documentées comme « objet JSON libre » ; les contrats importants (lancement, brouillon, publication, approbations, déclencheurs) sont typés.
 
 ## Conventions

@@ -47,7 +47,8 @@ test("un workflow de plus de 100 étapes s'ouvre, reste réactif et accessible",
   const boxes = await page.locator(".react-flow__node").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }));
   const pick = boxes.find((b) => b.x > 560 && b.x + b.w < 1230 && b.y > 300 && b.y + b.h < 680 && b.w > 3);
   expect(pick, "au moins une étape entièrement dans la fenêtre").toBeTruthy();
-  await page.mouse.click(pick!.x + pick!.w / 2, pick!.y + pick!.h / 2); // les étapes sont minuscules à cette échelle : clic par coordonnées
+  if (!pick) return; // inatteignable : l'assertion précédente a échoué
+  await page.mouse.click(pick.x + pick.w / 2, pick.y + pick.h / 2); // les étapes sont minuscules à cette échelle : clic par coordonnées
   await expect(page.getByRole("complementary").or(page.getByRole("region", { name: /étape|inspecteur/i })).first()).toBeVisible({ timeout: 10_000 });
   await expectNoA11yViolations(page);
   expect(errors, errors.join("\n")).toEqual([]);

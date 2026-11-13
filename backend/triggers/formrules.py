@@ -13,6 +13,7 @@ Conditions compare the value of an earlier field with a constant (`value`), with
 checked on one shared list of cases (`tests/fixtures/form_rules_cases.json`). What decides is the server: hidden values are
 dropped, `require` makes a field obligatory, `options` limits the accepted choices."""
 
+import operator
 import re
 
 MAX_RULES = 10
@@ -71,6 +72,9 @@ def _empty(v) -> bool:
     return v is None or v == "" or v == []
 
 
+_ORDER = {"gt": operator.gt, "gte": operator.ge, "lt": operator.lt, "lte": operator.le}
+
+
 def eval_cond(cond: dict, values: dict) -> bool:  # noqa: C901
     # the left operand: one field, or a composed value (« {prenom} {nom} »)
     left = render(cond["template"], values) if "template" in cond else values.get(cond["field"])
@@ -105,12 +109,10 @@ def eval_cond(cond: dict, values: dict) -> bool:  # noqa: C901
         return fold(text_of(left)).endswith(fold(text_of(right)))
     nl, nr = num_of(left), num_of(right)
     if nl is not None and nr is not None:
-        a, b = nl, nr
-    elif isinstance(left, str) and isinstance(right, str) and _ISO_DATE.match(left) and _ISO_DATE.match(right):
-        a, b = left, right  # ISO dates compare as text
-    else:
-        return False
-    return {"gt": a > b, "gte": a >= b, "lt": a < b, "lte": a <= b}[op]
+        return _ORDER[op](nl, nr)
+    if isinstance(left, str) and isinstance(right, str) and _ISO_DATE.match(left) and _ISO_DATE.match(right):
+        return _ORDER[op](left, right)  # ISO dates compare as text
+    return False
 
 
 def eval_node(node: dict, values: dict) -> bool:
@@ -225,9 +227,11 @@ def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int
             return {f"{path}.template": "Un {champ} de la valeur composée doit être un autre champ du formulaire."}
         src: dict = {"type": "text"}
     else:
-        src = earlier.get(cond.get("field"))
-        if src is None:
+        ref = cond.get("field")
+        found = earlier.get(ref) if isinstance(ref, str) else None  # une référence non textuelle ne désigne aucun champ
+        if found is None:
             return {f"{path}.field": "Une condition ne peut lire qu'un autre champ du formulaire."}
+        src = found
     op = cond.get("op")
     if op not in OPERATORS:
         return {f"{path}.op": "Opérateur inconnu."}

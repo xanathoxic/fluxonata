@@ -4,7 +4,6 @@ import pytest
 
 from ai import service
 from ai.plan import PlanError, compile_plan
-from tests.test_ai import ai_ws  # noqa: F401  (fixture)
 
 
 def edges(g):

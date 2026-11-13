@@ -1,3 +1,4 @@
+import { ReadRegion } from "./ReadRegion";
 /** Différences entre deux versions (format unifié) : numéros de ligne, ajouts en vert, suppressions en rouge. */
 export function DiffView({ diff, from, to }: { diff: string; from: string; to: string }) {
   let a = 0, b = 0;
@@ -10,7 +11,7 @@ export function DiffView({ diff, from, to }: { diff: string; from: string; to: s
     return { i, kind: "ctx", a: String(a++), b: String(b++), line };
   });
   return (
-    <div className="diff-view" role="region" aria-label={`Différences entre la version ${from} et la version ${to}`} tabIndex={0}>
+    <ReadRegion as="section" className="diff-view" label={`Différences entre la version ${from} et la version ${to}`}>
       <table>
         <caption className="sr-only">Différences de code entre {from} et {to}</caption>
         <tbody>
@@ -22,6 +23,6 @@ export function DiffView({ diff, from, to }: { diff: string; from: string; to: s
           ))}
         </tbody>
       </table>
-    </div>
+    </ReadRegion>
   );
 }

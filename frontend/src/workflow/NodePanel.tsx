@@ -21,6 +21,8 @@ import { ParamEditor } from "./ParamEditor";
 import { BindingsEditor, OutputsEditor } from "./ScriptParts";
 import { edgeText, NODE_LABELS, type EdgeLabel, type Graph, type GraphNode, type Issue, type SwitchCase } from "./types";
 import { HelpTip } from "../components/HelpTip";
+import { keyed } from "../components/keyed";
+import { ReadRegion } from "../components/ReadRegion";
 
 interface Props {
   graph: Graph;
@@ -56,7 +58,7 @@ export function NodePanel(p: Props) {
     <>
       {mine.length > 0 && (
         <ul className="issue-list" aria-label="Problèmes de cette étape">
-          {mine.map((i, k) => <li key={k} className={`issue issue-${i.level}`}><span aria-hidden="true">{i.level === "error" ? "✖" : "⚠"} </span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>{i.message}</li>)}
+          {keyed(mine, (i) => `${i.level}|${i.code}|${i.message}`).map(({ item: i, key }) => <li key={key} className={`issue issue-${i.level}`}><span aria-hidden="true">{i.level === "error" ? "✖" : "⚠"} </span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>{i.message}</li>)}
         </ul>
       )}
       <div className="field"><label htmlFor="node-name">Nom de l'étape</label><input id="node-name" value={node.name} onChange={(e) => onUpdate({ name: e.target.value })} /></div>
@@ -138,7 +140,7 @@ export function NodePanel(p: Props) {
             <select id="np-lang" value={node.language ?? "python"} onChange={(e) => onUpdate({ language: e.target.value as "python" | "javascript" })}>
               <option value="python">Python</option><option value="javascript">JavaScript</option></select></div>
           <button type="button" className="primary" onClick={p.onOpenScript}>{editable ? "Ouvrir l'éditeur de script" : "Voir le script"}</button>
-          <pre tabIndex={0} className="script-preview" aria-label="Aperçu du script">{(node.script ?? "").split("\n").slice(0, 14).join("\n")}</pre>
+          <ReadRegion className="script-preview" label="Aperçu du script">{(node.script ?? "").split("\n").slice(0, 14).join("\n")}</ReadRegion>
           <p className="help-row"><HelpTip caption="À savoir">Astuce : double-cliquez sur l'étape dans le schéma pour ouvrir l'éditeur.</HelpTip></p>
         </>
       ),
@@ -180,6 +182,7 @@ export function NodePanel(p: Props) {
         <div className="field">
           <p className="help-row"><HelpTip caption="À savoir">Les cas sont examinés dans l'ordre : le premier dont la condition est vraie est pris, sinon la sortie « Sinon ». Chaque cas a sa propre sortie à relier.</HelpTip></p>
           {cases.map((c, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <fieldset key={i} className="case-row">
               <legend>Cas {i + 1}</legend>
               <label htmlFor={`case-id-${i}`}>Identifiant du cas {i + 1}</label>

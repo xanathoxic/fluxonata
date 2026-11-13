@@ -115,6 +115,8 @@ def _fetch(t: PollTrigger):
     result, error = http_node.execute_spec(spec, t.workspace, t.environment_id, t)
     if error:
         return None, error["message"]
+    if result is None:
+        return None, "Le service n'a renvoyé aucune réponse."
     if not result["ok"]:
         return None, f"Le service a répondu {result['status']}."
     items = _dig(result["body"], t.items_path) if t.items_path else result["body"]
@@ -153,11 +155,15 @@ def poll_once(t: PollTrigger) -> None:
         if error:
             ok, note = False, error
         else:
-            ids = []
+            ids: list[str] = []
+            missing_id = False
             for it in items:
                 ident = _dig(it, t.id_path)
-                ids.append(None if ident is None else str(ident)[:200])
-            if any(i is None for i in ids):
+                if ident is None:
+                    missing_id = True
+                else:
+                    ids.append(str(ident)[:200])
+            if missing_id:
                 ok, note = False, "Certains éléments n'ont pas d'identifiant à l'emplacement indiqué."
             else:
                 seen = set(t.seen_ids)

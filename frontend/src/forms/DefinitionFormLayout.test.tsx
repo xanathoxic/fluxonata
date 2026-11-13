@@ -13,6 +13,7 @@ const definition: FormDefinition = {
     { key: "groupe", type: "text", label: "Groupe", layout: { row: 2, col: 1, span: 5 } },
     { key: "membres", type: "textarea", label: "Membres", layout: { row: 2, col: 6, span: 7, height: 7 } },
     { key: "utilisateur", type: "text", label: "Utilisateur", layout: { row: 3, col: 1, span: 5 },
+      // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
       rules: [{ when: { field: "action", op: "equals", value: "ajouter" }, then: [{ do: "show" }], else: [{ do: "hide" }] }] },
     { key: "motif", type: "text", label: "Motif", layout: { row: 4, col: 1, span: 5 } },
   ] }],

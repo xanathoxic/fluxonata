@@ -1,8 +1,13 @@
 import { EditorView } from "@codemirror/view";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef, useState } from "react";
+import { createRef, type RefObject, useState } from "react";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
+
+function Insert({ handle, seen }: { handle: RefObject<CodeEditorHandle | null>; seen: { line: number; col: number; lines: number }[] }) {
+  const [v, setV] = useState("a\nb");
+  return <CodeEditor ref={handle} value={v} onChange={setV} language="python" ariaLabel="Code du test" onCursor={(c) => seen.push(c)} />;
+}
 
 function Harness({ language = "python" as const }) {
   const [v, setV] = useState("x = 1");
@@ -41,11 +46,7 @@ describe("CodeEditor", () => {
   it("insère du texte au curseur par la poignée et publie la position du curseur", () => {
     const ref = createRef<CodeEditorHandle>();
     const seen: { line: number; col: number; lines: number }[] = [];
-    function Insert() {
-      const [v, setV] = useState("a\nb");
-      return <CodeEditor ref={ref} value={v} onChange={setV} language="python" ariaLabel="Code du test" onCursor={(c) => seen.push(c)} />;
-    }
-    render(<Insert />);
+    render(<Insert handle={ref} seen={seen} />);
     const view = EditorView.findFromDOM(screen.getByRole("textbox", { name: "Code du test" }).closest(".cm-editor") as HTMLElement) as EditorView;
     act(() => view.dispatch({ selection: { anchor: 2 } }));
     act(() => ref.current?.insert("vars"));

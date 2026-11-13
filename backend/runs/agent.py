@@ -33,7 +33,9 @@ DECISION_SCHEMA = {
 
 
 def tool_slugs(node: dict) -> list[str]:
-    raw = node.get("tools") if isinstance(node.get("tools"), list) else []
+    raw = node.get("tools")
+    if not isinstance(raw, list):
+        raw = []
     return [s for s in dict.fromkeys(raw) if isinstance(s, str)][:10]
 
 
@@ -225,7 +227,10 @@ def advance(run, node, sr) -> tuple | None:
         decision = last.result if isinstance(last.result, dict) else {}
         if decision.get("action") == "final":
             return _finish(state, str(decision.get("answer", "")), "done", mode)
-        slug, inputs = decision.get("tool"), decision.get("inputs") if isinstance(decision.get("inputs"), dict) else {}
+        slug = decision.get("tool")
+        inputs = decision.get("inputs")
+        if not isinstance(inputs, dict):
+            inputs = {}
         tool = tools.get(slug)
         problem = None
         if tool is None:
@@ -235,8 +240,8 @@ def advance(run, node, sr) -> tuple | None:
                 jsonschema.validate(inputs, tool["av"].input_schema)
             except jsonschema.ValidationError as exc:
                 problem = f"Entrées invalides pour {slug} : {exc.message[:200]}"
-        if problem:
-            _observe(state, str(slug), inputs, problem, False)
+        if tool is None or problem:  # (un outil inconnu a toujours un `problem`)
+            _observe(state, str(slug), inputs, problem or "", False)
         elif node.get("approval") == "always" or (node.get("approval") == "effectful" and tool["effectful"]):
             Approval.objects.create(
                 step_run=sr,
@@ -251,7 +256,7 @@ def advance(run, node, sr) -> tuple | None:
             return None
         else:
             state["pending"] = {"tool": slug, "inputs": inputs}
-            obs = _run_tool(run, node, sr, state, tool, slug, inputs)
+            obs = _run_tool(run, node, sr, state, tool, str(slug), inputs)
             if obs is None:
                 sr.agent_state = state
                 sr.save()

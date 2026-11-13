@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { type FormEvent, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError } from "../../api";
 import { Badge, Confirm } from "../../components/AdminUi";
@@ -22,6 +22,7 @@ import "../../forms/forms.css";
 import { TestTab } from "./TestTab";
 import { Switch } from "./DesignerUi";
 import { ControlDesigner, type Cfg, type Meta } from "./ControlDesigner";
+import { keyed } from "../../components/keyed";
 
 const split = (spec: ControlSpec): { cfg: Cfg; row: FormDefinition } => { const { parts, ...cfg } = spec; return { cfg, row: rowDefinition(parts) }; };
 const join = (cfg: Cfg, row: FormDefinition): ControlSpec => ({ ...cfg, parts: (row.sections[0]?.fields ?? []) as FormField[] });
@@ -60,7 +61,9 @@ function ControlEditor({ slug }: { slug: string }) {
     setCfg(s.cfg); setRow(s.row); setMeta(m);
     setBaseline({ value: { meta: m, spec: join(s.cfg, s.row) }, revision: d.draft_revision });
   };
-  useEffect(() => { if (detail.data && row === null) load(detail.data); }, [detail.data, row]); // eslint-disable-line react-hooks/exhaustive-deps
+  // `load` est recréée à chaque rendu ; seules les données reçues et l'absence de brouillon déclenchent le chargement
+  const loadReceived = useEffectEvent((received: NonNullable<typeof detail.data>) => load(received));
+  useEffect(() => { if (detail.data && row === null) loadReceived(detail.data); }, [detail.data, row]);
 
   const spec = useMemo(() => (cfg && row ? join(cfg, row) : null), [cfg, row]);
   // validity, as the server sees it (debounced)
@@ -112,7 +115,7 @@ function ControlEditor({ slug }: { slug: string }) {
         {auto.state === "conflict" && <p role="alert" className="conflict">Ce contrôle a été modifié ailleurs. <button type="button" onClick={() => void reload()}>Recharger la version du serveur</button> <button type="button" onClick={() => void auto.overwrite()}>Écraser avec ma version</button></p>}
         {auto.state === "invalid" && <p role="alert" className="field-error">Le serveur refuse ce brouillon : {auto.message || "contenu invalide"}. Vos modifications restent dans ce navigateur ; corrigez-les, l'enregistrement reprendra tout seul.</p>}
         {auto.recover && <p role="alert" className="conflict">Des modifications non enregistrées ont été retrouvées dans ce navigateur. <button type="button" onClick={auto.acceptRecovery}>Les récupérer</button> <button type="button" onClick={auto.discardRecovery}>Les ignorer</button></p>}
-        {bad > 0 && <ul className="fb-problems" aria-label="Problèmes du contrôle">{(problems ?? []).slice(0, 4).map((p, i) => <li key={i}>{p}</li>)}{bad > 4 && <li>… et {bad - 4} autre(s)</li>}</ul>}
+        {bad > 0 && <ul className="fb-problems" aria-label="Problèmes du contrôle">{keyed((problems ?? []).slice(0, 4), (p) => p).map(({ item: p, key }) => <li key={key}>{p}</li>)}{bad > 4 && <li>… et {bad - 4} autre(s)</li>}</ul>}
       </>}>
       <div role="tabpanel" aria-label={active} className="tabpanel">
         {active === "design" && <ControlDesigner meta={meta} cfg={cfg} row={row} edit={edit} problems={problems} onMeta={change(setMeta)} onCfg={change(setCfg)} onRow={change(setRow)} />}
@@ -167,6 +170,7 @@ function Preview({ name, slug, spec }: { name: string; slug: string; spec: Contr
       )}
       {result.problem ? <p role="status" className="field-error">{result.problem}</p> : <p role="status" className="hint">Valeur acceptée.</p>}
       <h3>Valeur remise au workflow</h3>
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
       <pre className="ctl-json" aria-label="Valeur produite">{JSON.stringify(result.value ?? null, null, 2)}</pre>
     </section>
   );

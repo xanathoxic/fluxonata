@@ -32,7 +32,7 @@ describe("champ calculé dans le formulaire", () => {
   ] }] } as FormDefinition;
 
   it("évalue d'abord ce que le champ lit, où qu'il soit placé", () => {
-    expect(evaluationOrder(def.sections[0]!.fields).map((x) => x.key)).toEqual(["prix", "qte", "ht", "total"]);
+    expect(evaluationOrder(def.sections[0]?.fields ?? []).map((x) => x.key)).toEqual(["prix", "qte", "ht", "total"]);
     expect(visibleState(def, { prix: 10, qte: 2, total: 1 }).kept).toEqual({ prix: 10, qte: 2, ht: 20, total: 24 });
   });
   it("sans valeur calculable : rien n'est gardé et l'obligation joue", () => {

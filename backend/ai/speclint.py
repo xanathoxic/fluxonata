@@ -137,12 +137,12 @@ def spec_lint(request: str, graph: dict, ctx: dict, *, additions_only: bool = Fa
         on_error = bool(
             kind and kind.group(1).lower() == "exception" and re.search(r"refus|echou|erreur|echec", context)
         )
-        present = _norm(text) in pool(kind.group(1).lower() if kind else "")
+        found = _norm(text) in pool(kind.group(1).lower() if kind else "")
         if (
-            present and on_error
+            found and on_error
         ):  # « si elle est refusée / échoue, une exception… »: it must hang on that step's error exit
-            present = _on_error_exit(graph, _norm(text), _owner_of(request, m.start(), context, ctx))
-        if " " in text and label and not present:
+            found = _on_error_exit(graph, _norm(text), _owner_of(request, m.start(), context, ctx))
+        if " " in text and label and not found:
             where = {
                 "exception": " Il manque une étape exception (throw) portant ce texte ; si la demande la place « si elle est "
                 "refusée / si l'étape échoue », accroche-la à la sortie d'erreur de cette étape (add_branch after=<étape> "

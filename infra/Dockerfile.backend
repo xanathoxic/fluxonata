@@ -2,15 +2,15 @@
 #   runtime : API (gunicorn), orchestrator, migrate — NO docker CLI (nothing there starts containers; less to exploit on the Internet-facing side).
 #   exec    : runtime + docker CLI, for the worker only (it starts isolated action containers on the host daemon). It is the LAST stage,
 #             so a plain `docker build` (no --target) still gives the historical image.
-FROM python:3.13-slim AS runtime
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS runtime
 ARG ORCH_VERSION=0.1.0-dev
 ARG ORCH_REVISION=
 LABEL org.opencontainers.image.title="fluxonata-backend" org.opencontainers.image.version=$ORCH_VERSION org.opencontainers.image.revision=$ORCH_REVISION org.opencontainers.image.licenses="Apache-2.0"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt backend/constraints.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 COPY backend /app/backend
 COPY workers /app/workers
 RUN useradd --system --uid 10001 --home /nonexistent fluxonata && mkdir -p /app/var /keys && chown -R fluxonata /app/var /keys

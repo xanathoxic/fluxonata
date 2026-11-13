@@ -75,9 +75,8 @@ def _token_request(conn, form: dict) -> dict:
     except ValueError:
         data = {}
     if not 200 <= status < 300 or not isinstance(data, dict) or not data.get("access_token"):
-        reason = (
-            data.get("error") if isinstance(data, dict) and isinstance(data.get("error"), str) else f"HTTP {status}"
-        )
+        error = data.get("error") if isinstance(data, dict) else None
+        reason = error if isinstance(error, str) else f"HTTP {status}"
         raise AuthError("OAUTH_REFUSED", f"Le serveur d'authentification a refusé la demande ({reason[:80]}).")
     return data
 

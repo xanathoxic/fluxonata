@@ -97,6 +97,7 @@ export function LibraryPicker() {
             </div>
           </header>
           <Tabs label="Formulaire d'entrée" active={tab} onChange={setTab} tabs={[
+            // biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran
             { id: "map", label: <IconLabel icon="link">Correspondance{bad > 0 && <span className="lp-count" aria-label={`${bad} problème(s)`}>{bad}</span>}</IconLabel>,
               content: preview.data ? <InputMapping definition={preview.data.definition} schema={graph.inputs} map={map} editable={editable} onChange={setMap} /> : <p className="hint">Chargement…</p> },
             { id: "preview", label: <IconLabel icon="eye">Aperçu</IconLabel>,

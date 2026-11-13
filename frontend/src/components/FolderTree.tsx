@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
+import { type KeyboardEvent, useEffect, useEffectEvent, useId, useMemo, useState } from "react";
 import { api, type ApiError } from "../api";
 import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useApp } from "../context";
@@ -49,7 +49,7 @@ function Branch({ node, current, onPick, counts, locked, fold }: { node: Node; c
                 ? <span className={`tree-chev${open ? " open" : ""}`} aria-hidden="true" title={open ? "Replier" : "Déplier"} onClick={() => fold.toggle(c.path)}>▸</span>
                 : <span className="tree-chev none" aria-hidden="true" />}
               <button type="button" className="tree-item" aria-current={current === c.path ? "true" : undefined} aria-expanded={has ? open : undefined} onKeyDown={key} onClick={() => onPick(c.path)}>
-                <FolderIcon /> {c.name}{locked.has(c.path) && <span title="Dossier privé" aria-label="privé"> 🔒</span>} <span className="hint">({counts.get(c.path) ?? 0})</span>
+                <FolderIcon /> {c.name}{locked.has(c.path) && <span role="img" title="Dossier privé" aria-label="privé"> 🔒</span>} <span className="hint">({counts.get(c.path) ?? 0})</span>
               </button>
             </span>
             {has && open && <Branch node={c} current={current} onPick={onPick} counts={counts} locked={locked} fold={fold} />}
@@ -109,8 +109,9 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
   label: string; kind: FolderKind; folders: string[]; current: string; onPick: (p: string) => void; canEdit: boolean;
 }) {
   const phone = useMediaQuery(PHONE);
-  const [foldOpen, setFoldOpen] = useState(false);
-  useEffect(() => setFoldOpen(false), [current]);
+  const [foldState, setFoldState] = useState<{ open: boolean; at: string }>({ open: false, at: current }); // le repli se referme quand le dossier courant change
+  const foldOpen = foldState.open && foldState.at === current;
+  const setFoldOpen = (open: boolean) => setFoldState({ open, at: current });
   const folderQuery = useFolders(kind).data;
   const persisted = folderQuery?.results;
   const locked = useMemo(() => new Set(folderQuery?.private ?? []), [folderQuery]);
@@ -129,11 +130,13 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem(storeKey) ?? "[]") as string[]); } catch { return new Set(); } });
   useEffect(() => { try { localStorage.setItem(storeKey, JSON.stringify([...collapsed])); } catch { /* preference only */ } }, [collapsed, storeKey]);
   // The selected folder must stay visible: opening it, or a folder that was just created, unfolds its parents.
-  useEffect(() => {
-    if (!current) return;
-    const parentsPaths = current.split("/").map((_, i, a) => a.slice(0, i + 1).join("/")).slice(0, -1);
-    if (parentsPaths.some((p) => collapsed.has(p))) setCollapsed((c) => { const n = new Set(c); parentsPaths.forEach((p) => n.delete(p)); return n; });
-  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ne se déclenche qu'au changement de dossier courant (sinon un dossier replié par la personne se rouvrirait)
+  const unfoldParents = useEffectEvent((selected: string) => {
+    if (!selected) return;
+    const parentsPaths = selected.split("/").map((_, i, a) => a.slice(0, i + 1).join("/")).slice(0, -1);
+    if (parentsPaths.some((p) => collapsed.has(p))) setCollapsed((c) => { const n = new Set(c); parentsPaths.forEach((p) => { n.delete(p); }); return n; });
+  });
+  useEffect(() => { unfoldParents(current); }, [current]);
   const fold: Fold = { collapsed, toggle: (path, open) => setCollapsed((c) => { const n = new Set(c); const want = open ?? n.has(path); if (want) n.delete(path); else n.add(path); return n; }) };
   const branches = useMemo(() => { const all: string[] = []; const walk = (n: Node) => n.children.forEach((c) => { if (c.children.size) all.push(c.path); walk(c); }); walk(tree); return all; }, [tree]);
   const open = (d: "create" | "rename" | "delete" | "share") => { acts.create.reset(); acts.rename.reset(); acts.remove.reset(); setDialog(d); };
@@ -150,6 +153,7 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
       <div className="tree-row tree-all">
         <button type="button" className="tree-item" aria-current={current === "" ? "true" : undefined} onClick={() => onPick("")}><AllIcon /> Tous ({folders.length})</button>
         {branches.length > 0 && (
+          // biome-ignore lint/a11y/useSemanticElements: regroupement de boutons de repli ; un fieldset changerait la mise en forme
           <span className="tree-fold" role="group" aria-label="Déplier ou replier tout l'arbre">
             <button type="button" className="icon-btn" title="Tout déplier" aria-label="Tout déplier" disabled={collapsed.size === 0} onClick={() => setCollapsed(new Set())}>⊞</button>
             <button type="button" className="icon-btn" title="Tout replier" aria-label="Tout replier" disabled={branches.every((p) => collapsed.has(p))} onClick={() => setCollapsed(new Set(branches))}>⊟</button>

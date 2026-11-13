@@ -5,6 +5,7 @@ Kills services with SIGKILL / restarts PostgreSQL, then checks that no confirmed
 uncertain external effect is surfaced for a human decision. Run via scripts/resilience.sh.
 Never runs `wsl --shutdown` (that must be done by the user).
 """
+
 import concurrent.futures
 import hashlib
 import hmac
@@ -40,8 +41,12 @@ class Api:
     def call(self, method, path, body=None):
         if not self.csrf():
             self.op.open(f"{BASE}/auth/csrf/").read()
-        req = urllib.request.Request(f"{BASE}{path}", method=method, data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Content-Type": "application/json", "X-CSRFToken": self.csrf(), "Origin": BASE.split("/api")[0]})
+        req = urllib.request.Request(
+            f"{BASE}{path}",
+            method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json", "X-CSRFToken": self.csrf(), "Origin": BASE.split("/api")[0]},
+        )
         try:
             with self.op.open(req, timeout=30) as r:
                 raw = r.read()
@@ -82,7 +87,12 @@ def stack_up(lease=None):
 
 def publish(api, slug, nodes, edges, inputs=None):
     api.call("POST", f"/workspaces/{WS}/workflows/", {"slug": slug, "name": slug})
-    graph = {"inputs": inputs or {"type": "object", "properties": {}, "required": []}, "nodes": nodes, "edges": edges, "outputs": {}}
+    graph = {
+        "inputs": inputs or {"type": "object", "properties": {}, "required": []},
+        "nodes": nodes,
+        "edges": edges,
+        "outputs": {},
+    }
     api.call("PUT", f"/workspaces/{WS}/workflows/{slug}/draft/", {"graph": graph, "revision": 1})
     api.call("POST", f"/workspaces/{WS}/workflows/{slug}/publish/", {})
 
@@ -121,69 +131,163 @@ def record(name, ok, detail=""):
 def scenario_a(api, ts):
     """Spec §13: finished action + durable wait + external-effect step; hard-kill everything during the wait."""
     slug = f"resil-a-{ts}"
-    publish(api, slug, [
-        {"id": "analyse", "type": "action", "name": "Analyse", "action": "text-stats", "inputs": {"text": "un deux trois"}},
-        {"id": "pause", "type": "wait", "name": "Pause", "seconds": 15},
-        {"id": "notifier", "type": "action", "name": "Notifier", "action": "send-notification", "inputs": {"recipient": "x@example.org", "seconds": 1}},
-    ], [{"from": "analyse", "to": "pause"}, {"from": "pause", "to": "notifier"}])
+    publish(
+        api,
+        slug,
+        [
+            {
+                "id": "analyse",
+                "type": "action",
+                "name": "Analyse",
+                "action": "text-stats",
+                "inputs": {"text": "un deux trois"},
+            },
+            {"id": "pause", "type": "wait", "name": "Pause", "seconds": 15},
+            {
+                "id": "notifier",
+                "type": "action",
+                "name": "Notifier",
+                "action": "send-notification",
+                "inputs": {"recipient": "x@example.org", "seconds": 1},
+            },
+        ],
+        [{"from": "analyse", "to": "pause"}, {"from": "pause", "to": "notifier"}],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]), label="wait started")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]),
+        label="wait started",
+    )
     for n in ("web", "worker", "orchestrator", "api"):
         kill(n)
     time.sleep(18)  # the wait expires while everything is down
     stack_up()
-    run = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=120, label="completion after restart")
+    run = wait_for(
+        api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=120, label="completion after restart"
+    )
     started = [e for e in run["events"] if e["type"] == "step_started" and e["node_id"] == "analyse"]
-    ok = run["status"] == "succeeded" and len(started) == 1 and step(run, "analyse")["attempt"] == 1 and step(run, "notifier")["attempt"] == 1
-    record("A: arrêt brutal de tous les services pendant une attente", ok, f"status={run['status']} analyse_started={len(started)}")
+    ok = (
+        run["status"] == "succeeded"
+        and len(started) == 1
+        and step(run, "analyse")["attempt"] == 1
+        and step(run, "notifier")["attempt"] == 1
+    )
+    record(
+        "A: arrêt brutal de tous les services pendant une attente",
+        ok,
+        f"status={run['status']} analyse_started={len(started)}",
+    )
 
 
 def scenario_b(api, ts):
     """Worker killed during a non-idempotent external action -> uncertain, human decision, never blind re-run."""
     slug = f"resil-b-{ts}"
-    publish(api, slug, [{"id": "notifier", "type": "action", "name": "Notifier", "action": "send-notification",
-                         "inputs": {"recipient": "y@example.org", "seconds": 40}}], [])
+    publish(
+        api,
+        slug,
+        [
+            {
+                "id": "notifier",
+                "type": "action",
+                "name": "Notifier",
+                "action": "send-notification",
+                "inputs": {"recipient": "y@example.org", "seconds": 40},
+            }
+        ],
+        [],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "notifier" and s["status"] == "running" for s in r["steps"]), label="external action running")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "notifier" and s["status"] == "running" for s in r["steps"]),
+        label="external action running",
+    )
     time.sleep(3)
     kill("worker")
-    run = wait_for(api, rid, lambda r: r["needs_decision"], timeout=60, label="uncertain outcome")  # lease expires (6 s)
+    run = wait_for(
+        api, rid, lambda r: r["needs_decision"], timeout=60, label="uncertain outcome"
+    )  # lease expires (6 s)
     stack_up(lease=6)  # worker back
     time.sleep(6)
     still = get(api, rid)
     no_rerun = step(still, "notifier")["attempt"] == 1 and step(still, "notifier")["status"] == "uncertain"
-    api.call("POST", f"/workspaces/{WS}/workflow-runs/{rid}/steps/notifier/decision/", {"decision": "succeed", "output": {"delivered": True, "recipient": "y@example.org"}})
+    api.call(
+        "POST",
+        f"/workspaces/{WS}/workflow-runs/{rid}/steps/notifier/decision/",
+        {"decision": "succeed", "output": {"delivered": True, "recipient": "y@example.org"}},
+    )
     final = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), label="decision applied")
-    record("B: worker tué pendant un effet externe non idempotent", run["needs_decision"] and no_rerun and final["status"] == "succeeded",
-           f"uncertain={run['needs_decision']} not_rerun={no_rerun} final={final['status']}")
+    record(
+        "B: worker tué pendant un effet externe non idempotent",
+        run["needs_decision"] and no_rerun and final["status"] == "succeeded",
+        f"uncertain={run['needs_decision']} not_rerun={no_rerun} final={final['status']}",
+    )
 
 
 def scenario_c(api, ts):
     """Worker killed during an idempotent action -> lease expires, safe automatic retry."""
     slug = f"resil-c-{ts}"
-    publish(api, slug, [{"id": "attente", "type": "action", "name": "Attente", "action": "slow-wait", "inputs": {"seconds": 8}}], [])
+    publish(
+        api,
+        slug,
+        [{"id": "attente", "type": "action", "name": "Attente", "action": "slow-wait", "inputs": {"seconds": 8}}],
+        [],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "attente" and s["status"] == "running" for s in r["steps"]), label="running")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "attente" and s["status"] == "running" for s in r["steps"]),
+        label="running",
+    )
     time.sleep(2)
     kill("worker")
     time.sleep(8)  # lease (6 s) expires; orchestrator reconciles and re-queues
     stack_up(lease=6)
     run = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=90, label="completion")
-    record("C: worker tué pendant une action idempotente (reprise automatique)", run["status"] == "succeeded", f"status={run['status']}")
+    record(
+        "C: worker tué pendant une action idempotente (reprise automatique)",
+        run["status"] == "succeeded",
+        f"status={run['status']}",
+    )
 
 
 def scenario_d(api, ts):
     """PostgreSQL restarted while a run is waiting: services reconnect, run completes."""
     slug = f"resil-d-{ts}"
-    publish(api, slug, [{"id": "pause", "type": "wait", "name": "Pause", "seconds": 12},
-                        {"id": "fin", "type": "action", "name": "Fin", "action": "text-stats", "inputs": {"text": "base de données"}}],
-            [{"from": "pause", "to": "fin"}])
+    publish(
+        api,
+        slug,
+        [
+            {"id": "pause", "type": "wait", "name": "Pause", "seconds": 12},
+            {
+                "id": "fin",
+                "type": "action",
+                "name": "Fin",
+                "action": "text-stats",
+                "inputs": {"text": "base de données"},
+            },
+        ],
+        [{"from": "pause", "to": "fin"}],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]), label="waiting")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]),
+        label="waiting",
+    )
     out = sh("docker restart fluxonata-db-1")
     assert out.returncode == 0, out.stderr
-    run = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=120, label="completion after db restart")
-    record("D: redémarrage de PostgreSQL pendant une exécution", run["status"] == "succeeded", f"status={run['status']}")
+    run = wait_for(
+        api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=120, label="completion after db restart"
+    )
+    record(
+        "D: redémarrage de PostgreSQL pendant une exécution", run["status"] == "succeeded", f"status={run['status']}"
+    )
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -208,54 +312,105 @@ def started_counts(run):
 def scenario_e(api, ts):
     """Orchestrator killed ALONE while a run waits: nothing advances until it is back, then the run completes without repeating a step."""
     slug = f"resil-e-{ts}"
-    publish(api, slug, [
-        {"id": "debut", "type": "join", "name": "Début"},
-        {"id": "pause", "type": "wait", "name": "Pause", "seconds": 6},
-        {"id": "fin", "type": "join", "name": "Fin"},
-    ], [{"from": "debut", "to": "pause"}, {"from": "pause", "to": "fin"}])
+    publish(
+        api,
+        slug,
+        [
+            {"id": "debut", "type": "join", "name": "Début"},
+            {"id": "pause", "type": "wait", "name": "Pause", "seconds": 6},
+            {"id": "fin", "type": "join", "name": "Fin"},
+        ],
+        [{"from": "debut", "to": "pause"}, {"from": "pause", "to": "fin"}],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]), label="attente")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]),
+        label="attente",
+    )
     kill("orchestrator")
     time.sleep(9)  # l'attente expire pendant que l'orchestrateur est absent
     frozen = get(api, rid)["status"] == "running"  # personne n'a avancé le run
     t0 = time.time()
     stack_up(lease=6)
-    run = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=90, label="fin après retour de l'orchestrateur")
+    run = wait_for(
+        api,
+        rid,
+        lambda r: r["status"] in ("succeeded", "failed"),
+        timeout=90,
+        label="fin après retour de l'orchestrateur",
+    )
     took = time.time() - t0
     counts = started_counts(run)
-    ok = run["status"] == "succeeded" and frozen and took <= E_RECOVERY and all(v == 1 for v in counts.values()) and set(counts) == {"debut", "pause", "fin"}
-    record("E: orchestrateur tué seul pendant une attente", ok, f"gelé_pendant_l'absence={frozen} terminé_en={took:.0f}s (<= {E_RECOVERY}) départs={counts}")
+    ok = (
+        run["status"] == "succeeded"
+        and frozen
+        and took <= E_RECOVERY
+        and all(v == 1 for v in counts.values())
+        and set(counts) == {"debut", "pause", "fin"}
+    )
+    record(
+        "E: orchestrateur tué seul pendant une attente",
+        ok,
+        f"gelé_pendant_l'absence={frozen} terminé_en={took:.0f}s (<= {E_RECOVERY}) départs={counts}",
+    )
 
 
 def scenario_f(api, ts):
     """API killed ALONE: execution does not need it (orchestrator + worker + database only); it comes back fast."""
     slug = f"resil-f-{ts}"
-    publish(api, slug, [
-        {"id": "pause", "type": "wait", "name": "Pause", "seconds": 5},
-        {"id": "fin", "type": "action", "name": "Fin", "action": "text-stats", "inputs": {"text": "sans api"}},
-    ], [{"from": "pause", "to": "fin"}])
+    publish(
+        api,
+        slug,
+        [
+            {"id": "pause", "type": "wait", "name": "Pause", "seconds": 5},
+            {"id": "fin", "type": "action", "name": "Fin", "action": "text-stats", "inputs": {"text": "sans api"}},
+        ],
+        [{"from": "pause", "to": "fin"}],
+    )
     rid = start(api, slug)
-    wait_for(api, rid, lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]), label="attente")
+    wait_for(
+        api,
+        rid,
+        lambda r: any(s["node_id"] == "pause" and s["status"] == "waiting" for s in r["steps"]),
+        label="attente",
+    )
     kill("api")
     time.sleep(14)  # l'exécution continue sans API
     t0 = time.time()
     stack_up()
     first_200 = time.time() - t0
-    run = wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=30, label="état après retour de l'API")
+    run = wait_for(
+        api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=30, label="état après retour de l'API"
+    )
     finished = run.get("finished_at") or ""
     # le run s'est terminé pendant l'absence de l'API : sa date de fin précède le moment où l'API est revenue
     back_at = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t0))
     done_while_down = bool(finished) and finished[:19] < back_at
     ok = run["status"] == "succeeded" and done_while_down and first_200 <= F_RECOVERY
-    record("F: API tuée seule (l'exécution continue)", ok, f"terminé_API_arrêtée={done_while_down} 1re_réponse_en={first_200:.0f}s (<= {F_RECOVERY}) fin={finished[:19]} retour={back_at}")
+    record(
+        "F: API tuée seule (l'exécution continue)",
+        ok,
+        f"terminé_API_arrêtée={done_while_down} 1re_réponse_en={first_200:.0f}s (<= {F_RECOVERY}) fin={finished[:19]} retour={back_at}",
+    )
 
 
 def _post_webhook(url, secret, payload, delivery):
     raw = json.dumps(payload).encode()
     t = str(int(time.time()))
     sig = hmac.new(secret.encode(), t.encode() + b"." + raw, hashlib.sha256).hexdigest()
-    req = urllib.request.Request(url, data=raw, method="POST", headers={
-        "Content-Type": "application/json", "X-Fluxonata-Timestamp": t, "X-Fluxonata-Signature": f"v1={sig}", "X-Fluxonata-Delivery": delivery})
+    req = urllib.request.Request(
+        url,
+        data=raw,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "X-Fluxonata-Timestamp": t,
+            "X-Fluxonata-Signature": f"v1={sig}",
+            "X-Fluxonata-Delivery": delivery,
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.status, json.loads(r.read() or b"{}")
@@ -269,9 +424,16 @@ def scenario_g(api, ts):
     """PostgreSQL STOPPED (not restarted) in the middle of a webhook burst; the sender retries each failed delivery with the same id.
     Exactly one run per delivery: none lost, none duplicated."""
     slug, n_events = f"resil-g-{ts}", 30
-    publish(api, slug, [{"id": "a", "type": "join", "name": "A"}], [],
-            inputs={"type": "object", "properties": {"n": {"type": "string"}}, "required": ["n"]})
-    hook = api.call("POST", f"/workspaces/{WS}/webhooks/", {"name": f"resil-g-{ts}", "workflow": slug, "environment": "test"})
+    publish(
+        api,
+        slug,
+        [{"id": "a", "type": "join", "name": "A"}],
+        [],
+        inputs={"type": "object", "properties": {"n": {"type": "string"}}, "required": ["n"]},
+    )
+    hook = api.call(
+        "POST", f"/workspaces/{WS}/webhooks/", {"name": f"resil-g-{ts}", "workflow": slug, "environment": "test"}
+    )
     url = BASE.split("/api")[0] + hook["url"] if hook["url"].startswith("/") else hook["url"]
     acked_at, attempts = {}, {}
 
@@ -306,7 +468,11 @@ def scenario_g(api, ts):
     stack_up()
     end = time.time() + 60
     while True:  # les 30 runs doivent aussi TERMINER (pas seulement exister)
-        runs = [r for r in api.call("GET", f"/workspaces/{WS}/workflow-runs/?limit=200")["results"] if r["workflow"]["slug"] == slug]
+        runs = [
+            r
+            for r in api.call("GET", f"/workspaces/{WS}/workflow-runs/?limit=200")["results"]
+            if r["workflow"]["slug"] == slug
+        ]
         if (len(runs) >= n_events and all(r["status"] in ("succeeded", "failed") for r in runs)) or time.time() > end:
             break
         time.sleep(2)
@@ -314,40 +480,76 @@ def scenario_g(api, ts):
     retried = sum(1 for v in attempts.values() if v > 1)
     done = sum(r["status"] == "succeeded" for r in runs)
     ok = seen == list(range(n_events)) and len(acked_at) == n_events and done == n_events and first_ok <= G_RECOVERY
-    record("G: PostgreSQL arrêté pendant une rafale de webhooks", ok,
-           f"acquittés={len(acked_at)}/{n_events} runs={len(runs)} distincts={len(set(seen))} réussis={done} réessayés={retried} 1er_accepté_après_retour={first_ok:.0f}s (<= {G_RECOVERY}) base_arrêtée={t_up - t_stop:.0f}s")
+    record(
+        "G: PostgreSQL arrêté pendant une rafale de webhooks",
+        ok,
+        f"acquittés={len(acked_at)}/{n_events} runs={len(runs)} distincts={len(set(seen))} réussis={done} réessayés={retried} 1er_accepté_après_retour={first_ok:.0f}s (<= {G_RECOVERY}) base_arrêtée={t_up - t_stop:.0f}s",
+    )
 
 
 def scenario_h(api, ts):
     """Two orchestrators at once, one of them SIGKILLed on the way: every step is started exactly once and every run completes."""
     slug, n_runs = f"resil-h-{ts}", 12
-    publish(api, slug, [
-        {"id": "un", "type": "join", "name": "Un"},
-        {"id": "pause", "type": "wait", "name": "Pause", "seconds": 8},
-        {"id": "deux", "type": "join", "name": "Deux"},
-    ], [{"from": "un", "to": "pause"}, {"from": "pause", "to": "deux"}])
-    n_extra = int(os.environ.get("H_ORCHESTRATORS", "3"))  # 3 en plus de celui de la pile = 4 orchestrateurs simultanés (AR4.1)
-    extras = [subprocess.Popen([f"{ROOT}/.venv/bin/python", "manage.py", "run_orchestrator"], cwd=f"{ROOT}/backend",
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True) for _ in range(n_extra)]
-    second = extras[0]
+    publish(
+        api,
+        slug,
+        [
+            {"id": "un", "type": "join", "name": "Un"},
+            {"id": "pause", "type": "wait", "name": "Pause", "seconds": 8},
+            {"id": "deux", "type": "join", "name": "Deux"},
+        ],
+        [{"from": "un", "to": "pause"}, {"from": "pause", "to": "deux"}],
+    )
+    n_extra = int(
+        os.environ.get("H_ORCHESTRATORS", "3")
+    )  # 3 en plus de celui de la pile = 4 orchestrateurs simultanés (AR4.1)
+    extras = [
+        subprocess.Popen(
+            [f"{ROOT}/.venv/bin/python", "manage.py", "run_orchestrator"],
+            cwd=f"{ROOT}/backend",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        for _ in range(n_extra)
+    ]
     try:
         time.sleep(3)
         t0 = time.time()
         ids = [start(api, slug) for _ in range(n_runs)]
         time.sleep(2)  # les 12 runs sont en attente (8 s) : il reste du travail à faire pour celui qui survit
         mid_flight = sum(get(api, rid)["status"] == "running" for rid in ids)
-        for victim in extras[: max(1, n_extra // 2)]:  # la moitié des orchestrateurs supplémentaires meurent en pleine exécution
+        for victim in extras[
+            : max(1, n_extra // 2)
+        ]:  # la moitié des orchestrateurs supplémentaires meurent en pleine exécution
             os.killpg(victim.pid, signal.SIGKILL)
             victim.wait()
-        runs = [wait_for(api, rid, lambda r: r["status"] in ("succeeded", "failed"), timeout=H_BUDGET + 30, label=f"run {rid[:8]}") for rid in ids]
+        runs = [
+            wait_for(
+                api,
+                rid,
+                lambda r: r["status"] in ("succeeded", "failed"),
+                timeout=H_BUDGET + 30,
+                label=f"run {rid[:8]}",
+            )
+            for rid in ids
+        ]
         took = time.time() - t0
     finally:
         for p in extras:
             if p.poll() is None:
                 os.killpg(p.pid, signal.SIGKILL)
-    dup = [(r["id"][:8], started_counts(r)) for r in runs if any(v != 1 for v in started_counts(r).values()) or set(started_counts(r)) != {"un", "pause", "deux"}]
+    dup = [
+        (r["id"][:8], started_counts(r))
+        for r in runs
+        if any(v != 1 for v in started_counts(r).values()) or set(started_counts(r)) != {"un", "pause", "deux"}
+    ]
     ok = all(r["status"] == "succeeded" for r in runs) and not dup and took <= H_BUDGET and mid_flight == n_runs
-    record("H: quatre orchestrateurs, un tué en route", ok, f"runs={n_runs} en_cours_au_moment_du_kill={mid_flight} réussis={sum(r['status'] == 'succeeded' for r in runs)} durée={took:.0f}s (<= {H_BUDGET}) anomalies_de_départ={dup[:2]}")
+    record(
+        "H: quatre orchestrateurs, un tué en route",
+        ok,
+        f"runs={n_runs} en_cours_au_moment_du_kill={mid_flight} réussis={sum(r['status'] == 'succeeded' for r in runs)} durée={took:.0f}s (<= {H_BUDGET}) anomalies_de_départ={dup[:2]}",
+    )
 
 
 def main():

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { HelpTip } from "./HelpTip";
+import { keyed } from "./keyed";
 
 export interface JobEvent { t: number; phase: string; label: string; state: "running" | "done" | "warning" | "error"; detail: string; pct: number }
 export interface JobError { code: string; message: string }
@@ -39,8 +40,8 @@ export function GenerationProgress({ job }: { job: DraftJob }) {
         <span className="hint">{elapsed} s</span>
       </div>
       <div className="gen-log" role="log" aria-label="Journal de la génération" aria-live="polite"><ol>
-        {job.events.map((e, i) => (
-          <li key={`${e.phase}-${i}`} className={`gen-${e.state}`}>
+        {keyed(job.events, (e) => `${e.phase}-${e.state}`).map(({ item: e, key }) => (
+          <li key={key} className={`gen-${e.state}`}>
             <span aria-hidden="true">{ICON[e.state]}</span>
             <span className="sr-only">{STATE_TEXT[e.state]} : </span>
             <span className="gen-time hint">+{Math.max(0, Math.round(e.t - start))} s</span>{" "}
@@ -93,19 +94,19 @@ export function DraftReport({ result }: { result: DraftResult }) {
       {toRead.length > 0 && (
         <section aria-label="Scripts à relire">
           <h3>Scripts à relire avant publication <HelpTip>L'assistant a écrit ces scripts : la règle de sécurité de la plateforme exige qu'une personne les relise. Ouvrez chacun dans l'éditeur, relisez le code, testez-le, puis confirmez « J'ai relu ce code ».</HelpTip></h3>
-          <ul>{toRead.map((i, k) => <li key={k}><strong>{label(i)}</strong></li>)}</ul>
+          <ul>{keyed(toRead, (i) => `${i.node}|${i.code}|${i.message}`).map(({ item: i, key }) => <li key={key}><strong>{label(i)}</strong></li>)}</ul>
         </section>
       )}
       {errors.length > 0 && (
         <section aria-label="Problèmes à corriger">
           <h3>Problèmes à corriger</h3>
-          <ul>{errors.map((i, k) => <li key={k}><span className="field-error">✖ Bloquant</span>{i.node && <> · <strong>{label(i)}</strong></>} : {i.message}</li>)}</ul>
+          <ul>{keyed(errors, (i) => `${i.node}|${i.code}|${i.message}`).map(({ item: i, key }) => <li key={key}><span className="field-error">✖ Bloquant</span>{i.node && <> · <strong>{label(i)}</strong></>} : {i.message}</li>)}</ul>
         </section>
       )}
       {warnings.length > 0 && (
         <section aria-label="Avertissements">
           <h3>Avertissements</h3>
-          <ul>{warnings.map((i, k) => <li key={k}><span className="hint">⚠ Avertissement</span>{i.node && <> · <strong>{label(i)}</strong></>} : {i.message}</li>)}</ul>
+          <ul>{keyed(warnings, (i) => `${i.node}|${i.code}|${i.message}`).map(({ item: i, key }) => <li key={key}><span className="hint">⚠ Avertissement</span>{i.node && <> · <strong>{label(i)}</strong></>} : {i.message}</li>)}</ul>
         </section>
       )}
       {result.check?.dryrun && <DryRunReport dry={result.check.dryrun} />}

@@ -28,12 +28,15 @@ describe("texts", () => {
     expect(textOf(5)).toBe("5");
   });
   it("applies text effects", () => {
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     const f: FormField = { key: "x", label: "X", type: "text", rules: [{ when: { field: "a", op: "not_empty" }, then: [{ do: "text", target: "label", text: "Nom de {a}" }, { do: "text", target: "help", text: "Aide" }] }] as Rule[] };
     const s = applyRules(f, { a: "Ada" }, initialState(f));
     expect([s.label, s.help, s.placeholder]).toEqual(["Nom de Ada", "Aide", null]);
   });
   it("knows when a field can be hidden", () => {
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     expect(canHide({ rules: [{ when: { field: "a", op: "not_empty" }, then: [{ do: "hide" }] }] })).toBe(true);
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     expect(canHide({ rules: [{ when: { field: "a", op: "not_empty" }, then: [{ do: "require" }] }] })).toBe(false);
   });
 });
@@ -50,6 +53,7 @@ describe("sentences", () => {
 });
 
 describe("a field may read any other field, wherever it is laid out", () => {
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   const hideIf = (other: string): Rule[] => [{ when: { field: other, op: "equals", value: "x" }, then: [{ do: "hide" }] }];
   const def = { version: 1, sections: [{ id: "s", title: "S", fields: [
     { key: "c", label: "C", type: "text", layout: { row: 1, col: 1, span: 6 }, rules: hideIf("b") },
@@ -58,7 +62,7 @@ describe("a field may read any other field, wherever it is laid out", () => {
   ] }] } as unknown as Parameters<typeof visibleState>[0];
 
   it("evaluates what a field reads before the field", () => {
-    const fields = def.sections[0]!.fields;
+    const fields = def.sections[0]?.fields ?? [];
     expect(evaluationOrder(fields).map((f) => f.key)).toEqual(["a", "b", "c"]);
     // a = x hides b, so c (which reads the hidden, dropped b) stays shown: same as the server test
     const { shown, kept } = visibleState(def, { a: "x", b: "x", c: "v" });
@@ -67,13 +71,14 @@ describe("a field may read any other field, wherever it is laid out", () => {
   });
 
   it("knows which fields would make a loop", () => {
-    const fields = def.sections[0]!.fields;
+    const fields = def.sections[0]?.fields ?? [];
     expect([...readers(fields, "a")].sort()).toEqual(["b", "c"]);
     expect([...readers(fields, "c")]).toEqual([]);
   });
 });
 
 describe("remplir le champ", () => {
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   const rule = (value: string): Rule[] => [{ when: { field: "a", op: "equals", value: "FR" }, then: [{ do: "fill", value }] }];
   it("rend la valeur avec les champs insérés, seulement quand la règle s'applique", () => {
     const f = { key: "x", type: "text", rules: rule("{a}-{b}") } as FormField;
@@ -91,6 +96,7 @@ describe("remplir le champ", () => {
 });
 
 describe("chargement d'un service piloté par les règles", () => {
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   const field = { rules: [{ when: { field: "pays", op: "equals", value: "FR" }, then: [{ do: "load", what: "options" }] }] } as unknown as FormField;
   it("sans règle de chargement, tout charge tout seul ; avec une règle, seulement tant qu'elle s'applique", () => {
     expect(canLoad({}, undefined, "options")).toBe(true);

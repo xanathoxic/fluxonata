@@ -13,8 +13,6 @@ TOKEN = "orr_" + "x" * 40
 
 
 def run(capsys, **env):
-    for k, v in env.items():
-        pass
     call_command("runner_bootstrap")
     return capsys.readouterr().out
 

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type ApiError } from "../api";
 import { useApp } from "../context";
 import { errorText } from "../lib";
@@ -68,7 +68,8 @@ export function AiChat({ onClose, initialMessage }: { onClose: () => void; initi
     } finally { jobId.current = null; setPhase(""); if (alive.current) setBusy(false); }
   };
   const started = useRef(false);
-  useEffect(() => { if (initialMessage && !started.current && msgs.length === 0) { started.current = true; void send(initialMessage); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const startConversation = useEffectEvent(() => { if (initialMessage && !started.current && msgs.length === 0) { started.current = true; void send(initialMessage); } });
+  useEffect(() => { startConversation(); }, []);
   const submit = (e: FormEvent) => { e.preventDefault(); void send(text); };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(text); } };
   const apply = (m: Msg) => {
@@ -87,6 +88,7 @@ export function AiChat({ onClose, initialMessage }: { onClose: () => void; initi
         </button>
       </header>
       <p className="hint ai-chat-note">Il propose des modifications du brouillon ; vous les relisez avant de les appliquer (annulables). Il ne publie jamais.</p>
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: zone défilante ou bloc de texte atteignable au clavier pour être lu */}
       <div className="ai-chat-log" ref={log} role="log" aria-live="polite" aria-label="Conversation avec l'assistant" tabIndex={0}>
         {msgs.length === 0 && (
           <div className="ai-chat-empty">

@@ -57,20 +57,13 @@ def _kw(call: ast.Call) -> dict:
 def check(path: Path) -> list[tuple[str, str]]:
     """[(règle, explication)] des violations de CE fichier, dérogations déduites."""
     text = path.read_text(encoding="utf-8")
-    allowed = {
-        r.strip()
-        for m in WAIVER.finditer(text)
-        for r in m.group(1).split(",")
-        if r.strip()
-    }
+    allowed = {r.strip() for m in WAIVER.finditer(text) for r in m.group(1).split(",") if r.strip()}
     found: list[tuple[str, str]] = []
     tree = ast.parse(text)
     created = {  # tables créées PAR cette migration : un index ou une contrainte dessus ne bloque personne (elle est vide et inconnue de l'ancien code)
         _kw(n)["name"].value.lower()
         for n in ast.walk(tree)
-        if isinstance(n, ast.Call)
-        and _name(n) == "CreateModel"
-        and isinstance(_kw(n).get("name"), ast.Constant)
+        if isinstance(n, ast.Call) and _name(n) == "CreateModel" and isinstance(_kw(n).get("name"), ast.Constant)
     }
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -87,23 +80,15 @@ def check(path: Path) -> list[tuple[str, str]]:
             field = next(
                 (
                     a
-                    for a in list(node.args)
-                    + [k.value for k in node.keywords if k.arg == "field"]
+                    for a in list(node.args) + [k.value for k in node.keywords if k.arg == "field"]
                     if isinstance(a, ast.Call)
                 ),
                 None,
             )
             if field is not None:
                 kw = _kw(field)
-                nullable = (
-                    isinstance(kw.get("null"), ast.Constant)
-                    and kw["null"].value is True
-                )
-                if (
-                    not nullable
-                    and "default" not in kw
-                    and _name(field) not in ("ManyToManyField",)
-                ):
+                nullable = isinstance(kw.get("null"), ast.Constant) and kw["null"].value is True
+                if not nullable and "default" not in kw and _name(field) not in ("ManyToManyField",):
                     found.append(
                         (
                             "M2",
@@ -112,10 +97,7 @@ def check(path: Path) -> list[tuple[str, str]]:
                     )
         elif op in INDEX_OPS:
             target = _kw(node).get("model_name")
-            if (
-                isinstance(target, ast.Constant)
-                and str(target.value).lower() in created
-            ):
+            if isinstance(target, ast.Constant) and str(target.value).lower() in created:
                 continue
             found.append(
                 (
@@ -124,11 +106,7 @@ def check(path: Path) -> list[tuple[str, str]]:
                 )
             )
         elif op == "RunSQL":
-            sql = " ".join(
-                a.value
-                for a in ast.walk(node)
-                if isinstance(a, ast.Constant) and isinstance(a.value, str)
-            )
+            sql = " ".join(a.value for a in ast.walk(node) if isinstance(a, ast.Constant) and isinstance(a.value, str))
             if RISKY_SQL.search(sql):
                 found.append(
                     (
@@ -140,11 +118,7 @@ def check(path: Path) -> list[tuple[str, str]]:
 
 
 def baseline() -> set[str]:
-    return (
-        set(json.loads(BASELINE.read_text(encoding="utf-8"))["reviewed"])
-        if BASELINE.exists()
-        else set()
-    )
+    return set(json.loads(BASELINE.read_text(encoding="utf-8"))["reviewed"]) if BASELINE.exists() else set()
 
 
 def main(argv: list[str]) -> int:
@@ -173,9 +147,7 @@ def main(argv: list[str]) -> int:
             print(
                 f"{key(p)} : {rule} — {why}\n   dérogation : `# lint-migrations: allow {rule} — raison` dans le fichier, après revue"
             )
-    print(
-        f"{len(files)} migrations, {len(new)} nouvelle(s) contrôlée(s), {bad} violation(s)"
-    )
+    print(f"{len(files)} migrations, {len(new)} nouvelle(s) contrôlée(s), {bad} violation(s)")
     return 1 if bad else 0
 
 

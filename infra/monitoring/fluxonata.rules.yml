@@ -1,0 +1,61 @@
+# Règles d'alerte Prometheus pour Fluxonata. Elles ne s'appuient QUE sur les métriques exposées par `GET /api/v1/metrics/`
+# (jeton `ORCH_METRICS_TOKEN`). Ajustez les durées `for:` et les seuils à votre exploitation ; chaque règle est testée
+# par `scripts/alerts-test.sh` avec des séries synthétiques (aucune notification n'est envoyée).
+groups:
+  - name: fluxonata
+    rules:
+      - alert: FluxonataApiInjoignable
+        expr: up{job="fluxonata"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "L'API Fluxonata ne répond plus au scrape"
+          description: "Aucune réponse de {{ $labels.instance }} depuis 2 minutes (API arrêtée, jeton de métriques refusé ou réseau)."
+
+      - alert: FluxonataOrchestrateurAbsent
+        expr: fluxonata_service_instances{kind="orchestrator"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Aucun orchestrateur vivant"
+          description: "Les exécutions de workflows n'avancent plus : démarrez `run_orchestrator` (processus ou conteneur)."
+
+      - alert: FluxonataAucunTravailleur
+        expr: fluxonata_workers_alive == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Aucun travailleur vivant"
+          description: "Les actions ne sont plus exécutées : démarrez `run_worker`."
+
+      - alert: FluxonataFileBloquee
+        expr: fluxonata_queue_oldest_age_seconds > 300
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "La plus ancienne exécution en file attend depuis plus de 5 minutes"
+          description: "Capacité ou ordonnancement insuffisants (voir `ORCH_WORKER_CONCURRENCY`, agents d'exécution) ou travailleur figé."
+
+      - alert: FluxonataEchecsEnHausse
+        expr: delta(fluxonata_workflow_runs{status="failed"}[15m]) > 5
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Plus de 5 exécutions de workflow échouées en 15 minutes"
+          description: "Consultez Exploitation → Vue d'ensemble pour les workflows en cause."
+
+      - alert: FluxonataEtapesIncertaines
+        expr: fluxonata_uncertain_steps > 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Des étapes attendent une décision humaine depuis plus de 30 minutes"
+          description: "Une étape dont l'issue est incertaine doit être tranchée par une personne."
+
+      - alert: FluxonataRappelsAbandonnes
+        expr: delta(fluxonata_callbacks_failed[1h]) > 0
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Des rappels sortants ont été abandonnés"
+          description: "Un service destinataire ne répond plus ; vérifiez l'adresse du rappel."

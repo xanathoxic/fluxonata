@@ -27,6 +27,7 @@ export function OptionPicker({ id, items, selected, multiple, placeholder, disab
   const label = (v: string) => items.find((o) => o.value === v)?.label || v;
   const full = multiple && max !== undefined && selected.length >= max;
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: conteneur qui relaie le focus et les touches de ses enfants interactifs (menu local)
     <div className="opk" ref={box} onBlur={(e) => { if (!box.current?.contains(e.relatedTarget as Node | null)) setOpen(false); }} onKeyDown={(e) => { if (e.key === "Escape" && open) { e.stopPropagation(); setOpen(false); } }}>
       <div className="opk-field">
         <input id={id} role="combobox" aria-expanded={open} aria-controls={list} aria-autocomplete="list" autoComplete="off" disabled={disabled} aria-invalid={invalid ? true : undefined}
@@ -39,6 +40,7 @@ export function OptionPicker({ id, items, selected, multiple, placeholder, disab
         </ul>
       )}
       {open && (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div id={list} className="opk-pop" role="group" aria-label="Options" onMouseDown={(e) => e.preventDefault()}>
           {shown.length === 0 && <p className="hint">Aucune option ne correspond.</p>}
           {shown.map((o, i) => {

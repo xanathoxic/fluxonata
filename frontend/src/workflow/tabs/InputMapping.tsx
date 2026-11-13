@@ -1,4 +1,4 @@
-import { type JsonSchema } from "../../api";
+import type { JsonSchema } from "../../api";
 import { HelpTip } from "../../components/HelpTip";
 import { FormIcon, IconLabel } from "../../forms/FormIcon";
 import { autoMap, dataFields, problemsOf, produces, sourceOf, type InputMap } from "../../forms/inputMap";

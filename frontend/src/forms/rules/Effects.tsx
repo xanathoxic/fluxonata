@@ -41,12 +41,15 @@ interface Props { effects: Effect[]; field: FormField; earlier: FormField[]; onC
 export function EffectList({ effects, field, earlier, onChange, label }: Props) {
   const set = (i: number, e: Effect) => onChange(effects.map((x, k) => (k === i ? e : x)));
   return (
+    // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className="rl-effects" role="group" aria-label={label}>
       {effects.length === 0 && <p className="hint">Aucun effet.</p>}
       {effects.map((e, i) => {
         const kind = EFFECT_KINDS.find((k) => k.id === e.do) as (typeof EFFECT_KINDS)[number];
         const n = `${label} : effet ${i + 1}`;
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
+          // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
           <div key={i} className="rl-effect" role="group" aria-label={n}>
             <span className="rl-ekind"><FormIcon name={kind.icon} size={16} />{kind.label}</span>
             {e.do === "text" && (
@@ -82,6 +85,7 @@ export function EffectList({ effects, field, earlier, onChange, label }: Props) 
               </select>
             )}
             {e.do === "options" && (
+              // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
               <span className="rl-chips" role="group" aria-label={`${n} : choix proposés`}>
                 {(field.options ?? []).map((o) => {
                   const on = e.values.includes(o.value);
@@ -93,6 +97,7 @@ export function EffectList({ effects, field, earlier, onChange, label }: Props) 
           </div>
         );
       })}
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <div className="rl-add" role="group" aria-label={`${label} : ajouter un effet`}>
         {EFFECT_KINDS.map((k) => {
           const why = unavailable(k.id, field);

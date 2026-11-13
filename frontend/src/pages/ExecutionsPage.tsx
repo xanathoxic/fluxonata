@@ -75,6 +75,7 @@ export function ExecutionsPage() {
           <a className="button" href={`/api/v1/workspaces/${workspace.slug}/workflow-runs/export/${serverQs ? `?${serverQs}` : ""}`} download>Exporter en CSV</a>
           <button type="button" disabled={picked.length !== 2} onClick={() => navigate(`/runs/compare?a=${picked[0]}&b=${picked[1]}`)}>Comparer les 2 exécutions cochées</button>
         </>} />
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <section className="xsearch" role="search" aria-label="Rechercher dans les exécutions">
         <div className="xs-box">
           <Magnifier />
@@ -83,9 +84,11 @@ export function ExecutionsPage() {
           <button type="button" className="xs-toggle" aria-expanded={filters} aria-controls="ex-filters" onClick={() => setFilters(!filters)}>{filters ? "Masquer les filtres" : "Afficher les filtres"}</button>
         </div>
         <div className="xs-row">
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="xs-chips" role="group" aria-label="Statut">
             {STATUSES.map(([v, l]) => <button key={v} type="button" className={`xs-chip xs-${v || "all"}`} aria-pressed={status === v} onClick={() => reset(setStatus)(v)}>{l} <span className="xs-n">{count(v)}</span></button>)}
           </div>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="xs-seg" role="group" aria-label="Type">
             {KINDS.map(([v, l]) => <button key={v} type="button" aria-pressed={kind === v} onClick={() => reset(setKind)(v)}>{l}</button>)}
           </div>
@@ -99,6 +102,7 @@ export function ExecutionsPage() {
           </div>
         )}
         {active.length > 0 && (
+          // biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran
           <div className="xs-active" aria-label="Filtres actifs">
             {active.map((a) => <span key={a.k} className="xs-tag">{a.label}<button type="button" onClick={a.clear} aria-label={`Retirer le filtre : ${a.label}`}>×</button></span>)}
             <button type="button" className="xs-clear" onClick={clearAll}>Tout effacer</button>

@@ -7,6 +7,7 @@ import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText } from "../../lib";
 import { HelpTip } from "../../components/HelpTip";
+import { ReadRegion } from "../../components/ReadRegion";
 
 export interface RunnerRow {
   id: string; name: string; description: string; scope: "shared" | "dedicated"; workspaces: string[]; tags: string[]; runtimes: string[];
@@ -39,9 +40,9 @@ function TokenView({ created, onClose }: { created: Created; onClose: () => void
       <p><button type="button" onClick={() => void copy()}>Copier le jeton</button> {copied && <span role="status" className="hint">Copié.</span>}</p>
       <h3>Démarrer l'agent <HelpTip>Sur la machine qui exécutera les actions (Docker requis). L'adresse ci-dessous est celle de cette page : adaptez-la si le runner joint la plate-forme autrement (utilisez HTTPS hors réseau local).</HelpTip></h3>
       <h4>Directement sur l'hôte</h4>
-      <pre tabIndex={0} aria-label="Commande pour démarrer l'agent sur l'hôte" className="wrap">{cmd.host}</pre>
+      <ReadRegion className="wrap" label="Commande pour démarrer l'agent sur l'hôte">{cmd.host}</ReadRegion>
       <h4>Dans un conteneur</h4>
-      <pre tabIndex={0} aria-label="Commandes pour démarrer l'agent dans un conteneur" className="wrap">{cmd.docker}</pre>
+      <ReadRegion className="wrap" label="Commandes pour démarrer l'agent dans un conteneur">{cmd.docker}</ReadRegion>
       <p className="help-row"><HelpTip caption="À savoir">Le runner ne fait que des appels sortants vers la plate-forme ; il n'accède ni à la base de données ni au coffre-fort. Voir <code>docs/RUNNERS.md</code>.</HelpTip></p>
     </Overlay>
   );

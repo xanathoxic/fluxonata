@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Écrit l'archive du paquet d'actions (à importer depuis Bibliothèques → Actions → Paquets → Importer).
 
-  python3 construire_paquet.py            # crée tests-automatisation-1.0.0.zip dans le dossier courant
+python3 construire_paquet.py            # crée tests-automatisation-1.0.0.zip dans le dossier courant
 """
 
 import sys

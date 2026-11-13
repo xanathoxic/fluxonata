@@ -85,7 +85,7 @@ def sample_inputs(schema: dict, variant: str) -> dict:
     return {k: synth(v, variant, k) for k, v in props.items()}
 
 
-def valid_inputs(schema: dict, value) -> bool:
+def valid_inputs(schema: dict | None, value) -> bool:
     try:
         jsonschema.validate(value, schema or {"type": "object"})
         return isinstance(value, dict)
@@ -621,7 +621,9 @@ def dry_run(
     """Run the scenarios: each sample (label, inputs, expected) with approvals granted, plus one with approvals refused
     when the workflow has any. Returns {scenarios, problems, coverage, ran}."""
     deadline = time.monotonic() + budget
-    plan = [(s, True, None, None) for s in samples[:3]]
+    plan: list[tuple[dict, bool, int | str | set | None, dict | tuple | None]] = [
+        (s, True, None, None) for s in samples[:3]
+    ]
     if any(n["type"] == "approval" for n in graph.get("nodes", [])):  # each sample again, approvals refused
         plan += [
             ({**x, "label": f"{x['label']}, approbation refusée", "expected": []}, False, None, None)
@@ -636,7 +638,9 @@ def dry_run(
         and any(e["from"] == n["id"] and e.get("label") == "error" for e in graph.get("edges", []))
     ][:MAX_FAILURE_SCENARIOS]
     awaited = _awaited_values(graph)
-    reach_all = {}  # every value a decision waits for, applied together: the branches that hold the steps worth failing
+    reach_all: dict[
+        str, dict
+    ] = {}  # every value a decision waits for, applied together: the branches that hold the steps worth failing
     for nid, field, value, _ in awaited:
         reach_all.setdefault(nid, {}).setdefault(field, value)
     if samples:
@@ -712,16 +716,18 @@ def dry_run(
         )
 
     # The scenarios are independent: they run side by side (starting a container is slow, waiting for each in turn is not).
-    scenarios, problems = [None] * len(plan), []
+    results: dict[int, dict] = {}
+    problems: list[dict] = []
     with ThreadPoolExecutor(max_workers=min(len(plan), MAX_PARALLEL) or 1) as pool:
         futures = {pool.submit(one, i): i for i in range(len(plan))}
         done = 0
         for future in as_completed(futures):
             i = futures[future]
-            scenarios[i] = future.result()
+            results[i] = future.result()
             done += 1
             if progress:
                 progress(done - 1, len(plan), plan[i][0]["label"], done)
+    scenarios = [results[i] for i in range(len(plan))]
     for sc in scenarios:
         if sc["outcome"]["status"] == "infra":  # the sandbox is not available here: no verdict, say so
             return {

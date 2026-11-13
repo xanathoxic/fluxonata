@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import zipfile
@@ -35,6 +36,14 @@ def paquet_zip(directory: Path = RESSOURCES / "paquet") -> bytes:
         for f in sorted(p for p in directory.rglob("*") if p.is_file()):
             z.write(f, f.relative_to(directory).as_posix())
     return buf.getvalue()
+
+
+def adresse_http(url: str) -> str:
+    """Refuse tout schéma autre que http(s) (file:, ftp:, …) : l'adresse vient de la ligne de commande, jamais d'une réponse."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise argparse.ArgumentTypeError(f"adresse refusée : http:// ou https:// attendu, reçu {url!r}")
+    return url
 
 
 def appel(url: str, token: str, method: str, body: bytes | None = None, content_type: str = "application/json"):
@@ -65,7 +74,9 @@ def multipart(champs: dict[str, str], fichier: tuple[str, bytes]) -> tuple[bytes
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--url", required=True, help="adresse de la plate-forme (ex. http://127.0.0.1:5173)")
+    ap.add_argument(
+        "--url", required=True, type=adresse_http, help="adresse de la plate-forme (ex. http://127.0.0.1:5173)"
+    )
     ap.add_argument("--workspace", required=True, help="identifiant de l'espace (ex. tests-auto)")
     ap.add_argument("--dry-run", action="store_true", help="indique ce qui serait installé, sans rien écrire")
     args = ap.parse_args()
@@ -77,7 +88,9 @@ def main() -> int:
     echec = False
 
     # 1. actions (paquet) : « skip » laisse en place ce qui existe déjà
-    corps, ctype = multipart({"mode": "preview" if args.dry_run else "apply", "strategy": "skip"}, ("tests-automatisation.zip", paquet_zip()))
+    corps, ctype = multipart(
+        {"mode": "preview" if args.dry_run else "apply", "strategy": "skip"}, ("tests-automatisation.zip", paquet_zip())
+    )
     statut, rapport = appel(f"{base}/packages/import/", token, "POST", corps, ctype)
     if statut >= 400 and not rapport.get("items"):
         print(f"Paquet d'actions : refusé ({statut}) {'; '.join(rapport.get('errors', []))[:300]}")

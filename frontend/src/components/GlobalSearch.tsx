@@ -49,8 +49,10 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
   const first = hits[0]?.[1][0];
   return (
     <Overlay variant="modal" title="Recherche" description="Workflows, actions, formulaires, contrôles, connexions et exécutions récentes." onClose={onClose}>
+      {/* biome-ignore lint/a11y/useSemanticElements: le role="search" est porté par le formulaire ; <search> n'est pas géré par tous les lecteurs d'écran */}
       <form role="search" onSubmit={(e) => { e.preventDefault(); if (first) go(first.to); }}>
         <label htmlFor="gs-q" className="sr-only">Rechercher dans l'espace</label>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ de recherche reçoit le focus à l'ouverture de la fenêtre dédiée */}
         <input id="gs-q" className="gs-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tapez un nom, un identifiant…" autoComplete="off" autoFocus />
       </form>
       <div role="status" aria-live="polite">

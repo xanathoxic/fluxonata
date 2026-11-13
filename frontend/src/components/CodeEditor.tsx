@@ -8,7 +8,7 @@ import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } fr
 import { tags as t } from "@lezer/highlight";
 import { Compartment, EditorState } from "@codemirror/state";
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useEffectEvent } from "react";
 import { HelpTip } from "./HelpTip";
 
 export interface Completion { label: string; detail?: string }
@@ -77,8 +77,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
   onChangeRef.current = onChange;
   completionsRef.current = completions;
 
-  useEffect(() => {
-    if (!host.current) return;
+  // l'éditeur est créé une seule fois ; valeur, langue et lecture seule sont synchronisées par les effets suivants
+  const createView = useEffectEvent((parent: HTMLElement) => {
     const source = (ctx: CompletionContext) => {
       const word = ctx.matchBefore(/[\w.]*/);
       if (!word || (word.from === word.to && !ctx.explicit)) return null;
@@ -104,9 +104,12 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
         theme,
       ],
     });
-    view.current = new EditorView({ state, parent: host.current });
+    view.current = new EditorView({ state, parent });
+  });
+  useEffect(() => {
+    if (!host.current) return;
+    createView(host.current);
     return () => { view.current?.destroy(); view.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor is created once; props are synced below
   }, []);
 
   useEffect(() => {

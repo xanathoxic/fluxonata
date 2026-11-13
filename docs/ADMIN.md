@@ -92,6 +92,8 @@ Toute génération reste un **brouillon** ; la décision d'autorisation n'est ja
 Journaux JSON avec `correlation_id` (`X-Request-ID`), `run_id`, `execution_id` ; `GET /api/v1/health/live/` (vivacité) et `/health/ready/` (disponibilité) ;
 métriques Prometheus sur `/api/v1/metrics/` si `ORCH_METRICS_TOKEN` est défini ; rétention : `manage.py prune_data`.
 
+**Alertes d'exploitation (Prometheus).** `infra/monitoring/` fournit des règles prêtes à l'emploi (`fluxonata.rules.yml` : API injoignable, orchestrateur absent, aucun travailleur, file bloquée, échecs en hausse, étapes incertaines, rappels abandonnés) et un exemple de configuration (`prometheus.example.yml`, jeton lu dans un fichier). Elles ne citent que des séries exposées par `/api/v1/metrics/` (un test le vérifie). Les destinataires (e-mail, chat, astreinte) se déclarent dans votre Alertmanager : ce dépôt n'en configure aucun et n'envoie rien. `scripts/alerts-test.sh` vérifie la syntaxe et le déclenchement sur des séries synthétiques (promtool dans un conteneur sans réseau). Les alertes fonctionnelles « une exécution échoue » et « taux d'échec » (webhook ou e-mail, par espace) se règlent dans Exploitation → Alertes.
+
 **Jetons dans l'adresse.** Les formulaires publics (`/f/<jeton>`, `/api/v1/forms/<jeton>/`), les formulaires de reprise (`/r/<jeton>`, `/api/v1/resume-forms/<jeton>/`)
 et les reprises (`/api/v1/hooks/resume/<jeton>/`) sont des adresses « capacité » : qui la connaît peut s'en servir. Les adresses ne changent pas, mais les journaux
 livrés remplacent le jeton par `[jeton]` (route, méthode, statut, identifiant de corrélation conservés) :

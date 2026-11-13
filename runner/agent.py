@@ -18,6 +18,7 @@ import logging
 import os
 import platform
 import random
+import shutil
 import signal
 import ssl
 import subprocess
@@ -381,8 +382,8 @@ def main(argv=None) -> int:
         executor = subprocess_runner()
     else:
         try:
-            ver = subprocess.run(
-                ["docker", "version", "--format", "{{.Server.Version}}"],
+            ver = subprocess.run(  # noqa: S603 - exécutable résolu par shutil.which, arguments littéraux, sans shell
+                [shutil.which("docker") or "docker", "version", "--format", "{{.Server.Version}}"],
                 check=False,
                 capture_output=True,
                 text=True,

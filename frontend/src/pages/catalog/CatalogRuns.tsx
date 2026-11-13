@@ -5,6 +5,7 @@ import { Badge, EmptyRow, type Tone } from "../../components/AdminUi";
 import { PageHeader } from "../../components/PageHeader";
 import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
+import { ReadRegion } from "../../components/ReadRegion";
 
 interface Row {
   id: string; workflow: { slug: string; name: string; version: string }; status: string; status_label: string;
@@ -97,7 +98,7 @@ export function CatalogRunDetailPage() {
         <h2 id="cr-out">Retour du workflow</h2>
         {r.outputs === null || r.outputs === undefined || (typeof r.outputs === "object" && Object.keys(r.outputs as object).length === 0)
           ? <p className="hint">{ACTIVE.includes(r.status) ? "Pas encore de résultat : le traitement est en cours." : "Aucun résultat."}</p>
-          : <pre className="ctl-json" tabIndex={0} aria-label="Retour du workflow">{JSON.stringify(r.outputs, null, 2)}</pre>}
+          : <ReadRegion className="ctl-json" label="Retour du workflow">{JSON.stringify(r.outputs, null, 2)}</ReadRegion>}
       </section>
     </>
   );

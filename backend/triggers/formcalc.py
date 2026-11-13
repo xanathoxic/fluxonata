@@ -10,6 +10,7 @@ field stays empty rather than showing a wrong number. Every number is a float in
 """
 
 import math
+import operator
 import re
 from datetime import date
 from functools import lru_cache
@@ -269,15 +270,16 @@ def _equal(a, b) -> bool:
     return na == nb if na is not None and nb is not None else text_of(a) == text_of(b)
 
 
+_ORDER = {"<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
+
+
 def _order(op: str, a, b) -> bool:
     na, nb = num_of(a), num_of(b)
     if na is not None and nb is not None:
-        x, y = na, nb
-    elif isinstance(a, str) and isinstance(b, str) and _ISO_DATE.match(a) and _ISO_DATE.match(b):
-        x, y = a, b
-    else:
-        return False
-    return {"<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[op]
+        return _ORDER[op](na, nb)
+    if isinstance(a, str) and isinstance(b, str) and _ISO_DATE.match(a) and _ISO_DATE.match(b):
+        return _ORDER[op](a, b)
+    return False
 
 
 def _arith(op: str, a, b):
@@ -335,7 +337,11 @@ def _call(name: str, args: list, values: dict):  # noqa: C901
             return sum(nums)
         if not nums:
             return None
-        return {"min": min, "max": max, "avg": lambda xs: sum(xs) / len(xs)}[name](nums)
+        if name == "min":
+            return min(nums)
+        if name == "max":
+            return max(nums)
+        return sum(nums) / len(nums)
     if name in ("floor", "ceil", "abs", "round"):
         x = _num(vals[0])
         if x is None:

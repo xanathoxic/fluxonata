@@ -12,6 +12,7 @@ export function StepFinder({ graph, onPick, onClose }: { graph: Graph; onPick: (
     <Overlay variant="modal" title="Aller à une étape" onClose={onClose}>
       <div className="field">
         <label htmlFor="finder-q" className="sr-only">Nom de l'étape</label>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
         <input id="finder-q" type="search" autoFocus placeholder="Nom, type ou identifiant de l'étape" value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && found[0]) onPick(found[0].id); }} />
       </div>

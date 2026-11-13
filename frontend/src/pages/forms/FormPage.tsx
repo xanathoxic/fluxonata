@@ -266,6 +266,7 @@ function Copy({ form, asTemplate, onClose, onDone }: { form: FormFull; asTemplat
     <Overlay variant="modal" title={title} description={asTemplate ? "Le modèle est une copie du brouillon, réutilisable pour créer d'autres formulaires." : "Une copie du brouillon, indépendante de l'original."} onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form="fc-form" className="primary" disabled={!name.trim() || go.isPending}>{asTemplate ? "Créer le modèle" : "Dupliquer"}</button></>}>
       <form id="fc-form" onSubmit={(e: FormEvent) => { e.preventDefault(); if (name.trim()) go.mutate(); }}>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
         <div className="field"><label htmlFor="fc-name">Nom</label><input id="fc-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
         {go.error && <p role="alert" className="field-error">Erreur : {go.error.status === 400 ? "cet identifiant existe déjà, changez le nom." : errorText(go.error)}</p>}
       </form>

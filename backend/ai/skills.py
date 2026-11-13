@@ -8,6 +8,7 @@ import re
 import jsonschema
 from django.db import transaction
 from django.http import Http404
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -71,6 +72,7 @@ def check_instructions(text: str, declared: set[str]) -> str:
     return text
 
 
+@extend_schema_serializer(component_name="SkillVersionInput")
 class VersionInput(serializers.Serializer):
     version = serializers.CharField(required=False)
     bump = serializers.ChoiceField(choices=["patch", "minor", "major"], default="minor")
@@ -117,7 +119,7 @@ class VersionSerializer(serializers.ModelSerializer):
 
 
 class SkillSerializer(serializers.ModelSerializer):
-    owner = serializers.SlugRelatedField(slug_field="username", read_only=True)
+    owner: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="username", read_only=True)
     latest_version = serializers.SerializerMethodField()
 
     class Meta:
@@ -267,6 +269,7 @@ class SkillDetailView(APIView):
 class SkillVersionsView(APIView):
     serializer_class = VersionInput
 
+    @extend_schema(request=VersionInput, responses={201: VersionSerializer})
     @transaction.atomic
     def post(self, request, workspace, slug):
         ws = get_workspace(request.user, workspace, PUBLISH)

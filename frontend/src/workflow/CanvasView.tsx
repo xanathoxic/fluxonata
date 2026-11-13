@@ -148,6 +148,7 @@ function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, ta
       {editable && selected && (
         <EdgeLabelRenderer>
           {points.map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <RouteHandle key={`p${i}`} id={`${id}-pt-${i}`} kind="point" pos={p}
               label={`Point de passage ${i + 1} sur ${points.length} de la ligne vers « ${name} » : glisser, ou flèches pour le déplacer (Maj : 1 pixel) ; Suppr pour le retirer ; Échap pour remettre la ligne en automatique`}
               onPointerDown={grab({ index: i, pt: p, inserted: false })}
@@ -162,6 +163,7 @@ function RoutedEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, ta
               }} />
           ))}
           {!full && !drag && adds.map((m, k) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <RouteHandle key={`a${k}`} id={`${id}-add-${k}`} kind="add" pos={m}
               label={`Ajouter un point de passage à la ligne vers « ${name} »${adds.length > 1 ? `, segment ${k + 1} sur ${adds.length}` : ""} : glisser, ou Entrée pour en poser un au milieu`}
               onPointerDown={grab({ index: k, pt: { x: Math.round(m.x), y: Math.round(m.y) }, inserted: true })}
@@ -268,6 +270,7 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
   const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: zone de dépôt (glisser-déposer depuis la palette) ; au clavier, la palette ajoute les étapes sans glisser
     <div ref={wrap} className="flow-drop" onDragOver={(e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
       onDrop={(e) => {
         const raw = e.dataTransfer.getData(DRAG_MIME);

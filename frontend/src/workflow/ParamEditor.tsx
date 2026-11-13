@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 import type { JsonSchema } from "../api";
 import { typeCompatible, type OutputField } from "./graphOps";
 import { HelpTip } from "../components/HelpTip";
@@ -21,7 +21,7 @@ export function ParamEditor({ name, schema, required, value, variables, onChange
   const template = isTemplate(value);
   const label = schema.title ?? name;
   const hint = schema.description;
-  let control;
+  let control: ReactNode;
   if (template || schema.type === "string" || (!schema.type && !schema.enum)) {
     control = <input id={id} type="text" value={typeof value === "string" ? value : ""}
       onChange={(e) => onChange(e.target.value)} />;

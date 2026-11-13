@@ -30,6 +30,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -65,9 +66,7 @@ def sh(cmd, env=None, check=True, **kw):
         **kw,
     )
     if check and r.returncode:
-        raise RuntimeError(
-            f"{' '.join(map(str, cmd))[:120]} -> {r.returncode}\n{r.stderr[-600:]}"
-        )
+        raise RuntimeError(f"{' '.join(map(str, cmd))[:120]} -> {r.returncode}\n{r.stderr[-600:]}")
     return r
 
 
@@ -178,18 +177,16 @@ def build_images(old_ref):
 class Client:
     def __init__(self):
         self.jar = http.cookiejar.CookieJar()
-        self.op = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self.jar)
-        )
+        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
 
     def csrf(self):
         return next((c.value for c in self.jar if c.name == "csrftoken"), "")
 
     def call(self, method, path, body=None, timeout=15):
         if not self.csrf():
-            self.op.open(f"{BASE}/api/v1/auth/csrf/", timeout=timeout).read()
+            self.op.open(f"http://127.0.0.1:{PORT}/api/v1/auth/csrf/", timeout=timeout).read()
         req = urllib.request.Request(
-            f"{BASE}/api/v1{path}", method=method, data=json.dumps(body).encode() if body is not None else None,
+            f"http://127.0.0.1:{PORT}/api/v1{path}", method=method, data=json.dumps(body).encode() if body is not None else None,
             headers={"Content-Type": "application/json", "X-CSRFToken": self.csrf(), "Origin": BASE},
         )  # fmt: skip
         with self.op.open(req, timeout=timeout) as r:
@@ -197,13 +194,20 @@ class Client:
             return json.loads(raw) if raw else None
 
 
-def post_webhook(url, secret, payload, delivery):
+def local_path(url: str) -> str:
+    """Chemin d'une adresse de webhook, qui ne doit viser que la pile locale : la signature ne part jamais vers un autre hôte."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme or parts.netloc:
+        if (parts.scheme, parts.hostname, parts.port) not in {("http", "127.0.0.1", PORT), ("http", "localhost", PORT)}:
+            raise ValueError(f"adresse de webhook hors de la pile locale : {url!r}")
+    return parts.path + (f"?{parts.query}" if parts.query else "")
+
+
+def post_webhook(path, secret, payload, delivery):
     raw = json.dumps(payload).encode()
     ts = str(int(time.time()))
-    sig = hmac.new(
-        secret.encode(), ts.encode() + b"." + raw, hashlib.sha256
-    ).hexdigest()
-    req = urllib.request.Request(url, data=raw, method="POST", headers={"Content-Type": "application/json", "X-Fluxonata-Timestamp": ts, "X-Fluxonata-Signature": f"v1={sig}", "X-Fluxonata-Delivery": delivery})  # fmt: skip
+    sig = hmac.new(secret.encode(), ts.encode() + b"." + raw, hashlib.sha256).hexdigest()
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}{path}", data=raw, method="POST", headers={"Content-Type": "application/json", "X-Fluxonata-Timestamp": ts, "X-Fluxonata-Signature": f"v1={sig}", "X-Fluxonata-Delivery": delivery})  # fmt: skip
     try:
         with urllib.request.urlopen(req, timeout=8) as r:
             return r.status
@@ -232,11 +236,7 @@ class Load:
             n += 1
             end = time.time() + 60
             while time.time() < end:
-                if (
-                    200
-                    <= post_webhook(self.url, self.secret, {"n": str(n)}, f"up-{n}")
-                    < 300
-                ):
+                if 200 <= post_webhook(self.url, self.secret, {"n": str(n)}, f"up-{n}") < 300:
                     with self.lock:
                         self.acked[n] = time.time()
                     break
@@ -286,18 +286,11 @@ def roll_replicas(svc, replicas, timeout=240):
     end = time.time() + timeout
     new_ids = []
     while time.time() < end:
-        ids = [
-            i
-            for i in compose("ps", "-q", svc, check=False).stdout.split()
-            if i not in old_ids
-        ]
+        ids = [i for i in compose("ps", "-q", svc, check=False).stdout.split() if i not in old_ids]
         healthy = [
             i
             for i in ids
-            if sh(
-                ["docker", "inspect", "-f", "{{.State.Health.Status}}", i], check=False
-            ).stdout.strip()
-            == "healthy"
+            if sh(["docker", "inspect", "-f", "{{.State.Health.Status}}", i], check=False).stdout.strip() == "healthy"
         ]
         if len(healthy) >= replicas:
             new_ids = healthy
@@ -314,10 +307,7 @@ def wait_healthy(service, timeout=240):
     while time.time() < end:
         ids = compose("ps", "-q", service, check=False).stdout.split()
         states = [
-            sh(
-                ["docker", "inspect", "-f", "{{.State.Health.Status}}", i], check=False
-            ).stdout.strip()
-            for i in ids
+            sh(["docker", "inspect", "-f", "{{.State.Health.Status}}", i], check=False).stdout.strip() for i in ids
         ]
         if ids and all(s == "healthy" for s in states):
             return True
@@ -348,17 +338,10 @@ def main():
     build_images(a.old_ref)
     verdict = {}
     try:
-        log(
-            f"démarrage avec l'ANCIEN code ({a.old_ref}), {a.replicas} réplica(s) pour api-ui et api-ingest"
-        )
+        log(f"démarrage avec l'ANCIEN code ({a.old_ref}), {a.replicas} réplica(s) pour api-ui et api-ingest")
         compose("up", "-d", "--no-build", *scale, env=OLD)
         for _ in range(90):
-            if (
-                sh(
-                    ["curl", "-fs", f"{BASE}/api/v1/health/ready/"], check=False
-                ).returncode
-                == 0
-            ):
+            if sh(["curl", "-fs", f"{BASE}/api/v1/health/ready/"], check=False).returncode == 0:
                 break
             time.sleep(2)
         compose(
@@ -412,8 +395,7 @@ def main():
             "/workspaces/demo/webhooks/",
             {"name": slug, "workflow": slug, "environment": "test"},
         )
-        url = BASE + hook["url"] if hook["url"].startswith("/") else hook["url"]
-        load = Load(url, hook["secret"])
+        load = Load(local_path(hook["url"]), hook["secret"])
         load.start()
         log("charge démarrée (webhooks + lectures) ; 15 s avec l'ancien code")
         time.sleep(15)
@@ -435,18 +417,12 @@ def main():
                     "-d",
                     "--no-build",
                     "--no-deps",
-                    *(
-                        [f"--scale={svc}={a.replicas}"]
-                        if svc in ("api-ui", "api-ingest")
-                        else []
-                    ),
+                    *([f"--scale={svc}={a.replicas}"] if svc in ("api-ui", "api-ingest") else []),
                     svc,
                     env=NEW,
                 )
                 ok = wait_healthy(svc)
-            marks[
-                f"{svc} (basculé en {time.time() - t0:.0f} s{'' if ok else ', PAS SAIN'})"
-            ] = time.time()
+            marks[f"{svc} (basculé en {time.time() - t0:.0f} s{'' if ok else ', PAS SAIN'})"] = time.time()
             log(f"  {svc} : {'sain' if ok else 'PAS SAIN'}")
             time.sleep(3)
         log("tout est sur le nouveau code ; 15 s de charge de plus")
@@ -472,11 +448,7 @@ print("RESULT", json.dumps({{"runs": runs.count(), "statuts": dict(Counter(runs.
 """.replace("json.dumps", "__import__('json').dumps"),
             env=NEW,
         )
-        res = json.loads(
-            next(l for l in out.stdout.splitlines() if l.startswith("RESULT")).split(
-                " ", 1
-            )[1]
-        )
+        res = json.loads(next(line for line in out.stdout.splitlines() if line.startswith("RESULT")).split(" ", 1)[1])
         acked = sorted(load.acked)
         lost = sorted(set(acked) - set(res["ns"]))
         dup = res["runs"] - res["n_distincts"]
@@ -516,18 +488,10 @@ print("RESULT", json.dumps({{"runs": runs.count(), "statuts": dict(Counter(runs.
             "fenêtres d'erreur de l'interface": phases, "jalons": {k: time.strftime("%H:%M:%S", time.localtime(v)) for k, v in marks.items()},
         }  # fmt: skip
         print(json.dumps(verdict, ensure_ascii=False, indent=1))
-        ok = (
-            not lost
-            and dup == 0
-            and set(res["statuts"]) <= {"succeeded"}
-            and len(acked) > 0
-        )
+        ok = not lost and dup == 0 and set(res["statuts"]) <= {"succeeded"} and len(acked) > 0
         if a.replicas >= 2:
             ok = ok and rate <= 0.02 and longest <= 8
-        print(
-            "MISE À JOUR PROGRESSIVE : "
-            + ("OK (seuils tenus)" if ok else "SEUILS NON TENUS")
-        )
+        print("MISE À JOUR PROGRESSIVE : " + ("OK (seuils tenus)" if ok else "SEUILS NON TENUS"))
         return 0 if ok else 1
     finally:
         if not a.keep:

@@ -6,7 +6,11 @@ source "$(dirname "$0")/_common.sh"; cd "$ROOT"; load_env
 PY="$ROOT/.venv/bin"
 step() { printf '\n== %s\n' "$*"; }
 step "ruff format --check";   (cd backend && "$PY/ruff" format --check . ../runner)
-step "ruff check";            (cd backend && "$PY/ruff" check . ../runner)
+step "ruff check";            (cd backend && "$PY/ruff" check . && "$PY/ruff" check --config ruff.toml ../runner)  # runner/ : mêmes règles que le backend (sans cette option, ruff y applique sa configuration par défaut)
+# Hors backend/ et runner/ : mêmes règles sauf la famille S (sécurité), dont 8 constats historiques restent à traiter. Le format n'est pas contrôlé ici (dérive historique).
+step "ruff check (scripts, workers, tests, examples)"; (cd backend && "$PY/ruff" check --config ruff.toml --extend-ignore S ../scripts ../workers ../tests ../examples)
+step "typage mypy (tout le backend applicatif ; baseline vide ; toute erreur est bloquante)"; "$PY/python" scripts/mypy_baseline.py
+step "règles d'alerte Prometheus (promtool, séries synthétiques)"; scripts/alerts-test.sh
 step "migrations sûres pour une mise à jour progressive"; "$PY/python" scripts/lint_migrations.py
 step "migrations à jour";     (cd backend && "$PY/python" manage.py makemigrations --check --dry-run)
 step "pytest";                (cd backend && "$PY/python" -m pytest)
@@ -14,7 +18,8 @@ step "pytest";                (cd backend && "$PY/python" -m pytest)
 [ -z "${COMPAT_BASE_REF:-}" ] || { step "compatibilité : code $COMPAT_BASE_REF sur le schéma courant"; scripts/compat-test.sh "$COMPAT_BASE_REF"; }
 [ "${CI_POOLER:-0}" != 1 ] || { step "pytest derrière PgBouncer (mode transaction)"; scripts/pooler-test.sh; }
 step "tsc strict + build";    (cd frontend && npm run build)
-step "vitest";                (cd frontend && npm test)
+step "linter frontend (Biome, baseline ; périmètres corrigés bloquants)"; "$PY/python" scripts/lint_frontend_baseline.py
+step "vitest + couverture (informative, sans seuil)"; (cd frontend && npm run test:coverage)
 step "npm audit (prod)";      (cd frontend && npm audit --omit=dev)
 step "pip-audit";             (cd backend && "$PY/pip-audit" -r requirements.txt --progress-spinner off)
 step "scan de secrets";       python3 scripts/scan-secrets.py

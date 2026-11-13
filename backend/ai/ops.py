@@ -217,7 +217,7 @@ def _add_branch(w: _Graph, op: dict):
     if w.node(op.get("after")).get("type") == "condition" and (op.get("label") or None) not in ("true", "false"):
         raise _Refused(f"« {op.get('after')} » est une décision : précise label « true » ou « false ».")
     if w.node(op.get("after")).get("type") == "switch":
-        _switch_label(w, op.get("after"), op.get("label") or None)
+        _switch_label(w, str(op.get("after")), op.get("label") or None)
     prev, label = op.get("after"), op.get("label")
     for step in steps[:10]:
         wanted = step.get("id")
@@ -281,7 +281,7 @@ def _set_fields(w: _Graph, op: dict):
     fields = op.get("fields")
     if not isinstance(fields, dict) or not fields:
         raise _Refused("fields doit être un objet non vide.")
-    allowed = ("name", *FIELDS.get(node.get("type"), ()))
+    allowed = ("name", *FIELDS.get(str(node.get("type")), ()))
     bad = [k for k in fields if k not in allowed]
     if bad:
         raise _Refused(
@@ -336,7 +336,7 @@ def _set_variable(w: _Graph, op: dict):
 
 def _remove_variable(w: _Graph, op: dict):
     name = op.get("name")
-    if name not in {v.get("name") for v in w.g.get("variables") or []}:
+    if not isinstance(name, str) or name not in {v.get("name") for v in w.g.get("variables") or []}:
         raise _Refused(f"La variable « {name} » n'existe pas.")
     w.g["variables"] = [v for v in w.g["variables"] if v.get("name") != name]
     w.removed_variables.append(name)
@@ -421,7 +421,7 @@ def apply_ops(graph: dict, ops) -> tuple[dict, list[str]]:
         return w.g, ["ops doit être une liste d'opérations."]
     for i, op in enumerate(ops[:MAX_OPS], 1):
         name = op.get("op") if isinstance(op, dict) else None
-        handler = HANDLERS.get(name)
+        handler = HANDLERS.get(name) if isinstance(name, str) else None
         if handler is None:
             errors.append(f"Opération {i} : « {name} » est inconnue (possibles : {', '.join(HANDLERS)}).")
             continue

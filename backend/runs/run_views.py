@@ -1,7 +1,10 @@
 """API for workflow runs, approvals and operator decisions."""
 
+from typing import Any, cast
+
 from django.db.models import Exists, OuterRef
 from django.http import Http404, HttpResponse
+from drf_spectacular.utils import extend_schema, extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
@@ -144,12 +147,14 @@ class RunDetailSerializer(RunSerializer):
     def _nodes(self, obj):
         return {n["id"]: n for n in obj.definition["graph"]["nodes"]}
 
+    @extend_schema_field(StepSerializer(many=True))
     def get_steps(self, obj):
         qs = obj.steps.order_by("started_at", "id")
         request = self.context.get("request")
         can_resume = bool(request and has_perm(request.user, obj.workspace, RUN))
         return StepSerializer(qs, many=True, context={"nodes": self._nodes(obj), "can_resume": can_resume}).data
 
+    @extend_schema_field(RunEventSerializer(many=True))
     def get_events(self, obj):
         return RunEventSerializer(obj.events.all(), many=True).data
 
@@ -174,6 +179,7 @@ class RunDetailSerializer(RunSerializer):
         return obj.definition.get("runtime", {})
 
 
+@extend_schema_serializer(component_name="WorkflowRunStart")
 class StartSerializer(serializers.Serializer):
     environment = serializers.ChoiceField(choices=["dev", "test", "prod"])
     inputs = serializers.JSONField(default=dict)
@@ -181,6 +187,16 @@ class StartSerializer(serializers.Serializer):
     callback_url = serializers.URLField(required=False, max_length=500)
     until = serializers.CharField(required=False, max_length=64)  # stop after this step (development only)
     draft = serializers.BooleanField(required=False, default=False)  # run the saved DRAFT (development only)
+
+
+@extend_schema_serializer(component_name="WorkflowRunStarted")
+class WorkflowRunStartedSerializer(RunSerializer):
+    """Réponse réelle du démarrage : l'exécution (comme la liste) et l'adresse de son suivi. Documentation seulement."""
+
+    url = serializers.CharField()
+
+    class Meta(RunSerializer.Meta):
+        fields = [*RunSerializer.Meta.fields, "url"]
 
 
 class WorkflowRunListView(ListAPIView):
@@ -253,6 +269,7 @@ class WorkflowRunDetailView(RetrieveAPIView):
 class StartWorkflowRunView(APIView):
     serializer_class = StartSerializer
 
+    @extend_schema(responses={200: WorkflowRunStartedSerializer, 202: WorkflowRunStartedSerializer})
     def post(self, request, workspace, slug):
         ws = get_workspace(request.user, workspace, RUN)
         ser = StartSerializer(data=request.data)
@@ -398,7 +415,8 @@ class ApprovalSerializer(serializers.ModelSerializer):
     decided_by = serializers.CharField(source="decided_by.username", default=None)
     run_id = serializers.UUIDField(source="step_run.run_id")
     workflow = serializers.SerializerMethodField()
-    context = serializers.SerializerMethodField()
+    # `context` est un nom du contrat d'API ; il masque la propriété `context` de DRF `Serializer` : exemption ciblée.
+    context = serializers.SerializerMethodField()  # type: ignore[assignment]
     can_decide = serializers.SerializerMethodField()
 
     class Meta:
@@ -426,7 +444,9 @@ class ApprovalSerializer(serializers.ModelSerializer):
         return obj.step_run.run.inputs
 
     def get_can_decide(self, obj) -> bool:
-        u = self.context["request"].user
+        u = cast("dict[str, Any]", self.context)[
+            "request"
+        ].user  # le champ d'API `context` masque la propriété DRF pour mypy
         run = obj.step_run.run
         prod_ban = run.environment.kind == "prod" and (run.definition.get("governance") or {}).get("rules", {}).get(
             "forbid_self_approval_in_prod", True

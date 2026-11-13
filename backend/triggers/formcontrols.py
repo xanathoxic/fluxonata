@@ -391,7 +391,7 @@ def process(field: dict, value):  # noqa: C901
     else:
         items = {o["value"]: o for o in items_of(field)}
         details = has_details(spec)
-        picked: dict[str, dict] = {}
+        picked: dict[object, dict] = {}  # clés : valeurs des choix (texte ou nombre)
         for raw in value:
             v = raw.get("value") if isinstance(raw, dict) else raw
             item = _known(items, field, v)

@@ -44,16 +44,17 @@ describe("ParamEditor", () => {
   });
 });
 
+function ListHarness() {
+  const [value, setValue] = useState<unknown>(["Objet : {{ inputs.texte }}"]);
+  return (
+    <>
+      <ParamEditor name="lines" schema={{ type: "array", title: "Lignes" }} required value={value} variables={vars} onChange={setValue} />
+      <output aria-label="valeur">{JSON.stringify(value) ?? "undefined"}</output>
+    </>
+  );
+}
+
 describe("ParamEditor : listes et objets", () => {
-  function ListHarness() {
-    const [value, setValue] = useState<unknown>(["Objet : {{ inputs.texte }}"]);
-    return (
-      <>
-        <ParamEditor name="lines" schema={{ type: "array", title: "Lignes" }} required value={value} variables={vars} onChange={setValue} />
-        <output aria-label="valeur">{JSON.stringify(value) ?? "undefined"}</output>
-      </>
-    );
-  }
 
   it("shows a list as JSON and keeps it a list (never « [object Object] » or a string)", () => {
     render(<ListHarness />);

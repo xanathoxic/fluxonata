@@ -16,7 +16,16 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+
+
+def adresse_http(url: str) -> str:
+    """Refuse tout schéma autre que http(s) (file:, ftp:, …) : l'adresse vient de la ligne de commande, jamais d'une réponse."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise ValueError(f"adresse refusée : http:// ou https:// attendu, reçu {url!r}")
+    return url
 
 
 def main(argv: list[str]) -> int:
@@ -24,6 +33,11 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     url, raw = argv[1], argv[2]
+    try:
+        adresse_http(url)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     secret = os.environ.get("FLUXONATA_WEBHOOK_SECRET", "")
     if not secret:
         print("Définissez FLUXONATA_WEBHOOK_SECRET (le secret du webhook).", file=sys.stderr)

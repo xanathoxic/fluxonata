@@ -37,12 +37,12 @@ export function TagFilter({ lists, value, onChange }: { lists: (string[] | undef
     return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"));
   }, [lists]);
   const shown = all.filter(([t]) => t.includes(q.trim().toLowerCase()));
-  const place = () => {
-    const r = btn.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 6, left: Math.max(12, Math.min(r.left, window.innerWidth - 292)) });
-  };
   useEffect(() => {
     if (!open) return;
+    const place = () => {
+      const r = btn.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: Math.max(12, Math.min(r.left, window.innerWidth - 292)) });
+    };
     place();
     const close = (e: Event) => { const t = e.target as Node; if (!pop.current?.contains(t) && !btn.current?.contains(t)) setOpen(false); };
     const key = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); btn.current?.focus(); } };
@@ -58,6 +58,7 @@ export function TagFilter({ lists, value, onChange }: { lists: (string[] | undef
       {value && <span className="tagchip tagchip-on">{value}<button type="button" className="tag-x" aria-label={`Retirer le filtre ${value}`} onClick={() => onChange("")}>×</button></span>}
       {open && createPortal(
         <div ref={pop} id={id} role="dialog" aria-label="Filtrer par étiquette" className="tagfilter-pop" style={{ top: pos.top, left: pos.left }}>
+          {/* biome-ignore lint/a11y/noAutofocus: la recherche reçoit le focus à l'ouverture du panneau de filtre */}
           <input type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher une étiquette…" aria-label="Chercher une étiquette" />
           <ul>
             {shown.map(([t, c]) => (

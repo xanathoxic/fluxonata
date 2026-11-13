@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FormIcon, IconButton, IconLabel } from "../../forms/FormIcon";
 import { MAX_ITEMS, type ControlItem } from "../../forms/controls";
 import { isBlock } from "../../forms/types";
+import { keyed } from "../../components/keyed";
 
 /** The options as a tree: a group is a parent, its options are its children (stored flat, `group` on each option). */
 interface Leaf { uid: number; item: ControlItem }
@@ -60,7 +61,7 @@ export function OptionsEditor({ items, edit, onChange }: Props) {
     const label = `Option ${all.length + 1}`;
     const leaf: Leaf = { uid: uid(), item: { value: freeValue(taken), label } };
     const next = [...tree];
-    if (groupSel) { next[loc!.i] = { ...groupSel, children: [...groupSel.children, leaf] }; }
+    if (groupSel && loc) { next[loc.i] = { ...groupSel, children: [...groupSel.children, leaf] }; }
     else if (loc && top && loc.j !== null && top.kind === "group") { const c = [...top.children]; c.splice(loc.j + 1, 0, leaf); next[loc.i] = { ...top, children: c }; }
     else next.splice(loc ? loc.i + 1 : next.length, 0, { uid: leaf.uid, kind: "opt", item: leaf.item });
     update(next); setSel(leaf.uid);
@@ -134,7 +135,6 @@ export function OptionsEditor({ items, edit, onChange }: Props) {
   );
   const itemTag = (o: ControlItem) => [o.disabled ? "grisée" : "", detailCount(o) ? `${detailCount(o)} champ(s) propre(s)` : ""].filter(Boolean).join(" · ");
   return (
-    <>
       <fieldset disabled={!edit} className="od-fs">
         <div className="od">
           <nav className="od-tree" aria-label="Structure des options">
@@ -147,7 +147,7 @@ export function OptionsEditor({ items, edit, onChange }: Props) {
               <IconButton icon="down" label="Descendre" disabled={!loc} onClick={() => move(1)} />
               <IconButton icon="right" label="Placer dans le groupe au-dessus" disabled={!canIndent} onClick={indent} />
               <IconButton icon="back" label="Sortir du groupe" disabled={!(loc && loc.j !== null)} onClick={outdent} />
-              <IconButton icon="trash" danger label="Supprimer la sélection" disabled={!loc || Boolean(groupSel && groupSel.children.length)} onClick={remove} />
+              <IconButton icon="trash" danger label="Supprimer la sélection" disabled={!loc || Boolean(groupSel?.children.length)} onClick={remove} />
             </div>
             {tree.length === 0 && <p className="hint">Aucune option : ajoutez-en une, ou collez une liste ci-dessous.</p>}
             <ul className="od-list">
@@ -192,11 +192,10 @@ export function OptionsEditor({ items, edit, onChange }: Props) {
                 )}
               </>
             ) : <p className="hint">Sélectionnez une option ou un groupe à gauche pour le régler.</p>}
-            {problems.length > 0 && <ul className="fb-problems" role="alert" aria-label="Problèmes des options">{problems.slice(0, 4).map((p, i) => <li key={i}>{p}</li>)}</ul>}
+            {problems.length > 0 && <ul className="fb-problems" role="alert" aria-label="Problèmes des options">{keyed(problems.slice(0, 4), (p) => p).map(({ item: p, key }) => <li key={key}>{p}</li>)}</ul>}
           </section>
         </div>
       </fieldset>
-    </>
   );
 }
 

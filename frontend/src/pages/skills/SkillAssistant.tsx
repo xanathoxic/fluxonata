@@ -1,5 +1,6 @@
 import type { JsonSchema } from "../../api";
 import { AssistantPanel, SchemaTable } from "../../components/AssistantPanel";
+import { ReadRegion } from "../../components/ReadRegion";
 
 export interface SkillProposal { slug: string; name: string; description: string; instructions: string; input_schema: JsonSchema; output_schema: JsonSchema; tags: string[] }
 
@@ -18,7 +19,7 @@ export function SkillAssistant({ onUse, onClose }: { onUse: (p: SkillProposal) =
         <>
           <h3>{p.name} <code className="mono">{p.slug}</code></h3>
           <p>{p.description}</p>
-          <h4>Instructions données à l'IA</h4><pre className="wrap" tabIndex={0}>{p.instructions}</pre>
+          <h4>Instructions données à l'IA</h4><ReadRegion className="wrap" label="Instructions données à l'IA">{p.instructions}</ReadRegion>
           <h4>Entrées</h4><SchemaTable schema={p.input_schema} caption="Entrées proposées" />
           <h4>Champs de la réponse</h4><SchemaTable schema={p.output_schema} caption="Réponse attendue" />
         </>

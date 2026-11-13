@@ -629,8 +629,14 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
     for src in template_expressions(graph.get("outputs", {})):
         _check_expr(src, None, set(by_id), by_id, declared_inputs, out_types, issues, declared_vars)
     _check_failure_branches(nodes, clean_edges, by_id, issues)
-    seen: set = set()  # the same step read twice on one line gives the same finding twice
-    return [i for i in issues if (k := (i["node"], i["code"], i["message"])) not in seen and not seen.add(k)]
+    vus: set = set()  # the same step read twice on one line gives the same finding twice
+    uniques = []
+    for i in issues:
+        k = (i["node"], i["code"], i["message"])
+        if k not in vus:
+            vus.add(k)
+            uniques.append(i)
+    return uniques
 
 
 def _validate_http(n: dict, workspace, issues: list) -> None:
@@ -642,7 +648,9 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
         if op is None:
             issues.append(issue(nid, "bad_http", "Intégration ou opération inconnue."))
         else:
-            given = n.get("params") if isinstance(n.get("params"), dict) else {}
+            given = n.get("params")
+            if not isinstance(given, dict):
+                given = {}
             for prm in op["params"]:
                 if prm.get("required") and given.get(prm["name"]) in (None, ""):
                     issues.append(issue(nid, "missing_param", f"Renseignez « {prm['label']} »."))
@@ -1203,7 +1211,14 @@ def _validate_variables(variables) -> list[dict]:
     out, seen = [], set()
     if not isinstance(variables, list):
         return [issue(None, "bad_variables", "Les variables du workflow sont mal formées.")]
-    py = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    py: dict[str, type | tuple[type, ...]] = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
     for v in variables:
         name = v.get("name") if isinstance(v, dict) else None
         if not isinstance(name, str) or not IDENT.match(name) or name in RESERVED:

@@ -63,7 +63,7 @@ MIDDLEWARE = [
 ]
 ROOT_URLCONF = "fluxonata.urls"
 WSGI_APPLICATION = "fluxonata.wsgi.application"
-TEMPLATES = []
+TEMPLATES: list[dict[str, object]] = []
 
 # 1 = ORCH_DB_HOST/PORT designate a transaction-mode pooler (PgBouncer), see docs/INSTALL.md and ADR 0022. Never for `migrate`.
 ORCH_DB_POOLED = env("ORCH_DB_POOLED", "0") == "1"

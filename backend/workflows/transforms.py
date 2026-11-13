@@ -60,6 +60,7 @@ def apply(node: dict, ctx: dict) -> dict:
     op = node.get("op")
     if op not in OPS:
         raise TransformError(f"Opération inconnue : {op}.")
+    out: list[object]
     if op == "set":
         fields = node.get("fields")
         if not isinstance(fields, dict) or not fields:

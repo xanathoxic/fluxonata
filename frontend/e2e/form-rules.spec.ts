@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, login, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, login, publishViaApi, boxOf, viewportOf } from "./helpers";
 
 async function call(page: Page, method: string, path: string, body?: unknown) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -31,8 +31,8 @@ test("éditeur de conditions : fenêtre centrée, conditions riches, groupes, co
   // la fenêtre est au milieu de l'écran
   const dlg = page.getByRole("dialog", { name: "Conditions du champ « Numéro de TVA »" });
   await expect(dlg).toBeVisible();
-  const box = (await dlg.boundingBox())!;
-  const vp = page.viewportSize()!;
+  const box = (await boxOf(dlg));
+  const vp = viewportOf(page);
   expect(Math.abs(box.x + box.width / 2 - vp.width / 2)).toBeLessThan(30);
   expect(Math.abs(box.y + box.height / 2 - vp.height / 2)).toBeLessThan(80);
 
@@ -106,10 +106,14 @@ test("règles à l'exécution : afficher, obligatoire, textes, choix limités, c
   const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [
     f("pays", "Pays", { type: "select", required: true, options: [{ value: "FR", label: "France" }, { value: "BE", label: "Belgique" }] }),
     f("email", "E-mail"),
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     f("conf", "Confirmation", { rules: [{ when: when("email", "not_empty"), then: [{ do: "text", target: "label", text: "Confirmez {email}" }, { do: "text", target: "help", text: "Pays : {pays}" }] }] }),
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     f("tva", "TVA", { rules: [{ when: when("pays", "equals", { value: "be", ci: true }), then: [{ do: "show" }, { do: "require" }], else: [{ do: "hide" }] }] }),
     f("ville", "Ville", { type: "select", options: [{ value: "paris", label: "Paris" }, { value: "lyon", label: "Lyon" }, { value: "bruxelles", label: "Bruxelles" }],
+      // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
       rules: [{ when: when("pays", "equals", { value: "FR" }), then: [{ do: "options", values: ["paris", "lyon"] }], else: [{ do: "options", values: ["bruxelles"] }] }] }),
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
     f("code", "Code société", { rules: [{ when: { op: "all", items: [when("email", "contains", { value: "@CORP", ci: true }), when("email", "ends_with", { value: ".com" })] }, then: [{ do: "show" }], else: [{ do: "hide" }] }] }),
   ] }] };
   expect((await call(page, "POST", "/form-library/", { slug, name: `Exéc ${slug}`, definition: def })).status).toBe(201);
@@ -178,6 +182,7 @@ test("conditions : une ancienne règle d'affichage est reprise comme première r
   await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 }); // enregistrement automatique
   const saved = (await call(page, "GET", `/form-library/${slug}/`)).data.definition.sections[0].fields.find((x: { key: string }) => x.key === "tva");
   expect(saved.visible_if).toBeUndefined();
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   expect(saved.rules[0]).toMatchObject({ then: [{ do: "show" }], else: [{ do: "hide" }] });
 });
 
@@ -286,8 +291,8 @@ test("champ calculé : formule, essai en direct, valeur recalculée et non modif
   const dlg = page.getByRole("dialog", { name: "Conditions du champ « Total TTC »" });
   await expect(dlg).toBeVisible();
   await dlg.getByRole("tab", { name: /^Calcul/ }).click();
-  const box = (await dlg.boundingBox())!;
-  expect(Math.abs(box.x + box.width / 2 - page.viewportSize()!.width / 2)).toBeLessThan(30);
+  const box = (await boxOf(dlg));
+  expect(Math.abs(box.x + box.width / 2 - viewportOf(page).width / 2)).toBeLessThan(30);
   await dlg.getByRole("button", { name: "Prix", exact: true }).click();
   await dlg.getByLabel("Formule").pressSequentially(" * ");
   await dlg.getByRole("button", { name: "Quantité", exact: true }).click();

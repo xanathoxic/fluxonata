@@ -49,9 +49,7 @@ def main():
     ap.add_argument("--concurrency", type=int, nargs="+", default=[1, 2, 4])
     a = ap.parse_args()
     load_env()
-    os.environ.update(
-        ORCH_DB_NAME=DB, ORCH_DEBUG="1", DJANGO_SETTINGS_MODULE="fluxonata.settings"
-    )
+    os.environ.update(ORCH_DB_NAME=DB, ORCH_DEBUG="1", DJANGO_SETTINGS_MODULE="fluxonata.settings")
     sys.path.insert(0, str(ROOT / "backend"))
     results = []
     for conc in a.concurrency:

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, login } from "./helpers";
+import { expectNoA11yViolations, login, boxOf } from "./helpers";
 
 async function call(page: Page, method: string, path: string, body?: unknown) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -131,7 +131,8 @@ test("contrôle à lignes répétées : calcul par ligne, total du formulaire et
 
   // le serveur refuse un contrôle dont une sous-règle n'est pas respectée
   const bad = JSON.parse(JSON.stringify(def)) as typeof def;
-  (bad.sections[0]!.fields[0] as { control: { spec: { parts: unknown[] } } }).control.spec.parts.push({ key: "x", label: "X", type: "datagrid" });
+  const first = bad.sections[0]?.fields[0] as { control: { spec: { parts: unknown[] } } } | undefined;
+  first?.control.spec.parts.push({ key: "x", label: "X", type: "datagrid" });
   expect((await call(page, "POST", "/form-library/", { slug: `${slug}-bad`, name: "Refusé", definition: bad })).status).toBe(400);
 });
 
@@ -324,7 +325,7 @@ test("contrôle à options fournies par le formulaire : essayé avec des options
   // sans dépendre d'un chevauchement vertical : un décalage plus grand que la zone ne les fait pas échapper au contrôle.
   const rest = ["value_path", "label_path", "group_path", "disabled_path"];
   const alignment = async () => {
-    const box = async (k: string) => (await svc.locator(`#fp-options-${k}`).boundingBox())!;
+    const box = async (k: string) => (await boxOf(svc.locator(`#fp-options-${k}`)));
     const columns = await svc.locator(".sv-card[aria-label='Dans la réponse'] .sv-grid").evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
     const list = await box("items_path");
     const boxes = await Promise.all(rest.map(async (k) => ({ k, b: await box(k) })));
@@ -478,7 +479,7 @@ test("onglet Test : l'option choisie pré-remplit ses champs enfants (nom, prén
   await t.getByRole("button", { name: "Envoyer les options" }).click();
   await expect(t.getByText("2 option(s) retenue(s) (dont 2 avec des valeurs pour les champs enfants)")).toBeVisible();
 
-  const choice = t.getByRole("group", { name: "Personne " + id }).getByRole("combobox");
+  const choice = t.getByRole("group", { name: `Personne ${id}` }).getByRole("combobox");
   await choice.selectOption("option-2");
   await expect(t.getByLabel("Nom", { exact: true })).toHaveValue("Exemple2");
   await expect(t.getByLabel("Prénom")).toHaveValue("Exemple2");

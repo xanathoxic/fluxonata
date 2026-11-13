@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Minimal secret scanner over git-tracked files (no external service). Exit 1 on findings."""
+
 import re
 import subprocess
 import sys
@@ -10,7 +11,8 @@ PATTERNS = {
     "github token": re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}"),
     "slack token": re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
     "generic secret assignment": re.compile(
-        r"(?i)\b(api[_-]?key|secret|token|passwd|password)\b\s*[:=]\s*['\"][A-Za-z0-9/+_\-]{20,}['\"]"),
+        r"(?i)\b(api[_-]?key|secret|token|passwd|password)\b\s*[:=]\s*['\"][A-Za-z0-9/+_\-]{20,}['\"]"
+    ),
 }
 ALLOW = ("fluxonata-dev", "demo-fluxonata", "pw-test-123")  # documented throwaway dev values
 files = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True).stdout.split()

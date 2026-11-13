@@ -43,7 +43,7 @@ def build(
 ) -> tuple[bytes, dict]:
     """meta: name, slug, version, description, license. actions/workflows: dict payloads (see export view)."""
     files: dict[str, bytes] = {}
-    contents = {"actions": [], "workflows": []}
+    contents: dict[str, list[dict]] = {"actions": [], "workflows": []}
     for a in actions:
         base = f"actions/{a['slug']}/{a['version']}"
         source = a.pop("source")

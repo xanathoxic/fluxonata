@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "../api";
 import { useApp } from "../context";
 import { FormIcon, IconLabel } from "./FormIcon";
+import { keyed } from "../components/keyed";
 
 interface Problem { line: number; message: string }
 const SNIPPETS: { label: string; css: string }[] = [
@@ -60,10 +61,11 @@ export function CssEditor({ css, onChange, edit }: { css: string | undefined; on
       <label htmlFor="css-src" className="sr-only">CSS personnalisé</label>
       <textarea id="css-src" className="fb-csssrc" spellCheck={false} rows={16} value={text} disabled={!edit} onChange={(e) => check(e.target.value)} aria-describedby={problems.length ? "css-problems" : "css-help"} placeholder={".fb-heading {\n  color: #1d4ed8;\n}"} />
       {problems.length > 0 && (
-        <ul id="css-problems" role="alert" className="fb-problems">{problems.map((p, i) => <li key={i}><strong>Ligne {p.line}</strong> : {p.message}</li>)}</ul>
+        <ul id="css-problems" role="alert" className="fb-problems">{keyed(problems, (p) => `${p.line}:${p.message}`).map(({ item: p, key }) => <li key={key}><strong>Ligne {p.line}</strong> : {p.message}</li>)}</ul>
       )}
       <p id="css-help" className="hint">Les règles s'appliquent uniquement à l'intérieur du formulaire. Sont refusés : <code>url()</code>, <code>@import</code>, <code>position: fixed</code>, <code>!important</code>, les échappements et tout ce qui n'est pas de la mise en forme. Le texte enregistré est réécrit sous forme normalisée.</p>
       {edit && (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="fb-snips" role="group" aria-label="Exemples à insérer">
           {SNIPPETS.map((s) => <button key={s.label} type="button" onClick={() => insert(s.css)}><IconLabel icon="plus">{s.label}</IconLabel></button>)}
           <button type="button" onClick={() => check("")} disabled={!text}><IconLabel icon="undo">Effacer</IconLabel></button>

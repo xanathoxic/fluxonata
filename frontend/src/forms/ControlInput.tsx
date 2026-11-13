@@ -1,5 +1,5 @@
 import { DefinitionForm } from "./DefinitionForm";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, useEffectEvent } from "react";
 import type { LookupFn } from "./DefinitionForm";
 import { DualList } from "./DualList";
 import { OptionPicker } from "./OptionPicker";
@@ -25,9 +25,10 @@ function useServiceItems(key: string, source: DataSource | undefined, values: Ro
   const params = JSON.stringify(paramsOf(source?.params, values));
   const waiting = waitingFor(source, values);
   const waitKey = waiting.join(",");
+  const hasSource = Boolean(source); // la recherche se relance si l'existence de la source, ses paramètres ou l'attente changent
   const [state, setState] = useState<{ items: ControlItem[]; loading: boolean; error: string }>({ items: [], loading: false, error: "" });
   useEffect(() => {
-    if (!source || !lookup || !enabled || waitKey) { setState({ items: [], loading: false, error: "" }); return; }
+    if (!hasSource || !lookup || !enabled || waitKey) { setState({ items: [], loading: false, error: "" }); return; }
     let live = true;
     setState((s) => ({ ...s, loading: true, error: "" }));
     const timer = window.setTimeout(() => {
@@ -36,7 +37,7 @@ function useServiceItems(key: string, source: DataSource | undefined, values: Ro
         .catch((e: unknown) => { if (live) setState({ items: [], loading: false, error: e instanceof Error ? e.message : "La liste n'a pas pu être chargée." }); });
     }, 300);
     return () => { live = false; window.clearTimeout(timer); };
-  }, [key, Boolean(source), lookup, params, enabled, waitKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, hasSource, lookup, params, enabled, waitKey]);
   return { ...state, waiting: enabled ? waiting : [] };
 }
 
@@ -47,25 +48,27 @@ function usePrefill(key: string, cfg: ControlPrefill | undefined, values: Row, l
   const ours = useRef<string | null>(null);
   const current = useRef(value);
   current.current = value;
+  const hasCfg = Boolean(cfg); // la clé et l'existence de la configuration identifient la requête
+  const applyFill = useEffectEvent((v: unknown) => fill(v));
   const run = useCallback(() => {
-    if (!cfg || !lookup || !enabled) return () => undefined;
+    if (!hasCfg || !lookup || !enabled) return () => undefined;
     let live = true;
     setState((s) => ({ ...s, loading: true, error: "" }));
     lookup(key, JSON.parse(params) as Record<string, string>, "prefill")
       .then((r) => {
         if (!live) return;
         const mine = ours.current !== null && JSON.stringify(current.current) === ours.current;
-        if (!touched.current && (isEmpty(current.current) || mine)) { ours.current = JSON.stringify(r); touched.current = false; fill(r); }
+        if (!touched.current && (isEmpty(current.current) || mine)) { ours.current = JSON.stringify(r); touched.current = false; applyFill(r); }
         setState({ loading: false, error: "", done: true });
       })
       .catch((e: unknown) => { if (live) setState({ loading: false, error: e instanceof Error ? e.message : "Le service n'a pas répondu.", done: false }); });
     return () => { live = false; };
-  }, [key, Boolean(cfg), lookup, params, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, hasCfg, lookup, params, enabled, touched]);
   useEffect(() => {
-    if (!cfg || !lookup || !enabled || touched.current) return;
+    if (!hasCfg || !lookup || !enabled || touched.current) return;
     const timer = window.setTimeout(() => { void run(); }, 300);
     return () => window.clearTimeout(timer);
-  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [run, hasCfg, lookup, enabled, touched]);
   return state;
 }
 
@@ -97,7 +100,13 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
     };
     const form = (row: Row, set: (r: Row) => void, key: string) => formOf(spec.parts ?? [], row, set, key);
 
-    if (spec.mode === "group") return <div className="ctl ctl-group">{form(asRow(value), onChange, "g")}</div>;
+    if (spec.mode === "group")
+      return (
+        // biome-ignore lint/a11y/useSemanticElements: groupe de champs d'un contrôle (pas un fieldset : mise en forme) ; il porte le libellé du champ, sans quoi les champs internes sont lus sans contexte
+        <div className="ctl ctl-group" role="group" aria-labelledby={`${id}-l`}>
+          {form(asRow(value), onChange, "g")}
+        </div>
+      );
 
     if (spec.mode === "repeat") {
       const rows = Array.isArray(value) ? (value as unknown[]).map(asRow) : [];
@@ -113,6 +122,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
         const grid = { gridTemplateColumns: `repeat(${cols.length}, minmax(9rem, 1fr))` };
         const sums = (spec.totals ?? []).map((k) => [k, shown.reduce((t, r) => t + (typeof r[k] === "number" ? (r[k] as number) : 0), 0)] as const);
         return (
+          // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
           <div className="ctl ctl-repeat" role="group" aria-labelledby={`${id}-l`}>
             <div className="ctl-table">
               <div className="ctl-trow ctl-thead" aria-hidden="true">
@@ -120,6 +130,8 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
                 <span className="ctl-tools" />
               </div>
               {shown.map((r, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
+                // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
                 <div key={i} className="ctl-trow" role="group" aria-label={`${label} ${i + 1}`}>
                   {formOf(spec.parts ?? [], r, (next) => set(shown.map((x, k) => (k === i ? next : x))), `r${i}`, true)}
                   {!disabled && (
@@ -132,6 +144,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
                 </div>
               ))}
               {sums.length > 0 && (
+                // biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran
                 <div className="ctl-trow ctl-tfoot" aria-label="Totaux">
                   <div className="fb-grid fb-inline" style={grid}>{cols.map((c) => <div key={c.key} className="fb-cell">{(spec.totals ?? []).includes(c.key) ? <span>Total {c.label || c.key} : {Math.round((sums.find(([k]) => k === c.key)?.[1] ?? 0) * 1e6) / 1e6}</span> : null}</div>)}</div>
                   <span className="ctl-tools" />
@@ -144,8 +157,11 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
         );
       }
       return (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="ctl ctl-repeat" role="group" aria-labelledby={`${id}-l`}>
           {shown.map((r, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
+            // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
             <div key={i} className="ctl-row" role="group" aria-label={`${label} ${i + 1}`}>
               <div className="ctl-rowhead">
                 <strong>{label} {i + 1}</strong>
@@ -174,6 +190,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
       const pick = (v: string) => onChange(v === "" ? undefined : details ? { ...seedOf(spec, items.find((o) => o.value === v)), value: v } : v);
       const parts = detailsOf(spec, current);
       return (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="ctl ctl-choice" role="group" aria-labelledby={`${id}-l`}>
           {spec.display === "dropdown" ? (
             <OptionPicker id={id} items={items} selected={current ? [current.value] : []} multiple={false} placeholder={spec.placeholder} disabled={disabled} invalid={Boolean(error)} onToggle={(v) => pick(v)} />
@@ -210,7 +227,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
     if (spec.display === "dual" && !details) {
       // the value is the list of the chosen values IN THE ORDER the person put them (the server keeps that order for this display)
       return (
-        <div className="ctl ctl-items" role="group" aria-labelledby={`${id}-l`}>
+        <div className="ctl ctl-items">{/* le groupe nommé est celui de DualList : un second, de même nom, serait annoncé deux fois */}
           <DualList id={id} labelledBy={`${id}-l`} options={items} value={[...picked.keys()]} onChange={(next) => onChange(next)} disabled={disabled} max={spec.max} invalid={Boolean(error)} availableLabel={spec.available_label} chosenLabel={spec.chosen_label} />
           {(spec.min || field.required) && <p className="hint"><FormIcon name="boxes" size={14} /> au moins {Math.max(spec.min ?? 0, field.required ? 1 : 0)}</p>}
         </div>
@@ -220,6 +237,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
     const seed = (v: string): Row => (details ? seedOf(spec, items.find((o) => o.value === v)) : {});
     const toggle = (v: string, on: boolean) => { const n = new Map(picked); if (on) n.set(v, seed(v)); else n.delete(v); emit(n); };
     return (
+      // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
       <div className="ctl ctl-items" role="group" aria-labelledby={`${id}-l`}>
         {dropdown && <OptionPicker id={id} items={items} selected={[...picked.keys()]} multiple placeholder={spec.placeholder} disabled={disabled} invalid={Boolean(error)} max={spec.max} onToggle={toggle} />}
         {items.map((o, i) => {

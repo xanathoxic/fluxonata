@@ -39,6 +39,7 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   await expectNoA11yViolations(page);
   await form.getByRole("button", { name: "Créer l'utilisateur" }).click();
   const secret = page.getByRole("dialog", { name: "Utilisateur créé" });
+  // biome-ignore lint/performance/useDomNodeTextContent: méthode Playwright `innerText()` (texte rendu, tel que la personne le lit), pas la propriété DOM — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
   const temp = (await secret.getByLabel("Mot de passe provisoire").innerText()).trim();
   expect(temp.length).toBeGreaterThanOrEqual(16);
   await expectNoA11yViolations(page);
@@ -94,6 +95,7 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   await page.getByRole("button", { name: `Réinitialiser le mot de passe de ${name}` }).click();
   await page.getByRole("dialog", { name: /Réinitialiser le mot de passe/ }).getByRole("button", { name: "Réinitialiser" }).click();
   const again = page.getByRole("dialog", { name: "Mot de passe réinitialisé" });
+  // biome-ignore lint/performance/useDomNodeTextContent: méthode Playwright `innerText()` (texte rendu, tel que la personne le lit), pas la propriété DOM — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
   const temp2 = (await again.getByLabel("Mot de passe provisoire").innerText()).trim();
   await again.getByRole("button", { name: "J'ai transmis le mot de passe" }).click();
   await signIn(person, name, mine);

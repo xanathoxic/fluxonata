@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { type ApiError, type JsonSchema } from "../api";
+import type { ApiError, JsonSchema } from "../api";
 import { defaultsFor } from "../components/SchemaForm";
 import { WizardForm } from "../workflow/WizardForm";
 import type { FormDef } from "../workflow/types";
@@ -48,7 +48,7 @@ export function PublicFormPage({ kind = "forms" }: { kind?: "forms" | "resume-fo
     setErrors(problems);
     if (Object.keys(problems).length === 0) send.mutate(visibleState(d, values).kept);
   };
-  const send = useMutation<{ ok: boolean; message: string }, ApiError, Record<string, unknown> | void>({
+  const send = useMutation<{ ok: boolean; message: string }, ApiError, Record<string, unknown> | undefined>({
     mutationFn: (sent) => call(kind, `${token}/`, { values: sent ?? values, website: trap }),
     onError: (e) => setErrors(e.status === 400 && e.details ? Object.fromEntries(Object.entries(e.details).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])) : { _: e.message }),
   });

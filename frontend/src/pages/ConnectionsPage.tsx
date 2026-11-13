@@ -110,10 +110,12 @@ export function ConnectionsPage() {
       {test.data && <p role="status">{test.data.ok ? "✔" : "✖"} {test.data.message}</p>}
       {manage && open && (
         <Overlay title="Nouvelle connexion" description={`Assistant de configuration — étape ${Math.min(step + 1, 4)} sur 4`} onClose={() => setOpen(false)}>
+        {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
         <div aria-label="Assistant de configuration" role="group">
           {step === 0 && (
             <fieldset><legend>Quel type de connexion ?</legend>
               <div className="field"><span id="w-tpl-l" className="label">Partir d'un service connu (facultatif)</span>
+                {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
                 <div className="svc-grid" role="group" aria-labelledby="w-tpl-l">
                   {integrations.map((i) => (
                     <button type="button" key={i.slug} className="svc" title={`${i.name} — ${i.category}`} aria-label={`Service ${i.name}`}

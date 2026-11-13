@@ -4,6 +4,7 @@ import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { HelpTip } from "../../components/HelpTip";
+import { ReadRegion } from "../../components/ReadRegion";
 
 interface Row { id: number; provider: string; model: string; suite: string; status: string; passed: number; total: number; score: number | null; tokens: number; prompts: Record<string, string>; previous_score: number | null; regression: boolean; error: string; created_at: string }
 interface Providers { results: { name: string; model: string; kind: string; enabled: boolean }[] }
@@ -40,7 +41,7 @@ export function AiEvals() {
             <td><button type="button" onClick={() => void showLog(r.id)} aria-expanded={open === r.id}>{open === r.id ? "Masquer" : "Journal"}</button></td></tr>))}
           {runs.data?.results.length === 0 && <tr><td colSpan={6} className="hint">Aucune évaluation lancée. Les résultats ne sont pas mesurés tant qu'aucune n'a tourné sur un vrai modèle.</td></tr>}</tbody></table></div>
       {paged.pager("Pagination des évaluations")}
-      {open !== null && <pre className="mono data-box" tabIndex={0} aria-label="Journal de l'évaluation">{text}</pre>}
+      {open !== null && <ReadRegion className="mono data-box" label="Journal de l'évaluation">{text}</ReadRegion>}
       <form className="adm-evform" onSubmit={(e) => { e.preventDefault(); start.mutate(f); }}>
         <div className="field"><label htmlFor="ev-p">Fournisseur</label><select id="ev-p" value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value })} required><option value="">Choisir…</option>{providers.map((p) => <option key={p.name} value={p.name}>{p.name}{p.model ? ` (${p.model})` : ""}</option>)}</select></div>
         <div className="field"><label htmlFor="ev-s">Suite de cas</label><select id="ev-s" value={f.suite} onChange={(e) => setF({ ...f, suite: e.target.value })}>{Object.entries(SUITES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>

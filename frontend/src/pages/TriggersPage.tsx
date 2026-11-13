@@ -93,7 +93,7 @@ export function TriggersPage() {
         <Overlay title="Nouvelle planification" description="Le workflow est lancé automatiquement selon l'expression cron."
           onClose={() => setOpenS(false)}
           footer={<><button type="button" onClick={() => setOpenS(false)}>Annuler</button><button type="submit" form="sched-form" className="primary">Créer la planification</button></>}>
-          <form id="sched-form" onSubmit={(e) => { e.preventDefault(); let inputs; try { inputs = JSON.parse(s.inputs); setInputErr(""); } catch { setInputErr("Les entrées ne sont pas du JSON valide."); return; } addS.mutate({ ...s, inputs }, { onSuccess: () => setOpenS(false) }); }}>
+          <form id="sched-form" onSubmit={(e) => { e.preventDefault(); let inputs: unknown; try { inputs = JSON.parse(s.inputs); setInputErr(""); } catch { setInputErr("Les entrées ne sont pas du JSON valide."); return; } addS.mutate({ ...s, inputs }, { onSuccess: () => setOpenS(false) }); }}>
           <div className="field"><label htmlFor="s-n">Nom</label><input id="s-n" value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} required /></div>
           <div className="field"><label htmlFor="s-w">Workflow</label><select id="s-w" value={s.workflow} onChange={(e) => setS({ ...s, workflow: e.target.value })} required><option value="">Choisir…</option>{publishable.map((w) => <option key={w.slug} value={w.slug}>{w.name}</option>)}</select></div>
           <div className="field"><label htmlFor="s-p">Fréquence prédéfinie</label><select id="s-p" value="" onChange={(e) => e.target.value && setS({ ...s, cron: e.target.value })}><option value="">Choisir un modèle…</option>{PRESETS.map(([l, c]) => <option key={c} value={c}>{l}</option>)}</select></div>

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, login, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, login, publishViaApi, boxOf, viewportOf } from "./helpers";
 
 async function call(page: Page, method: string, path: string, body?: unknown) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -41,9 +41,9 @@ test("mise en page : déplacer et redimensionner au clavier, à la souris et par
 
   // souris : tirer le bord droit de A de 6 à 3 colonnes
   const grid = page.locator(".fb-lgrid").first();
-  const box = (await grid.boundingBox())!;
+  const box = (await boxOf(grid));
   const handle = card(page, "A").locator(".fb-handle");
-  const hb = (await handle.boundingBox())!;
+  const hb = (await boxOf(handle));
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
   await page.mouse.down();
   await page.mouse.move(hb.x + hb.width / 2 - (box.width / 12) * 1.5, hb.y + hb.height / 2, { steps: 6 });
@@ -65,9 +65,9 @@ test("mise en page : déplacer et redimensionner au clavier, à la souris et par
 
   // l'aperçu applique le placement : C, puis A et B côte à côte
   await page.getByRole("tab", { name: "Aperçu" }).click();
-  const a = (await page.getByLabel("A", { exact: true }).boundingBox())!;
-  const b = (await page.getByLabel("B", { exact: true }).boundingBox())!;
-  const c = (await page.getByLabel("C", { exact: true }).boundingBox())!;
+  const a = (await boxOf(page.getByLabel("A", { exact: true })));
+  const b = (await boxOf(page.getByLabel("B", { exact: true })));
+  const c = (await boxOf(page.getByLabel("C", { exact: true })));
   expect(Math.abs(a.y - b.y)).toBeLessThan(4);
   expect(b.x).toBeGreaterThan(a.x + a.width - 4);
   expect(a.y).toBeGreaterThan(c.y);
@@ -133,7 +133,7 @@ test("style : couleur, libellés à gauche, largeur et bouton ; une couleur illi
   await expect(preview).toHaveClass(/fb-l-left/);
   await expect(preview).toHaveClass(/fb-b-full/);
   expect(await preview.evaluate((el) => getComputedStyle(el).getPropertyValue("--accent").trim())).toBe("#1d4ed8");
-  expect((await preview.boundingBox())!.width).toBeLessThanOrEqual(961);
+  expect((await boxOf(preview)).width).toBeLessThanOrEqual(961);
   await expectNoA11yViolations(page);
 
   // enregistrer, publier, rattacher à un formulaire public : la page publique porte le style et le placement
@@ -148,8 +148,8 @@ test("style : couleur, libellés à gauche, largeur et bouton ; une couleur illi
   const anon = await browser.newContext();
   const pub = await anon.newPage();
   await pub.goto(pf.data.url);
-  const a = (await pub.getByLabel("A", { exact: true }).boundingBox())!;
-  const b = (await pub.getByLabel("B", { exact: true }).boundingBox())!;
+  const a = (await boxOf(pub.getByLabel("A", { exact: true })));
+  const b = (await boxOf(pub.getByLabel("B", { exact: true })));
   expect(b.x).toBeGreaterThan(a.x);
   await expect(pub.locator(".fb-form")).toHaveClass(/fb-l-left/);
   await expectNoA11yViolations(pub);
@@ -251,10 +251,10 @@ test("défilement : seul le formulaire défile, la barre d'outils, la palette, l
   const tool = page.getByRole("toolbar", { name: "Outils de l'éditeur de formulaire" });
   const palette = page.getByLabel("Rechercher un élément");
   const props = page.getByRole("complementary", { name: "Propriétés" }).getByRole("heading", { name: "Propriétés" });
-  const y = async () => [(await tool.boundingBox())!.y, (await palette.boundingBox())!.y, (await props.boundingBox())!.y];
+  const y = async () => [(await boxOf(tool)).y, (await boxOf(palette)).y, (await boxOf(props)).y];
   const before = await y();
   const canvas = page.locator(".fb-canvas");
-  const cb = (await canvas.boundingBox())!;
+  const cb = (await boxOf(canvas));
   await page.mouse.move(cb.x + cb.width / 2, cb.y + 200);
   await page.mouse.wheel(0, 4000);
   await expect.poll(() => canvas.evaluate((el) => el.scrollTop)).toBeGreaterThan(300);
@@ -272,13 +272,13 @@ test("défilement : seul le formulaire défile, la barre d'outils, la palette, l
   // idem dans l'onglet Style : la barre d'icônes reste, l'aperçu défile
   await page.getByRole("tab", { name: "Apparence" }).click();
   const bar = page.getByRole("toolbar", { name: "Style du formulaire" });
-  const by = (await bar.boundingBox())!.y;
+  const by = (await boxOf(bar)).y;
   const scroller = page.locator(".fb-stylepanel > .fb-scroll");
-  const sb = (await scroller.boundingBox())!;
+  const sb = (await boxOf(scroller));
   await page.mouse.move(sb.x + sb.width / 2, sb.y + 100);
   await page.mouse.wheel(0, 1500);
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(300);
-  expect((await bar.boundingBox())!.y).toBe(by);
+  expect((await boxOf(bar)).y).toBe(by);
   await expect(bar).toBeInViewport();
   await bar.getByRole("button", { name: /^Densité/ }).click();
   await expect(page.getByRole("menu", { name: "Densité" })).toBeInViewport();
@@ -361,7 +361,7 @@ test("CSS sans code : cliquer dans l'aperçu, régler visuellement, CSS génér�
   await page.getByRole("button", { name: "Modifier à la main" }).click();
   const area = page.getByRole("textbox", { name: "CSS personnalisé" });
   await expect(area).toHaveValue(/& \.fb-heading \{/);
-  await area.fill((await area.inputValue()) + "\n\n& .fb-actions button {\n  letter-spacing: 0.1em;\n}");
+  await area.fill(`${await area.inputValue()}\n\n& .fb-actions button {\n  letter-spacing: 0.1em;\n}`);
   await expect(page.getByRole("status").filter({ hasText: "CSS valide et appliqué" })).toBeVisible();
   await page.getByRole("tab", { name: "Visuel" }).click();
   await page.getByRole("button", { name: /^Règles du formulaire/ }).click();
@@ -424,9 +424,9 @@ test("menus contextuels : ils restent dans la fenêtre (pas de défilement horiz
   await page.getByRole("button", { name: "Thèmes prêts à l'emploi" }).click();
   const menu = page.getByRole("group", { name: "Thèmes prêts à l'emploi" });
   await expect(menu).toBeVisible();
-  const box = (await menu.boundingBox())!;
+  const box = (await boxOf(menu));
   expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewportOf(page).width);
   expect(await overflow()).toBeLessThanOrEqual(0);
   await page.keyboard.press("Escape");
   // idem pour les menus de la barre d'état, de portée et d'écran
@@ -455,8 +455,8 @@ test("un champ pleine largeur remplit sa case, un demi-champ remplit sa moitié 
   const anon = await browser.newContext({ viewport: { width: 1600, height: 900 } });
   const pub = await anon.newPage();
   await pub.goto(pf.data.url);
-  const w = async (label: string) => (await pub.getByLabel(label, { exact: true }).boundingBox())!.width;
-  const section = (await pub.locator(".fb-grid").first().boundingBox())!.width;
+  const w = async (label: string) => (await boxOf(pub.getByLabel(label, { exact: true }))).width;
+  const section = (await boxOf(pub.locator(".fb-grid").first())).width;
   // pleine largeur : tout l'espace de la ligne, bien au-delà de 560 px
   expect(await w("A")).toBeGreaterThan(section * 0.97);
   expect(await w("A")).toBeGreaterThan(700);
@@ -482,9 +482,9 @@ test("hauteur : une cartouche représente l'épaisseur du champ ; un texte long 
   await page.goto(`/forms/${slug}`);
 
   // l'éditeur : la cartouche du texte long fait environ deux fois la hauteur d'un champ court
-  const ca = (await card(page, "A").boundingBox())!;
-  const cb = (await card(page, "B").boundingBox())!;
-  const ct = (await card(page, "T").boundingBox())!;
+  const ca = (await boxOf(card(page, "A")));
+  const cb = (await boxOf(card(page, "B")));
+  const ct = (await boxOf(card(page, "T")));
   expect(ct.height).toBeGreaterThan(ca.height * 1.9);
   expect(Math.abs(ct.y - ca.y)).toBeLessThan(3);
   expect(Math.abs(ct.y + ct.height - (cb.y + cb.height))).toBeLessThan(3); // elle couvre exactement les deux lignes de A et B
@@ -503,14 +503,14 @@ test("hauteur : une cartouche représente l'épaisseur du champ ; un texte long 
   await page.getByRole("button", { name: "Moins haut d'une ligne" }).click();
   await expect(card(page, "T")).toHaveAttribute("aria-label", /hauteur 2/);
   // à la souris : la poignée du bas
-  const t2 = (await card(page, "T").boundingBox())!;
-  const vh = (await card(page, "T").locator(".fb-vhandle").boundingBox())!;
+  const t2 = (await boxOf(card(page, "T")));
+  const vh = (await boxOf(card(page, "T").locator(".fb-vhandle")));
   await page.mouse.move(vh.x + vh.width / 2, vh.y + vh.height / 2);
   await page.mouse.down();
   await page.mouse.move(vh.x + vh.width / 2, vh.y + vh.height / 2 + 80, { steps: 6 });
   await page.mouse.up();
   await expect(card(page, "T")).toHaveAttribute("aria-label", /hauteur 3/);
-  expect((await card(page, "T").boundingBox())!.height).toBeGreaterThan(t2.height);
+  expect((await boxOf(card(page, "T"))).height).toBeGreaterThan(t2.height);
   await page.getByRole("button", { name: "Moins haut d'une ligne" }).click();
   await expect(card(page, "T")).toHaveAttribute("aria-label", /hauteur 2/);
 
@@ -525,9 +525,9 @@ test("hauteur : une cartouche représente l'épaisseur du champ ; un texte long 
   await page.getByRole("button", { name: "Annuler", exact: true }).click();
   await page.getByRole("button", { name: "Annuler", exact: true }).click();
   await page.getByRole("tab", { name: "Aperçu" }).click();
-  const a = (await page.getByLabel("A", { exact: true }).boundingBox())!;
-  const b = (await page.getByLabel("B", { exact: true }).boundingBox())!;
-  const t = (await page.getByLabel("T", { exact: true }).boundingBox())!;
+  const a = (await boxOf(page.getByLabel("A", { exact: true })));
+  const b = (await boxOf(page.getByLabel("B", { exact: true })));
+  const t = (await boxOf(page.getByLabel("T", { exact: true })));
   expect(t.height).toBeGreaterThan(a.height * 1.8);
   expect(Math.abs(t.y + t.height - (b.y + b.height))).toBeLessThan(4); // le bas du texte long s'aligne sur celui du second champ court
   expect(t.x).toBeGreaterThan(a.x + a.width);
@@ -543,9 +543,9 @@ test("hauteur : une cartouche représente l'épaisseur du champ ; un texte long 
   const anon = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const pub = await anon.newPage();
   await pub.goto(pf.data.url);
-  const pa = (await pub.getByLabel("A", { exact: true }).boundingBox())!;
-  const pb = (await pub.getByLabel("B", { exact: true }).boundingBox())!;
-  const pt = (await pub.getByLabel("T", { exact: true }).boundingBox())!;
+  const pa = (await boxOf(pub.getByLabel("A", { exact: true })));
+  const pb = (await boxOf(pub.getByLabel("B", { exact: true })));
+  const pt = (await boxOf(pub.getByLabel("T", { exact: true })));
   expect(pt.height).toBeGreaterThan(pa.height * 1.8);
   expect(Math.abs(pt.y + pt.height - (pb.y + pb.height))).toBeLessThan(4);
   await anon.close();

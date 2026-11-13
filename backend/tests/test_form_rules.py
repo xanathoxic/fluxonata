@@ -278,7 +278,9 @@ def test_a_rule_may_read_any_other_field_even_side_by_side_or_below():
 
 
 def test_fields_reading_each_other_in_a_loop_are_refused():
-    hide = lambda other: [{"when": cond(other, "not_empty"), "then": [{"do": "hide"}]}]  # noqa: E731
+    def hide(other):
+        return [{"when": cond(other, "not_empty"), "then": [{"do": "hide"}]}]
+
     d = form(field("a", rules=hide("b")), field("b", rules=hide("c")), field("c", rules=hide("a")))
     assert "boucle" in formengine.check_definition(d)["_"]
     legacy = form(field("a", visible_if="values.b == 'x'"), field("b", rules=hide("a")))
@@ -287,7 +289,9 @@ def test_fields_reading_each_other_in_a_loop_are_refused():
 
 def test_dependencies_are_evaluated_first_whatever_the_reading_order():
     # c (first) reads b, b reads a (last): a is evaluated before b, b before c
-    hide = lambda other: [{"when": cond(other, "equals", value="x"), "then": [{"do": "hide"}]}]  # noqa: E731
+    def hide(other):
+        return [{"when": cond(other, "equals", value="x"), "then": [{"do": "hide"}]}]
+
     d = form(field("c", rules=hide("b")), field("b", rules=hide("a")), field("a"))
     assert [f["key"] for f in formengine.evaluation_order(list(formengine.data_fields(d)))] == ["a", "b", "c"]
     # a=x hides b, so c (reading the hidden, dropped b) stays shown
@@ -424,3 +428,21 @@ def test_readonly_is_a_presentation_effect_the_server_does_not_enforce():
     assert state["readonly"] is True
     kept, problems = formengine.validate_submission(d, {"a": "x", "b": "valeur envoyée"})
     assert problems == {} and kept["b"] == "valeur envoyée"  # limite connue et documentée, pas une garantie
+
+
+@pytest.mark.parametrize("then", ["show", {"do": "show"}, 3, None])
+def test_the_then_branch_of_a_rule_must_be_a_list_of_effects(then):
+    """Garantie sur laquelle repose l'acceptation des exceptions `then` du frontend : une donnée de règle venue de l'extérieur n'est
+    jamais enregistrée avec un `then` qui ne soit pas une liste (un objet appelable est de toute façon impossible en JSON)."""
+    from triggers import formrules
+
+    rule = {"when": {"field": "a", "op": "not_empty"}, "then": then}
+    problems = formrules.check_rules([rule], "f.rules", {"key": "b", "type": "text"}, {"a": {"type": "text"}})
+    assert "f.rules.0.then" in problems
+
+
+def test_a_list_of_effects_is_accepted_as_then():
+    from triggers import formrules
+
+    rule = {"when": {"field": "a", "op": "not_empty"}, "then": [{"do": "show"}]}
+    assert formrules.check_rules([rule], "f.rules", {"key": "b", "type": "text"}, {"a": {"type": "text"}}) == {}

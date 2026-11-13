@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { ControlInput } from "./ControlInput";
 import { DualList } from "./DualList";
 import { IconButton, IconLabel } from "./FormIcon";
@@ -155,14 +155,18 @@ function FieldInput({ field: base, state, value, values, error, disabled: locked
   // A list that depends on another field: what was chosen under the previous value of that field is no longer offered, so it is dropped
   // (otherwise the old members of another group would stay ticked, invisible, and be sent).
   const dependent = Boolean(lookup) && (base.source?.params ?? []).some((p) => p !== "q");
-  useEffect(() => {
-    if (!dependent || loading || loadError) return;
-    const offered = new Set(loaded.options.map((o) => o.value));
+  // la purge des choix périmés ne dépend que de l'état de chargement des options
+  const purgeStale = useEffectEvent((offeredValues: string[]) => {
+    const offered = new Set(offeredValues);
     if (Array.isArray(value)) {
       const kept = (value as string[]).filter((v) => offered.has(v));
       if (kept.length !== value.length) onChange(kept);
     } else if (typeof value === "string" && value !== "" && !offered.has(value)) onChange("");
-  }, [dependent, loading, loadError, loaded.options]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    if (!dependent || loading || loadError) return;
+    purgeStale(loaded.options.map((o) => o.value));
+  }, [dependent, loading, loadError, loaded.options]);
   const options = state?.options ? loaded.options.filter((o) => (state.options as string[]).includes(o.value)) : loaded.options;
   const describedBy = [field.help ? `${id}-help` : "", error ? `${id}-err` : ""].filter(Boolean).join(" ") || undefined;
   const filled = state?.fill != null || Boolean(base.compute);  // filled by a rule: shown, not editable (the server keeps the rule's value)
@@ -183,7 +187,7 @@ function FieldInput({ field: base, state, value, values, error, disabled: locked
       </select>); break;
     case "combobox": control = (
       <>
-        <input {...common} role="combobox" aria-expanded="false" list={`${id}-list`} autoComplete="off" value={search !== "" || !text ? search : (options.find((o) => o.value === text)?.label ?? text)} placeholder={field.placeholder ?? "Tapez pour chercher…"}
+        <input {...common} aria-expanded="false" list={`${id}-list`} autoComplete="off" value={search !== "" || !text ? search : (options.find((o) => o.value === text)?.label ?? text)} placeholder={field.placeholder ?? "Tapez pour chercher…"}
           onChange={(e) => { setSearch(e.target.value); const m = options.find((o) => choice(o) === e.target.value || o.value === e.target.value); onChange(m ? m.value : ""); }} />
         <datalist id={`${id}-list`}>{options.map((o) => <option key={o.value} value={choice(o)} />)}</datalist>
       </>); break;
@@ -196,6 +200,7 @@ function FieldInput({ field: base, state, value, values, error, disabled: locked
       const picked = Array.isArray(value) ? (value as string[]) : [];
       if (field.display === "dual") { control = <DualList id={id} labelledBy={`${id}-l`} describedBy={describedBy} options={options} value={picked} onChange={onChange} disabled={disabled} invalid={Boolean(error)} availableLabel={field.available_label} chosenLabel={field.chosen_label} />; break; }
       control = (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div role="group" aria-labelledby={`${id}-l`} aria-describedby={describedBy} className="fb-choices">
           {options.map((o, i) => <label key={o.value} className="fb-choice"><input type="checkbox" id={i === 0 ? id : undefined} disabled={disabled} checked={picked.includes(o.value)} onChange={(e) => onChange(e.target.checked ? [...picked, o.value] : picked.filter((p) => p !== o.value))} /> {choice(o)}</label>)}
         </div>); break; }
@@ -231,6 +236,7 @@ function Grid({ field, id, value, disabled, onChange }: { field: FormField; id: 
         <thead><tr>{cols.map((c) => <th key={c.key} scope="col">{c.label || c.key}</th>)}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>
           {rows.map((row, r) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <tr key={r}>
               {cols.map((c, ci) => (
                 <td key={c.key}><input id={r === 0 && ci === 0 ? id : undefined} disabled={disabled} aria-label={`${c.label || c.key}, ligne ${r + 1}`} type={c.type === "number" ? "number" : "text"} step="any" value={row[c.key] ?? ""}

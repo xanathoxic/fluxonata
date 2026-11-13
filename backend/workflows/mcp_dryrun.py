@@ -31,7 +31,8 @@ OUTPUT = 120
 
 
 class SampleIn(serializers.Serializer):
-    label = serializers.CharField(max_length=60, required=False, default="essai")
+    # `label` est un nom du contrat d'API ; il masque l'attribut `label` de DRF `Field` : exemption ciblée.
+    label = serializers.CharField(max_length=60, required=False, default="essai")  # type: ignore[assignment]
     inputs = serializers.JSONField()
     expected = serializers.JSONField(required=False, default=list)
     mocks = serializers.JSONField(required=False, default=dict)
@@ -43,7 +44,8 @@ class StartIn(serializers.Serializer):
 
 
 class CaseIn(serializers.Serializer):
-    label = serializers.CharField(max_length=60, required=False, default="cas")
+    # idem (`label`, contrat d'API).
+    label = serializers.CharField(max_length=60, required=False, default="cas")  # type: ignore[assignment]
     inputs = serializers.JSONField()
     expected = serializers.JSONField(required=False, default=dict)
 
@@ -86,7 +88,9 @@ def _clean_samples(graph: dict, raw: list[dict]) -> list[dict]:
                 {
                     "label": s["label"],
                     "inputs": s["inputs"],
-                    "expected": [{"step": e["step"], "field": e["field"], "value": e["value"]} for e in expected],
+                    "expected": [
+                        {"step": e["step"], "field": e["field"], "value": e["value"]} for e in expected or []
+                    ],  # expected est une liste ici (sinon `problems` est non vide)
                     "mocks": mocks,
                 }
             )

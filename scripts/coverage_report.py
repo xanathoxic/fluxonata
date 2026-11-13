@@ -44,7 +44,7 @@ def summarize_tests(junit_path: str) -> dict:
     counts = {"tests": 0, "passed": 0, "failed": 0, "skipped": 0, "xfailed": 0}
     reasons: dict[str, int] = {}
     # S314 : le JUnit est produit par pytest dans l'environnement isolé du script, pas par une source externe.
-    for case in ET.parse(junit_path).getroot().iter("testcase"):  # noqa: S314
+    for case in ET.parse(junit_path).getroot().iter("testcase"):  # noqa: S314 - fichier JUnit produit par pytest sur cette machine
         counts["tests"] += 1
         skip = case.find("skipped")
         if case.find("failure") is not None or case.find("error") is not None:

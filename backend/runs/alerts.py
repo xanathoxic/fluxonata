@@ -142,6 +142,8 @@ def apply_retention(now=None) -> int:
 
     now, removed = now or timezone.now(), 0
     for ws in Workspace.objects.filter(retention_days__isnull=False, archived_at__isnull=True):
+        if ws.retention_days is None:  # le filtre l'exclut déjà
+            continue
         cutoff = now - timedelta(days=ws.retention_days)
         runs = WorkflowRun.objects.filter(
             workspace=ws,

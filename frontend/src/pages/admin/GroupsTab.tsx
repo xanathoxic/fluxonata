@@ -73,6 +73,7 @@ function GroupDialog({ group, people, items, busy, error, onClose, onSave }: {
     <Overlay title={group ? `Groupe « ${group.name} »` : "Nouveau groupe"} onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form="grp-form" className="primary" disabled={!name.trim() || busy}>Enregistrer</button></>}>
       <form id="grp-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ name: name.trim(), description, members: chosen, workflows: allowed }); }}>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
         <div className="field"><label htmlFor="grp-name">Nom du groupe</label><input id="grp-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoFocus required /></div>
         <div className="field"><label htmlFor="grp-desc">Description</label><input id="grp-desc" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} /></div>
         <fieldset className="grp-pick"><legend>Membres du groupe</legend>

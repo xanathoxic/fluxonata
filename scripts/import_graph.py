@@ -98,6 +98,64 @@ def cycles(pairs) -> list[list[str]]:
     return sorted(found)
 
 
+def file_graph() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Graphe fichier -> fichier (imports absolus ET relatifs), séparé en (imports de tête, imports faits dans une fonction).
+
+    Seuls les imports de tête s'exécutent au chargement : un cycle entre eux serait un vrai cycle d'import (ImportError possible).
+    Un import local à une fonction est différé : il ne boucle pas au chargement, mais garde un couplage."""
+    files: dict[str, Path] = {}
+    for m in modules():
+        for path in _python_files(m):
+            rel = path.relative_to(BACKEND).with_suffix("")
+            files[".".join(rel.parts[:-1] if rel.name == "__init__" else rel.parts)] = path
+
+    def resolve(name: str) -> str | None:
+        parts = name.split(".")
+        for i in range(len(parts), 0, -1):
+            if ".".join(parts[:i]) in files:
+                return ".".join(parts[:i])
+        return None
+
+    top: dict[str, set[str]] = {}
+    deferred: dict[str, set[str]] = {}
+    for dotted, path in files.items():
+        pkg = dotted if path.name == "__init__.py" else dotted.rpartition(".")[0]
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        in_function = {
+            id(n)
+            for fn in ast.walk(tree)
+            if isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda)
+            for n in ast.walk(fn)
+        }
+        for node in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = node.module or ""
+                if node.level:
+                    parts = pkg.split(".") if pkg else []
+                    parts = parts[: len(parts) - (node.level - 1)]
+                    base = ".".join([*parts, *([node.module] if node.module else [])])
+                names = [base, *(f"{base}.{a.name}" for a in node.names)]
+            for name in names:
+                target = resolve(name)
+                if target and target != dotted:
+                    (deferred if id(node) in in_function else top).setdefault(dotted, set()).add(target)
+    return top, deferred
+
+
+def _pairs(graph: dict[str, set[str]]) -> list[tuple[str, str]]:
+    return [(a, b) for a, targets in graph.items() for b in targets]
+
+
+def file_cycles() -> tuple[list[list[str]], list[list[str]]]:
+    """(cycles entre fichiers avec les seuls imports de tête, cycles en comptant aussi les imports locaux)."""
+    top, deferred = file_graph()
+    merged = {k: top.get(k, set()) | deferred.get(k, set()) for k in set(top) | set(deferred)}
+    return cycles(_pairs(top)), cycles(_pairs(merged))
+
+
 def snapshot() -> dict:
     e = edges()
     return {
@@ -105,6 +163,8 @@ def snapshot() -> dict:
         "modules": sorted(modules()),
         "edges": sorted([a, b] for a, b in e),
         "cycles": cycles(e),
+        "cycles_fichiers_imports_de_tete": file_cycles()[0],
+        "cycles_fichiers_avec_imports_locaux": file_cycles()[1],
     }
 
 

@@ -200,7 +200,7 @@ class WorkspaceVaultView(APIView):
 
 
 class ConnectionSerializer(serializers.ModelSerializer):
-    secret = serializers.SlugRelatedField(slug_field="name", read_only=True)
+    secret: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="name", read_only=True)
     secret_provider = serializers.CharField(source="secret.provider", default=None, read_only=True)
     environment = serializers.CharField(source="environment.kind", default=None, read_only=True)
 
@@ -223,7 +223,8 @@ class ConnectionSerializer(serializers.ModelSerializer):
 
 class ConnectionCreateSerializer(serializers.Serializer):
     name = serializers.SlugField(max_length=60)
-    label = serializers.CharField(max_length=120)
+    # `label` est un nom du contrat d'API ; il masque l'attribut `label` de DRF `Field` : exemption ciblée.
+    label = serializers.CharField(max_length=120)  # type: ignore[assignment]
     kind = serializers.ChoiceField(choices=Connection.Kind.choices)
     config = serializers.DictField(required=False, default=dict)
     secret = serializers.SlugField(required=False, help_text="Nom d'un secret existant")

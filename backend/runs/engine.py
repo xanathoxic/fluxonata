@@ -109,8 +109,8 @@ def _image_digest(image):
             _digest_cache[image] = None
         else:
             try:
-                out = subprocess.run(
-                    ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+                out = subprocess.run(  # noqa: S603 - exécutable résolu par shutil.which, arguments sans shell ; `image` vient de la configuration
+                    [shutil.which("docker") or "docker", "image", "inspect", "--format", "{{.Id}}", image],
                     capture_output=True,
                     text=True,
                     timeout=10,
@@ -456,7 +456,7 @@ def _start_followup(run, kind: str):
     target = Workflow.objects.filter(workspace=run.workspace, slug=slug).first()
     version = target.latest_version() if target else None
     tag = "error_workflow" if kind == "error" else "success_workflow"
-    if version is None:
+    if target is None or version is None:
         add_event(run, f"{tag}_skipped", f"Workflow « {slug} » : aucune version publiée.")
         return
     err = run.error or {}
@@ -1153,7 +1153,14 @@ def _poll(run, node, sr, steps) -> bool:  # noqa: C901
 
 def _script_output_problem(node, result) -> str | None:
     """Declared script outputs must exist and have the declared type (never echo the value)."""
-    types = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    types: dict[str, type | tuple[type, ...]] = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
     for o in node.get("outputs", []):
         name, want = o["name"], o.get("type", "string")
         if name not in (result or {}):

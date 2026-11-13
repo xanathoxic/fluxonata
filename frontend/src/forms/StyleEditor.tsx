@@ -29,7 +29,10 @@ export function Pop({ label, icon, children, badge }: { label: string; icon: Rea
     return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", esc); };
   }, [open]);
   useEffect(() => { // the menu opens on its checked (or first) item
-    if (open) root.current?.querySelector<HTMLElement>('[aria-checked="true"], .fb-pop button, .fb-pop input')?.focus();
+    if (!open) return;
+    // l'élément coché d'abord (une liste de sélecteurs renverrait le premier dans l'ordre du document, donc toujours le premier élément)
+    const target = root.current?.querySelector<HTMLElement>('[aria-checked="true"]') ?? root.current?.querySelector<HTMLElement>(".fb-pop button, .fb-pop input");
+    target?.focus();
   }, [open]);
   const keys = (e: React.KeyboardEvent) => {
     const items = [...(root.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? [])];
@@ -39,8 +42,10 @@ export function Pop({ label, icon, children, badge }: { label: string; icon: Rea
     if (step) { e.preventDefault(); items[(at + step + items.length) % items.length]?.focus(); }
   };
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: conteneur qui relaie le focus et les touches de ses enfants interactifs (menu local)
     <span className="fb-popwrap" ref={root} onKeyDown={keys}>
       <button type="button" className="fb-sbtn" aria-label={label} title={label} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>{icon}{badge}</button>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       {open && <div id={id} ref={popup} className={`fb-pop${flip ? " flip" : ""}`} role="group" aria-label={label}>{children(close)}</div>}
     </span>
   );
@@ -90,6 +95,7 @@ export function StyleEditor({ style, onChange, edit }: { style: FormStyle | unde
         <Pop label={`Couleur d'accent : ${s.accent ?? "par défaut"}`} icon={<FormIcon name="palette" />} badge={dot}>
           {() => (
             <div className="fb-accentpop">
+              {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
               <div className="fb-swatches" role="group" aria-label="Couleurs proposées">
                 {ACCENTS.map((c) => <button key={c} type="button" className="fb-swatch" style={{ background: c }} aria-pressed={s.accent === c} aria-label={`Couleur ${c}`} title={c} onClick={() => accent(c)} />)}
               </div>

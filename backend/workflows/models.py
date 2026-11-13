@@ -4,7 +4,7 @@ import json
 from django.conf import settings
 from django.db import models
 
-EMPTY_GRAPH = {
+EMPTY_GRAPH: dict[str, object] = {
     "inputs": {"type": "object", "properties": {}, "required": []},
     "variables": [],  # read-only workflow constants, available as vars.<name>
     "form": None,  # optional step-by-step input form definition

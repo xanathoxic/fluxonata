@@ -1,5 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+
+/** Rectangle d'un élément affiché : échoue avec un message clair s'il n'a pas de boîte (au lieu d'une erreur de type tardive). */
+export async function boxOf(loc: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await loc.boundingBox();
+  if (!box) throw new Error("élément sans boîte : il n'est pas affiché");
+  return box;
+}
+
+/** Taille de la fenêtre du navigateur (toujours définie dans ces essais). */
+export function viewportOf(page: Page): { width: number; height: number } {
+  const size = page.viewportSize();
+  if (!size) throw new Error("taille de fenêtre inconnue");
+  return size;
+}
 
 export async function login(page: Page, user = "alice") {
   await page.goto("/");

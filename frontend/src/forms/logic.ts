@@ -92,7 +92,7 @@ class Evaluator {
       if (t.v !== "values") throw new Error("path");
       this.expect(".");
       const key = this.toks[this.i++];
-      if (!key || key.t !== "id" || !this.known.has(key.v)) throw new Error("unknown");
+      if (key?.t !== "id" || !this.known.has(key.v)) throw new Error("unknown");
       const v = this.values[key.v];
       return v === undefined ? null : v;
     }

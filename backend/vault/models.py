@@ -106,8 +106,11 @@ class Connection(models.Model):
     def login(self, user_key: str = "username") -> tuple[str, str]:
         """(user name, secret) to log in with. The user name is a setting of the connection, except for dynamic Vault
         credentials, where Vault supplies both the user name and the password (the settings need not name a user)."""
-        f = self.secret.reveal_fields()
-        if self.secret.vault_mode == Secret.VaultMode.DYNAMIC and f.get("username"):
+        secret = self.secret
+        if secret is None:
+            raise ValueError("La connexion n'a pas de secret associé.")
+        f = secret.reveal_fields()
+        if secret.vault_mode == Secret.VaultMode.DYNAMIC and f.get("username"):
             return f["username"], f["value"]
         return (self.config or {}).get(user_key, ""), f["value"]
 

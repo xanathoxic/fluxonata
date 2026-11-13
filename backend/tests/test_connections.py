@@ -13,7 +13,6 @@ from runs.runners import DockerRunner, SubprocessRunner
 from runs.worker import process_one
 from tenancy.models import (
     Environment,
-    Membership,  # noqa: F401
     Role,
 )
 from tests.conftest import client_for, make_user

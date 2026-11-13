@@ -86,7 +86,9 @@ export function TableDesigner({ cfg, parts, edit, onParts, onTotals, onAdvanced 
             <li key={c.key}>
               <button type="button" className={`td-col${current?.key === c.key ? " on" : ""}`} aria-pressed={current?.key === c.key} onClick={() => setSelected(c.key)}>
                 <FormIcon name={c.type} size={16} /><span className="td-col-t">{c.label || c.key}</span>
+                {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
                 {c.required && <span className="td-req" title="Obligatoire" aria-label="obligatoire">*</span>}
+                {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
                 {totals.includes(c.key) && <span className="td-tot" title="Total sous la colonne" aria-label="avec total">Σ</span>}
                 <span className="sr-only"> (colonne {i + 1} sur {columns.length})</span>
               </button>
@@ -131,6 +133,7 @@ export function TableDesigner({ cfg, parts, edit, onParts, onTotals, onAdvanced 
           {CHOICES.includes(current.type) && (
             <fieldset className="td-options"><legend>Choix proposés dans la cellule</legend>
               {(current.options ?? []).map((o, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
                 <div key={i} className="td-opt">
                   <input aria-label={`Choix ${i + 1}`} value={o.label ?? o.value} maxLength={200}
                     onChange={(e) => update(current.key, { options: (current.options ?? []).map((x, k) => (k === i ? { value: x.value, label: e.target.value } : x)) })} />

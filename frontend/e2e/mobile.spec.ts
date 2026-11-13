@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoA11yViolations, login } from "./helpers";
+import { expectNoA11yViolations, login, boxOf } from "./helpers";
 
 /** Téléphone (390 × 844) : en-tête d'une ligne, espace et environnement dans le tiroir, arbre replié, KPI sur 2 colonnes, tableaux en cartes. */
 test.use({ viewport: { width: 390, height: 844 } });
@@ -10,7 +10,7 @@ test("en-tête compact, tiroir avec espace et environnement, pas de défilement 
   await page.getByLabel("Mot de passe").fill("demo-fluxonata");
   await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page.getByRole("heading", { name: /Bonjour/ })).toBeVisible({ timeout: 20_000 });
-  const head = (await page.locator("header.topbar").boundingBox())!;
+  const head = (await boxOf(page.locator("header.topbar")));
   expect(head.height).toBeLessThanOrEqual(56);
   await expect(page.locator(".env-stripe")).toBeVisible();
   await expect(page.getByLabel("Espace", { exact: true })).toBeHidden(); // plus dans l'en-tête

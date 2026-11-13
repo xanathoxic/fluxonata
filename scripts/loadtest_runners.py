@@ -73,9 +73,7 @@ def call(method, path, token=None, body=None, timeout=60):
     c.close()
     try:
         return r.status, (json.loads(raw) if raw else None)
-    except (
-        ValueError
-    ):  # corps non JSON (page d'erreur du serveur saturé) : on garde le code HTTP
+    except ValueError:  # corps non JSON (page d'erreur du serveur saturé) : on garde le code HTTP
         return r.status, None
 
 
@@ -150,17 +148,9 @@ def measure(slots, runners, seconds):
                     if status not in (200, 204, 429):
                         counts.setdefault("other_codes", set()).add(status)
                 if status == 429:
-                    stop.wait(
-                        float(
-                            ((body or {}).get("error") or {})
-                            .get("details", {})
-                            .get("retry_after", 5)
-                        )
-                    )
+                    stop.wait(float(((body or {}).get("error") or {}).get("details", {}).get("retry_after", 5)))
 
-        threads = [
-            threading.Thread(target=runner_loop, daemon=True) for _ in range(runners)
-        ]
+        threads = [threading.Thread(target=runner_loop, daemon=True) for _ in range(runners)]
         for t in threads:
             t.start()
         time.sleep(3)  # laisse les attentes s'installer
@@ -185,9 +175,7 @@ def measure(slots, runners, seconds):
             "p50_ms": round(statistics.median(lat)),
             "p95_ms": round(lat[int(len(lat) * 0.95) - 1]),
             "max_ms": round(lat[-1]),
-            "responses": {
-                k: (sorted(v) if isinstance(v, set) else v) for k, v in counts.items()
-            },
+            "responses": {k: (sorted(v) if isinstance(v, set) else v) for k, v in counts.items()},
         }
     finally:
         g.terminate()
@@ -206,9 +194,7 @@ def main():
     a = ap.parse_args()
     load_env()
     for s in a.slots:
-        print(
-            json.dumps(measure(s, a.runners, a.seconds), ensure_ascii=False), flush=True
-        )
+        print(json.dumps(measure(s, a.runners, a.seconds), ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

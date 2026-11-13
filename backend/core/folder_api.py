@@ -20,7 +20,7 @@ from workflows.models import FolderAccess, FolderGrant, Workflow
 
 from .folders import clean_folder
 
-ITEMS = {
+ITEMS: dict[str, tuple[type[Workflow | Action | AiSkill | Form | Control], str]] = {
     "workflow": (Workflow, EDIT),
     "action": (Action, PUBLISH),
     "ai_skill": (AiSkill, PUBLISH),

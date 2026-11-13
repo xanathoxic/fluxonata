@@ -8,6 +8,7 @@ placed; a loop (A reads B which reads A) is refused and fields are evaluated aft
 
 import re
 from datetime import date
+from typing import cast
 
 from workflows.expressions import ExpressionError, evaluate_ast, parse, paths_in
 
@@ -103,7 +104,9 @@ def _lay(field: dict) -> tuple[int, int, int]:
     lay = field.get("layout") or {}
     row, col, span = lay.get("row"), lay.get("col"), lay.get("span")
     ok = all(isinstance(v, int) and not isinstance(v, bool) for v in (row, col, span))
-    return (row, col, span) if ok else (0, 1, GRID_COLUMNS)
+    return (
+        cast("tuple[int, int, int]", (row, col, span)) if ok else (0, 1, GRID_COLUMNS)
+    )  # `ok` : trois entiers vérifiés
 
 
 def iter_fields(definition: dict):

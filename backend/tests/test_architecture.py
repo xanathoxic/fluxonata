@@ -47,3 +47,33 @@ def test_detects_a_new_cycle():
     ig = _load()
     assert ig.cycles([("a", "b"), ("b", "c"), ("c", "a")]) == [["a", "b", "c"]]
     assert ig.cycles([("a", "b"), ("b", "c")]) == []
+
+
+def test_no_import_time_cycle_between_files():
+    """Le « cycle » gelé entre applications n'est pas un cycle d'import : entre fichiers, les imports de tête (exécutés au
+    chargement) forment un graphe SANS cycle. Un cycle de ce type provoquerait une ImportError ou un ordre de chargement fragile."""
+    ig = _load()
+    top_cycles, _ = ig.file_cycles()
+    assert top_cycles == [], (
+        f"cycle d'import au chargement entre fichiers : {top_cycles}. Différez l'import dans la fonction ou extrayez la dépendance commune."
+    )
+
+
+def test_file_cycles_through_deferred_imports_never_grow():
+    """Les 5 petits cycles entre fichiers passent tous par un import local à une fonction (différé) ; aucun fichier de plus n'y entre."""
+    ig = _load()
+    frozen = json.loads(ig.BASELINE.read_text(encoding="utf-8"))["cycles_fichiers_avec_imports_locaux"]
+    now = ig.file_cycles()[1]
+    frozen_files = {f for comp in frozen for f in comp}
+    new_files = {f for comp in now for f in comp} - frozen_files
+    assert not new_files, f"fichiers entrés dans un cycle d'imports différés : {sorted(new_files)}. {HELP}"
+    assert len(now) <= len(frozen), f"nouveau cycle entre fichiers : {now}. {HELP}"
+
+
+def test_the_file_graph_tells_deferred_imports_from_load_time_ones():
+    """Contrôle du détecteur : `formcontrols` importe `formengine` seulement dans des fonctions, `formengine` importe `formcontrols` en tête."""
+    ig = _load()
+    top, deferred = ig.file_graph()
+    assert "triggers.formcontrols" in top["triggers.formengine"]
+    assert "triggers.formengine" not in top.get("triggers.formcontrols", set())
+    assert "triggers.formengine" in deferred["triggers.formcontrols"]

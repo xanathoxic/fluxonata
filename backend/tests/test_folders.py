@@ -87,7 +87,10 @@ def test_rename_refusals(world):
     c = client_for(world["designer"])
     item(world, "workflow", "w", "A/B")
     post(c, "workflow", "C")
-    patch = lambda p, n: c.patch(URL, {"kind": "workflow", "path": p, "new_path": n}, format="json")  # noqa: E731
+
+    def patch(p, n):
+        return c.patch(URL, {"kind": "workflow", "path": p, "new_path": n}, format="json")
+
     assert patch("A/B", "C").status_code == 400  # name already used
     assert patch("A", "A/B/Z").status_code == 400  # into itself
     assert patch("A/B", "A/B").status_code == 400  # unchanged

@@ -312,5 +312,31 @@
    "vault",
    "workflows"
   ]
+ ],
+ "cycles_fichiers_imports_de_tete": [],
+ "cycles_fichiers_avec_imports_locaux": [
+  [
+   "runs.agent",
+   "runs.proposed",
+   "runs.services"
+  ],
+  [
+   "runs.alerts",
+   "runs.engine",
+   "triggers.forms"
+  ],
+  [
+   "triggers.formcontrols",
+   "triggers.formengine"
+  ],
+  [
+   "vault.external",
+   "vault.models"
+  ],
+  [
+   "workflows.mcp_design",
+   "workflows.mcp_design_write",
+   "workflows.mcp_dryrun"
+  ]
  ]
 }

@@ -11,14 +11,14 @@ export function HelpTip({ children, label = "Aide", caption }: { children: React
   const pop = useRef<HTMLSpanElement>(null);
   const id = useId();
 
-  const place = () => {
-    const r = btn.current?.getBoundingClientRect();
-    if (!r) return;
-    const width = Math.min(320, window.innerWidth - 24);
-    setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12)) });
-  };
   useEffect(() => {
     if (!open) return;
+    const place = () => {
+      const r = btn.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = Math.min(320, window.innerWidth - 24);
+      setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12)) });
+    };
     place();
     const close = (e: Event) => {
       const t = e.target as Node;

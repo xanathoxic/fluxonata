@@ -137,15 +137,18 @@ def compare(a, b) -> dict:
                 "error_b": (y.error or {}).get("message") if y and y.error else None,
             }
         )
-    meta = lambda r: {  # noqa: E731
-        "id": str(r.id),
-        "workflow": r.workflow_version.workflow.slug,
-        "version": r.workflow_version.version,
-        "environment": r.environment.kind,
-        "status": r.status,
-        "created_at": r.created_at,
-        "duration_s": _seconds(r) or None,
-    }
+
+    def meta(r):
+        return {
+            "id": str(r.id),
+            "workflow": r.workflow_version.workflow.slug,
+            "version": r.workflow_version.version,
+            "environment": r.environment.kind,
+            "status": r.status,
+            "created_at": r.created_at,
+            "duration_s": _seconds(r) or None,
+        }
+
     return {
         "a": meta(a),
         "b": meta(b),

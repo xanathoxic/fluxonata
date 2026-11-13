@@ -121,7 +121,7 @@ def tokenize(src: str) -> list[tuple[str, str]]:
         if src[pos:].strip() == "":
             break
         m = TOKEN_RE.match(src, pos)
-        if not m or m.end() == pos:
+        if not m or m.end() == pos or m.lastgroup is None:
             raise ExpressionError(f"Caractère inattendu près de « {src[pos : pos + 10].strip()} ».")
         pos = m.end()
         kind = m.lastgroup

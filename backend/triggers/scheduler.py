@@ -40,7 +40,7 @@ def fire_due(now=None) -> int:
                 .filter(pk=sid, enabled=True, next_run_at__lte=now, workspace__archived_at__isnull=True)
                 .first()
             )
-            if sch is None:
+            if sch is None or sch.next_run_at is None:  # le filtre exige déjà `next_run_at__lte=now`
                 continue
             due = sch.next_run_at
             # next occurrence strictly after both `now` and the due instant: missed occurrences are coalesced
@@ -97,4 +97,6 @@ def set_next(sch: Schedule, after=None) -> None:
 
 
 def active_count(sch: Schedule) -> int:
+    if sch.last_run_id is None:
+        return 0
     return WorkflowRun.objects.filter(pk=sch.last_run_id, status__in=ACTIVE).count()

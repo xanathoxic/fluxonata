@@ -13,6 +13,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
 import { HelpTip } from "../components/HelpTip";
+import { ReadRegion } from "../components/ReadRegion";
 
 const ACTIVE = ["running", "compensating"];
 
@@ -131,6 +132,8 @@ function RunFiles({ rows, slug }: { rows: RunFileRow[]; slug: string }) {
 function ScrollBlock({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const h = useFitHeight(ref, 240);
+  // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
+  // biome-ignore lint/a11y/noNoninteractiveTabindex: zone défilante ou bloc de texte atteignable au clavier pour être lu
   return <div ref={ref} className="scroll-block" role="region" aria-label={label} tabIndex={0} style={h ? { maxHeight: h } : undefined}>{children}</div>;
 }
 
@@ -226,8 +229,8 @@ function RunTabs({ run, explain }: { run: WorkflowRun; explain: ReactNode }) {
       { id: "summary", label: "Résumé", content: <><RunFacts run={run} /><RunSummary run={run} />{explain}</> },
       { id: "schema", label: "Graphe", content: <RunSchemaView run={run} fill /> },
       { id: "steps", label: `Étapes (${steps.length})`, content: <ScrollBlock label="Étapes de l'exécution"><RunSteps steps={steps} /></ScrollBlock> },
-      ...((files.data?.length ?? 0) > 0 ? [{ id: "files", label: `Fichiers (${files.data!.length})`, content: <RunFiles rows={files.data!} slug={workspace.slug} /> }] : []),
-      { id: "logs", label: "Journaux", content: logs.length === 0 ? <p className="hint">Aucun journal : les étapes n'ont rien écrit (utilisez <code>System.log</code> dans un script).</p> : <>{logs.map((s) => <section key={s.node_id}><h3>{s.name}</h3><pre tabIndex={0} aria-label={`Journal de ${s.name}`}>{s.logs}</pre></section>)}</> },
+      ...((files.data?.length ?? 0) > 0 ? [{ id: "files", label: `Fichiers (${files.data?.length ?? 0})`, content: <RunFiles rows={files.data ?? []} slug={workspace.slug} /> }] : []),
+      { id: "logs", label: "Journaux", content: logs.length === 0 ? <p className="hint">Aucun journal : les étapes n'ont rien écrit (utilisez <code>System.log</code> dans un script).</p> : logs.map((s) => <section key={s.node_id}><h3>{s.name}</h3><ReadRegion label={`Journal de ${s.name}`}>{s.logs}</ReadRegion></section>) },
       { id: "io", label: "Entrées/Sorties", content: (
         <div className="run-io-tab">
           <section className="scroll-block io-constants" aria-label="Constantes du workflow">
