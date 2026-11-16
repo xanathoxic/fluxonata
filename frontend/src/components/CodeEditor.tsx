@@ -8,7 +8,7 @@ import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } fr
 import { tags as t } from "@lezer/highlight";
 import { Compartment, EditorState } from "@codemirror/state";
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useEffectEvent } from "react";
 import { HelpTip } from "./HelpTip";
 
 export interface Completion { label: string; detail?: string }
@@ -54,6 +54,8 @@ const theme = EditorView.theme({
  * Accessible code editor (CodeMirror 6). Tab indents like in any code editor, so Escape is the documented way out:
  * it moves focus to the element right after the editor (keyboard users are never trapped).
  */
+const MAX_REPORTED = 50; // bounded: a parent that never gives the value back (read-only display) cannot make the list grow
+
 export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEditor({ value, onChange, language, completions = [], ariaLabel, readOnly = false, minHeight = "260px", fill = false, onCursor }, handle) {
   const host = useRef<HTMLDivElement>(null);
   const exit = useRef<HTMLSpanElement>(null);
@@ -61,6 +63,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
   const lang = useRef(new Compartment());
   const ro = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
+  // what this editor reported and the parent has not given back yet: the parent's answer to an older edit can arrive after a newer one
+  // was typed, and it must not overwrite it (it is an echo, not a change from outside)
+  const reported = useRef<string[]>([]);
   const completionsRef = useRef(completions);
   const cursorRef = useRef(onCursor);
   cursorRef.current = onCursor;
@@ -77,8 +82,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
   onChangeRef.current = onChange;
   completionsRef.current = completions;
 
-  useEffect(() => {
-    if (!host.current) return;
+  // l'éditeur est créé une seule fois ; valeur, langue et lecture seule sont synchronisées par les effets suivants
+  const createView = useEffectEvent((parent: HTMLElement) => {
     const source = (ctx: CompletionContext) => {
       const word = ctx.matchBefore(/[\w.]*/);
       if (!word || (word.from === word.to && !ctx.explicit)) return null;
@@ -98,19 +103,32 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
         ro.current.of(EditorState.readOnly.of(readOnly)),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel, "aria-multiline": "true", tabindex: "0" }),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+          if (u.docChanged) {
+            const text = u.state.doc.toString();
+            reported.current = [...reported.current, text].slice(-MAX_REPORTED);
+            onChangeRef.current(text);
+          }
           if (u.docChanged || u.selectionSet) { const head = u.state.selection.main.head; const ln = u.state.doc.lineAt(head); cursorRef.current?.({ line: ln.number, col: head - ln.from + 1, lines: u.state.doc.lines }); }
         }),
         theme,
       ],
     });
-    view.current = new EditorView({ state, parent: host.current });
+    view.current = new EditorView({ state, parent });
+  });
+  useEffect(() => {
+    if (!host.current) return;
+    createView(host.current);
     return () => { view.current?.destroy(); view.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor is created once; props are synced below
   }, []);
 
   useEffect(() => {
     const v = view.current;
+    const echo = reported.current.indexOf(value);
+    if (echo >= 0) {
+      reported.current = reported.current.slice(echo + 1); // our own edit coming back (possibly an older one): nothing to apply
+      return;
+    }
+    reported.current = [];
     if (v && v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
   useEffect(() => {

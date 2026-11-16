@@ -1,0 +1,18 @@
+# Ajoute le type de connexion « ssh » (nœud SSH) : changement de choix seulement, aucune donnée touchée.
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('vault', '0010_smtp_kind'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='connection',
+            name='kind',
+            field=models.CharField(choices=[('http_bearer', 'Service HTTP (jeton)'), ('api_key', "Service HTTP (clé d'API)"), ('basic', 'Service HTTP (identifiant + mot de passe)'), ('oauth2_client', 'Service HTTP (OAuth2, identifiants client)'), ('oauth2_code', 'Service HTTP (OAuth2, autorisation par une personne)'), ('aws_sigv4', 'Stockage S3 / services AWS (signature SigV4)'), ('postgres', 'Base PostgreSQL (lecture seule)'), ('mysql', 'Base MySQL / MariaDB (lecture seule)'), ('ldap', 'Annuaire LDAP / Active Directory (lecture seule)'), ('sftp', 'Serveur SFTP (fichiers texte)'), ('ssh', 'Serveur SSH (commandes et session)'), ('imap', 'Boîte e-mail (IMAP)'), ('smtp', "Serveur SMTP (envoi d'e-mails)"), ('generic', 'Générique')], default='generic', max_length=20),
+        ),
+    ]

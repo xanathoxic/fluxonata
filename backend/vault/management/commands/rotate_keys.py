@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from vault import crypto
+from vault import crypto, registry
 from vault.models import Secret, VaultConfig, VaultLease
 
 
@@ -25,12 +25,7 @@ class Command(BaseCommand):
             s.save()
             n += 1
         # other encrypted columns register here as they appear (webhook secrets)
-        from triggers.models import Webhook  # noqa: PLC0415
-
-        for w in Webhook.objects.select_for_update().filter(external_secret__isnull=True):
-            w.set_secret(w.reveal_secret())
-            w.save()
-            n += 1
+        n += registry.rotate_registered()
         # the AppRole secret_id of the external vault, and the short-lived dynamic credentials kept encrypted
         cfg = VaultConfig.objects.select_for_update().filter(pk=1).first()
         if cfg is not None and cfg.secret_id_ciphertext:

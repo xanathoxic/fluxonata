@@ -47,3 +47,61 @@ def test_detects_a_new_cycle():
     ig = _load()
     assert ig.cycles([("a", "b"), ("b", "c"), ("c", "a")]) == [["a", "b", "c"]]
     assert ig.cycles([("a", "b"), ("b", "c")]) == []
+
+
+def test_no_import_time_cycle_between_files():
+    """Le « cycle » gelé entre applications n'est pas un cycle d'import : entre fichiers, les imports de tête (exécutés au
+    chargement) forment un graphe SANS cycle. Un cycle de ce type provoquerait une ImportError ou un ordre de chargement fragile."""
+    ig = _load()
+    top_cycles, _ = ig.file_cycles()
+    assert top_cycles == [], (
+        f"cycle d'import au chargement entre fichiers : {top_cycles}. Différez l'import dans la fonction ou extrayez la dépendance commune."
+    )
+
+
+def test_file_cycles_through_deferred_imports_never_grow():
+    """Les 5 petits cycles entre fichiers passent tous par un import local à une fonction (différé) ; aucun fichier de plus n'y entre."""
+    ig = _load()
+    frozen = json.loads(ig.BASELINE.read_text(encoding="utf-8"))["cycles_fichiers_avec_imports_locaux"]
+    now = ig.file_cycles()[1]
+    frozen_files = {f for comp in frozen for f in comp}
+    new_files = {f for comp in now for f in comp} - frozen_files
+    assert not new_files, f"fichiers entrés dans un cycle d'imports différés : {sorted(new_files)}. {HELP}"
+    assert len(now) <= len(frozen), f"nouveau cycle entre fichiers : {now}. {HELP}"
+
+
+def test_the_file_graph_tells_deferred_imports_from_load_time_ones():
+    """Contrôle du détecteur : `formcontrols` importe `formengine` seulement dans des fonctions, `formengine` importe `formcontrols` en tête."""
+    ig = _load()
+    top, deferred = ig.file_graph()
+    assert "triggers.formcontrols" in top["triggers.formengine"]
+    assert "triggers.formengine" not in top.get("triggers.formcontrols", set())
+    assert "triggers.formengine" in deferred["triggers.formcontrols"]
+
+
+def test_core_depends_on_no_application():
+    """`core` (garde des connexions sortantes, pagination, journaux, dossiers…) sert toutes les applications : elle n'en importe aucune.
+    Ce qui lui manquait (la liste d'hôtes autorisés de `tenancy`) lui est fourni par inversion (`netsec.set_managed_source`)."""
+    ig = _load()
+    assert [e for e in ig.edges() if e[0] == "core"] == []
+
+
+def test_core_stays_out_of_the_cycle_between_applications():
+    ig = _load()
+    assert all("core" not in comp for comp in ig.snapshot()["cycles"])
+
+
+def test_tenancy_stays_out_of_the_cycle_between_applications():
+    """`tenancy` (espaces, rôles, droits) est un socle : il n'importe ni workflows ni runs ; les vues qui lisent les accès
+    aux dossiers ou la flotte de workers vivent chez ceux qui possèdent ces données."""
+    ig = _load()
+    assert all("tenancy" not in comp for comp in ig.snapshot()["cycles"])
+    assert not {dep for src, dep in ig.snapshot()["edges"] if src == "tenancy"} & {"workflows", "runs"}
+
+
+def test_vault_stays_out_of_the_cycle_between_applications():
+    """`vault` (secrets, connexions) n'importe aucune application de fonctionnalité : les contrôles de configuration SMTP/SSH et la
+    rotation des secrets de webhooks lui sont fournis par `runs` et `triggers` (voir `vault/registry.py`)."""
+    ig = _load()
+    assert all("vault" not in comp for comp in ig.snapshot()["cycles"])
+    assert not {dep for src, dep in ig.snapshot()["edges"] if src == "vault"} & {"runs", "triggers", "workflows"}

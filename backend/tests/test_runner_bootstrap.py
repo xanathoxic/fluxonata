@@ -13,8 +13,6 @@ TOKEN = "orr_" + "x" * 40
 
 
 def run(capsys, **env):
-    for k, v in env.items():
-        pass
     call_command("runner_bootstrap")
     return capsys.readouterr().out
 
@@ -71,42 +69,13 @@ def test_refuses_a_token_that_belongs_to_another_runner(db, tok):
 
 
 def test_the_agent_stack_gives_the_agent_neither_a_database_nor_the_key():
-    import shutil
-    import subprocess
-    from pathlib import Path
+    from tests.compose_helpers import compose_config
 
-    import yaml
-
-    if not shutil.which("docker"):
-        pytest.skip("docker indisponible")
-    infra = Path(__file__).resolve().parents[2] / "infra"
-    env = {
-        "PATH": __import__("os").environ["PATH"],
-        "ORCH_DB_PASSWORD": "x",
-        "ORCH_WORK_DIR": "/srv/w",
-        "ORCH_EXEC_AGENT_TOKEN": TOKEN,
-    }
-    cmd = [
-        "docker",
-        "compose",
-        "-f",
-        str(infra / "docker-compose.prod.yml"),
-        "-f",
-        str(infra / "docker-compose.roles.yml"),
-        "-f",
-        str(infra / "docker-compose.agent.yml"),
-        "--env-file",
-        str(infra / ".env.prod.example"),
-        "--profile",
-        "agent",
-        "config",
-        "--format",
-        "json",
-    ]
-    out = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=60)
-    if out.returncode:
-        pytest.skip(out.stderr[:120])
-    services = yaml.safe_load(out.stdout)["services"]
+    services = compose_config(
+        ["docker-compose.prod.yml", "docker-compose.roles.yml", "docker-compose.agent.yml"],
+        ["agent"],
+        {"ORCH_WORK_DIR": "/srv/w"},
+    )["services"]
     agent = services["exec-agent"]
     assert "worker-exec" not in services and "worker-ai" not in services  # ni worker qui cumule le socket ET la clé
     assert not [k for k in agent["environment"] if k.startswith("ORCH_DB_") or k == "ORCH_SECRET_KEY"]

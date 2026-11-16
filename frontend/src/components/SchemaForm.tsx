@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useId, useState } from "react";
 import type { JsonSchema } from "../api";
-import { CodeEditor } from "./CodeEditor";
+import { LazyCodeEditor as CodeEditor } from "./LazyCodeEditor";
 import { t } from "../i18n";
 
 type Values = Record<string, unknown>;
@@ -25,13 +25,14 @@ export function JsonField({ prop, value, disabled, describedBy, invalid, onChang
   prop: JsonSchema; value: unknown; disabled?: boolean; describedBy?: string; invalid: boolean; onChange: (v: unknown) => void;
 }) {
   const [text, setText] = useState(() => pretty(value));
-  useEffect(() => { // the form was filled from outside (example, saved test set): show the new value
-    if (typeof value === "string") return;
+  // the form was filled from outside (example, saved test set): show the new value ; seuls les changements venus de l'extérieur comptent
+  const showExternal = useEffectEvent((external: unknown) => {
+    if (typeof external === "string") return;
     let current: unknown;
     try { current = text.trim() === "" ? undefined : JSON.parse(text); } catch { current = Symbol("invalid"); }
-    if (JSON.stringify(current) !== JSON.stringify(value)) setText(pretty(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only external value changes matter
-  }, [value]);
+    if (JSON.stringify(current) !== JSON.stringify(external)) setText(pretty(external));
+  });
+  useEffect(() => { showExternal(value); }, [value]);
   const edit = (next: string) => {
     setText(next);
     if (next.trim() === "") return onChange(undefined);
@@ -99,7 +100,7 @@ export function SchemaForm({ schema, values, onChange, errors = {}, disabled }: 
             {required && <span className="req"> ({t("common.required")})</span>}
           </label>
         );
-        let control;
+        let control: ReactNode;
         const value = values[name];
         if (prop.type === "boolean") {
           control = (

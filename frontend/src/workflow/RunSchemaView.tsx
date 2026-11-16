@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { type StepRun, type WorkflowRun } from "../api";
+import type { StepRun, WorkflowRun } from "../api";
 import { Fields } from "../components/Fields";
 import { RunInspectorPanel } from "./RunInspector";
 import { useFitHeight } from "./useFitHeight";
@@ -50,10 +50,11 @@ function loadHeight(): number | null {
 
 /** Horizontal splitter between the diagram (top) and the inspector (bottom): drag it, or focus it and use ↑/↓ (Shift = larger steps);
  *  double-click or Home restores the default height. */
-function RowResizer({ value, max, onChange }: { value: number; max: number; onChange: (v: number) => void }) {
+export function RowResizer({ value, max, onChange }: { value: number; max: number; onChange: (v: number) => void }) {
   const start = useRef<{ y: number; v: number } | null>(null);
   const clamp = (v: number) => Math.min(max, Math.max(INSP.min, Math.round(v)));
   return (
+    // biome-ignore lint/a11y/useSemanticElements: séparateur déplaçable : le rôle `separator` focalisable n'a pas d'équivalent natif (<hr> n'est pas interactif)
     <div
       role="separator" aria-orientation="horizontal" aria-label="Redimensionner l'inspecteur de variables" aria-valuenow={value} aria-valuemin={INSP.min} aria-valuemax={max} tabIndex={0}
       className="row-resizer" title="Glisser pour agrandir ou réduire l'inspecteur ; double-clic : hauteur par défaut"

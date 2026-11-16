@@ -6,9 +6,8 @@ from django.db import connection
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from core import health
 from core.logging import JsonFormatter, bind
-from runs import registry
+from runs import health, registry
 from runs.models import ServiceInstance
 from tenancy.models import Role
 from tests.conftest import client_for, make_user

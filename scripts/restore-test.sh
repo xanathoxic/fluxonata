@@ -2,7 +2,7 @@
 # Proves a backup is restorable: backup -> restore into a scratch DB -> compare row counts -> decrypt a secret with the
 # real key directory -> drop the scratch DB. Needs the dev stack (PostgreSQL) and demo data.
 source "$(dirname "$0")/_common.sh"; load_env; cd "$ROOT"
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"; docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" fluxonata-db-1 psql -U "${ORCH_DB_USER:-fluxonata}" -d postgres -qc "DROP DATABASE IF EXISTS fluxonata_restore_test" >/dev/null 2>&1' EXIT
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"; docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" "${ORCH_DB_CONTAINER:-fluxonata-db-1}" psql -U "${ORCH_DB_USER:-fluxonata}" -d postgres -qc "DROP DATABASE IF EXISTS fluxonata_restore_test" >/dev/null 2>&1' EXIT
 PY="$ROOT/.venv/bin/python"
 # make sure there is an encrypted secret to verify
 (cd backend && "$PY" manage.py shell -c "
@@ -13,7 +13,7 @@ s, _ = Secret.objects.get_or_create(workspace=ws, name='restore-probe')
 s.set_value('probe-value-12345'); s.save()" 2>/dev/null)
 scripts/backup.sh "$TMP/b" >/dev/null
 RESTORE_ARTIFACTS_DIR="$TMP/art" scripts/restore.sh "$TMP/b" fluxonata_restore_test >/dev/null
-count() { docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" fluxonata-db-1 psql -U "${ORCH_DB_USER:-fluxonata}" -d "$1" -Atc "SELECT count(*) FROM $2"; }
+count() { docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" "${ORCH_DB_CONTAINER:-fluxonata-db-1}" psql -U "${ORCH_DB_USER:-fluxonata}" -d "$1" -Atc "SELECT count(*) FROM $2"; }
 ok=1
 for t in tenancy_workspace auth_user catalog_action catalog_actionversion workflows_workflow workflows_workflowversion runs_workflowrun runs_execution audit_auditevent vault_secret; do
   a="$(count "${ORCH_DB_NAME:-fluxonata}" $t)"; b="$(count fluxonata_restore_test $t)"

@@ -53,7 +53,7 @@ services:
   api-ui:
     <<: *role
     environment: { <<: *env, ORCH_ROLES: ui }
-    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-", "--logger-class", "core.gunicorn_logging.RedactingLogger"]
     volumes: ["keys:/keys", "artifacts:/app/var/artifacts"]
     networks: [edge, data, egress]   # appelle OIDC, coffre externe, fournisseurs d'IA, test de connexions (ARCHITECTURE.md C-5)
     healthcheck: *ready
@@ -62,7 +62,7 @@ services:
   api-ingest:
     <<: *role
     environment: { <<: *env, ORCH_ROLES: ingest }
-    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-", "--logger-class", "core.gunicorn_logging.RedactingLogger"]
     volumes: ["keys:/keys"]   # la clé : vérifier la signature d'un webhook déchiffre son secret (C-4) ; PAS d'artefacts
     networks: [edge, data]   # AUCUNE sortie : ni egress, ni réseau externe
     healthcheck: *ready
@@ -71,7 +71,7 @@ services:
   runner-gw:
     <<: *role
     environment: { <<: *env, ORCH_ROLES: runner-gw, ORCH_RUNNER_LONG_POLL_SLOTS: "8", ORCH_ALLOWED_HOSTS: "${ORCH_ALLOWED_HOSTS:-localhost,127.0.0.1},runner-gw" }   # + son nom interne : l'agent d'exécution s'y connecte directement (en-tête Host)
-    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "16", "--timeout", "60", "--access-logfile", "-"]   # les attentes longues occupent des threads (AR1.3)
+    command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "16", "--timeout", "60", "--access-logfile", "-", "--logger-class", "core.gunicorn_logging.RedactingLogger"]   # les attentes longues occupent des threads (AR1.3)
     volumes: ["keys:/keys", "artifacts:/app/var/artifacts"]
     networks: [edge, data, egress]   # écrit les artefacts (stockage S3 éventuel)
     healthcheck: *ready

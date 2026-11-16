@@ -17,7 +17,7 @@ spec:
       containers:
       - name: api-ingest
         image: fluxonata-backend:local
-        command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-"]
+        command: ["gunicorn", "fluxonata.wsgi", "-b", "0.0.0.0:8000", "-w", "2", "--worker-class", "gthread", "--threads", "8", "--timeout", "60", "--access-logfile", "-", "--logger-class", "core.gunicorn_logging.RedactingLogger"]
         envFrom: [{configMapRef: {name: fluxonata-config}}, {secretRef: {name: fluxonata-secrets}}]
         env:
         - {name: ORCH_ROLES, value: "ingest"}

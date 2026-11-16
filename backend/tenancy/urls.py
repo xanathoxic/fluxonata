@@ -1,20 +1,15 @@
 from django.urls import path
 
 from . import admin_views as a
-from . import group_views as gv
 from . import mcp_tokens as mt
 from . import platform_views as pf
 from . import scim, views
 from . import user_views as uv
 
 urlpatterns = [
-    path("workspaces/<slug:workspace>/groups/", gv.GroupListCreateView.as_view()),
-    path("workspaces/<slug:workspace>/groups/<int:pk>/", gv.GroupDetailView.as_view()),
     path("platform/workspaces/", pf.WorkspacesView.as_view()),
     path("platform/workspaces/<slug:slug>/", pf.WorkspaceDetailView.as_view()),
     path("platform/workspaces/<slug:slug>/admins/", pf.WorkspaceAdminView.as_view()),
-    path("platform/workers/", pf.WorkersView.as_view()),
-    path("platform/workers/purge/", pf.WorkersPurgeView.as_view()),
     path("platform/admins/", pf.PlatformAdminsView.as_view()),
     path("platform/admins/<str:username>/", pf.PlatformAdminDetailView.as_view()),
     path("platform/egress/", pf.EgressView.as_view()),
@@ -45,9 +40,6 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/me/mcp-tokens/", mt.McpTokensView.as_view()),
     path("workspaces/<slug:workspace>/me/mcp-tokens/<int:pk>/", mt.McpTokenRevokeView.as_view()),
     path("workspaces/<slug:workspace>/policy/", a.PolicyView.as_view()),
-    path("workspaces/<slug:workspace>/promotions/", a.PromotionListView.as_view()),
-    path("workspaces/<slug:workspace>/promotions/<int:pk>/decide/", a.PromotionDecideView.as_view()),
-    path("workspaces/<slug:workspace>/workflows/<slug:slug>/versions/<str:version>/promote/", a.PromoteView.as_view()),
     path("workspaces/<slug:workspace>/audit/", a.AuditListView.as_view()),
     path("workspaces/<slug:workspace>/audit/export/", a.AuditExportView.as_view()),
 ]

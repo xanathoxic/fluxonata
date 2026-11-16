@@ -19,7 +19,6 @@ import pytest
 from rest_framework.test import APIClient
 
 from tenancy.models import Membership
-from tests.conftest import make_user  # noqa: F401
 
 IMAGE = "quay.io/keycloak/keycloak:26.0"
 CLIENT, SECRET = "fluxonata", "kc-secret-12345"

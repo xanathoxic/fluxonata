@@ -14,7 +14,6 @@ from runs.worker import process_one
 from tenancy.models import Membership, Role
 from tests.conftest import client_for, make_user
 from tests.wf_helpers import (
-    ACTIONS,
     STR,
     drain,
     edge,
@@ -26,17 +25,6 @@ from tests.wf_helpers import (
     schema,
     step,
 )
-
-
-@pytest.fixture
-def ws(world):
-    for slug in ACTIONS:
-        make_action(world["ws_a"], slug) if slug != "echo" else None
-    from catalog.models import ActionVersion
-
-    if not ActionVersion.objects.filter(action__workspace=world["ws_a"], action__slug="echo").exists():
-        make_action(world["ws_a"], "echo")
-    return world["ws_a"]
 
 
 def test_sequence_with_condition_skips_other_branch(ws, world):
@@ -86,7 +74,10 @@ def test_parallel_branches_and_join(ws, world):
 
 def test_failure_without_error_edge_fails_run_and_compensates_in_reverse(ws, world, tmp_path):
     user, log = world["designer"], str(tmp_path / "log.txt")
-    comp = lambda label: {"action": "log", "inputs": {"path": log, "label": label}}  # noqa: E731
+
+    def comp(label):
+        return {"action": "log", "inputs": {"path": log, "label": label}}
+
     v = publish(
         ws,
         "saga",

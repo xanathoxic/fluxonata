@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, goNav, loginToCatalog as login } from "./helpers";
+import { expectNoA11yViolations, goNav, loginToCatalog as login, boxOf } from "./helpers";
 
 test("connexion refusée avec un mauvais mot de passe, message associé", async ({ page }) => {
   await page.goto("/");
@@ -91,7 +91,7 @@ test("menu de gauche : se replie en rail d'icônes, reste accessible et utilisab
   await page.reload();
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   const main = page.locator("main#main");
-  const w = async (l: ReturnType<Page["locator"]>) => Math.round((await l.boundingBox())!.width);
+  const w = async (l: ReturnType<Page["locator"]>) => Math.round((await boxOf(l)).width);
   expect(await w(nav)).toBeGreaterThan(190);
   const mainBefore = await w(main);
 

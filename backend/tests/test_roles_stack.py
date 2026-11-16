@@ -1,41 +1,22 @@
 """AR2.4 + AR2.7 — la topologie PAR RÔLES (infra/docker-compose.roles.yml) : privilèges, réseaux, routage, profils.
 
 On interroge `docker compose config --format json`, qui donne la configuration FUSIONNÉE exacte (pas une réinterprétation maison des règles de fusion).
-Sauté si Docker Compose est absent. Pas de conteneur démarré.
+Configuration synthétique (voir `tests/compose_helpers.py`) : le vrai `infra/.env.prod` n'est jamais lu. Omis seulement si le client ou le plugin Compose
+est absent ; une configuration Compose invalide fait ÉCHOUER le test. Pas de conteneur démarré.
 """
 
-import json
-import os
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.compose_helpers import compose_config
 
 INFRA = Path(__file__).resolve().parents[2] / "infra"
 
 
 def merged(*profiles):
-    if not shutil.which("docker"):
-        pytest.skip("docker indisponible")
-    env = {**os.environ, "ORCH_DB_PASSWORD": "x", "ORCH_WORK_DIR": "/srv/work"}
-    cmd = [
-        "docker",
-        "compose",
-        "-f",
-        str(INFRA / "docker-compose.prod.yml"),
-        "-f",
-        str(INFRA / "docker-compose.roles.yml"),
-        "--env-file",
-        str(INFRA / ".env.prod.example"),
-    ]
-    for p in profiles:
-        cmd += ["--profile", p]
-    out = subprocess.run([*cmd, "config", "--format", "json"], capture_output=True, text=True, env=env, timeout=60)
-    if out.returncode:
-        pytest.skip(f"docker compose config indisponible : {out.stderr[:150]}")
-    return json.loads(out.stdout)
+    return compose_config(["docker-compose.prod.yml", "docker-compose.roles.yml"], profiles)
 
 
 @pytest.fixture(scope="module")
@@ -174,13 +155,17 @@ LOCATIONS = dict(re.findall(r"location (\S+) \{\s*set \$UP (\S+);", CONF))
 
 
 def test_nginx_routes_each_surface_to_its_own_service_and_starts_without_them():
-    assert LOCATIONS == {
-        "/api/v1/hooks/": "http://api-ingest:8000",
-        "/api/v1/forms/": "http://api-ingest:8000",
-        "/api/v1/resume-forms/": "http://api-ingest:8000",
-        "/api/v1/runner/": "http://runner-gw:8000",
-        "/api/": "http://api-ui:8000",
-    }
+    assert (
+        LOCATIONS
+        == {
+            "/api/v1/hooks/": "http://api-ingest:8000",
+            "/api/v1/hooks/resume/": "http://api-ingest:8000",  # même amont : emplacement à part pour limiter error_log à crit (jeton dans l'adresse)
+            "/api/v1/forms/": "http://api-ingest:8000",
+            "/api/v1/resume-forms/": "http://api-ingest:8000",
+            "/api/v1/runner/": "http://runner-gw:8000",
+            "/api/": "http://api-ui:8000",
+        }
+    )
     assert (
         "resolver 127.0.0.11" in CONF
     )  # noms résolus à la demande : nginx démarre même si un rôle est arrêté (502 sur cette surface seulement)
@@ -193,8 +178,11 @@ def test_nginx_prefixes_match_the_application_roles():
     """Le proxy et l'application doivent s'accorder sur qui sert quoi (fluxonata/apiroles.py)."""
     from fluxonata.apiroles import INGEST_PREFIXES, RUNNER_PREFIXES
 
-    ingest = {p.removeprefix("/api/v1/") for p, up in LOCATIONS.items() if "api-ingest" in up}
-    runner = {p.removeprefix("/api/v1/") for p, up in LOCATIONS.items() if "runner-gw" in up}
+    def served_by(role):  # un préfixe imbriqué dans un autre, servi par le même amont, ne change pas qui sert quoi
+        prefixes = {p for p, up in LOCATIONS.items() if role in up}
+        return {p.removeprefix("/api/v1/") for p in prefixes if not any(o != p and p.startswith(o) for o in prefixes)}
+
+    ingest, runner = served_by("api-ingest"), served_by("runner-gw")
     assert ingest == set(INGEST_PREFIXES) and runner == set(RUNNER_PREFIXES)
 
 

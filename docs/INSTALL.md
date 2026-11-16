@@ -47,7 +47,7 @@ Tests : `cd backend && ../.venv/bin/python -m pytest` · `cd frontend && npm tes
 
 ## 3. Production sur un hôte (Docker Compose)
 ```bash
-scripts/prod-init.sh        # génère infra/.env.prod (droits 600, secrets aléatoires ; jamais versionné)
+scripts/prod-init.sh        # génère infra/.env.prod et infra/.env.agent (droits 600, secrets aléatoires ; jamais versionnés)
 docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod up -d --build
 docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod exec api python manage.py bootstrap --workspace principal
 ```
@@ -192,6 +192,7 @@ git reset --hard origin/main   # remplace les fichiers suivis par Git ; .env, in
 Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.prod.yml`), refaites ces modifications ensuite. Un `git clone` neuf avec recopie de `infra/.env.prod` convient aussi : les volumes Docker sont conservés tant que le nom de projet reste `fluxonata-prod`.
 
 ### 7.4 À savoir pour la v0.4
+- **Depuis une version antérieure à la v0.4.5** : la migration `tenancy/0014` (jetons personnels) retient brièvement des verrous sur trois tables ; suivez [docs/MISE_A_NIVEAU_0014.md](MISE_A_NIVEAU_0014.md) (préconditions, étape préalable avec limite d'attente du verrou, contrôles, récupération) entre les étapes 2 et 3 ci-dessus.
 - Trois migrations **additives** (jeux de test des actions, secret de signature des webhooks, coffre externe) : rien n'est supprimé.
 - Le **coffre externe** (HashiCorp Vault) est désactivé tant qu'il n'est pas configuré (Plate-forme → Coffre externe). Pour un Vault du réseau interne, ajoutez son adresse à `ORCH_EGRESS_ALLOWLIST` dans `infra/.env.prod`.
 - Les boutons « Générer avec l'IA » (workflows, actions, skills) n'apparaissent que si l'assistant IA est activé (Administration → Assistant IA).
@@ -223,6 +224,10 @@ Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.pro
 `docker compose stop` envoie SIGTERM : l'orchestrateur finit son tour, le worker **termine l'action en cours** (puis ne reprend rien), les deux se retirent du registre de santé et sortent en code 0 ; l'API (gunicorn) finit ses requêtes. Si le délai (`stop_grace_period` : API 30 s, orchestrateur 20 s, worker 120 s) est dépassé, Docker tue le process : l'exécution en cours est reprise après expiration de son bail (voir `docs/RECOVERY.md`), plus lentement mais sans perte. **Une action plus longue que 120 s** doit faire augmenter `stop_grace_period` du worker.
 Sondes : `api` interroge `/api/v1/health/ready/` ; `orchestrator` et `worker` exécutent `manage.py healthcheck --kind …` (le battement de cœur de leur conteneur date de moins de 30 s). `docker compose ps` affiche leur état.
 
+## Étapes SSH (nœud « Commandes SSH »)
+Elles sont prises par le fil des étapes de connexion d'un worker (comme HTTP, SQL, SFTP, SMTP, LDAP) : **`worker`** (pile compacte), **`worker-aux`** (topologie par rôles et par agents ; kubernetes : `worker-aux`). Ce worker reçoit la clé du coffre (secrets de connexion) et doit être sur un réseau qui atteint les serveurs (réseau `egress` ; aucun accès au socket Docker n'est nécessaire ni donné). **Elles ne tournent ni sur un runner distant ni sur `exec-agent`**, qui n'ont pas la clé : un runner ne reçoit que les secrets d'une action, jamais ceux d'une connexion. Le nœud **ne change rien à l'invariant I1** (aucun service ne cumule socket Docker et clé du coffre) : il s'exécute dans un service qui a la clé et n'a pas le socket dans les profils par rôles et par agents ; en pile compacte, le `worker` cumule les deux comme avant (I1 y reste non tenu, voir plus haut). Un serveur SSH compromis ne peut pas obtenir autre chose que ce que la connexion lui remet pour s'authentifier.
+Réseau : ouvrez la sortie du worker vers les serveurs (port 22 ou celui de la connexion). Un serveur en réseau privé doit figurer dans `ORCH_EGRESS_ALLOWLIST` (premier saut seulement : les serveurs joints **par un rebond** ne sont pas filtrés par la plateforme, qui contrôle seulement qu'ils ne sont pas des adresses jamais autorisées). Le jeton SSH n'existe pas : l'authentification est celle de la connexion (mot de passe ou clé), l'empreinte de la clé du serveur est obligatoire. Mise à jour : une migration (`vault 0011`, ajout d'un choix de type de connexion) précède les nouveaux workers ; une installation existante n'est pas modifiée et les anciens workers ne savent pas exécuter une étape SSH (ils la laisseraient en file jusqu'à leur mise à jour).
+
 ## Topologie par rôles (AR2.4, AR2.7)
 Par défaut, la pile de production est **compacte** : un `api` et un `worker`. Pour séparer les surfaces et les privilèges :
 ```
@@ -232,10 +237,20 @@ docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.ym
 `api-ui` (interface), `api-ingest` (webhooks, formulaires publics ; **aucune sortie réseau**), `runner-gw` (runners distants), `worker-exec` (actions, seul avec `worker-ai` à détenir le socket Docker), `worker-aux` (étapes de connexion, interrogation, alertes, Git). nginx route par préfixe ; l'arrêt d'un rôle n'indisponibilise que sa surface. Les réseaux `data` et `edge` sont internes : un service qui doit appeler l'extérieur doit être aussi sur `egress` (voir le fichier). `scripts/prod-smoke.sh --roles` rejoue l'installation vierge sur cette topologie. **Ne pas mélanger** les deux topologies sur un même projet sans `down` : les noms de services diffèrent.
 
 ## Topologie par agents (AR3.2, ADR 0023)
-Pour que le service qui détient le socket Docker n'ait **ni la base ni la clé du coffre** : ajoutez `-f infra/docker-compose.agent.yml` aux deux fichiers de la topologie par rôles. `scripts/prod-init.sh` (rejoué sur une installation existante) ajoute `ORCH_EXEC_AGENT_TOKEN` à `infra/.env.prod`. Une fois la pile démarrée :
+Pour que le service qui détient le socket Docker n'ait **ni la base ni la clé du coffre** : ajoutez `-f infra/docker-compose.agent.yml` aux deux fichiers de la topologie par rôles. Le jeton de l'agent vit dans **`infra/.env.agent`** (droits 600, jamais versionné), un fichier **distinct** de `infra/.env.prod` : seul `exec-agent` le charge ; la plateforme n'en garde que l'empreinte. `scripts/prod-init.sh` le crée (voir la transition ci-dessous pour une installation existante). Une fois la pile démarrée :
 ```
 C="docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod"
-$C exec -T -e ORCH_EXEC_AGENT_TOKEN api-ui python manage.py runner_bootstrap      # enregistre le runner (jeton de l'environnement, jamais affiché)
+scripts/agent-register.sh                    # enregistre le runner (empreinte seulement ; le jeton n'est jamais affiché)
 $C --profile agent up -d --build exec-agent
 ```
-Limites : le worker de l'assistant (`worker-ai`) n'est pas disponible dans ce mode ; la prise de tâche passe par HTTP (latence non mesurée) ; l'agent tourne sur le même hôte (le déplacer sur un hôte dédié est le but du mode, non testé ici). `scripts/prod-smoke.sh --agent` rejoue l'installation vierge.
+**Transition d'une installation existante** (jeton `ORCH_EXEC_AGENT_TOKEN` dans `infra/.env.prod`, versions antérieures) : rejouer `scripts/prod-init.sh` ne modifie rien et **signale** le jeton hérité. Pour le déplacer : `scripts/prod-init.sh --migrate-agent-token` (même valeur dans `infra/.env.agent`, entrée retirée de `.env.prod` ; le runner déjà enregistré reste valable), puis recréer les services pour qu'ils ne le portent plus. Ce jeton ayant été visible de tous les services qui chargent `.env.prod`, une rotation est conseillée (ci-dessous).
+
+**Rotation du jeton de l'agent — en trois gestes, dans cet ordre ; changer le fichier ne révoque rien** :
+1. `scripts/prod-init.sh --rotate-agent-token` écrit un nouveau jeton dans `infra/.env.agent`. **L'ancien reste enregistré et accepté** par la plateforme, et l'agent en marche continue de l'utiliser : à ce stade, rien n'est révoqué.
+2. `scripts/agent-register.sh` remplace l'empreinte enregistrée : **c'est cette étape qui révoque l'ancien jeton** (refusé dès cet instant). L'agent en marche, qui porte encore l'ancien, est alors refusé : il s'arrête avec le code 2 et redémarre en boucle.
+3. `$C --profile agent up -d --force-recreate exec-agent` recrée l'agent avec le nouveau jeton (un simple `restart` ne relit pas le fichier). Enchaînez les étapes 2 et 3 sans attendre : une action en cours chez l'agent est interrompue (son bail expire, la reprise suit la politique habituelle de la plateforme).
+Sans l'étape 2, l'ancien jeton reste valable ; sans l'étape 3, l'agent ne tourne plus.
+
+**Étapes IA** : sans `worker-exec`, `worker-aux` (clé, **sans socket**) prend les étapes IA des workflows (`ORCH_AUX_RUNS_AI_STEPS=1`, posé par `docker-compose.agent.yml`) ; elles s'exécutent dans son process, jamais en conteneur, et il ne peut prendre aucune autre action. Aucun changement hors de ce profil.
+
+Limites : **ce profil n'est pas durci contre la compromission de l'agent sur le même hôte** (il sépare le détenteur du socket de la base et de la clé, il ne protège pas la clé d'un attaquant qui contrôle l'agent) ; le worker de l'assistant (`worker-ai`) n'est pas disponible dans ce mode (l'essai à blanc d'un workflow généré a besoin du socket et de la clé) ; **isoler le jeton ne protège pas d'un attaquant qui contrôle le démon Docker** : le socket de l'agent reste équivalent à root sur l'hôte (depuis l'agent, le volume des clés de la pile est lisible), donc le profil ne protège pas la clé dans ce cas ; l'agent s'exécute en root, sans retrait de capacités ; il partage le réseau `edge` avec `api-ui`, `api-ingest` et `web` (aucun filtrage) ; la prise de tâche passe par HTTP (latence non mesurée) ; l'agent tourne sur le même hôte (le déplacer sur un hôte dédié est le but du mode, non testé ici). `scripts/prod-smoke.sh --agent` rejoue l'installation vierge.

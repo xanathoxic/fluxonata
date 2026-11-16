@@ -1,0 +1,3 @@
+# Outils de mesure de couverture, hors de l'installation de production et de la CI (voir scripts/coverage.sh).
+pytest-cov==7.1.0
+coverage==7.17.2

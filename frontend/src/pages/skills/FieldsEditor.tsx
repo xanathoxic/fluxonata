@@ -10,6 +10,7 @@ export function FieldsEditor({ legend, fields, onChange, withRequired, minRows, 
       <legend>{legend}</legend>
       {fields.length === 0 && <p className="hint">Aucun champ.</p>}
       {fields.map((f, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
         <div className="edge-row field-row" key={i}>
           <label className="sr-only" htmlFor={`${idPrefix}-n-${i}`}>Nom du champ {i + 1}</label>
           <input id={`${idPrefix}-n-${i}`} value={f.name} className="mono" placeholder="nom_du_champ" onChange={(e) => set(i, { name: fieldName(e.target.value) })} />

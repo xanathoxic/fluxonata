@@ -56,68 +56,98 @@ def _num(v, expr):
     return v
 
 
+def _require_fields(node, message):
+    fields = node.get("fields")
+    if not isinstance(fields, dict) or not fields:
+        raise TransformError(message)
+    return fields
+
+
+def _set(node, ctx) -> dict:
+    fields = _require_fields(node, "Définissez au moins un champ.")
+    try:
+        return dict(resolve(fields, ctx))
+    except ExpressionError as exc:
+        raise TransformError(str(exc)) from None
+
+
+def _chunk(node, ctx, items) -> list:
+    size = node.get("size")
+    if not isinstance(size, int) or not 1 <= size <= MAX_ITEMS:
+        raise TransformError("« size » : taille des lots, entier de 1 à 5000.")
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def _map(node, ctx, items) -> list:
+    fields = _require_fields(node, "Définissez au moins un champ pour chaque élément.")
+    try:
+        return [dict(resolve(fields, {**ctx, "item": it})) for it in items]
+    except ExpressionError as exc:
+        raise TransformError(str(exc)) from None
+
+
+def _filter(node, ctx, items) -> list:
+    where = node.get("where")
+    if not str(where or "").strip():
+        raise TransformError("Indiquez la condition de filtre (ex. item.montant > 100).")
+    return [it for it in items if bool(_ev(where, ctx, it))]
+
+
+def _sort(node, ctx, items) -> list:
+    by = node.get("by") or "item"
+    keyed = [(_ev(by, ctx, it), it) for it in items]
+    kinds = {type(k) if not isinstance(k, (int, float)) or isinstance(k, bool) else float for k, _ in keyed}
+    if len(kinds) > 1:
+        raise TransformError("Le tri compare des valeurs de types différents (nombres et textes mélangés).")
+    try:
+        keyed.sort(key=lambda kv: kv[0], reverse=node.get("order") == "desc")
+    except TypeError:
+        raise TransformError("Ces valeurs ne peuvent pas être triées.") from None
+    return [it for _, it in keyed]
+
+
+def _unique(node, ctx, items) -> list:
+    by = node.get("by")
+    seen: set = set()
+    out = []
+    for it in items:
+        k = _hashable(_ev(by, ctx, it) if by else it)
+        if k not in seen:
+            seen.add(k)
+            out.append(it)
+    return out
+
+
+def _limit(node, ctx, items) -> list:
+    count = node.get("count")
+    skip = node.get("skip", 0)
+    if not isinstance(count, int) or count < 0 or not isinstance(skip, int) or skip < 0:
+        raise TransformError("« count » et « skip » sont des entiers positifs.")
+    return items[skip : skip + count]
+
+
+# Opérations qui lisent une liste : la liste est évaluée AVANT les paramètres propres à l'opération (ordre des erreurs conservé).
+_LIST_OPERATIONS = {
+    "chunk": _chunk,
+    "map": _map,
+    "filter": _filter,
+    "sort": _sort,
+    "unique": _unique,
+    "limit": _limit,
+    "group": lambda node, ctx, items: _group(node, ctx, items),
+    "merge": lambda node, ctx, items: _merge(node, ctx, items),
+}
+
+
 def apply(node: dict, ctx: dict) -> dict:
     op = node.get("op")
     if op not in OPS:
         raise TransformError(f"Opération inconnue : {op}.")
     if op == "set":
-        fields = node.get("fields")
-        if not isinstance(fields, dict) or not fields:
-            raise TransformError("Définissez au moins un champ.")
-        try:
-            return dict(resolve(fields, ctx))
-        except ExpressionError as exc:
-            raise TransformError(str(exc)) from None
+        return _set(node, ctx)
     if op == "split":
         return _split(node, ctx)
-    items = _items(node.get("items"), ctx)
-    if op == "chunk":
-        size = node.get("size")
-        if not isinstance(size, int) or not 1 <= size <= MAX_ITEMS:
-            raise TransformError("« size » : taille des lots, entier de 1 à 5000.")
-        out = [items[i : i + size] for i in range(0, len(items), size)]
-    elif op == "map":
-        fields = node.get("fields")
-        if not isinstance(fields, dict) or not fields:
-            raise TransformError("Définissez au moins un champ pour chaque élément.")
-        try:
-            out = [dict(resolve(fields, {**ctx, "item": it})) for it in items]
-        except ExpressionError as exc:
-            raise TransformError(str(exc)) from None
-    elif op == "filter":
-        where = node.get("where")
-        if not str(where or "").strip():
-            raise TransformError("Indiquez la condition de filtre (ex. item.montant > 100).")
-        out = [it for it in items if bool(_ev(where, ctx, it))]
-    elif op == "sort":
-        by = node.get("by") or "item"
-        keyed = [(_ev(by, ctx, it), it) for it in items]
-        kinds = {type(k) if not isinstance(k, (int, float)) or isinstance(k, bool) else float for k, _ in keyed}
-        if len(kinds) > 1:
-            raise TransformError("Le tri compare des valeurs de types différents (nombres et textes mélangés).")
-        try:
-            keyed.sort(key=lambda kv: kv[0], reverse=node.get("order") == "desc")
-        except TypeError:
-            raise TransformError("Ces valeurs ne peuvent pas être triées.") from None
-        out = [it for _, it in keyed]
-    elif op == "unique":
-        by = node.get("by")
-        seen, out = set(), []
-        for it in items:
-            k = _hashable(_ev(by, ctx, it) if by else it)
-            if k not in seen:
-                seen.add(k)
-                out.append(it)
-    elif op == "limit":
-        count = node.get("count")
-        skip = node.get("skip", 0)
-        if not isinstance(count, int) or count < 0 or not isinstance(skip, int) or skip < 0:
-            raise TransformError("« count » et « skip » sont des entiers positifs.")
-        out = items[skip : skip + count]
-    elif op == "group":
-        out = _group(node, ctx, items)
-    else:  # merge
-        out = _merge(node, ctx, items)
+    out = _LIST_OPERATIONS[op](node, ctx, _items(node.get("items"), ctx))
     return {"items": out, "count": len(out)}
 
 

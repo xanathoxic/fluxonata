@@ -12,15 +12,14 @@ from rest_framework.views import APIView
 from ai.models import AiSkill
 from audit.models import record
 from catalog.models import Action
+from core.folders import clean_folder
 from formbuilder.models import Control, Form
 from tenancy.models import Folder, Membership
 from tenancy.permissions import ADMINISTER, EDIT, PUBLISH, VIEW, get_workspace
 from workflows import access
 from workflows.models import FolderAccess, FolderGrant, Workflow
 
-from .folders import clean_folder
-
-ITEMS = {
+ITEMS: dict[str, tuple[type[Workflow | Action | AiSkill | Form | Control], str]] = {
     "workflow": (Workflow, EDIT),
     "action": (Action, PUBLISH),
     "ai_skill": (AiSkill, PUBLISH),

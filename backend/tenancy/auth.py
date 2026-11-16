@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -47,3 +48,17 @@ class BearerTokenAuthentication(BaseAuthentication):
         if token.last_used_at is None or now - token.last_used_at > timedelta(minutes=1):
             ApiToken.objects.filter(pk=token.pk).update(last_used_at=now)
         return user, token
+
+
+class BearerTokenAuthenticationScheme(OpenApiAuthenticationExtension):
+    """Décrit le jeton d'API dans le schéma OpenAPI (documentation seulement : aucun effet sur l'authentification)."""
+
+    target_class = "tenancy.auth.BearerTokenAuthentication"
+    name = "bearerToken"
+
+    def get_security_definition(self, auto_schema):
+        return {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Jeton d'API personnel ou de compte de service (`Authorization: Bearer orch_…`), limité à ses portées.",
+        }

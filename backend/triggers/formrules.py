@@ -13,6 +13,7 @@ Conditions compare the value of an earlier field with a constant (`value`), with
 checked on one shared list of cases (`tests/fixtures/form_rules_cases.json`). What decides is the server: hidden values are
 dropped, `require` makes a field obligatory, `options` limits the accepted choices."""
 
+import operator
 import re
 
 MAX_RULES = 10
@@ -71,25 +72,19 @@ def _empty(v) -> bool:
     return v is None or v == "" or v == []
 
 
-def eval_cond(cond: dict, values: dict) -> bool:  # noqa: C901
-    # the left operand: one field, or a composed value (« {prenom} {nom} »)
-    left = render(cond["template"], values) if "template" in cond else values.get(cond["field"])
-    op = cond["op"]
-    fold = (lambda s: s.lower()) if cond.get("ci") is True else (lambda s: s)
-    if op == "is_empty":
-        return _empty(left)
-    if op == "not_empty":
-        return not _empty(left)
-    if op == "is_true":
-        return left is True
-    if op == "is_false":
-        return left is False
-    if op in LISTED:
-        needles = [fold(text_of(x)) for x in cond.get("values", [])]
-        if op == "in_list":
-            return fold(text_of(left)) in needles
-        return isinstance(left, list) and any(fold(text_of(i)) in needles for i in left)
-    right = values.get(cond["ref"]) if "ref" in cond else cond.get("value")
+_ORDER = {"gt": operator.gt, "gte": operator.ge, "lt": operator.lt, "lte": operator.le}
+
+
+_STATE_OPS = {
+    "is_empty": _empty,
+    "not_empty": lambda left: not _empty(left),
+    "is_true": lambda left: left is True,
+    "is_false": lambda left: left is False,
+}
+
+
+def _text_condition(op: str, left, right, fold) -> bool:
+    """equals, not_equals, contains, not_contains, starts_with, ends_with (case folded when asked)."""
     if op in ("equals", "not_equals"):
         same = fold(text_of(left)) == fold(text_of(right))
         return same if op == "equals" else not same
@@ -101,16 +96,35 @@ def eval_cond(cond: dict, values: dict) -> bool:  # noqa: C901
         return found if op == "contains" else not found
     if op == "starts_with":
         return fold(text_of(left)).startswith(fold(text_of(right)))
-    if op == "ends_with":
-        return fold(text_of(left)).endswith(fold(text_of(right)))
+    return fold(text_of(left)).endswith(fold(text_of(right)))
+
+
+def _ordered_condition(op: str, left, right) -> bool:
+    """<, <=, >, >=: numbers, or two ISO dates compared as text; anything else is false."""
     nl, nr = num_of(left), num_of(right)
     if nl is not None and nr is not None:
-        a, b = nl, nr
-    elif isinstance(left, str) and isinstance(right, str) and _ISO_DATE.match(left) and _ISO_DATE.match(right):
-        a, b = left, right  # ISO dates compare as text
-    else:
-        return False
-    return {"gt": a > b, "gte": a >= b, "lt": a < b, "lte": a <= b}[op]
+        return _ORDER[op](nl, nr)
+    if isinstance(left, str) and isinstance(right, str) and _ISO_DATE.match(left) and _ISO_DATE.match(right):
+        return _ORDER[op](left, right)  # ISO dates compare as text
+    return False
+
+
+def eval_cond(cond: dict, values: dict) -> bool:
+    # the left operand: one field, or a composed value (« {prenom} {nom} »)
+    left = render(cond["template"], values) if "template" in cond else values.get(cond["field"])
+    op = cond["op"]
+    fold = (lambda s: s.lower()) if cond.get("ci") is True else (lambda s: s)
+    if op in _STATE_OPS:
+        return _STATE_OPS[op](left)
+    if op in LISTED:
+        needles = [fold(text_of(x)) for x in cond.get("values", [])]
+        if op == "in_list":
+            return fold(text_of(left)) in needles
+        return isinstance(left, list) and any(fold(text_of(i)) in needles for i in left)
+    right = values.get(cond["ref"]) if "ref" in cond else cond.get("value")
+    if op in ("equals", "not_equals", "contains", "not_contains", "starts_with", "ends_with"):
+        return _text_condition(op, left, right, fold)
+    return _ordered_condition(op, left, right)
 
 
 def eval_node(node: dict, values: dict) -> bool:
@@ -210,24 +224,28 @@ def _scalar(v, limit: int = MAX_TEXT) -> bool:
     )
 
 
-def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int]) -> dict[str, str]:
-    allowed = {"field", "template", "op", "value", "ref", "values", "ci"}
-    if set(cond) - allowed:
-        return {path: "Condition invalide."}
-    count[0] += 1
-    if count[0] > MAX_CONDITIONS:
-        return {path: f"{MAX_CONDITIONS} conditions au plus par règle."}
+def _cond_source(cond: dict, path: str, earlier: dict[str, dict]) -> tuple[dict | None, dict[str, str]]:
+    """What the condition reads: (field description, {}) or (None, error)."""
     if "template" in cond:
         text = cond["template"]
         if "field" in cond or not isinstance(text, str) or not 1 <= len(text) <= MAX_TEXT:
-            return {f"{path}.template": f"Valeur composée : un texte de 1 à {MAX_TEXT} caractères, sans champ à côté."}
+            return None, {
+                f"{path}.template": f"Valeur composée : un texte de 1 à {MAX_TEXT} caractères, sans champ à côté."
+            }
         if not _tokens_ok(text, earlier):
-            return {f"{path}.template": "Un {champ} de la valeur composée doit être un autre champ du formulaire."}
-        src: dict = {"type": "text"}
-    else:
-        src = earlier.get(cond.get("field"))
-        if src is None:
-            return {f"{path}.field": "Une condition ne peut lire qu'un autre champ du formulaire."}
+            return None, {
+                f"{path}.template": "Un {champ} de la valeur composée doit être un autre champ du formulaire."
+            }
+        return {"type": "text"}, {}
+    ref = cond.get("field")
+    found = earlier.get(ref) if isinstance(ref, str) else None  # une référence non textuelle ne désigne aucun champ
+    if found is None:
+        return None, {f"{path}.field": "Une condition ne peut lire qu'un autre champ du formulaire."}
+    return found, {}
+
+
+def _cond_operator(cond: dict, path: str, src: dict) -> dict[str, str]:
+    """The operator exists and fits the kind of field it reads."""
     op = cond.get("op")
     if op not in OPERATORS:
         return {f"{path}.op": "Opérateur inconnu."}
@@ -240,6 +258,12 @@ def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int
         return {f"{path}.op": "« vrai » et « faux » ne s'appliquent qu'à une case à cocher."}
     if op == "includes_any" and (kind != "checkbox_list" or "template" in cond):
         return {f"{path}.op": "« contient l'un de » ne s'applique qu'à des cases multiples."}
+    return {}
+
+
+def _cond_operands(cond: dict, path: str, earlier: dict[str, dict]) -> dict[str, str]:
+    """The value(s) compared with, as the operator wants them."""
+    op = cond["op"]
     operands = [k for k in ("value", "ref", "values") if k in cond]
     if op in UNARY:
         return {path: "Cet opérateur n'attend aucune valeur."} if operands else {}
@@ -264,6 +288,19 @@ def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int
     return {}
 
 
+def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int]) -> dict[str, str]:
+    allowed = {"field", "template", "op", "value", "ref", "values", "ci"}
+    if set(cond) - allowed:
+        return {path: "Condition invalide."}
+    count[0] += 1
+    if count[0] > MAX_CONDITIONS:
+        return {path: f"{MAX_CONDITIONS} conditions au plus par règle."}
+    src, error = _cond_source(cond, path, earlier)
+    if src is None:
+        return error
+    return _cond_operator(cond, path, src) or _cond_operands(cond, path, earlier)
+
+
 def _check_node(node, path: str, earlier: dict[str, dict], depth: int, count: list[int]) -> dict[str, str]:
     if not isinstance(node, dict):
         return {path: "Condition invalide."}
@@ -285,48 +322,59 @@ def _tokens_ok(text: str, earlier: dict[str, dict]) -> bool:
     return all(t in earlier for t in TOKEN.findall(text))
 
 
-def _check_effect(effect, path: str, field: dict, earlier: dict[str, dict]) -> dict[str, str]:  # noqa: C901
-    if not isinstance(effect, dict) or effect.get("do") not in EFFECTS:
-        return {path: "Effet inconnu."}
-    kind = effect["do"]
-    is_block = field.get("type") in _BLOCKS
-    if kind in ("show", "hide"):
-        return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
-    if kind in ("require", "optional"):
-        if is_block:
-            return {path: "Un bloc de contenu ne peut pas être obligatoire."}
-        return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
-    if kind in ("readonly", "editable"):
-        if is_block:
-            return {path: "Un bloc de contenu n'a pas de valeur à verrouiller."}
-        return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
-    if kind == "text":
-        if set(effect) != {"do", "target", "text"} or effect["target"] not in TEXT_TARGETS:
-            return {path: "Texte : {target: label|help|placeholder, text}."}
-        if is_block and effect["target"] != "label":
-            return {path: "Un bloc de contenu n'a que son texte."}
-        text = effect["text"]
-        if not isinstance(text, str) or len(text) > MAX_TEXT:
-            return {f"{path}.text": f"Texte de {MAX_TEXT} caractères au plus."}
-        if not _tokens_ok(text, earlier):
-            return {f"{path}.text": "Un {champ} du texte doit être un autre champ du formulaire."}
-        return {}
-    if kind == "fill":
-        if set(effect) != {"do", "value"} or not isinstance(effect["value"], str) or len(effect["value"]) > MAX_TEXT:
-            return {path: f"Remplir : {{value}}, texte de {MAX_TEXT} caractères au plus."}
-        if field.get("type") not in FILLABLE:
-            return {path: "Ce type de champ ne peut pas être rempli par une règle."}
-        if not _tokens_ok(effect["value"], earlier):
-            return {f"{path}.value": "Un {champ} de la valeur doit être un autre champ du formulaire."}
-        return {}
-    if kind == "load":
-        if set(effect) != {"do", "what"} or effect["what"] not in LOADS:
-            return {path: "Charger : {what: options|prefill}."}
-        has = "source" if effect["what"] == "options" else "prefill"
-        if field.get("type") != "custom" or has not in field:
-            return {path: "Ce champ ne lit pas ce service : réglez d'abord « Données depuis un service » du champ."}
-        return {}
-    # options
+def _no_parameter(effect: dict, path: str) -> dict[str, str]:
+    return {path: "Cet effet n'a pas de paramètre."} if set(effect) != {"do"} else {}
+
+
+def _fx_show(effect, path, field, earlier):
+    return _no_parameter(effect, path)
+
+
+def _fx_require(effect, path, field, earlier):
+    if field.get("type") in _BLOCKS:
+        return {path: "Un bloc de contenu ne peut pas être obligatoire."}
+    return _no_parameter(effect, path)
+
+
+def _fx_readonly(effect, path, field, earlier):
+    if field.get("type") in _BLOCKS:
+        return {path: "Un bloc de contenu n'a pas de valeur à verrouiller."}
+    return _no_parameter(effect, path)
+
+
+def _fx_text(effect, path, field, earlier):
+    if set(effect) != {"do", "target", "text"} or effect["target"] not in TEXT_TARGETS:
+        return {path: "Texte : {target: label|help|placeholder, text}."}
+    if field.get("type") in _BLOCKS and effect["target"] != "label":
+        return {path: "Un bloc de contenu n'a que son texte."}
+    text = effect["text"]
+    if not isinstance(text, str) or len(text) > MAX_TEXT:
+        return {f"{path}.text": f"Texte de {MAX_TEXT} caractères au plus."}
+    if not _tokens_ok(text, earlier):
+        return {f"{path}.text": "Un {champ} du texte doit être un autre champ du formulaire."}
+    return {}
+
+
+def _fx_fill(effect, path, field, earlier):
+    if set(effect) != {"do", "value"} or not isinstance(effect["value"], str) or len(effect["value"]) > MAX_TEXT:
+        return {path: f"Remplir : {{value}}, texte de {MAX_TEXT} caractères au plus."}
+    if field.get("type") not in FILLABLE:
+        return {path: "Ce type de champ ne peut pas être rempli par une règle."}
+    if not _tokens_ok(effect["value"], earlier):
+        return {f"{path}.value": "Un {champ} de la valeur doit être un autre champ du formulaire."}
+    return {}
+
+
+def _fx_load(effect, path, field, earlier):
+    if set(effect) != {"do", "what"} or effect["what"] not in LOADS:
+        return {path: "Charger : {what: options|prefill}."}
+    has = "source" if effect["what"] == "options" else "prefill"
+    if field.get("type") != "custom" or has not in field:
+        return {path: "Ce champ ne lit pas ce service : réglez d'abord « Données depuis un service » du champ."}
+    return {}
+
+
+def _fx_options(effect, path, field, earlier):
     if set(effect) != {"do", "values"} or not isinstance(effect["values"], list):
         return {path: "Choix : {values: [...]}."}
     if field.get("type") not in _CHOICE or not isinstance(field.get("options"), list):
@@ -335,6 +383,26 @@ def _check_effect(effect, path: str, field: dict, earlier: dict[str, dict]) -> d
     if not all(isinstance(v, str) and v in known for v in effect["values"]) or len(effect["values"]) > MAX_LIST:
         return {f"{path}.values": "Ces valeurs doivent faire partie des options du champ."}
     return {}
+
+
+_EFFECT_CHECKS = {
+    "show": _fx_show,
+    "hide": _fx_show,
+    "require": _fx_require,
+    "optional": _fx_require,
+    "readonly": _fx_readonly,
+    "editable": _fx_readonly,
+    "text": _fx_text,
+    "fill": _fx_fill,
+    "load": _fx_load,
+    "options": _fx_options,
+}
+
+
+def _check_effect(effect, path: str, field: dict, earlier: dict[str, dict]) -> dict[str, str]:
+    if not isinstance(effect, dict) or effect.get("do") not in EFFECTS:
+        return {path: "Effet inconnu."}
+    return _EFFECT_CHECKS[effect["do"]](effect, path, field, earlier)
 
 
 def _nodes(node):

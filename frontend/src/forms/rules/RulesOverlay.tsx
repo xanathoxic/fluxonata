@@ -10,6 +10,7 @@ import { CalcEditor, calcProblem } from "./CalcEditor";
 import { GroupEditor, newCond, shape } from "./ConditionTree";
 import { blankEffect, EffectList, unavailable } from "./Effects";
 import { Tryout } from "./Tryout";
+import { keyed } from "../../components/keyed";
 
 const MAP: Record<string, CondOp> = { "==": "equals", "!=": "not_equals", "<": "lt", "<=": "lte", ">": "gt", ">=": "gte", contains: "contains" };
 
@@ -18,19 +19,28 @@ export function legacyAsRule(expr: string | undefined): Rule | null {
   const set = expr ? exprToRuleSet(expr) : null;
   if (!set) return null;
   const items: Cond[] = set.rules.map((r) => shape({ field: r.field, op: MAP[r.op] as CondOp, value: r.value }));
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   return { name: "Règle d'affichage reprise", when: { op: set.join === "or" ? "any" : "all", items }, then: [{ do: "show" }], else: [{ do: "hide" }] };
 }
 
 const group = (fields: FormField[]): Group => ({ op: "all", items: [newCond(fields)] });
 interface Template { id: string; label: string; icon: FormIconName; build: (fields: FormField[], field: FormField) => Rule }
 const TEMPLATES: Template[] = [
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "show", label: "Afficher seulement si…", icon: "eye", build: (f) => ({ when: group(f), then: [{ do: "show" }], else: [{ do: "hide" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "hide", label: "Masquer si…", icon: "eyeOff", build: (f) => ({ when: group(f), then: [{ do: "hide" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "require", label: "Rendre obligatoire si…", icon: "check", build: (f) => ({ when: group(f), then: [{ do: "require" }], else: [{ do: "optional" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "readonly", label: "Lecture seule si…", icon: "lock", build: (f) => ({ when: group(f), then: [{ do: "readonly" }], else: [{ do: "editable" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "text", label: "Changer un texte si…", icon: "paragraph", build: (f, field) => ({ when: group(f), then: [blankEffect("text", field)] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "options", label: "Limiter les choix si…", icon: "list2", build: (f, field) => ({ when: group(f), then: [blankEffect("options", field)] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "load", label: "Charger les données du service si…", icon: "link", build: (f, field) => ({ when: group(f), then: [blankEffect("load", field)] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
   { id: "free", label: "Règle libre", icon: "rule", build: (f) => ({ when: group(f), then: [] }) },
 ];
 
@@ -38,7 +48,7 @@ function problems(rule: Rule, fields: FormField[]): string[] {
   const out: string[] = [];
   const keys = new Set(fields.map((f) => f.key));
   const walk = (n: Node, at: string) => {
-    if (isGroup(n)) { n.items.forEach((i, k) => walk(i, `${at}.${k + 1}`)); return; }
+    if (isGroup(n)) { n.items.forEach((i, k) => { walk(i, `${at}.${k + 1}`); }); return; }
     if (n.template !== undefined) {
       if (n.template.trim() === "") out.push(`Condition ${at} : écrivez la valeur composée.`);
       for (const m of n.template.matchAll(TOKEN_RE)) if (!keys.has(m[1] as string)) out.push(`Condition ${at} : le champ « ${m[1]} » n'est plus disponible.`);
@@ -99,6 +109,7 @@ export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply,
             </div>
           ))}
           <h3>Nouvelle règle</h3>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="rl-templates" role="group" aria-label="Nouvelle règle">
             {TEMPLATES.map((t) => {
               const why = t.id === "options" || t.id === "load" ? unavailable(t.id, field) : "";
@@ -121,7 +132,7 @@ export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply,
               <EffectList label="Alors" effects={rule.then} field={field} earlier={earlier} onChange={(then) => set({ ...rule, then })} />
               <h3><button type="button" className="rl-disclose" aria-expanded={showElse || Boolean(rule.else?.length)} onClick={() => setShowElse(!showElse)}><FormIcon name={showElse || rule.else?.length ? "down" : "right"} size={14} /> Sinon</button></h3>
               {(showElse || Boolean(rule.else?.length)) && <EffectList label="Sinon" effects={rule.else ?? []} field={field} earlier={earlier} onChange={(e) => set({ ...rule, else: e.length ? e : undefined })} />}
-              {all[sel]?.length ? <ul className="fb-problems" role="alert" aria-label="Problèmes de la règle">{(all[sel] as string[]).map((p, i) => <li key={i}>{p}</li>)}</ul> : null}
+              {all[sel]?.length ? <ul className="fb-problems" role="alert" aria-label="Problèmes de la règle">{keyed(all[sel] as string[], (p) => p).map(({ item: p, key }) => <li key={key}>{p}</li>)}</ul> : null}
               <Tryout rule={rule} field={field} fields={earlier} />
             </>
           )}

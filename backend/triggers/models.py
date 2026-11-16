@@ -60,8 +60,9 @@ class Webhook(models.Model):
         self.key_id, self.secret_ciphertext = crypto.encrypt(plaintext, self._purpose())
 
     def reveal_secret(self) -> str:
-        if self.external_secret_id:
-            return self.external_secret.reveal()
+        external = self.external_secret if self.external_secret_id else None
+        if external is not None:
+            return external.reveal()
         return crypto.decrypt(self.secret_ciphertext, self._purpose())
 
 

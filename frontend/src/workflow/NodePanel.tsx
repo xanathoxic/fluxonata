@@ -5,10 +5,14 @@ import { AiConfig } from "./AiConfig";
 import { CommentsTab } from "./CommentsTab";
 import { AgentConfig } from "./AgentConfig";
 import { DataTab } from "./DataTab";
+import { InputsTab } from "./InputsTab";
+import { OutputsTab } from "./OutputsTab";
 import { ExprPreview } from "./ExprPreview";
 import { HttpConfig } from "./HttpConfig";
 import { LdapConfig } from "./LdapConfig";
 import { SftpConfig } from "./SftpConfig";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { SshConfig } from "./SshConfig";
 import { SmtpConfig } from "./SmtpConfig";
 import { SqlConfig } from "./SqlConfig";
 import { TransformConfig } from "./TransformConfig";
@@ -21,6 +25,8 @@ import { ParamEditor } from "./ParamEditor";
 import { BindingsEditor, OutputsEditor } from "./ScriptParts";
 import { edgeText, NODE_LABELS, type EdgeLabel, type Graph, type GraphNode, type Issue, type SwitchCase } from "./types";
 import { HelpTip } from "../components/HelpTip";
+import { keyed } from "../components/keyed";
+import { ReadRegion } from "../components/ReadRegion";
 
 interface Props {
   graph: Graph;
@@ -37,6 +43,8 @@ interface Props {
   onClose?: () => void;
   onDelete: () => void;
   onOpenScript: () => void;
+  /** A preview of another workflow: no debug data and no comments (they would act on that workflow). */
+  preview?: boolean;
 }
 
 /** Right-hand properties panel: tabs General / Inputs-Outputs / Script / Exception handling, per element type. */
@@ -56,7 +64,7 @@ export function NodePanel(p: Props) {
     <>
       {mine.length > 0 && (
         <ul className="issue-list" aria-label="Problèmes de cette étape">
-          {mine.map((i, k) => <li key={k} className={`issue issue-${i.level}`}><span aria-hidden="true">{i.level === "error" ? "✖" : "⚠"} </span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>{i.message}</li>)}
+          {keyed(mine, (i) => `${i.level}|${i.code}|${i.message}`).map(({ item: i, key }) => <li key={key} className={`issue issue-${i.level}`}><span aria-hidden="true">{i.level === "error" ? "✖" : "⚠"} </span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>{i.message}</li>)}
         </ul>
       )}
       <div className="field"><label htmlFor="node-name">Nom de l'étape</label><input id="node-name" value={node.name} onChange={(e) => onUpdate({ name: e.target.value })} /></div>
@@ -138,7 +146,7 @@ export function NodePanel(p: Props) {
             <select id="np-lang" value={node.language ?? "python"} onChange={(e) => onUpdate({ language: e.target.value as "python" | "javascript" })}>
               <option value="python">Python</option><option value="javascript">JavaScript</option></select></div>
           <button type="button" className="primary" onClick={p.onOpenScript}>{editable ? "Ouvrir l'éditeur de script" : "Voir le script"}</button>
-          <pre tabIndex={0} className="script-preview" aria-label="Aperçu du script">{(node.script ?? "").split("\n").slice(0, 14).join("\n")}</pre>
+          <ReadRegion className="script-preview" label="Aperçu du script">{(node.script ?? "").split("\n").slice(0, 14).join("\n")}</ReadRegion>
           <p className="help-row"><HelpTip caption="À savoir">Astuce : double-cliquez sur l'étape dans le schéma pour ouvrir l'éditeur.</HelpTip></p>
         </>
       ),
@@ -180,6 +188,7 @@ export function NodePanel(p: Props) {
         <div className="field">
           <p className="help-row"><HelpTip caption="À savoir">Les cas sont examinés dans l'ordre : le premier dont la condition est vraie est pris, sinon la sortie « Sinon ». Chaque cas a sa propre sortie à relier.</HelpTip></p>
           {cases.map((c, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             <fieldset key={i} className="case-row">
               <legend>Cas {i + 1}</legend>
               <label htmlFor={`case-id-${i}`}>Identifiant du cas {i + 1}</label>
@@ -218,6 +227,8 @@ export function NodePanel(p: Props) {
     tabs.push({ id: "config", label: "E-mail", content: <SmtpConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "sftp") {
     tabs.push({ id: "config", label: "Fichier SFTP", content: <SftpConfig node={node} onUpdate={onUpdate} /> });
+  } else if (node.type === "ssh") {
+    tabs.push({ id: "config", label: "Commandes SSH", content: <ErrorBoundary label="Commandes SSH" key={node.id}><SshConfig node={node} onUpdate={onUpdate} /></ErrorBoundary> });
   } else if (node.type === "ldap") {
     tabs.push({ id: "config", label: "Annuaire", content: <LdapConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "sql") {
@@ -237,7 +248,10 @@ export function NodePanel(p: Props) {
     tabs.push({ id: "config", label: "Interaction", content: (
       <>
         <div className="field"><label htmlFor="ap-title">Ce qui doit être approuvé</label><input id="ap-title" value={node.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value })} /></div>
-        <div className="field"><label htmlFor="ap-ins">Consignes pour l'approbateur</label><textarea id="ap-ins" rows={3} value={node.instructions ?? ""} onChange={(e) => onUpdate({ instructions: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ap-subject">Objet de la demande</label><input id="ap-subject" maxLength={200} value={node.subject ?? ""} onChange={(e) => onUpdate({ subject: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ap-body">Corps de la demande (Markdown)</label>
+          <textarea id="ap-body" rows={8} maxLength={20000} value={typeof node.body === "string" ? node.body : (node.instructions ?? "")} onChange={(e) => onUpdate({ body: e.target.value, instructions: "" })} />
+          <p className="hint">Mise en page en Markdown : <code># Titre</code>, <code>**gras**</code>, <code>*italique*</code>, listes avec <code>-</code> ou <code>1.</code>, <code>`code`</code>, <code>[lien](https://…)</code>. Les variables <code>{"{{ … }}"}</code> sont remplacées au lancement.</p></div>
         <div className="field field-inline"><input id="ap-self" type="checkbox" checked={node.allow_self_approval ?? false} onChange={(e) => onUpdate({ allow_self_approval: e.target.checked })} /><label htmlFor="ap-self">Autoriser l'auto-approbation (déconseillé)</label></div>
       </>) });
   } else if (node.type === "subworkflow" || node.type === "foreach" || node.type === "while") {
@@ -290,13 +304,15 @@ export function NodePanel(p: Props) {
   } else if (node.type === "ai") {
     tabs.push({ id: "config", label: "Étape IA", content: <AiConfig node={node} variables={variables} editable={editable} onUpdate={onUpdate} /> });
   }
-  if (node.type !== "join" && node.type !== "race" && node.type !== "wait" && node.type !== "throw" && node.type !== "condition" && node.type !== "switch" && node.type !== "approval" && node.type !== "foreach" && node.type !== "subworkflow" && node.type !== "http" && node.type !== "sql" && node.type !== "agent" && node.type !== "ldap" && node.type !== "sftp" && node.type !== "smtp" && node.type !== "transform") {
+  if (node.type !== "join" && node.type !== "race" && node.type !== "wait" && node.type !== "throw" && node.type !== "condition" && node.type !== "switch" && node.type !== "approval" && node.type !== "foreach" && node.type !== "subworkflow" && node.type !== "http" && node.type !== "sql" && node.type !== "agent" && node.type !== "ldap" && node.type !== "sftp" && node.type !== "ssh" && node.type !== "smtp" && node.type !== "transform") {
     tabs.push({ id: "exceptions", label: "Exceptions", content: exceptions });
   } else if (retryable) {
     tabs.push({ id: "exceptions", label: "Exceptions", content: exceptions });
   }
-  if (node.type !== "join") tabs.push({ id: "data", label: "Données", content: <DataTab node={node} /> });
-  tabs.push({ id: "comments", label: "Commentaires", content: <CommentsTab node={node} /> });
+  if (node.type !== "join" && node.type !== "action" && node.type !== "script" && !(node.type === "ai" && node.skill !== undefined)) tabs.push({ id: "inputs", label: "Entrées", content: <InputsTab node={node} /> });
+  if (node.type !== "join") tabs.push({ id: "outputs", label: "Sorties", content: <OutputsTab node={node} /> });
+  if (node.type !== "join" && !p.preview) tabs.push({ id: "data", label: "Données", content: <DataTab node={node} /> });
+  if (!p.preview) tabs.push({ id: "comments", label: "Commentaires", content: <CommentsTab node={node} /> });
   const active = tabs.some((t) => t.id === tab) ? tab : "general";
   return (
     <section aria-label={`Configuration de l'étape ${node.name}`} className="node-panel">

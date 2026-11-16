@@ -43,16 +43,24 @@ def mariadb():
     if not cid:
         pytest.skip("image mariadb:11 indisponible")
     try:
-        deadline = time.time() + 240
+        started = time.time()
+        deadline = started + 240
+        last_error = None
         while True:
             try:
                 db = pymysql.connect(
                     host="127.0.0.1", port=port, user="root", password=PASSWORD, database="essai", connect_timeout=3
                 )
                 break
-            except pymysql.err.Error:
+            except pymysql.err.Error as exc:
+                last_error = f"{type(exc).__name__}: {str(exc)[:80]}"
                 if time.time() > deadline:
-                    pytest.skip("mariadb ne démarre pas")
+                    # the reason says what was seen (elapsed time, last error, end of the container's own log), not a guess
+                    logs = subprocess.run(["docker", "logs", "--tail", "4", cid], capture_output=True, text=True)
+                    tail = " | ".join((logs.stdout + logs.stderr).strip().splitlines()[-4:])[:300]
+                    pytest.skip(
+                        f"mariadb ne démarre pas après {int(time.time() - started)} s ; dernière erreur : {last_error} ; journal : {tail}"
+                    )
                 time.sleep(1)
         with db.cursor() as cur:
             cur.execute("CREATE TABLE gens (id INT PRIMARY KEY, nom VARCHAR(40))")

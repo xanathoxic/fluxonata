@@ -22,7 +22,7 @@ from . import proposed
 from .models import Attempt, Execution, ExecutionEvent
 
 S = Execution.Status
-ALLOWED = {
+ALLOWED: dict[str, set[str]] = {
     S.QUEUED: {S.RUNNING, S.CANCELLED},
     S.RUNNING: {S.QUEUED, S.SUCCEEDED, S.FAILED, S.CANCELLED},
     S.SUCCEEDED: set(),
@@ -107,20 +107,25 @@ def create_execution(*, workspace, environment, action_version, user, inputs, id
 
 
 @transaction.atomic
-def claim_next(worker_id: str, runner=None):
+def claim_next(worker_id: str, runner=None, runtimes=None):
     """Claim one queued execution (SKIP LOCKED). Returns (execution, attempt_number) or None.
 
     Who may run what:
     - the built-in workers (`runner=None`) serve the *shared* pool: spaces that allow shared runners, jobs whose required
       tags they carry (ORCH_WORKER_TAGS);
     - a runner agent serves only its scope (the spaces it is dedicated to, or the shared pool), only runtimes it is
-      allowed to run, jobs whose required tags it carries, never AI steps, and never more than its own concurrency."""
+      allowed to run, jobs whose required tags it carries, never AI steps, and never more than its own concurrency.
+
+    `runtimes` (built-in workers only) restricts the claim to those runtimes: a worker without the `exec` role (no Docker socket)
+    only ever claims `("ai",)` — in-process AI steps — and can therefore never be handed a container action."""
     now = timezone.now()
     qs = Execution.objects.filter(
         status=S.QUEUED
     )  # sans verrou : on choisit d'abord les candidats, on ne verrouille que ceux-là (FOR UPDATE interdit avec une fonction de fenêtre)
     if runner is None:
         qs, tags = qs.filter(workspace__use_shared_runners=True), set(settings.ORCH_WORKER_TAGS)
+        if runtimes is not None:
+            qs = qs.filter(action_version__runtime__in=runtimes)
     else:
         if runner.paused or Execution.objects.filter(runner=runner, status=S.RUNNING).count() >= runner.max_concurrent:
             return None

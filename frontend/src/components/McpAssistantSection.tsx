@@ -24,6 +24,7 @@ export function connectionSnippets(url: string, token: string) {
     mcpServers: {
       fluxonata: {
         command: "npx",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: `${FLUXONATA_AUTH}` est la référence de variable d'environnement lue par le client MCP, pas un gabarit JavaScript — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
         args: ["-y", "mcp-remote", url, "--header", "Authorization:${FLUXONATA_AUTH}", ...(url.startsWith("http:") ? ["--allow-http"] : [])],
         env: { FLUXONATA_AUTH: `Bearer ${token}` },
       },

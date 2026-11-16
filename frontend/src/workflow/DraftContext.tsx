@@ -35,6 +35,20 @@ export interface Draft {
 }
 
 const Ctx = createContext<Draft | null>(null);
+
+const noop = () => undefined;
+const noopAsync = async () => undefined;
+
+/** A fixed view of another workflow's draft for a preview: nothing is loaded, saved or recovered, and nothing can change. */
+export function ReadOnlyDraftProvider({ slug, wf, actions, workflows, children }: { slug: string; wf: WorkflowDetail; actions: Action[]; workflows: WorkflowSummary[]; children: ReactNode }) {
+  const graph = useMemo(() => placeNewNodes(wf.draft_graph ?? emptyGraph()), [wf]);
+  const value: Draft = {
+    slug, wf, graph, setGraph: noop, undo: noop, redo: noop, canUndo: false, canRedo: false, saveState: "saved", save: noopAsync, reload: noopAsync,
+    issues: [], serverIssues: [], setServerIssues: noop, validateNow: async () => [], editable: false, actions, workflows, recover: null,
+    acceptRecovery: noop, discardRecovery: noop, refetchWorkflow: noopAsync,
+  };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
 export const useDraft = (): Draft => {
   const d = useContext(Ctx);
   if (!d) throw new Error("DraftProvider missing");
@@ -91,25 +105,39 @@ export function DraftProvider({ slug, children }: { slug: string; children: Reac
     setLoaded(true);
   }, [wf, loaded, history, key]);
 
-  const save = useCallback(async (force = false) => {
+  // Les écritures sont mises en file : une seule est en vol, chacune part avec la révision laissée par la précédente.
+  // Sans cela, un serveur lent (plus de 1,2 s) voyait partir plusieurs écritures avec la même révision : les suivantes
+  // étaient refusées (409) par les premières de ce même navigateur, et l'éditeur affichait un conflit imaginaire.
+  const chain = useRef<Promise<void>>(Promise.resolve());
+  const write = useCallback(async (force = false) => {
     const json = JSON.stringify(graph);
+    if (json === savedJson.current && !force) { setSaveState("saved"); return; } // rien de nouveau depuis l'écriture précédente
     setSaveState("saving");
-    try {
-      const res = await api<{ revision: number; issues: Issue[] }>(`/workspaces/${workspace.slug}/workflows/${slug}/draft/`, { method: "PUT", json: { graph, revision: revision.current } });
-      revision.current = res.revision;
-      savedJson.current = json;
-      setServerIssues(res.issues);
-      try { localStorage.removeItem(key); } catch { /* ignore */ }
-      setSaveState(JSON.stringify(graph) === json ? "saved" : "dirty");
-    } catch (e) {
-      const err = e as ApiError;
-      if (err.status === 409) {
+    let overwrite = force; // forcé : en cas de conflit, on reprend la révision courante et on réessaie une fois
+    for (;;) {
+      try {
+        const res = await api<{ revision: number; issues: Issue[] }>(`/workspaces/${workspace.slug}/workflows/${slug}/draft/`, { method: "PUT", json: { graph, revision: revision.current } });
+        revision.current = res.revision;
+        savedJson.current = json;
+        setServerIssues(res.issues);
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        setSaveState(JSON.stringify(graph) === json ? "saved" : "dirty");
+        return;
+      } catch (e) {
+        const err = e as ApiError;
+        if (err.status !== 409) { setSaveState("error"); return; }
         const cur = (err.details as { current_revision?: number } | null)?.current_revision;
-        if (force && cur) { revision.current = cur; void save(false); return; }
+        if (overwrite && cur) { revision.current = cur; overwrite = false; continue; }
         setSaveState("conflict");
-      } else setSaveState("error");
+        return;
+      }
     }
   }, [graph, workspace.slug, slug, key]);
+  const save = useCallback((force = false) => {
+    const run = chain.current.then(() => write(force));
+    chain.current = run.catch(() => undefined);
+    return run;
+  }, [write]);
 
   useEffect(() => {
     if (!loaded || !editable) return;

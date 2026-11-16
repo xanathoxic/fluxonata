@@ -135,6 +135,7 @@ function NewForm({ folder, existing, onClose, onCreated }: { folder: string; exi
     <Overlay variant="modal" title="Nouveau formulaire" description="Partez de zéro, d'un modèle ou des entrées d'un workflow." onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form="nf-form" className="primary" disabled={!ready || create.isPending}>Créer et ouvrir le concepteur</button></>}>
       <form id="nf-form" onSubmit={(e: FormEvent) => { e.preventDefault(); if (ready) create.mutate(); }}>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
         <div className="field"><label htmlFor="nf-name">Nom du formulaire</label><input id="nf-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
         <div className="field"><label htmlFor="nf-folder">Dossier (facultatif)</label><input id="nf-folder" value={where} onChange={(e) => setWhere(e.target.value)} placeholder="ex. RH/Demandes" /></div>
         <TagInput value={tags} onChange={setTags} suggestions={[...new Set(existing.flatMap((f) => f.tags))].sort()} />

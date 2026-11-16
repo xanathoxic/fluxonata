@@ -11,6 +11,7 @@ const definition: FormDefinition = {
   sections: [{ id: "s", title: "S", fields: [
     { key: "action", type: "select", label: "Action", options: [{ value: "ajouter", label: "Ajouter" }, { value: "retirer", label: "Retirer" }] },
     { key: "utilisateur", type: "email", label: "Utilisateur",
+      // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
       rules: [{ when: { field: "action", op: "equals", value: "ajouter" }, then: [{ do: "show" }, { do: "require" }], else: [{ do: "hide" }, { do: "fill", value: "" }] }] },
   ] }],
 };

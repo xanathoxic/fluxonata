@@ -69,11 +69,15 @@ export function Menu({ label, ariaLabel, entries, align = "start", className = "
         <div ref={list} id={id} role="menu" className="menu-list" aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)} onKeyDown={onKey}
           style={pos ? { top: pos.top, left: pos.left, right: pos.right } : { visibility: "hidden" }}>
           {entries.map((e, k) => {
-            if (e.kind === "separator") return <hr key={k} role="separator" className="menu-sep" />;
+            // biome-ignore lint/suspicious/noArrayIndexKey: entrées statiques, jamais réordonnées ni munies d'état
+            if (e.kind === "separator") return <hr key={k} className="menu-sep" />;
+            // biome-ignore lint/suspicious/noArrayIndexKey: entrées statiques, jamais réordonnées ni munies d'état
             if (e.kind === "heading") return <div key={k} role="presentation" className="menu-heading">{e.label}</div>;
             if (!isItem(e)) return null;
             const role = e.checked === undefined ? "menuitem" : "menuitemcheckbox";
             return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: entrées statiques, jamais réordonnées ni munies d'état
+              // biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-checked n'est renseigné que pour le rôle menuitemcheckbox (e.checked défini)
               <button key={k} type="button" role={role} aria-checked={e.checked} disabled={e.disabled} tabIndex={-1} className={`menu-item${e.danger ? " menu-danger" : ""}`}
                 onClick={() => { close(true); e.onSelect(); }}>
                 <span className="menu-ico" aria-hidden="true">{e.checked === undefined ? e.icon : e.checked ? "✓" : ""}</span>

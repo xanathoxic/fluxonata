@@ -8,6 +8,7 @@ placed; a loop (A reads B which reads A) is refused and fields are evaluated aft
 
 import re
 from datetime import date
+from typing import cast
 
 from workflows.expressions import ExpressionError, evaluate_ast, parse, paths_in
 
@@ -103,7 +104,9 @@ def _lay(field: dict) -> tuple[int, int, int]:
     lay = field.get("layout") or {}
     row, col, span = lay.get("row"), lay.get("col"), lay.get("span")
     ok = all(isinstance(v, int) and not isinstance(v, bool) for v in (row, col, span))
-    return (row, col, span) if ok else (0, 1, GRID_COLUMNS)
+    return (
+        cast("tuple[int, int, int]", (row, col, span)) if ok else (0, 1, GRID_COLUMNS)
+    )  # `ok` : trois entiers vérifiés
 
 
 def iter_fields(definition: dict):
@@ -126,9 +129,8 @@ def data_fields(definition: dict):
     return (f for f in iter_fields(definition) if f.get("type") not in BLOCK_TYPES)
 
 
-def check_definition(definition) -> dict[str, str]:
-    """Structure only (no workflow needed). Returns {path: message}, empty when the definition is well formed."""
-    problems: dict[str, str] = {}
+def _check_envelope(definition) -> dict[str, str]:
+    """The shape of the whole definition (known keys, reference, input map, number of sections): one problem stops the check."""
     if not isinstance(definition, dict) or set(definition) - {"version", "sections", "ref", "map", "style", "css"}:
         return {"_": "Définition invalide : un objet {version, sections} est attendu."}
     ref = definition.get("ref")
@@ -145,38 +147,37 @@ def check_definition(definition) -> dict[str, str]:
     sections = definition.get("sections")
     if not isinstance(sections, list) or not 1 <= len(sections) <= MAX_SECTIONS:
         return {"sections": f"Entre 1 et {MAX_SECTIONS} sections."}
-    style = definition.get("style")
-    if style is not None:
-        problems.update(_check_style(style))
-    if definition.get("css") not in (None, ""):
-        problems.update(_check_css(definition["css"]))
-    seen: list[str] = []
-    for si, section in enumerate(sections):
-        where = f"sections.{si}"
-        if not isinstance(section, dict) or set(section) - SECTION_KEYS:
-            problems[where] = "Section invalide."
-            continue
-        if not _text(section.get("title", ""), 160):
-            problems[f"{where}.title"] = "Titre trop long (160 caractères)."
-        if not _text(section.get("description", ""), 2000):
-            problems[f"{where}.description"] = "Texte trop long (2000 caractères)."
-        fields = section.get("fields")
-        if not isinstance(fields, list):
-            problems[f"{where}.fields"] = "Une liste de champs est attendue."
-            continue
-        for fi, field in enumerate(fields):
-            if len(seen) >= MAX_FIELDS:
-                problems["_"] = f"Au plus {MAX_FIELDS} champs."
-                return problems
-            path = f"{where}.fields.{fi}"
-            problems.update(_check_field(field, path, seen))
-            if isinstance(field, dict) and isinstance(field.get("key"), str):
-                seen.append(field["key"])
-        problems.update(_check_layout(fields, where))
-    if problems:
-        return problems
-    # rules and visibility expressions may read any OTHER data field, wherever it is placed (side by side, below…);
-    # what is forbidden is a loop: A reads B which reads A
+    return {}
+
+
+def _check_section(section, where, seen, problems) -> bool:
+    """One section: its own keys and texts, then its fields and layout. False once the total number of fields is exceeded."""
+    if not isinstance(section, dict) or set(section) - SECTION_KEYS:
+        problems[where] = "Section invalide."
+        return True
+    if not _text(section.get("title", ""), 160):
+        problems[f"{where}.title"] = "Titre trop long (160 caractères)."
+    if not _text(section.get("description", ""), 2000):
+        problems[f"{where}.description"] = "Texte trop long (2000 caractères)."
+    fields = section.get("fields")
+    if not isinstance(fields, list):
+        problems[f"{where}.fields"] = "Une liste de champs est attendue."
+        return True
+    for fi, field in enumerate(fields):
+        if len(seen) >= MAX_FIELDS:
+            problems["_"] = f"Au plus {MAX_FIELDS} champs."
+            return False
+        path = f"{where}.fields.{fi}"
+        problems.update(_check_field(field, path, seen))
+        if isinstance(field, dict) and isinstance(field.get("key"), str):
+            seen.append(field["key"])
+    problems.update(_check_layout(fields, where))
+    return True
+
+
+def _check_cross_references(sections) -> dict[str, str]:
+    """Rules, visibility and computed values may read any OTHER data field, wherever it is placed (side by side, below…)."""
+    problems: dict[str, str] = {}
     every = {f["key"]: f for s_ in sections for f in s_["fields"] if f.get("type") not in BLOCK_TYPES}
     for si, section in enumerate(sections):
         for fi, field in enumerate(section["fields"]):
@@ -186,13 +187,32 @@ def check_definition(definition) -> dict[str, str]:
                 problems.update(_check_rule(rule, f"{where}.visible_if", [k for k in every if k != field["key"]]))
             others = {k: f for k, f in every.items() if k != field["key"]}
             problems.update(formrules.check_rules(field.get("rules"), f"{where}.rules", field, others))
-            if "compute" in field:
-                if message := formcalc.check(field["compute"], others):
-                    problems[f"{where}.compute"] = message
+            if "compute" in field and (message := formcalc.check(field["compute"], others)):
+                problems[f"{where}.compute"] = message
+    return problems
+
+
+def check_definition(definition) -> dict[str, str]:
+    """Structure only (no workflow needed). Returns {path: message}, empty when the definition is well formed.
+
+    The checks run in stages, each only once the previous one found nothing to report: the envelope, the sections and their fields,
+    then what the fields say about each other (rules, visibility, computed values), then loops."""
+    if problems := _check_envelope(definition):
+        return problems
+    if definition.get("style") is not None:
+        problems.update(_check_style(definition["style"]))
+    if definition.get("css") not in (None, ""):
+        problems.update(_check_css(definition["css"]))
+    seen: list[str] = []
+    for si, section in enumerate(definition["sections"]):
+        if not _check_section(section, f"sections.{si}", seen, problems):
+            return problems
     if problems:
         return problems
-    loop = _find_loop(every, [f for f in _all_fields(definition)])
-    if loop:
+    if problems := _check_cross_references(definition["sections"]):
+        return problems
+    every = {f["key"]: f for s_ in definition["sections"] for f in s_["fields"] if f.get("type") not in BLOCK_TYPES}
+    if loop := _find_loop(every, list(_all_fields(definition))):
         problems["_"] = "Ces champs se lisent en boucle : " + " → ".join(loop) + "."
     return problems
 
@@ -253,32 +273,34 @@ def evaluation_order(fields: list[dict]) -> list[dict]:
     return out
 
 
-def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:  # noqa: C901
-    if not isinstance(field, dict) or set(field) - FIELD_KEYS:
-        return {path: "Champ invalide."}
-    if field.get("type") in BLOCK_TYPES and set(field) - BLOCK_KEYS:
-        return {path: "Un bloc de contenu n'a ni option, ni source, ni contrainte."}
+def _check_key(field: dict, path: str, earlier: list[str]) -> dict[str, str]:
+    """The key: well formed and not used by an earlier field."""
     out: dict[str, str] = {}
-    key, kind = field.get("key"), field.get("type")
+    key = field.get("key")
     if not isinstance(key, str) or not KEY_RE.match(key):
         out[f"{path}.key"] = "Clé invalide (lettres, chiffres et _ ; 64 caractères au plus)."
     elif key in earlier:
         out[f"{path}.key"] = f"La clé « {key} » est déjà utilisée."
-    if kind not in FIELD_TYPES and kind not in BLOCK_TYPES:
-        out[f"{path}.type"] = "Type de champ inconnu."
-        return out
-    if "layout" in field:
-        out.update(_check_one_layout(field["layout"], f"{path}.layout"))
-    if kind in BLOCK_TYPES:
-        limit = 2000 if kind == "paragraph" else 160
-        if not _text(field.get("label", ""), limit) or (kind != "divider" and not field.get("label")):
-            out[f"{path}.label"] = f"Un texte de {limit} caractères au plus est obligatoire."
-        if "level" in field and field["level"] not in (2, 3, 4):
-            out[f"{path}.level"] = "Niveau de titre : 2, 3 ou 4."
-        rule = field.get("visible_if")
-        if rule not in (None, "") and not isinstance(rule, str):
-            out[f"{path}.visible_if"] = "Une expression est attendue."
-        return out
+    return out
+
+
+def _check_block(field: dict, path: str, kind: str) -> dict[str, str]:
+    """A content block (title, paragraph, divider): its text, level and visibility."""
+    out: dict[str, str] = {}
+    limit = 2000 if kind == "paragraph" else 160
+    if not _text(field.get("label", ""), limit) or (kind != "divider" and not field.get("label")):
+        out[f"{path}.label"] = f"Un texte de {limit} caractères au plus est obligatoire."
+    if "level" in field and field["level"] not in (2, 3, 4):
+        out[f"{path}.level"] = "Niveau de titre : 2, 3 ou 4."
+    rule = field.get("visible_if")
+    if rule not in (None, "") and not isinstance(rule, str):
+        out[f"{path}.visible_if"] = "Une expression est attendue."
+    return out
+
+
+def _check_common(field: dict, path: str) -> dict[str, str]:
+    """What every input field has: level (title only), label, help, required, numeric bounds."""
+    out: dict[str, str] = {}
     if "level" in field:
         out[f"{path}.level"] = "Seul un titre a un niveau."
     if not _text(field.get("label"), 160) or not field.get("label"):
@@ -292,12 +314,12 @@ def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:  # noq
         v = field.get(bound)
         if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
             out[f"{path}.{bound}"] = "Un nombre est attendu."
-    if kind == "custom":
-        out.update(formcontrols.check_field(field, path))
-        if "options" in field and not out:
-            out.update(_check_choices(field, path))
-    elif "control" in field or "prefill" in field:
-        out[f"{path}.control"] = "Seul un contrôle personnalisé porte un contrôle et un remplissage par un service."
+    return out
+
+
+def _check_dual_list(field: dict, path: str, kind: str) -> dict[str, str]:
+    """Column titles and display of a list of boxes (the double list is for multiple boxes only)."""
+    out: dict[str, str] = {}
     for name in ("available_label", "chosen_label"):
         if name in field and (
             kind != "checkbox_list"
@@ -310,6 +332,19 @@ def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:  # noq
             )
     if "display" in field and (kind != "checkbox_list" or field["display"] not in CHECKBOX_DISPLAYS):
         out[f"{path}.display"] = "Affichage : « list » ou « dual » (liste double), pour les cases multiples seulement."
+    return out
+
+
+def _check_kind_features(field: dict, path: str, kind: str, found: dict[str, str]) -> dict[str, str]:
+    """What depends on the kind of field: custom control, column titles, display, options, columns, visibility, formula."""
+    out: dict[str, str] = {}
+    if kind == "custom":
+        out.update(formcontrols.check_field(field, path))
+        if "options" in field and not (found or out):  # options are read only when nothing else is wrong yet
+            out.update(_check_choices(field, path))
+    elif "control" in field or "prefill" in field:
+        out[f"{path}.control"] = "Seul un contrôle personnalisé porte un contrôle et un remplissage par un service."
+    out.update(_check_dual_list(field, path, kind))
     if kind in CHOICE_TYPES:
         out.update(_check_choices(field, path))
     elif kind != "custom" and ("options" in field or "source" in field):
@@ -323,6 +358,25 @@ def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:  # noq
         out[f"{path}.visible_if"] = "Une expression est attendue."
     if "compute" in field and kind not in formcalc.COMPUTABLE:
         out[f"{path}.compute"] = "Ce type de champ ne peut pas être calculé (texte, nombre, date ou e-mail)."
+    return out
+
+
+def _check_field(field, path: str, earlier: list[str]) -> dict[str, str]:
+    if not isinstance(field, dict) or set(field) - FIELD_KEYS:
+        return {path: "Champ invalide."}
+    if field.get("type") in BLOCK_TYPES and set(field) - BLOCK_KEYS:
+        return {path: "Un bloc de contenu n'a ni option, ni source, ni contrainte."}
+    out = _check_key(field, path, earlier)
+    kind = field.get("type")
+    if kind not in FIELD_TYPES and kind not in BLOCK_TYPES:
+        out[f"{path}.type"] = "Type de champ inconnu."
+        return out
+    if "layout" in field:
+        out.update(_check_one_layout(field["layout"], f"{path}.layout"))
+    if kind in BLOCK_TYPES:
+        return {**out, **_check_block(field, path, kind)}
+    out.update(_check_common(field, path))
+    out.update(_check_kind_features(field, path, kind, out))
     return out
 
 
@@ -601,33 +655,65 @@ def visible_values(definition: dict, values: dict) -> tuple[dict, list[dict]]:
     return kept, [f for f, _ in shown]
 
 
-def _field_problem(field: dict, value) -> str:  # noqa: C901
-    kind = field["type"]
-    if kind in ("text", "textarea", "email", "date", "select", "radio", "combobox"):
-        if not isinstance(value, str):
-            return "Un texte est attendu."
-        if len(value) > (MAX_LONG_TEXT if kind == "textarea" else MAX_TEXT):
-            return "Texte trop long."
-    if kind == "email" and not EMAIL_RE.match(value):
-        return "Adresse e-mail invalide."
-    if kind == "date":
-        try:
-            date.fromisoformat(value)
-        except ValueError:
-            return "Date invalide (AAAA-MM-JJ)."
-    if kind == "number":
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return "Un nombre est attendu."
-        if field.get("min") is not None and value < field["min"]:
-            return f"Au moins {field['min']}."
-        if field.get("max") is not None and value > field["max"]:
-            return f"Au plus {field['max']}."
-    if kind == "checkbox" and not isinstance(value, bool):
-        return "Vrai ou faux attendu."
-    if kind == "checkbox_list" and (
-        not isinstance(value, list) or len(value) > MAX_OPTIONS or not all(_text(p, 200) for p in value)
-    ):
+def _text_problem(field: dict, value) -> str:
+    if not isinstance(value, str):
+        return "Un texte est attendu."
+    if len(value) > (MAX_LONG_TEXT if field["type"] == "textarea" else MAX_TEXT):
+        return "Texte trop long."
+    return ""
+
+
+def _email_problem(field: dict, value) -> str:
+    return _text_problem(field, value) or ("" if EMAIL_RE.match(value) else "Adresse e-mail invalide.")
+
+
+def _date_problem(field: dict, value) -> str:
+    problem = _text_problem(field, value)
+    if problem:
+        return problem
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return "Date invalide (AAAA-MM-JJ)."
+    return ""
+
+
+def _number_problem(field: dict, value) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "Un nombre est attendu."
+    if field.get("min") is not None and value < field["min"]:
+        return f"Au moins {field['min']}."
+    if field.get("max") is not None and value > field["max"]:
+        return f"Au plus {field['max']}."
+    return ""
+
+
+def _checkbox_problem(field: dict, value) -> str:
+    return "" if isinstance(value, bool) else "Vrai ou faux attendu."
+
+
+def _checkbox_list_problem(field: dict, value) -> str:
+    if not isinstance(value, list) or len(value) > MAX_OPTIONS or not all(_text(p, 200) for p in value):
         return "Une liste de textes est attendue."
+    return ""
+
+
+_KIND_PROBLEMS = {
+    **dict.fromkeys(("text", "textarea", "select", "radio", "combobox"), _text_problem),
+    "email": _email_problem,
+    "date": _date_problem,
+    "number": _number_problem,
+    "checkbox": _checkbox_problem,
+    "checkbox_list": _checkbox_list_problem,
+}
+
+
+def _field_problem(field: dict, value) -> str:
+    kind = field["type"]
+    check = _KIND_PROBLEMS.get(kind)
+    problem = check(field, value) if check else ""
+    if problem:
+        return problem
     if kind in CHOICE_TYPES and "options" in field:
         allowed = {o["value"] for o in field["options"]}
         if any(p not in allowed for p in (value if isinstance(value, list) else [value])):

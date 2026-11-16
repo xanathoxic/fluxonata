@@ -2,6 +2,22 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.5.0 — 2026-11-16
+
+**Fluxonata 0.5.0 : nœud « Commandes SSH » (exécution directe, rebonds, session interactive, hôte choisi dans l'étape), onglets Entrées et Sorties des étapes, aperçu du workflow appelé, connexions modifiables, fenêtre d'approbation à onglets avec objet et corps en Markdown, pages chargées à la demande, durcissement (masquage des journaux, typage, accessibilité, images et actions épinglées) et couverture de tests**
+
+- Nœud « Commandes SSH » : commandes directes ou session interactive (terminal borné, envoi, attente d'un motif, réponses automatiques), rebonds ordonnés, clé du serveur toujours vérifiée par son empreinte, hôte, port et empreinte choisis dans l'étape (la connexion devient une identité réutilisable), secrets par référence, mode test simulé, résultats partiels conservés à l'annulation, éditeur dédié et deux workflows d'exemple
+- Assistants (MCP de conception, IA) : les étapes SSH ne sont créées ou modifiées qu'en mode test, les commandes et envois sensibles leur sont masqués ; chargement des clés privées SFTP et SSH réparé
+- Éditeur de workflow : onglet « Entrées » (variables lues par l'étape, à copier) et onglet « Sorties » (variables produites et façon de les utiliser) pour tous les types d'étape ; double-clic sur une étape « Workflow » pour en voir le contenu en lecture seule dans une fenêtre superposée
+- Connexions : bouton « Modifier » (libellé, paramètres, secret : conserver, choisir un secret existant ou en créer un)
+- Approbations : fenêtre de demande centrée et plus grande, à deux onglets (« Demande » : titre, demandeur, objet et corps mis en page en Markdown ; « Contexte de la demande »), commentaire et boutons toujours visibles ; l'étape d'approbation définit l'objet et le corps de la demande (variables remplacées au lancement) ; le Markdown est rendu sans HTML et seuls les liens http, https et mailto sont cliquables
+- Interface : pages et éditeur de code chargés à la demande (JavaScript initial de 2,06 Mo à 0,47 Mo) ; corrections de l'éditeur de code (saisie écrasée par un écho tardif), de la navigation pendant un chargement et du curseur d'une formule calculée ; une boucle en échec désigne l'itération qui a échoué
+- Sécurité : secrets et jetons d'adresse masqués dans les journaux, rapports d'erreur et journaux nginx (formes base64, URL et JSON comprises) ; jeton de l'agent isolé dans son propre fichier ; images Docker et actions GitHub épinglées par empreinte, dépendances Python exactes, droits minimaux pour la CI
+- Accessibilité : zones de lecture défilantes nommées et focalisables, noms de groupes, commandes segmentées au clavier, focus des fenêtres, titre propre à chaque page
+- Exploitation : règles d'alerte Prometheus testées, exercice de restauration sur base jetable, notification d'échec des tâches planifiées, procédure de mise à niveau de la migration tenancy/0014
+- Mise à niveau : deux migrations qui n'ajoutent que des colonnes avec valeur par défaut (type de connexion « ssh », objet et corps des approbations), compatibles avec l'ancien code pendant un déploiement par rôles ; l'API reste en v1 (les approbations gagnent les champs `subject` et `body`) et le schéma OpenAPI est complété
+- Qualité : typage Python sans erreur sur tout le backend, linter frontend sans diagnostic, contrôles de complexité, de mise en forme et de couverture en CI, fonctions trop complexes découpées, couverture de tests de 90,1 % à 92,1 % (3 265 tests)
+
 ## v0.4.13 — 2026-11-07
 
 **Fluxonata 0.4.13 : la clé publique de l'instance s'affiche dans une fenêtre copiable depuis l'onglet Paquets**

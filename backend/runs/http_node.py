@@ -13,6 +13,7 @@ Safety rules, all server-side:
 import json
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -22,6 +23,7 @@ from django.utils import timezone
 
 from audit.models import record
 from core import netsec
+from vault.injection import mask_text
 
 from . import files
 from .models import StepRun
@@ -68,6 +70,69 @@ def find_connection(workspace_id, environment_id, name):
     )
 
 
+def _target_url(base: str, path: str, query) -> str:
+    """Connection address + path + query; the path cannot change the host."""
+    if not path.startswith("/") or any(c in path for c in "\\\r\n \t") or "@" in path.split("?")[0].split("/")[0]:
+        raise HttpStepError(
+            "HTTP_CONFIG", "Le chemin doit commencer par « / » et ne contenir ni espace ni retour ligne."
+        )
+    if not isinstance(query, dict):
+        raise HttpStepError("HTTP_CONFIG", "Les paramètres de requête doivent former un objet.")
+    url = (
+        base if path == "/" and urlsplit(base).path not in ("", "/") else base + path
+    )  # « / » = the connection address itself
+    if query:
+        url += ("&" if "?" in path else "?") + urlencode({str(k): str(v) for k, v in query.items()})
+    if urlsplit(url).hostname != urlsplit(base).hostname:
+        raise HttpStepError("HTTP_CONFIG", "Le chemin ne peut pas changer l'hôte de la connexion.")
+    return url
+
+
+def _clean_headers(headers) -> dict:
+    if not isinstance(headers, dict) or len(headers) > MAX_HEADERS:
+        raise HttpStepError("HTTP_CONFIG", f"Les en-têtes doivent former un objet de {MAX_HEADERS} entrées au plus.")
+    clean = {}
+    for k, v in headers.items():
+        name, value = str(k).strip(), str(v)
+        if not name.replace("-", "").isalnum() or name.lower() in FORBIDDEN_HEADERS or "\n" in value or "\r" in value:
+            raise HttpStepError("HTTP_CONFIG", f"En-tête interdit ou invalide : « {name} ».")
+        clean[name] = value[:1000]
+    return clean
+
+
+def _encoded_body(body, body_format: str, clean: dict) -> str:
+    if body_format == "form" and isinstance(body, dict):
+        clean.setdefault("Content-Type", "application/x-www-form-urlencoded")
+        return urlencode({k: str(v) for k, v in body.items()})
+    if isinstance(body, (dict, list)):
+        clean.setdefault("Content-Type", "application/json")
+        return json.dumps(body, ensure_ascii=False)
+    return str(body)
+
+
+def _request_body(fields: dict, clean: dict) -> tuple[str | None, str | None, dict | None]:
+    """(raw body, body file id, parts built by the worker); sets the Content-Type in `clean` when it is implied."""
+    body, body_format = fields["body"], fields["body_format"]
+    if body_format == "file":
+        body_file = files.file_id_of(fields.get("file"))
+        if body_file is None:
+            raise HttpStepError("HTTP_CONFIG", "Corps « fichier » : indiquez le fichier (sortie « file » d'une étape).")
+        return None, body_file, None
+    if body_format == "multipart":
+        if any(isinstance(f, dict) and f.get("file") for f in (fields.get("files") or [])):
+            # built by the worker: it reads the files
+            return None, None, {"fields": body, "files": _check_parts(fields.get("files"))}
+        boundary, raw = multipart(body, fields.get("files"))
+        clean["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        return raw, None, None
+    if body is None:
+        return None, None, None
+    raw = _encoded_body(body, body_format, clean)
+    if len(raw.encode()) > MAX_BODY:
+        raise HttpStepError("HTTP_CONFIG", "Corps de requête trop volumineux (256 Ko au plus).")
+    return raw, None, None
+
+
 def prepare(node: dict, resolve, ctx: dict, workspace_id, environment_id) -> dict:
     """Template resolution + checks. Returns the job spec (no secret in it). Raises HttpStepError."""
     conn = find_connection(workspace_id, environment_id, node.get("connection", ""))
@@ -82,54 +147,9 @@ def prepare(node: dict, resolve, ctx: dict, workspace_id, environment_id) -> dic
     method = str(fields["method"]).upper()
     if method not in METHODS:
         raise HttpStepError("HTTP_CONFIG", f"Méthode inconnue : {method}.")
-    path = str(fields["path"])
-    if not path.startswith("/") or any(c in path for c in "\\\r\n \t") or "@" in path.split("?")[0].split("/")[0]:
-        raise HttpStepError(
-            "HTTP_CONFIG", "Le chemin doit commencer par « / » et ne contenir ni espace ni retour ligne."
-        )
-    query = fields["query"]
-    if not isinstance(query, dict):
-        raise HttpStepError("HTTP_CONFIG", "Les paramètres de requête doivent former un objet.")
-    url = (
-        base if path == "/" and urlsplit(base).path not in ("", "/") else base + path
-    )  # « / » = the connection address itself
-    if query:
-        url += ("&" if "?" in path else "?") + urlencode({str(k): str(v) for k, v in query.items()})
-    if urlsplit(url).hostname != urlsplit(base).hostname:
-        raise HttpStepError("HTTP_CONFIG", "Le chemin ne peut pas changer l'hôte de la connexion.")
-    headers = fields["headers"]
-    if not isinstance(headers, dict) or len(headers) > MAX_HEADERS:
-        raise HttpStepError("HTTP_CONFIG", f"Les en-têtes doivent former un objet de {MAX_HEADERS} entrées au plus.")
-    clean = {}
-    for k, v in headers.items():
-        name, value = str(k).strip(), str(v)
-        if not name.replace("-", "").isalnum() or name.lower() in FORBIDDEN_HEADERS or "\n" in value or "\r" in value:
-            raise HttpStepError("HTTP_CONFIG", f"En-tête interdit ou invalide : « {name} ».")
-        clean[name] = value[:1000]
-    body = fields["body"]
-    raw, body_file, parts = None, None, None
-    if fields["body_format"] == "file":
-        body_file = files.file_id_of(fields.get("file"))
-        if body_file is None:
-            raise HttpStepError("HTTP_CONFIG", "Corps « fichier » : indiquez le fichier (sortie « file » d'une étape).")
-    elif fields["body_format"] == "multipart" and any(
-        isinstance(f, dict) and f.get("file") for f in (fields.get("files") or [])
-    ):
-        parts = {"fields": body, "files": _check_parts(fields.get("files"))}  # built by the worker: it reads the files
-    elif fields["body_format"] == "multipart":
-        boundary, raw = multipart(body, fields.get("files"))
-        clean["Content-Type"] = f"multipart/form-data; boundary={boundary}"
-    elif body is not None:
-        if fields["body_format"] == "form" and isinstance(body, dict):
-            raw = urlencode({k: str(v) for k, v in body.items()})
-            clean.setdefault("Content-Type", "application/x-www-form-urlencoded")
-        elif isinstance(body, (dict, list)):
-            raw = json.dumps(body, ensure_ascii=False)
-            clean.setdefault("Content-Type", "application/json")
-        else:
-            raw = str(body)
-        if len(raw.encode()) > MAX_BODY:
-            raise HttpStepError("HTTP_CONFIG", "Corps de requête trop volumineux (256 Ko au plus).")
+    url = _target_url(base, str(fields["path"]), fields["query"])
+    clean = _clean_headers(fields["headers"])
+    raw, body_file, parts = _request_body(fields, clean)
     if node.get("response_file") and (node.get("pagination") or fields.get("pagination")):
         raise HttpStepError("HTTP_CONFIG", "Une réponse enregistrée comme fichier ne peut pas être paginée.")
     timeout = node.get("timeout_seconds")
@@ -221,7 +241,7 @@ def _check_parts(raw) -> list:
         )
     out = []
     for f in raw:
-        item = {k: str(f[k])[:200] for k in ("field", "filename", "content_type") if f.get(k)}
+        item: dict[str, str | None] = {k: str(f[k])[:200] for k in ("field", "filename", "content_type") if f.get(k)}
         if f.get("file"):
             item["file_id"] = files.file_id_of(f["file"])
             if item["file_id"] is None:
@@ -357,7 +377,7 @@ def claim_next() -> StepRun | None:
             StepRun.objects.select_for_update(skip_locked=True)
             .select_related("run__workspace")
             .filter(
-                node_type__in=("http", "sql", "ldap", "sftp", "smtp"),
+                node_type__in=("http", "sql", "ldap", "sftp", "smtp", "ssh"),
                 status=StepRun.Status.WAITING,
                 http_job__state="queued",
             )
@@ -367,17 +387,20 @@ def claim_next() -> StepRun | None:
         )
         if sr is None:
             return None
-        sr.http_job = {**sr.http_job, "state": "running", "claimed_at": timezone.now().isoformat()}
+        # `claim` identifies THIS attempt for good (`claimed_at` is renewed while a long session runs, so it cannot)
+        sr.http_job = {
+            **(sr.http_job or {}),
+            "state": "running",
+            "claimed_at": timezone.now().isoformat(),
+            "claim": uuid.uuid4().hex,
+        }
         sr.save(update_fields=["http_job"])
         return sr
 
 
 def _mask(value, secrets: list):
     if isinstance(value, str):
-        for secret in secrets:
-            if secret and len(secret) >= 4:
-                value = value.replace(secret, "***")
-        return value
+        return mask_text(value, [secret for secret in secrets if secret and len(secret) >= 4])
     if isinstance(value, dict):
         return {k: _mask(v, secrets) for k, v in value.items()}
     if isinstance(value, list):
@@ -401,6 +424,24 @@ def _dig(value, path: str):
         else:
             return None
     return value
+
+
+def _decode_body(raw: bytes, ctype: str, limit: int):
+    """The response body as data: JSON, last event of a stream, XML as data, otherwise the text."""
+    text = raw[:limit].decode("utf-8", "replace").replace("\x00", "\ufffd")  # PostgreSQL JSON refuses NUL
+    kind = ctype.lower()
+    if "json" in kind:
+        try:
+            return json.loads(text)
+        except ValueError:
+            return text
+    if "event-stream" in kind:
+        last = sse_last_json(text)
+        return text if last is None else last
+    if "xml" in kind and len(raw) <= limit:
+        data = xml_to_data(text)
+        return text if data is None else data
+    return text
 
 
 def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tuple[dict | None, dict | None, dict]:
@@ -446,17 +487,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
             "simulated": False,
         }
         return {**result, "_raw": raw}, None, lower
-    text = raw[:limit].decode("utf-8", "replace").replace("\x00", "\ufffd")  # PostgreSQL JSON refuses NUL
-    body: object = text
-    if "json" in ctype.lower():
-        try:
-            body = json.loads(text)
-        except ValueError:
-            body = text
-    elif "event-stream" in ctype.lower():
-        body = sse_last_json(text) if sse_last_json(text) is not None else text
-    elif "xml" in ctype.lower() and len(raw) <= limit:
-        body = xml_to_data(text) if xml_to_data(text) is not None else text
+    body = _decode_body(raw, ctype, limit)
     out_headers = {"content-type": ctype[:200]}
     if lower.get("etag"):  # the version of what was read: a later write can ask « only if still this one » (If-Match)
         out_headers["etag"] = lower["etag"][:200]
@@ -494,7 +525,7 @@ def xml_to_data(text: str):
     if "<!DOCTYPE" in head or "<!ENTITY" in text.upper():
         return None
     try:
-        root = ElementTree.fromstring(text)  # noqa: S314
+        root = ElementTree.fromstring(text)  # noqa: S314 - DOCTYPE et ENTITY refusés ci-dessus ; réponse bornée par max_bytes
     except ElementTree.ParseError:
         return None
 
@@ -524,58 +555,81 @@ def _next_link(link_header: str) -> str | None:
     return None
 
 
+class _Pager:
+    """Where the next page is: the request parameters of the current page and how the reading moves on."""
+
+    def __init__(self, pg: dict, url: str):
+        self.pg, self.kind, self.url = pg, pg["type"], url
+        self.page_no = int(pg.get("page_start", 1))
+        self.offset = 0
+        self.cursor: object = None
+        self.link: str | None = None
+
+    def target(self) -> str:
+        pg = self.pg
+        extra: dict = {}
+        if self.kind == "page":
+            extra[pg.get("page_param", "page")] = self.page_no
+        elif self.kind == "offset":
+            extra[pg.get("offset_param", "offset")] = self.offset
+        elif self.kind == "cursor" and self.cursor is not None:
+            extra[pg.get("cursor_param", "cursor")] = self.cursor
+        if self.kind != "link" and pg.get("page_size"):
+            extra[pg.get("size_param", "limit")] = pg["page_size"]
+        return self.link if self.kind == "link" and self.link else _with_query(self.url, extra)
+
+    def items(self, body) -> list:
+        got = _dig(body, self.pg["items_path"]) if self.pg.get("items_path") else body
+        return got if isinstance(got, list) else []
+
+    def advance(self, body, got: list, lower: dict) -> bool:
+        """Moves to the next page; False when there is none."""
+        if self.kind == "page":
+            self.page_no += 1
+        elif self.kind == "offset":
+            self.offset += len(got)
+            return not (self.pg.get("page_size") and len(got) < self.pg["page_size"])
+        elif self.kind == "cursor":
+            self.cursor = _dig(body, self.pg["next_path"])
+            return self.cursor not in (None, "", False)
+        elif self.kind == "link":
+            self.link = _next_link(lower.get("link", ""))
+            return bool(self.link) and urlsplit(self.link).hostname == urlsplit(self.url).hostname
+        return True
+
+
 def _paginate(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tuple[dict | None, dict | None]:
     """Reads successive pages and concatenates their items: body = list of items, `pages` = pages read, `truncated` when
     the page limit stopped the reading."""
     pg = spec["pagination"]
-    kind, max_pages = pg["type"], pg.get("max_pages", 10)
+    max_pages = pg.get("max_pages", 10)
+    pager = _Pager(pg, url)
     items: list = []
-    page_no = int(pg.get("page_start", 1))
-    offset, cursor, link = 0, None, None
     last: dict | None = None
     for n in range(1, max_pages + 1):
-        extra: dict = {}
-        if kind == "page":
-            extra[pg.get("page_param", "page")] = page_no
-        elif kind == "offset":
-            extra[pg.get("offset_param", "offset")] = offset
-        elif kind == "cursor" and cursor is not None:
-            extra[pg.get("cursor_param", "cursor")] = cursor
-        if kind != "link" and pg.get("page_size"):
-            extra[pg.get("size_param", "limit")] = pg["page_size"]
-        target = link if kind == "link" and link else _with_query(url, extra)
-        result, error, lower = _send(spec, target, headers, secrets, signer)
+        result, error, lower = _send(spec, pager.target(), headers, secrets, signer)
         if error:
             return None, error
+        if result is None:
+            return None, {"code": "HTTP_ERROR", "message": "Aucune réponse reçue.", "next_step": "Réessayez."}
         last = result
         if not result["ok"]:
             return result, None  # the failing page is returned as it is (status, body)
-        body = result["body"]
-        got = _dig(body, pg["items_path"]) if pg.get("items_path") else body
-        got = got if isinstance(got, list) else []
+        got = pager.items(result["body"])
         items += got
         if len(items) > MAX_ITEMS:
             items, last["truncated"] = items[:MAX_ITEMS], True
             break
-        if not got:
+        if not got or not pager.advance(result["body"], got, lower):
             break
-        if kind == "page":
-            page_no += 1
-        elif kind == "offset":
-            offset += len(got)
-            if pg.get("page_size") and len(got) < pg["page_size"]:
-                break
-        elif kind == "cursor":
-            cursor = _dig(body, pg["next_path"])
-            if cursor in (None, "", False):
-                break
-        elif kind == "link":
-            link = _next_link(lower.get("link", ""))
-            if not link or urlsplit(link).hostname != urlsplit(url).hostname:
-                break
         if n == max_pages:
             last["truncated"] = True
-    assert last is not None
+    if last is None:  # inatteignable : max_pages est validé entre 1 et MAX_PAGES ; garde explicite plutôt qu'assertion
+        return None, {
+            "code": "PAGINATION_EMPTY",
+            "message": "Aucune page n'a été lue.",
+            "next_step": "Vérifiez la pagination de l'étape.",
+        }
     return {**last, "body": items, "pages": n}, None
 
 
@@ -595,6 +649,8 @@ def _fail_if(rule: dict, result: dict) -> dict | None:
 
 def execute(sr: StepRun) -> tuple[dict | None, dict | None]:
     """Sends the request of a step. Returns (result, error)."""
+    if sr.http_job is None:
+        raise ValueError("L'étape n'a pas de requête à envoyer.")
     return execute_spec(sr.http_job["spec"], sr.run.workspace, sr.run.environment_id, sr.run, step_id=sr.node_id)
 
 
@@ -602,13 +658,69 @@ def _file_error(exc: files.FileError) -> dict:
     return {"code": exc.code, "message": exc.message, "next_step": exc.next_step}
 
 
+def _attach_files(spec: dict, headers: dict, run) -> dict:
+    """Loads the body file / multipart parts of a step (only possible inside a run); returns the spec with the bytes."""
+    if spec.get("body_file") or spec.get("parts"):
+        if run is None:
+            raise files.FileError("FILE_MISSING", "Les fichiers ne sont utilisables que dans une exécution.")
+        if spec.get("body_file"):
+            f = files.load(run, spec["body_file"])
+            spec = {**spec, "_body_bytes": bytes(f.data)}
+            if not any(k.lower() == "content-type" for k in headers):
+                headers["Content-Type"] = f.content_type
+        else:
+            boundary, data = multipart_bytes(
+                spec["parts"]["fields"], spec["parts"]["files"], lambda fid: files.load(run, fid)
+            )
+            spec = {**spec, "_body_bytes": data}
+            headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        if len(spec["_body_bytes"]) > files.MAX_FILE + 4096:
+            raise files.FileError("FILE_TOO_BIG", "Corps de requête trop volumineux (10 Mo au plus).")
+    if spec.get("save_file") and run is None:
+        raise files.FileError("FILE_MISSING", "Les fichiers ne sont utilisables que dans une exécution.")
+    return spec
+
+
+def _credentials(conn):
+    """(credentials, None) or (None, error) when the vault refuses."""
+    from vault import auth
+
+    try:
+        return auth.credentials(conn), None
+    except auth.AuthError as exc:
+        return None, {"code": exc.code, "message": exc.message, "next_step": "Vérifiez la connexion dans Connexions."}
+
+
+def _store_response_file(spec: dict, result: dict, run, step_id: str) -> dict | None:
+    """Saves the response bytes as a run file (adds `file` to the result); the error when it cannot be stored."""
+    raw = result.pop("_raw")
+    try:
+        result["file"] = files.save(
+            run, step_id, spec["save_file"]["name"], result["headers"].get("content-type", ""), raw
+        )
+    except files.FileError as exc:
+        return _file_error(exc)
+    return None
+
+
+def _audit_request(spec: dict, result: dict, workspace, audit_target, started: float) -> None:
+    record(
+        "http.request",
+        workspace=workspace,
+        target=audit_target,
+        method=spec["method"],
+        host=urlsplit(spec["url"]).hostname,
+        status=result["status"],
+        pages=result.get("pages", 1),
+        ms=int((time.monotonic() - started) * 1000),
+    )
+
+
 def execute_spec(
     spec: dict, workspace, environment_id, audit_target, step_id: str = ""
 ) -> tuple[dict | None, dict | None]:
     """Sends a prepared request. The secret is read here and never leaves this function."""
     conn = find_connection(workspace.pk, environment_id, spec["connection"])
-    from vault import auth
-
     if conn is None:
         return None, {
             "code": "CONNECTION_MISSING",
@@ -616,10 +728,9 @@ def execute_spec(
             "next_step": "Vérifiez la connexion.",
         }
 
-    try:
-        creds = auth.credentials(conn)
-    except auth.AuthError as exc:
-        return None, {"code": exc.code, "message": exc.message, "next_step": "Vérifiez la connexion dans Connexions."}
+    creds, error = _credentials(conn)
+    if error:
+        return None, error
     headers = {**spec["headers"], **creds.headers}
     url = spec["url"]
     if creds.query:
@@ -628,24 +739,7 @@ def execute_spec(
 
     run = audit_target if isinstance(audit_target, WorkflowRun) else None  # files exist only inside a run
     try:
-        if spec.get("body_file") or spec.get("parts"):
-            if run is None:
-                raise files.FileError("FILE_MISSING", "Les fichiers ne sont utilisables que dans une exécution.")
-            if spec.get("body_file"):
-                f = files.load(run, spec["body_file"])
-                spec = {**spec, "_body_bytes": bytes(f.data)}
-                if not any(k.lower() == "content-type" for k in headers):
-                    headers["Content-Type"] = f.content_type
-            else:
-                boundary, data = multipart_bytes(
-                    spec["parts"]["fields"], spec["parts"]["files"], lambda fid: files.load(run, fid)
-                )
-                spec = {**spec, "_body_bytes": data}
-                headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
-            if len(spec["_body_bytes"]) > files.MAX_FILE + 4096:
-                raise files.FileError("FILE_TOO_BIG", "Corps de requête trop volumineux (10 Mo au plus).")
-        if spec.get("save_file") and run is None:
-            raise files.FileError("FILE_MISSING", "Les fichiers ne sont utilisables que dans une exécution.")
+        spec = _attach_files(spec, headers, run)
     except files.FileError as exc:
         return None, _file_error(exc)
     except HttpStepError as exc:
@@ -655,27 +749,37 @@ def execute_spec(
         result, error = _paginate(spec, url, headers, creds.secrets, creds.signer)
     else:
         result, error, _ = _send(spec, url, headers, creds.secrets, creds.signer)
-    if result is not None and "_raw" in result:
-        raw = result.pop("_raw")
-        try:
-            name = spec["save_file"]["name"]
-            result["file"] = files.save(run, step_id, name, result["headers"].get("content-type", ""), raw)
-        except files.FileError as exc:
-            return None, _file_error(exc)
-    if result is not None and error is None and spec.get("fail_if") and result["ok"]:
+    if result is None:
+        return result, error
+    return _finish(spec, result, error, run, step_id, (workspace, audit_target, started))
+
+
+def _finish(spec: dict, result: dict, error, run, step_id: str, audit: tuple) -> tuple[dict | None, dict | None]:
+    """After the send: store the response file, apply `fail_if`, audit the request."""
+    if "_raw" in result:
+        file_error = _store_response_file(spec, result, run, step_id)
+        if file_error:
+            return None, file_error
+    if error is None and spec.get("fail_if") and result["ok"]:
         error = _fail_if(spec["fail_if"], result)
-    if result is not None:
-        record(
-            "http.request",
-            workspace=workspace,
-            target=audit_target,
-            method=spec["method"],
-            host=urlsplit(spec["url"]).hostname,
-            status=result["status"],
-            pages=result.get("pages", 1),
-            ms=int((time.monotonic() - started) * 1000),
-        )
+    _audit_request(spec, result, *audit)
     return result, error
+
+
+def keep_partial_results(sr: StepRun, result: dict) -> int:
+    """Late write of an SSH session's partial results after a CONTROLLED cancellation: the engine already ended the step as CANCELLED while the
+    worker was still alive and noticed it. What the session collected (already redacted: sensitive items hidden, known secrets masked) is kept
+    on the step. Bound to: this step only, only if it ended CANCELLED, only the claim that produced these results, only if nothing was written
+    yet — so another attempt, a terminal status or an existing output is never altered, and the status itself is never touched. A process killed
+    outright never gets here: its results are lost and the lease expiry reports the step as interrupted (uncertain). Returns the rows written."""
+    claim = (sr.http_job or {}).get("claim")
+    if not claim:
+        return 0
+    return (
+        StepRun.objects.filter(pk=sr.pk, status=StepRun.Status.CANCELLED, http_job__claim=claim)
+        .filter(Q(output__isnull=True) | Q(output={}))
+        .update(output=result)
+    )
 
 
 def process_one() -> bool:
@@ -695,6 +799,10 @@ def process_one() -> bool:
             from . import sftp_node
 
             result, error = sftp_node.execute(sr)
+        elif sr.node_type == "ssh":
+            from . import ssh_node
+
+            result, error = ssh_node.execute(sr)
         elif sr.node_type == "ldap":
             from . import ldap_node
 
@@ -705,15 +813,26 @@ def process_one() -> bool:
         log.exception("http step %s crashed", sr.pk)
         result, error = None, {"code": "HTTP_ERROR", "message": "Erreur interne pendant l'appel.", "next_step": ""}
     # only a step still waiting for this very call takes the outcome (a cancelled run keeps its own state)
-    StepRun.objects.filter(pk=sr.pk, status=StepRun.Status.WAITING, http_job__state="running").update(
-        http_job={**sr.http_job, "state": "done", "result": result, "error": error}
+    job = {**(sr.http_job or {}), "state": "done", "result": result, "error": error}
+    if sr.node_type == "ssh" and job.get("spec"):
+        from . import ssh_node
+
+        job["spec"] = ssh_node.scrub_spec(
+            job["spec"]
+        )  # whatever happened above: sensitive texts do not stay in the database
+    taken = StepRun.objects.filter(pk=sr.pk, status=StepRun.Status.WAITING, http_job__state="running").update(
+        http_job=job
     )
+    if not taken and sr.node_type == "ssh" and result:
+        keep_partial_results(sr, result)
     return True
 
 
 def lease_expired(job: dict) -> bool:
     at = job.get("claimed_at")
-    return bool(at) and timezone.now() - datetime.fromisoformat(at) > LEASE
+    if not at:
+        return False
+    return timezone.now() - datetime.fromisoformat(at) > LEASE
 
 
 def run_loop(worker_id: str, stop=None, poll_seconds: float = 1.0) -> None:

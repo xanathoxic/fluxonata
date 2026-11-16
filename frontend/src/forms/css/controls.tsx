@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { FormIcon, type FormIconName } from "../FormIcon";
 import { UNITS, formatBox, formatColor, formatShadows, joinLength, parseBox, parseColor, parseGradient, formatGradient, parseShadows, splitLength, toHex, type Box, type Shadow } from "./values";
+import { useRadioGroup } from "../../components/useRadioGroup";
 
 /** A labelled control with a small × that removes the declaration. */
 export function Row({ label, set, onReset, children, wide }: { label: string; set: boolean; onReset: () => void; children: ReactNode; wide?: boolean }) {
@@ -41,6 +42,7 @@ export function Color({ value, onChange, label }: { value: string; onChange: (v:
         <input className="cs-text" aria-label={`${label} : code`} value={value} placeholder="#rrggbb" onChange={(e) => onChange(e.target.value)} maxLength={40} />
       </span>
       {c && <input type="range" aria-label={`${label} : opacité`} title={`Opacité ${Math.round(c.a * 100)} %`} min={0} max={1} step={0.05} value={c.a} onChange={(e) => onChange(formatColor({ ...c, a: Number(e.target.value) }))} />}
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <span className="cs-chips" role="group" aria-label={`${label} : couleurs du thème`}>
         {THEME_COLORS.map(([v, name]) => <button key={v} type="button" className="cs-chip" style={{ background: THEME_DOT[v] }} aria-label={name} title={name} aria-pressed={value === v} onClick={() => onChange(v)} />)}
       </span>
@@ -52,9 +54,11 @@ const hexToRgb = (hex: string) => { const n = parseInt(hex.slice(1), 16); return
 export interface Choice { id: string; label: string; icon?: FormIconName; glyph?: string }
 /** A short list of options as small icon (or glyph) buttons; choosing the active one again removes the setting. */
 export function Choices({ value, onChange, options, label }: { value: string; onChange: (v: string) => void; options: Choice[]; label: string }) {
+  const radio = useRadioGroup<HTMLSpanElement>();
   return (
-    <span className="cs-choices" role="radiogroup" aria-label={label}>
+    <span ref={radio.ref} onKeyDown={radio.onKeyDown} className="cs-choices" role="radiogroup" aria-label={label}>
       {options.map((o) => (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <button key={o.id} type="button" role="radio" aria-checked={value === o.id} className={`cs-opt${value === o.id ? " on" : ""}`} aria-label={o.label} title={o.label} onClick={() => onChange(value === o.id ? "" : o.id)}>
           {o.icon ? <FormIcon name={o.icon} size={16} /> : <span className="cs-glyph" aria-hidden="true">{o.glyph}</span>}
         </button>
@@ -95,6 +99,8 @@ export function Shadows({ value, onChange, label, text }: { value: string; onCha
   return (
     <span className="cs-shadows">
       {layers.map((l, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <span key={i} className="cs-layer" role="group" aria-label={`${label} ${i + 1}`}>
           {(text ? (["x", "y", "blur"] as const) : (["x", "y", "blur", "spread"] as const)).map((k) => <input key={k} type="number" aria-label={`${label} ${i + 1} : ${k === "x" ? "décalage horizontal" : k === "y" ? "décalage vertical" : k === "blur" ? "flou" : "étendue"}`} title={k === "x" ? "Horizontal" : k === "y" ? "Vertical" : k === "blur" ? "Flou" : "Étendue"} placeholder={k === "x" ? "x" : k === "y" ? "y" : k === "blur" ? "flou" : "ét."} value={l[k]} onChange={(e) => upd(i, { [k]: Number(e.target.value) } as Partial<Shadow>)} />)}
           {!text && <button type="button" className={`cs-opt${l.inset ? " on" : ""}`} aria-pressed={l.inset} aria-label={`${label} ${i + 1} : intérieure`} title="Ombre intérieure" onClick={() => upd(i, { inset: !l.inset })}><FormIcon name="border" size={14} /></button>}

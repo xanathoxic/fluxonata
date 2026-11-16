@@ -113,3 +113,26 @@ def test_only_platform_administrators_may_change_it_and_a_workspace_administrato
         c = client_for(world[who])
         assert c.post(P, {"host": "10.1.1.1"}, format="json").status_code == 403
     assert EgressHost.objects.count() == 0
+
+
+def test_the_managed_list_comes_from_the_source_registered_by_tenancy_and_never_allows_more_when_it_fails(settings):
+    settings.ORCH_EGRESS_ALLOWLIST = "10.9.9.9"
+    netsec.set_managed_source(lambda: ["127.0.0.1"])
+    try:
+        assert netsec.managed_allowlist() == frozenset({"127.0.0.1"})
+        netsec.set_managed_source(lambda: (_ for _ in ()).throw(RuntimeError("base injoignable")))
+        assert netsec.managed_allowlist() == frozenset()  # unreadable: nothing is added to the environment's list
+        with pytest.raises(UnsafeURL):
+            validate_url("http://127.0.0.1:8765/marques")
+        netsec.set_managed_source(None)
+        assert (
+            netsec.managed_allowlist() == frozenset()
+        )  # no source at all (a process without the application): same answer
+    finally:
+        netsec.set_managed_source(lambda: EgressHost.objects.values_list("host", flat=True))
+
+
+def test_the_tenancy_application_registers_its_source_when_django_starts(boss):
+    EgressHost.objects.create(host="127.0.0.1", note="x", created_by=boss)
+    netsec.reset_allowlist_cache()
+    assert "127.0.0.1" in netsec.managed_allowlist()

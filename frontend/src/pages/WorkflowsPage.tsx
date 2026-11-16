@@ -72,6 +72,7 @@ export function WorkflowsPage() {
               footer={<><button type="button" onClick={() => setCreating(false)}>Annuler</button><button type="submit" form="wf-new" className="primary" disabled={!name.trim() || create.isPending}>Créer et ouvrir l'éditeur</button></>}>
               <form id="wf-new" onSubmit={(e: FormEvent) => { e.preventDefault(); if (name.trim()) create.mutate(); }}>
                 <div className="field"><label htmlFor="wf-name">Nom du nouveau workflow</label>
+                  {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
                   <input id="wf-name" value={name} onChange={(e) => setName(e.target.value)} aria-describedby={err ? "wf-err" : undefined} aria-invalid={!!err} autoFocus /></div>
                 <div className="field"><label htmlFor="wf-folder">Dossier (facultatif)</label><input id="wf-folder" value={folderNew} placeholder={folder || "ex. Réseau/DNS"} onChange={(e) => setFolderNew(e.target.value)} /></div>
                 <TagInput value={newTags} onChange={setNewTags} suggestions={[...new Set(all.flatMap((w) => w.tags ?? []))].sort()} />

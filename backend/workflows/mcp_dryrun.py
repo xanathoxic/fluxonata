@@ -13,6 +13,7 @@ from django.http import Http404
 from rest_framework import serializers
 
 from audit.models import record
+from runs import ssh_node
 from tenancy.permissions import EDIT, VIEW, has_perm
 
 from . import access
@@ -31,7 +32,8 @@ OUTPUT = 120
 
 
 class SampleIn(serializers.Serializer):
-    label = serializers.CharField(max_length=60, required=False, default="essai")
+    # `label` est un nom du contrat d'API ; il masque l'attribut `label` de DRF `Field` : exemption ciblée.
+    label = serializers.CharField(max_length=60, required=False, default="essai")  # type: ignore[assignment]
     inputs = serializers.JSONField()
     expected = serializers.JSONField(required=False, default=list)
     mocks = serializers.JSONField(required=False, default=dict)
@@ -43,7 +45,8 @@ class StartIn(serializers.Serializer):
 
 
 class CaseIn(serializers.Serializer):
-    label = serializers.CharField(max_length=60, required=False, default="cas")
+    # idem (`label`, contrat d'API).
+    label = serializers.CharField(max_length=60, required=False, default="cas")  # type: ignore[assignment]
     inputs = serializers.JSONField()
     expected = serializers.JSONField(required=False, default=dict)
 
@@ -86,13 +89,22 @@ def _clean_samples(graph: dict, raw: list[dict]) -> list[dict]:
                 {
                     "label": s["label"],
                     "inputs": s["inputs"],
-                    "expected": [{"step": e["step"], "field": e["field"], "value": e["value"]} for e in expected],
+                    "expected": [
+                        {"step": e["step"], "field": e["field"], "value": e["value"]} for e in expected or []
+                    ],  # expected est une liste ici (sinon `problems` est non vide)
                     "mocks": mocks,
                 }
             )
     if errors:
         raise serializers.ValidationError(errors)
     return out
+
+
+def ssh_node_error(node: dict) -> str:
+    return (
+        f"L'étape SSH « {node.get('id', '?')} » désigne une connexion qui n'existe pas, n'est pas de type SSH ou n'est pas disponible dans cet espace : "
+        "choisissez des connexions de type « ssh » dans list_connections."
+    )
 
 
 def start_dry_run(request, ws, args):
@@ -110,11 +122,17 @@ def start_dry_run(request, ws, args):
     graph = wf.draft_graph or {}
     if not service.policy_for(ws).dry_run:
         return _err("L'essai à blanc est désactivé pour cet espace (Administration → Assistant IA → Essai à blanc).")
-    if not any(n.get("type") in ("script", "condition") for n in graph.get("nodes", [])):
+    nodes = [n for n in graph.get("nodes", []) if isinstance(n, dict)]
+    for n in (
+        nodes
+    ):  # an SSH step is simulated, but its connections must still be SSH connections of THIS workspace, checked now
+        if n.get("type") == "ssh" and ssh_node.unauthorized_connections(ws, n):
+            return _err(ssh_node_error(n))
+    if not any(n.get("type") in ("script", "condition", "ssh") for n in nodes):
         return _ok(
             {
                 "applicable": False,
-                "reason": "Rien à exécuter : l'essai à blanc exécute les scripts et les décisions, ce workflow n'en a pas.",
+                "reason": "Rien à exécuter : l'essai à blanc exécute les scripts, les décisions et simule les étapes SSH ; ce workflow n'en a pas.",
             }
         )
     samples = _clean_samples(graph, d.get("samples") or [])

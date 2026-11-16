@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoA11yViolations, login, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, login, publishViaApi, boxOf } from "./helpers";
 
 test("menu par intention et recherche globale Ctrl+K", async ({ page }) => {
   await login(page, "alice");
@@ -41,7 +41,7 @@ test("accueil : exécutions récentes avant les raccourcis, guide repliable puis
   await login(page, "alice");
   await page.evaluate(() => localStorage.removeItem("fluxonata.home.tutorial"));
   await page.goto("/home");
-  const y = async (name: string) => (await page.getByRole("heading", { name }).boundingBox())!.y;
+  const y = async (name: string) => (await boxOf(page.getByRole("heading", { name }))).y;
   await expect(page.getByRole("heading", { name: "Exécutions récentes" })).toBeVisible();
   expect(await y("Exécutions récentes")).toBeLessThan(await y("Démarrer rapidement"));
   const guide = page.getByRole("region", { name: "Démarrer en 5 minutes" });
@@ -77,11 +77,11 @@ test("éditeur de formulaire : l'aperçu se règle en largeur (bureau, tablette,
   await page.goto(`/library/forms/${slug}/design`);
   await page.getByRole("tablist", { name: "Vue de l'éditeur" }).getByRole("tab", { name: "Aperçu" }).click();
   const frame = page.locator(".fb-previewframe");
-  const full = (await frame.boundingBox())!.width;
+  const full = (await boxOf(frame)).width;
   await page.getByRole("tablist", { name: "Largeur de l'aperçu" }).getByRole("tab", { name: /Mobile/ }).click();
-  expect((await frame.boundingBox())!.width).toBeLessThanOrEqual(390);
+  expect((await boxOf(frame)).width).toBeLessThanOrEqual(390);
   await page.getByRole("tablist", { name: "Largeur de l'aperçu" }).getByRole("tab", { name: /Tablette/ }).click();
-  const tablet = (await frame.boundingBox())!.width;
+  const tablet = (await boxOf(frame)).width;
   expect(tablet).toBeLessThanOrEqual(768);
   expect(full).toBeGreaterThan(tablet - 1);
 });

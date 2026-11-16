@@ -4,6 +4,7 @@ import copy
 
 from django.db import IntegrityError, transaction
 from django.http import Http404
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -80,8 +81,9 @@ def usage_counts(workspace) -> dict[str, int]:
             for f in section.get("fields", [])
             if isinstance(f, dict) and f.get("type") == "custom"
         }
-        for ref in refs - {None}:
-            counts[ref] = counts.get(ref, 0) + 1
+        for ref in refs:
+            if ref is not None:
+                counts[ref] = counts.get(ref, 0) + 1
     return counts
 
 
@@ -99,6 +101,7 @@ def usage(c: Control) -> list[str]:
     return used
 
 
+@extend_schema_serializer(component_name="ControlCreate")
 class CreateSerializer(serializers.Serializer):
     slug = serializers.SlugField(max_length=50)
     name = serializers.CharField(max_length=160)
@@ -111,9 +114,68 @@ class CreateSerializer(serializers.Serializer):
     spec = serializers.JSONField(required=False)
 
 
+# --- Réponses réelles, décrites pour le schéma OpenAPI (documentation seulement : jamais utilisées pour répondre) ---
+class ControlVersionLightSerializer(serializers.Serializer):
+    version = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    changelog = serializers.CharField(allow_blank=True)
+    digest = serializers.CharField()
+
+
+class ControlPublishedSerializer(serializers.Serializer):
+    version = serializers.CharField()
+    name = serializers.CharField()
+    icon = serializers.CharField(allow_blank=True, allow_null=True)
+    spec = serializers.JSONField()
+
+
+class ControlCardSerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    icon = serializers.CharField(allow_blank=True, allow_null=True)
+    folder = serializers.CharField(allow_blank=True)
+    tags = serializers.ListField(child=serializers.CharField())
+    owner = serializers.CharField(allow_null=True)
+    mode = serializers.CharField(allow_null=True)
+    parts = serializers.IntegerField()
+    latest_version = ControlVersionLightSerializer(allow_null=True)
+    draft_revision = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    published = ControlPublishedSerializer(required=False)
+
+
+class ControlListItemSerializer(ControlCardSerializer):
+    used_by = serializers.IntegerField()
+
+
+class ControlListSerializer(serializers.Serializer):
+    results = ControlListItemSerializer(many=True)
+
+
+class ControlDraftSerializer(ControlCardSerializer):
+    spec = serializers.JSONField()
+
+
+class ControlDetailResponseSerializer(ControlDraftSerializer):
+    versions = ControlVersionLightSerializer(many=True)
+    usage = serializers.ListField(child=serializers.CharField())
+
+
+class ControlPublishResponseSerializer(serializers.Serializer):
+    version = serializers.CharField()
+    digest = serializers.CharField()
+
+
+class ControlCheckResponseSerializer(serializers.Serializer):
+    problems = serializers.DictField(child=serializers.JSONField())
+
+
 class ControlListCreateView(APIView):
     serializer_class = CreateSerializer
 
+    @extend_schema(responses={200: ControlListSerializer})
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, VIEW)
         rows = Control.objects.filter(workspace=ws).select_related("owner").prefetch_related("versions")
@@ -122,6 +184,7 @@ class ControlListCreateView(APIView):
         out = [{**card(c, spec=published), "used_by": counts.get(c.slug, 0)} for c in rows]
         return Response({"results": [c for c in out if c["latest_version"]] if published else out})
 
+    @extend_schema(responses={201: ControlCardSerializer})
     def post(self, request, workspace):
         ws = get_workspace(request.user, workspace, EDIT)
         ser = CreateSerializer(data=request.data)
@@ -149,6 +212,7 @@ class ControlListCreateView(APIView):
         return Response(card(control), status=201)
 
 
+@extend_schema_serializer(component_name="ControlPatch")
 class PatchSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=160, required=False)
     description = serializers.CharField(required=False, allow_blank=True, max_length=2000)
@@ -162,6 +226,7 @@ class PatchSerializer(serializers.Serializer):
 class ControlDetailView(APIView):
     serializer_class = PatchSerializer
 
+    @extend_schema(responses={200: ControlDetailResponseSerializer})
     def get(self, request, workspace, slug):
         ws, control = _get(request, workspace, slug, VIEW)
         return Response(
@@ -173,6 +238,7 @@ class ControlDetailView(APIView):
             }
         )
 
+    @extend_schema(responses={200: ControlDraftSerializer})
     def patch(self, request, workspace, slug):
         ws, control = _get(request, workspace, slug, EDIT)
         ser = PatchSerializer(data=request.data)
@@ -218,6 +284,7 @@ class ControlDetailView(APIView):
         return Response(status=204)
 
 
+@extend_schema_serializer(component_name="ControlPublish")
 class PublishSerializer(serializers.Serializer):
     changelog = serializers.CharField(required=False, allow_blank=True, max_length=300, default="")
     bump = serializers.ChoiceField(choices=BUMPS, default="minor")
@@ -226,6 +293,7 @@ class PublishSerializer(serializers.Serializer):
 class ControlPublishView(APIView):
     serializer_class = PublishSerializer
 
+    @extend_schema(responses={201: ControlPublishResponseSerializer})
     def post(self, request, workspace, slug):
         ws, control = _get(request, workspace, slug, PUBLISH)
         ser = PublishSerializer(data=request.data)
@@ -257,6 +325,7 @@ class ControlVersionView(APIView):
         return Response({**_light(v), "name": v.name, "icon": v.icon, "spec": v.spec})
 
 
+@extend_schema_serializer(component_name="ControlCheck")
 class CheckSerializer(serializers.Serializer):
     spec = serializers.JSONField()
 
@@ -266,6 +335,7 @@ class ControlCheckView(APIView):
 
     serializer_class = CheckSerializer
 
+    @extend_schema(responses={200: ControlCheckResponseSerializer})
     def post(self, request, workspace):
         get_workspace(request.user, workspace, EDIT)
         ser = CheckSerializer(data=request.data)

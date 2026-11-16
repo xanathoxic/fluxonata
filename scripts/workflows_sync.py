@@ -15,8 +15,17 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+
+
+def adresse_http(url: str) -> str:
+    """Refuse tout schéma autre que http(s) (file:, ftp:, …) : l'adresse vient de la ligne de commande, jamais d'une réponse."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise argparse.ArgumentTypeError(f"adresse refusée : http:// ou https:// attendu, reçu {url!r}")
+    return url
 
 
 def call(url: str, token: str, method: str = "GET", body=None):
@@ -40,7 +49,9 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("export", "import"):
         p = sub.add_parser(name)
-        p.add_argument("--url", required=True, help="adresse de la plateforme, ex. https://flux.exemple.org")
+        p.add_argument(
+            "--url", required=True, type=adresse_http, help="adresse de la plateforme, ex. https://flux.exemple.org"
+        )
         p.add_argument("--workspace", required=True)
     sub.choices["export"].add_argument("--out", required=True)
     sub.choices["import"].add_argument("--from", dest="src", required=True)
@@ -56,12 +67,19 @@ def main() -> None:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
         for wf in doc["workflows"]:
-            (out / f"{wf['slug']}.json").write_text(json.dumps(wf, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+            (out / f"{wf['slug']}.json").write_text(
+                json.dumps(wf, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
         print(f"{len(doc['workflows'])} workflow(s) écrit(s) dans {out}/")
         return
     files = sorted(Path(args.src).glob("*.json"))
     items = [json.loads(f.read_text(encoding="utf-8")) for f in files]
-    res = call(f"{base}/import-all/", token, "POST", {"format": "fluxonata-workflows/1", "workflows": items, "overwrite": args.overwrite, "dry_run": args.dry_run})
+    res = call(
+        f"{base}/import-all/",
+        token,
+        "POST",
+        {"format": "fluxonata-workflows/1", "workflows": items, "overwrite": args.overwrite, "dry_run": args.dry_run},
+    )
     for r in res["results"]:
         print(f"{r['status']:13} {r['slug']}" + (f" — {r['reason']}" if r.get("reason") else ""))
     if any(r["status"] == "refused" for r in res["results"]):

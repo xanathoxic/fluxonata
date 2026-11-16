@@ -1,5 +1,6 @@
 [Unit]
 Description=Essai de restauration de la dernière sauvegarde Fluxonata (dans une base jetable)
+OnFailure=fluxonata-notify@%n.service
 
 [Service]
 Type=oneshot

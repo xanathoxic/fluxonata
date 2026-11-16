@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoA11yViolations, goNav, login, menuClick, publishViaApi } from "./helpers";
+import { expectNoA11yViolations, goNav, login, menuClick, publishViaApi, boxOf } from "./helpers";
 
 const uniq = () => `${Date.now()}`.slice(-7);
 const tabLink = (page: Page, name: string) => page.getByRole("navigation", { name: "Sections du workflow" }).getByRole("link", { name, exact: true }).click();
@@ -382,19 +382,19 @@ test("déplacer un nœud : il suit la souris pendant le glissement, la position 
   await page.goto(`/workflows/${slug}/schema`);
   const box = page.locator(".flow-node", { hasText: "Pause A" }).locator(".flow-box");
   await expect(box).toBeVisible();
-  const start = (await box.boundingBox())!;
+  const start = (await boxOf(box));
   const [cx, cy] = [start.x + start.width / 2, start.y + start.height / 2];
   await page.mouse.move(cx, cy);
   await page.mouse.down();
   await page.mouse.move(cx + 60, cy + 30, { steps: 6 });
-  const mid = (await box.boundingBox())!; // la souris est TOUJOURS enfoncée
+  const mid = (await boxOf(box)); // la souris est TOUJOURS enfoncée
   expect(mid.x - start.x).toBeGreaterThan(40);
   expect(mid.y - start.y).toBeGreaterThan(15);
   await page.mouse.move(cx + 140, cy + 90, { steps: 6 });
-  const late = (await box.boundingBox())!;
+  const late = (await boxOf(box));
   expect(late.x - start.x).toBeGreaterThan(110);
   await page.mouse.up();
-  const dropped = (await box.boundingBox())!;
+  const dropped = (await boxOf(box));
   expect(Math.abs(dropped.x - late.x)).toBeLessThan(6);
   expect(Math.abs(dropped.y - late.y)).toBeLessThan(6);
 
@@ -406,7 +406,7 @@ test("déplacer un nœud : il suit la souris pendant le glissement, la position 
 
   // un seul pas d'historique : « Annuler » ramène le nœud à sa place d'origine
   await page.getByRole("button", { name: "Annuler", exact: true }).click();
-  const undone = (await box.boundingBox())!;
+  const undone = (await boxOf(box));
   expect(Math.abs(undone.x - start.x)).toBeLessThan(6);
   expect(Math.abs(undone.y - start.y)).toBeLessThan(6);
 });
@@ -419,12 +419,12 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
   await page.goto(`/workflows/${slug}/schema`);
   const start = page.getByRole("img", { name: "Début du workflow" });
   await expect(start).toBeVisible();
-  const before = (await start.boundingBox())!;
+  const before = (await boxOf(start));
   await page.mouse.move(before.x + 20, before.y + 20);
   await page.mouse.down();
   await page.mouse.move(before.x + 20, before.y + 140, { steps: 8 });
   await page.mouse.up();
-  const after = (await start.boundingBox())!;
+  const after = (await boxOf(start));
   expect(after.y - before.y).toBeGreaterThan(100);
 
   // la ligne A → B : sélection, puis tracé libre (points de passage)
@@ -450,7 +450,7 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
 
   // souris : glisser la poignée « + » d'un segment crée un point où on la dépose, y compris en diagonale
   const seg = page.getByRole("button", { name: /Ajouter un point de passage à la ligne vers « Pause B »/ }).first();
-  const box = (await seg.boundingBox())!;
+  const box = (await boxOf(seg));
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + 40, box.y - 90, { steps: 8 });
@@ -480,7 +480,7 @@ test("brouillon sans positions : déplacer un nœud ne réorganise pas les autre
     nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1 }, { id: "b", type: "wait", name: "Pause B", seconds: 1 }, { id: "c", type: "wait", name: "Pause C", seconds: 1 }] });
   await page.goto(`/workflows/${slug}/schema`);
   const box = (name: string) => page.locator(".flow-node", { hasText: name }).locator(".flow-box");
-  const at = async (name: string) => (await box(name).boundingBox())!;
+  const at = async (name: string) => (await boxOf(box(name)));
   await expect(box("Pause C")).toBeVisible();
   const before = { a: await at("Pause A"), b: await at("Pause B"), c: await at("Pause C") };
   const [cx, cy] = [before.b.x + before.b.width / 2, before.b.y + before.b.height / 2];
@@ -538,7 +538,7 @@ test.describe("éditeur : panneaux gauche et droit", () => {
     await expect(page.locator(".flow-node")).toBeVisible();
     return slug;
   };
-  const width = async (loc: ReturnType<Page["locator"]>) => Math.round((await loc.boundingBox())!.width);
+  const width = async (loc: ReturnType<Page["locator"]>) => Math.round((await boxOf(loc)).width);
 
   test("des boutons masquent et affichent la palette et les propriétés", async ({ page }) => {
     await open(page);
@@ -573,7 +573,7 @@ test.describe("éditeur : panneaux gauche et droit", () => {
     const handle = page.getByRole("separator", { name: "Redimensionner la palette" });
     const start = await width(palette);
     expect(start).toBe(236);
-    const hb = (await handle.boundingBox())!;
+    const hb = (await boxOf(handle));
     const [x, y] = [hb.x + hb.width / 2, hb.y + hb.height / 2];
     await page.mouse.move(x, y);
     await page.mouse.down();
@@ -612,7 +612,7 @@ test.describe("éditeur : panneaux gauche et droit", () => {
     const props = page.getByRole("complementary", { name: "Propriétés de l'étape" });
     const handle = page.getByRole("separator", { name: "Redimensionner les propriétés" });
     const start = await width(props);
-    const hb = (await handle.boundingBox())!;
+    const hb = (await boxOf(handle));
     const [x, y] = [hb.x + hb.width / 2, hb.y + hb.height / 2];
     await page.mouse.move(x, y);
     await page.mouse.down();

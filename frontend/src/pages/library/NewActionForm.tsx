@@ -22,7 +22,7 @@ export function NewActionForm({ onDone, folder = "", initial }: { onDone: () => 
   const known = useWsQuery<{ results: { tags?: string[] }[] }>("actions-tags", "/actions/");
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    let input_schema, output_schema;
+    let input_schema: unknown, output_schema: unknown;
     try { input_schema = JSON.parse(f.input); output_schema = JSON.parse(f.output); setJsonError(""); } catch { setJsonError("Un des schémas n'est pas du JSON valide."); return; }
     create.mutate({ slug: f.slug, name: f.name, description: f.description, folder: f.folder, tags, version: { runtime: f.runtime, source: f.source, input_schema, output_schema, side_effects: f.side, network_policy: f.network, ...(initial?.examples?.length ? { examples: initial.examples } : {}) }, ...(initial ? { ai_generated: true, reviewed } : {}) },
       { onSuccess: (a) => { onDone(); navigate(`/library/actions/${a.slug}`); } });

@@ -258,14 +258,23 @@ def test_the_guide_teaches_native_steps_and_that_actions_have_no_network(ws):
 def test_the_native_step_examples_pass_the_validator(ws):
     from vault.models import Connection
 
-    for name, kind in (("svc", "http_bearer"), ("db", "postgres"), ("mail", "smtp")):
-        Connection.objects.create(workspace=ws, name=name, label=name, kind=kind)
+    for name, kind in (("svc", "http_bearer"), ("db", "postgres"), ("mail", "smtp"), ("srv", "ssh"), ("idt", "ssh")):
+        Connection.objects.create(
+            workspace=ws, name=name, label=name, kind=kind, config={"host": "srv.exemple.test"} if name == "srv" else {}
+        )
     for key, conn in (
         ("http (appel d'un service web par une connexion)", "svc"),
         ("sql (lecture seule)", "db"),
         ("smtp (envoi d'e-mail)", "mail"),
+        ("ssh (commandes indépendantes, simulées)", "srv"),
+        ("ssh (session interactive, simulée)", "srv"),
+        ("ssh (identité réutilisable, hôte choisi dans l'étape)", "idt"),
     ):
         node_ = {**OTHER_NODES[key], "connection": conn}
+        if (
+            conn == "idt"
+        ):  # the placeholders of the identity example are what the person must provide: real-looking values stand in here
+            node_ = {**node_, "host": "idt.exemple.test", "host_key_sha256": "SHA256:" + "A" * 43}
         g = {"inputs": schema(motif=STR, mail=STR), "nodes": [node_], "edges": [], "outputs": {}}
         issues = validate(g, ws, "x")
         assert [i for i in issues if i["level"] == "error"] == [], (key, issues)

@@ -11,17 +11,63 @@ import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { HelpTip } from "../components/HelpTip";
+import { Markdown } from "../components/Markdown";
+
+/** The request itself: who asks, about what, and the body its author wrote in Markdown. */
+function RequestTab({ ap }: { ap: Approval }) {
+  return (
+    <div className="ap-request">
+      <dl className="ap-meta">
+        <div><dt>Titre de la demande</dt><dd>{ap.title}</dd></div>
+        <div><dt>Demandeur</dt><dd>{ap.requested_by ?? "—"}</dd></div>
+        <div><dt>Workflow</dt><dd>{ap.workflow}</dd></div>
+        <div><dt>Date</dt><dd>{formatDate(ap.created_at)}</dd></div>
+        {ap.subject && <div className="ap-subject"><dt>Objet</dt><dd>{ap.subject}</dd></div>}
+      </dl>
+      {ap.body ? <Markdown source={ap.body} /> : ap.instructions ? <Markdown source={ap.instructions} /> : <p className="hint">Aucun détail n'accompagne cette demande.</p>}
+    </div>
+  );
+}
+
+function ContextTab({ ap }: { ap: Approval }) {
+  return (
+    <>
+      <p className="hint">Les valeurs avec lesquelles le workflow a été lancé.</p>
+      <Fields data={ap.context} />
+      <p><Link to={`/runs/${ap.run_id}`}>Voir l'exécution</Link></p>
+    </>
+  );
+}
+
+/** The decision area, shown whatever tab is open: the comment, what blocks the decision, and the buttons. */
+function DecisionBar({ ap, canApprove, comment, setComment, error, busy, decide }: { ap: Approval; canApprove: boolean; comment: string; setComment: (v: string) => void; error: ApiError | null; busy: boolean; decide: (approve: boolean) => void }) {
+  const id = `c-${ap.id}`;
+  if (ap.status !== "pending") {
+    return <p className="ap-done"><strong>{ap.status === "approved" ? "✔ Approuvée" : "✖ Refusée"}</strong> par {ap.decided_by} le {formatDate(ap.decided_at)}{ap.comment ? ` — « ${ap.comment} »` : ""}</p>;
+  }
+  if (!canApprove) return <p className="hint">Votre rôle ne permet pas de décider.</p>;
+  return (
+    <div className="ap-decision">
+      <div className="field"><label htmlFor={id}>Commentaire (facultatif)</label><textarea id={id} rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
+      {!ap.can_decide && <p className="hint">Vous ne pouvez pas approuver votre propre demande.</p>}
+      {error && <p role="alert" className="field-error">Erreur : {error.message}</p>}
+      <div className="ap-buttons">
+        <button type="button" className="danger" disabled={!ap.can_decide || busy} onClick={() => decide(false)}>Refuser</button>
+        <button type="button" className="primary" disabled={!ap.can_decide || busy} onClick={() => decide(true)}>Approuver</button>
+      </div>
+    </div>
+  );
+}
 
 function ApprovalRow({ ap, slug, canApprove }: { ap: Approval; slug: string; canApprove: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState("request");
   const [comment, setComment] = useState("");
   const decide = useMutation({
     mutationFn: (approve: boolean) => api(`/workspaces/${slug}/approvals/${ap.id}/decide/`, { json: { approve, comment } }),
     onSuccess: () => { setOpen(false); void qc.invalidateQueries({ queryKey: ["approvals"] }); },
   });
-  const err = decide.error as ApiError | null;
-  const id = `c-${ap.id}`;
   const pending = ap.status === "pending";
   return (
     <li className="approval-row">
@@ -30,22 +76,14 @@ function ApprovalRow({ ap, slug, canApprove }: { ap: Approval; slug: string; can
         <span className="hint">{ap.workflow} · demandé par {ap.requested_by ?? "—"} le {formatDate(ap.created_at)}</span>
         {!pending && <span className="hint">{ap.status === "approved" ? "✔ Approuvée" : "✖ Refusée"} par {ap.decided_by} le {formatDate(ap.decided_at)}{ap.comment ? ` — « ${ap.comment} »` : ""}</span>}
       </div>
-      <button type="button" className={pending ? "primary" : undefined} onClick={() => setOpen(true)} aria-label={`${pending ? "Examiner" : "Voir"} : ${ap.title}`}>{pending ? "Examiner" : "Voir"}</button>
+      <button type="button" className={pending ? "primary" : undefined} onClick={() => { setTab("request"); setOpen(true); }} aria-label={`${pending ? "Examiner" : "Voir"} : ${ap.title}`}>{pending ? "Examiner" : "Voir"}</button>
       {open && (
-        <Overlay title={ap.title} description={`Workflow : ${ap.workflow} — demandé par ${ap.requested_by ?? "—"} le ${formatDate(ap.created_at)}`} onClose={() => setOpen(false)}
-          footer={pending && canApprove ? <>
-            <button type="button" className="danger" disabled={!ap.can_decide || decide.isPending} onClick={() => decide.mutate(false)}>Refuser</button>
-            <button type="button" className="primary" disabled={!ap.can_decide || decide.isPending} onClick={() => decide.mutate(true)}>Approuver</button></> : undefined}>
-          {ap.instructions && <p>{ap.instructions}</p>}
-          <details open><summary>Contexte de la demande</summary><Fields data={ap.context} /></details>
-          <p><Link to={`/runs/${ap.run_id}`}>Voir l'exécution</Link></p>
-          {pending ? (canApprove ? (
-            <>
-              <div className="field"><label htmlFor={id}>Commentaire (facultatif)</label><textarea id={id} rows={3} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
-              {!ap.can_decide && <p className="hint">Vous ne pouvez pas approuver votre propre demande.</p>}
-              {err && <p role="alert" className="field-error">Erreur : {err.message}</p>}
-            </>
-          ) : <p className="hint">Votre rôle ne permet pas de décider.</p>) : <p><strong>{ap.status === "approved" ? "✔ Approuvée" : "✖ Refusée"}</strong> par {ap.decided_by} le {formatDate(ap.decided_at)}{ap.comment ? ` — « ${ap.comment} »` : ""}</p>}
+        <Overlay title={ap.title} description={ap.subject || `Workflow : ${ap.workflow}`} variant="modal" wide className="overlay-approval" onClose={() => setOpen(false)}
+          footer={<DecisionBar ap={ap} canApprove={canApprove} comment={comment} setComment={setComment} error={decide.error as ApiError | null} busy={decide.isPending} decide={(approve) => decide.mutate(approve)} />}>
+          <Tabs label="Détail de la demande" active={tab} onChange={setTab} tabs={[
+            { id: "request", label: "Demande", content: <RequestTab ap={ap} /> },
+            { id: "context", label: "Contexte de la demande", content: <ContextTab ap={ap} /> },
+          ]} />
         </Overlay>
       )}
     </li>

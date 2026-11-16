@@ -46,7 +46,10 @@ def _item(key, label, status, message, hint=""):
 def _runners_item(workspace, now) -> dict:
     """Who will run this space's actions: dedicated runners, the shared pool, or nobody (jobs would wait forever)."""
     window = timedelta(seconds=settings.ORCH_RUNNER_ONLINE_SECONDS)
-    live = lambda qs: qs.filter(paused=False, last_contact_at__gte=now - window).count()  # noqa: E731
+
+    def live(qs):
+        return qs.filter(paused=False, last_contact_at__gte=now - window).count()
+
     dedicated = live(Runner.objects.filter(scope="dedicated", workspaces=workspace))
     waiting = Execution.objects.filter(workspace=workspace, status="queued").count()
     if not workspace.use_shared_runners and dedicated == 0:

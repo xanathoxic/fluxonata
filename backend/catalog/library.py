@@ -48,7 +48,8 @@ class VersionInput(serializers.Serializer):
     bump = serializers.ChoiceField(choices=["patch", "minor", "major"], default="minor")
     runtime = serializers.ChoiceField(choices=sorted(RUNTIMES), default="python")
     entrypoint = serializers.RegexField(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$", default="run")
-    source = serializers.CharField(max_length=MAX_SOURCE, trim_whitespace=False)
+    # `source` est le nom du champ du contrat d'API ; il masque l'attribut `source` de DRF `Field` (str | None), d'où l'exemption ciblée.
+    source = serializers.CharField(max_length=MAX_SOURCE, trim_whitespace=False)  # type: ignore[assignment]
     input_schema = serializers.JSONField()
     output_schema = serializers.JSONField()
     license = serializers.CharField(max_length=40, default="Apache-2.0")
@@ -461,7 +462,10 @@ class WorkflowCompareView(APIView):
         na, nb = {n["id"]: n for n in a.graph["nodes"]}, {n["id"]: n for n in b.graph["nodes"]}
         ea = {(e["from"], e["to"], e.get("label")) for e in a.graph["edges"]}
         eb = {(e["from"], e["to"], e.get("label")) for e in b.graph["edges"]}
-        strip = lambda n: {k: v for k, v in n.items() if k != "ui"}  # noqa: E731 - layout is not a functional change
+
+        def strip(n):
+            return {k: v for k, v in n.items() if k != "ui"}  # layout is not a functional change
+
         return Response(
             {
                 "a": a.version,

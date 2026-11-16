@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import serializers
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed, Throttled
@@ -286,6 +287,19 @@ class FormAttachView(FormDetailView):
 class _NoAuth(BaseAuthentication):
     def authenticate(self, request):
         return None
+
+
+class NoAuthScheme(OpenApiAuthenticationExtension):
+    """Aucun schéma d'authentification d'API à déclarer : Les formulaires publics s'authentifient par le jeton de l'adresse. Documentation seulement."""
+
+    target_class = "triggers.forms._NoAuth"
+    name: list[str] = []
+
+    def get_security_requirement(self, auto_schema):
+        return []
+
+    def get_security_definition(self, auto_schema):
+        return []
 
 
 def _open_form(token: str) -> PublicForm:

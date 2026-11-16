@@ -1,0 +1,13 @@
+{
+  "bloquants": [
+    "src/components/",
+    "src/App.tsx",
+    "src/main.tsx",
+    "src/pages/",
+    "src/workflow/",
+    "src/forms/",
+    "e2e/"
+  ],
+  "fichiers": {},
+  "par_regle": {}
+}

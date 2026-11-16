@@ -44,20 +44,21 @@ describe("ParamEditor", () => {
   });
 });
 
-describe("ParamEditor : listes et objets", () => {
-  function ListHarness() {
-    const [value, setValue] = useState<unknown>(["Objet : {{ inputs.texte }}"]);
-    return (
-      <>
-        <ParamEditor name="lines" schema={{ type: "array", title: "Lignes" }} required value={value} variables={vars} onChange={setValue} />
-        <output aria-label="valeur">{JSON.stringify(value) ?? "undefined"}</output>
-      </>
-    );
-  }
+function ListHarness() {
+  const [value, setValue] = useState<unknown>(["Objet : {{ inputs.texte }}"]);
+  return (
+    <>
+      <ParamEditor name="lines" schema={{ type: "array", title: "Lignes" }} required value={value} variables={vars} onChange={setValue} />
+      <output aria-label="valeur">{JSON.stringify(value) ?? "undefined"}</output>
+    </>
+  );
+}
 
-  it("shows a list as JSON and keeps it a list (never « [object Object] » or a string)", () => {
+describe("ParamEditor : listes et objets", () => {
+
+  it("shows a list as JSON and keeps it a list (never « [object Object] » or a string)", async () => {
     render(<ListHarness />);
-    expect(screen.getByLabelText(/Lignes \(JSON liste\)/)).toHaveTextContent('"Objet : {{ inputs.texte }}"');
+    expect(await screen.findByLabelText(/Lignes \(JSON liste\)/)).toHaveTextContent('"Objet : {{ inputs.texte }}"');
     expect(screen.getByLabelText("valeur")).toHaveTextContent('["Objet : {{ inputs.texte }}"]');
   });
 

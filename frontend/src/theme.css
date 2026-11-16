@@ -841,3 +841,61 @@ nav.wf-tabs.pt ul { border-bottom: 0; }
 .cat-card .cat-foot { margin-top: auto; }
 input::placeholder, textarea::placeholder { color: #5b6b80; opacity: 1; }
 .flow-endpoint { position: relative; } .flow-endlabel { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+
+/* Secret sur plusieurs lignes (clé privée collée) : masqué par défaut là où le navigateur sait le faire (Chromium, Safari) ; la case « Afficher » le révèle. */
+.secret-multiline { width: 100%; resize: vertical; min-height: 8em; }
+.secret-multiline.masked { -webkit-text-security: disc; }
+.secret-instructions p, .secret-instructions ul { margin: 0 0 6px; } .secret-instructions ul { padding-left: 1.2em; }
+
+/* Onglet « Sorties » d'une étape : une ligne par variable, le lien vers le workflow replié tant qu'on ne le demande pas. */
+.outs { display: grid; gap: 10px; }
+.outs-help { margin: 0; color: var(--text-muted, inherit); }
+.outs-more summary { cursor: pointer; font-size: var(--fs-sm); }
+.outs-more ul { margin: 6px 0 0; padding-left: 1.2em; font-size: var(--fs-sm); }
+.outs-title { margin: 4px 0 0; font-size: var(--fs-md, 1rem); } .outs-count { font-weight: 400; opacity: .7; margin-left: 4px; }
+.outs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.outs-row { border: 1px solid var(--border, rgba(127,127,127,.35)); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
+.outs-line { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.outs-name { min-width: 0; overflow-wrap: anywhere; }
+.outs-code { display: block; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.outs-link { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-sm); }
+.outs-toggle { background: none; border: 0; padding: 0; color: var(--accent, inherit); text-decoration: underline; cursor: pointer; font: inherit; font-size: var(--fs-sm); }
+.outs-panel { border-top: 1px dashed var(--border, rgba(127,127,127,.35)); padding-top: 8px; display: grid; gap: 8px; }
+.outs-panel .field { margin: 0; }
+.outs-group { list-style: none; margin: 8px 0 2px; font-size: var(--fs-sm); }
+.overlay-modal.overlay-wide.overlay-preview .overlay-panel { width: min(1470px, 100%); max-height: 96vh; }
+.wfp { display: flex; flex-direction: column; gap: 12px; }
+.wfp-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; height: 56vh; }
+.wfp-with-panel .wfp-top { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); }
+.wfp-canvas, .wfp-canvas .canvas { min-height: 0; height: 100%; }
+.wfp-panel { overflow: auto; min-height: 0; }
+.wfp-panel .node-panel .tabs { flex-wrap: wrap; overflow: visible; } /* every tab reachable: no hidden sideways scrolling */
+.wfp-script { height: 70vh; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.sd-inline { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; } .sd-inline > .script-dialog { flex: 1 1 auto; box-shadow: none; border-radius: 0; }
+@media (max-width: 800px) { .wfp-with-panel .wfp-top { grid-template-columns: minmax(0, 1fr); height: auto; } .wfp-canvas { height: 50vh; } }
+
+/* Demande d'approbation : fenêtre centrée, 50 % plus large que le tiroir d'origine (520 px), de hauteur stable d'un onglet à l'autre ;
+   le commentaire et les boutons restent dans le pied, visibles quel que soit l'onglet. */
+.overlay-modal.overlay-wide.overlay-approval .overlay-panel { width: min(780px, 100%); height: min(780px, 92vh); max-height: 92vh; }
+.overlay-approval .overlay-body { padding-top: 4px; }
+.overlay-approval .overlay-foot { display: block; }
+.ap-decision { display: flex; flex-direction: column; gap: 8px; }
+.ap-decision .field { margin: 0; }
+.ap-decision textarea { width: 100%; resize: vertical; }
+.ap-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.ap-done { margin: 0; }
+.ap-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 20px; margin: 12px 0 16px; }
+.ap-meta dt { font-size: var(--fs-sm); color: var(--muted, #64748b); }
+.ap-meta dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.ap-meta .ap-subject { grid-column: 1 / -1; }
+.md { line-height: 1.55; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md h3, .md h4, .md h5, .md h6 { margin: 1.1em 0 .4em; line-height: 1.25; }
+.md h3 { font-size: var(--fs-lg); } .md h4 { font-size: 1.05em; } .md h5, .md h6 { font-size: 1em; }
+.md p, .md ul, .md ol, .md blockquote, .md pre { margin: .6em 0; }
+.md ul, .md ol { padding-left: 1.5em; }
+.md blockquote { border-left: 3px solid var(--border); padding: .1em .9em; color: var(--muted, #64748b); }
+.md code { font-family: var(--mono, ui-monospace, monospace); font-size: .92em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 .3em; }
+.md pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow: auto; }
+.md pre code { background: none; border: 0; padding: 0; }
+.md hr { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }

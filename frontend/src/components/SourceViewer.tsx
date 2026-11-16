@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge } from "./AdminUi";
-import { CodeEditor } from "./CodeEditor";
+import { LazyCodeEditor as CodeEditor } from "./LazyCodeEditor";
 
 const LANGUAGE: Record<string, { label: string; editor: "python" | "javascript" | "text" }> = {
   python: { label: "Python", editor: "python" },

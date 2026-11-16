@@ -14,12 +14,15 @@ Failure policy (fail-fast): a failed step without an "error" edge stops new work
 declared compensations in reverse order (each may itself fail) and ends the run as failed.
 """
 
+import dataclasses
 import random
 import shutil
 import subprocess
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import timedelta
+from typing import Any
 
 import jsonschema
 from django.conf import settings
@@ -34,7 +37,7 @@ from workflows import transforms
 from workflows.expressions import ExpressionError, coerce_inputs, evaluate, resolve
 from workflows.validation import explain_validation_error, topo_order
 
-from . import agent, alerts, http_node, ldap_node, proposed, services, sftp_node, smtp_node, sql_node
+from . import agent, alerts, http_node, ldap_node, proposed, services, sftp_node, smtp_node, sql_node, ssh_node
 from .models import Approval, CallbackDelivery, Execution, RunEvent, StepRun, WorkflowRun
 
 R, S = WorkflowRun.Status, StepRun.Status
@@ -75,12 +78,17 @@ def _ctx(run, steps):
         "steps": {
             nid: {"output": sr.output if sr.output is not None else {}, "status": sr.status}
             for nid, sr in steps.items()
-            if sr.status == S.SUCCEEDED
+            # a failed SSH step keeps its (bounded, already redacted) partial results for the `error` branch
+            if sr.status == S.SUCCEEDED or (sr.status == S.FAILED and sr.node_type == "ssh" and sr.output)
         },
     }
 
 
 def _finish(run, sr, status, *, output=None, error=None):
+    if sr.node_type == "ssh" and (sr.http_job or {}).get(
+        "spec"
+    ):  # cancelled, expired or crashed steps too: no sensitive text kept
+        sr.http_job = {**sr.http_job, "spec": ssh_node.scrub_spec(sr.http_job["spec"])}
     sr.status = status
     sr.output = output if output is not None else sr.output
     sr.error = error
@@ -109,8 +117,8 @@ def _image_digest(image):
             _digest_cache[image] = None
         else:
             try:
-                out = subprocess.run(
-                    ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+                out = subprocess.run(  # noqa: S603 - exécutable résolu par shutil.which, arguments sans shell ; `image` vient de la configuration
+                    [shutil.which("docker") or "docker", "image", "inspect", "--format", "{{.Id}}", image],
                     capture_output=True,
                     text=True,
                     timeout=10,
@@ -324,6 +332,26 @@ def advance(run_id, only_if_due: bool = False) -> bool:
         return processed
 
 
+def _activate_ready(run, nodes, incoming, order, steps) -> bool:
+    """Starts (or skips, on a branch not taken) every step whose predecessors are settled; True when one was."""
+    changed = False
+    for nid in order:
+        if nid in steps:
+            continue
+        state = _activation(nodes[nid], incoming[nid], steps, nodes)
+        if state == "wait":
+            continue
+        changed = True
+        if state == "skipped":
+            steps[nid] = StepRun.objects.create(
+                run=run, node_id=nid, node_type=nodes[nid]["type"], status=S.SKIPPED, finished_at=timezone.now()
+            )
+            add_event(run, "step_skipped", f"Étape « {nodes[nid].get('name', nid)} » ignorée (branche non prise).", nid)
+        else:
+            steps[nid] = _start(run, nodes[nid], steps)
+    return changed
+
+
 def _advance_locked(run) -> bool:
     graph = run.definition["graph"]
     nodes, incoming, outgoing, order = _graph_views(graph)
@@ -346,25 +374,7 @@ def _advance_locked(run) -> bool:
         until = run.definition.get("until")
         if until and until in steps and steps[until].status in TERMINAL:
             break
-        for nid in order:
-            if nid in steps:
-                continue
-            state = _activation(nodes[nid], incoming[nid], steps, nodes)
-            if state == "wait":
-                continue
-            changed = True
-            if state == "skipped":
-                steps[nid] = StepRun.objects.create(
-                    run=run, node_id=nid, node_type=nodes[nid]["type"], status=S.SKIPPED, finished_at=timezone.now()
-                )
-                add_event(
-                    run,
-                    "step_skipped",
-                    f"Étape « {nodes[nid].get('name', nid)} » ignorée (branche non prise).",
-                    nid,
-                )
-            else:
-                steps[nid] = _start(run, nodes[nid], steps)
+        changed |= _activate_ready(run, nodes, incoming, order, steps)
         if not changed:
             break
     until = run.definition.get("until")
@@ -456,7 +466,7 @@ def _start_followup(run, kind: str):
     target = Workflow.objects.filter(workspace=run.workspace, slug=slug).first()
     version = target.latest_version() if target else None
     tag = "error_workflow" if kind == "error" else "success_workflow"
-    if version is None:
+    if target is None or version is None:
         add_event(run, f"{tag}_skipped", f"Workflow « {slug} » : aucune version publiée.")
         return
     err = run.error or {}
@@ -516,187 +526,254 @@ def _complete(run, steps, graph):
 
 
 # ----------------------------------------------------------------------------- start a step
+def _label(node) -> str:
+    return node.get("name", node["id"])
+
+
+def _succeed(run, sr, node, message, output):
+    _finish(run, sr, S.SUCCEEDED, output=output)
+    add_event(run, "step_succeeded", message, node["id"])
+
+
+def _start_pinned(run, node, sr) -> bool:
+    """Development only: a pinned output replaces the step (nothing is executed, no effect is produced)."""
+    pin = (run.definition["graph"].get("pins") or {}).get(node["id"])
+    if not (isinstance(pin, dict) and run.environment.kind == "dev" and node["type"] not in _NEVER_PINNED):
+        return False
+    _finish(run, sr, S.SUCCEEDED, output=pin)
+    add_event(run, "step_pinned", f"Étape « {_label(node)} » : sortie épinglée utilisée (non exécutée).", node["id"])
+    return True
+
+
+def _start_action(run, node, sr, ctx, steps):
+    _dispatch_action(run, node, sr, ctx)
+
+
+def _start_ai(run, node, sr, ctx, steps):
+    _dispatch_ai(run, node, sr, ctx)
+
+
+def _start_script(run, node, sr, ctx, steps):
+    _dispatch_script(run, node, sr, ctx)
+
+
+def _start_condition(run, node, sr, ctx, steps):
+    result = bool(evaluate(node["expr"], ctx))
+    _succeed(run, sr, node, f"Condition « {_label(node)} » : {'oui' if result else 'non'}.", {"result": result})
+
+
+def _start_switch(run, node, sr, ctx, steps):
+    chosen = next((c["id"] for c in node["cases"] if evaluate(c["expr"], ctx)), "default")
+    _succeed(run, sr, node, f"Choix « {_label(node)} » : {chosen}.", {"result": chosen})
+
+
+def _start_throw(run, node, sr, ctx, steps):
+    raise _StepError(
+        str(node.get("code") or "THROWN")[:40],
+        str(resolve(node.get("message", "Exception levée par le workflow."), ctx))[:300],
+        "Corrigez la cause indiquée ou relancez avec d'autres entrées.",
+    )
+
+
+def _start_join(run, node, sr, ctx, steps):
+    _finish(run, sr, S.SUCCEEDED, output={})
+
+
+def _start_race_step(run, node, sr, ctx, steps):
+    _start_race(run, node, sr, steps)
+
+
+def _start_wait(run, node, sr, ctx, steps):
+    sr.status, sr.available_at = S.WAITING, timezone.now() + timedelta(seconds=node["seconds"])
+    sr.save()
+
+
+MAX_APPROVAL_BODY = 20000  # characters of Markdown
+
+
+def _start_approval(run, node, sr, ctx, steps):
+    Approval.objects.create(
+        step_run=sr,
+        workspace=run.workspace,
+        title=str(resolve(node["title"], ctx))[:200],
+        instructions=str(resolve(node.get("instructions", ""), ctx)),
+        subject=str(resolve(node.get("subject", ""), ctx))[:200],
+        body=str(resolve(node.get("body", ""), ctx))[:MAX_APPROVAL_BODY],
+        requested_by=run.requested_by,
+        allow_self_approval=bool(node.get("allow_self_approval", False)),
+    )
+    sr.status = S.WAITING
+    sr.save()
+    add_event(run, "approval_requested", f"Approbation demandée : {node['title']}", node["id"])
+
+
+def _start_transform(run, node, sr, ctx, steps):
+    try:
+        out = transforms.apply(node, ctx)
+    except transforms.TransformError as exc:
+        raise _StepError("TRANSFORM_ERROR", str(exc), "Vérifiez la liste en entrée et les expressions.") from None
+    _succeed(run, sr, node, f"Transformation « {_label(node)} » terminée.", out)
+
+
+def _start_agent(run, node, sr, ctx, steps):
+    if not agent.specs(run, node):
+        raise _StepError(
+            "AGENT_NO_TOOL",
+            "L'agent n'a aucun outil utilisable (actions introuvables).",
+            "Choisissez des actions du catalogue.",
+        )
+    agent.start(run, node, sr, str(resolve(node.get("goal", ""), ctx)))
+    mode = "réel" if node.get("mode") == "reel" else "test : outils simulés"
+    add_event(run, "agent_started", f"Agent « {_label(node)} » lancé ({mode}).", node["id"])
+
+
+def _start_subworkflow(run, node, sr, ctx, steps):
+    _start_child(run, node, sr, ctx, resolve(node.get("inputs", {}), ctx), None)
+    sr.status = S.WAITING
+    sr.save()
+
+
+def _start_while(run, node, sr, ctx, steps):
+    sr.output = {"iterations": 0, "results": [], "last": {}, "stopped": ""}
+    _start_child(run, node, sr, ctx, resolve(node.get("inputs", {}), {**ctx, "last": {}, "iteration": 0}), 0)
+    sr.status = S.WAITING
+    sr.save()
+
+
+def _start_foreach(run, node, sr, ctx, steps):
+    items = evaluate(node["items"], ctx)
+    if not isinstance(items, list) or len(items) > node["max_iterations"]:
+        raise _StepError(
+            "TOO_MANY_ITEMS" if isinstance(items, list) else "NOT_A_LIST",
+            "La liste à parcourir est absente ou dépasse la limite de la boucle.",
+        )
+    sr.output = {"items": items, "results": [None] * len(items), "count": len(items)}
+    sr.status = S.WAITING
+    sr.save()
+    _foreach_launch(run, node, sr, ctx)
+
+
+@dataclasses.dataclass(frozen=True)
+class _NetworkStep:
+    """What differs between the steps that talk to the outside through a worker: the module that prepares them, its error type, and the
+    two messages (a simulated run in test mode; a queued run otherwise). `{label}` is the step's name."""
+
+    module: Any
+    error: type[Exception]
+    simulated: str
+    queued: str
+
+
+_NETWORK_STEPS: dict[str, _NetworkStep] = {
+    "sftp": _NetworkStep(
+        sftp_node,
+        sftp_node.SftpStepError,
+        "Fichier SFTP « {label} » simulé (mode test : rien n'est envoyé).",
+        "Fichier SFTP « {label} » en attente d'un travailleur.",
+    ),
+    "smtp": _NetworkStep(
+        smtp_node,
+        smtp_node.SmtpStepError,
+        "E-mail « {label} » simulé (mode test : rien n'est envoyé).",
+        "E-mail « {label} » en attente d'un travailleur.",
+    ),
+    "ldap": _NetworkStep(
+        ldap_node,
+        ldap_node.LdapStepError,
+        "Recherche d'annuaire « {label} » simulée (mode test).",
+        "Recherche d'annuaire « {label} » en attente d'un travailleur.",
+    ),
+    "sql": _NetworkStep(
+        sql_node,
+        sql_node.SqlStepError,
+        "Requête SQL « {label} » simulée (mode test : rien n'est envoyé).",
+        "Requête SQL « {label} » en attente d'un travailleur.",
+    ),
+    "http": _NetworkStep(
+        http_node,
+        http_node.HttpStepError,
+        "Requête « {label} » simulée (mode test : rien n'est envoyé).",
+        "Requête « {label} » en attente d'un travailleur.",
+    ),
+}
+
+
+def _start_network(run, node, sr, ctx, steps):
+    kind = _NETWORK_STEPS[node["type"]]
+    label = _label(node)
+    try:
+        spec = kind.module.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
+    except kind.error as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    if spec["mode"] == "test":
+        _succeed(run, sr, node, kind.simulated.format(label=label), kind.module.simulated_output(spec))
+    else:
+        http_node.queue(sr, spec)
+        add_event(run, "http_queued", kind.queued.format(label=label), node["id"])
+
+
+def _start_ssh(run, node, sr, ctx, steps):
+    label = _label(node)
+    try:
+        spec = ssh_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
+    except ssh_node.SshStepError as exc:
+        # a configuration error still leaves a minimal output, so that an `error` branch can read `error_type` and `error`
+        error = {"code": exc.code, "message": exc.message, "next_step": exc.next_step}
+        _finish(run, sr, S.FAILED, output=ssh_node.failure_output(node, exc), error=error)
+        add_event(run, "step_failed", f"Commandes SSH « {label} » échouées : {exc.message}", node["id"])
+        return
+    if spec["mode"] != "test":
+        http_node.queue(sr, spec)
+        add_event(run, "http_queued", f"Commandes SSH « {label} » en attente d'un travailleur.", node["id"])
+        return
+    out = ssh_node.simulated_output(spec)
+    if out["status"] == "succeeded":
+        _succeed(run, sr, node, f"Commandes SSH « {label} » simulées (mode test : aucune connexion).", out)
+    else:  # a simulated failure lets the `error` branch be tried without any network
+        _finish(run, sr, S.FAILED, output=out, error=ssh_node.core.engine_error(out))
+        add_event(run, "step_failed", f"Commandes SSH « {label} » : échec simulé.", node["id"])
+
+
+# A step type absent from this table starts nothing: its step run stays RUNNING (as before).
+_STARTERS: dict[str, Callable[..., None]] = {
+    "action": _start_action,
+    "condition": _start_condition,
+    "switch": _start_switch,
+    "ai": _start_ai,
+    "script": _start_script,
+    "throw": _start_throw,
+    "join": _start_join,
+    "race": _start_race_step,
+    "wait": _start_wait,
+    "approval": _start_approval,
+    "transform": _start_transform,
+    "agent": _start_agent,
+    "ssh": _start_ssh,
+    "subworkflow": _start_subworkflow,
+    "while": _start_while,
+    "foreach": _start_foreach,
+    **dict.fromkeys(_NETWORK_STEPS, _start_network),
+}
+_NEVER_PINNED = ("join", "race", "condition", "switch")
+
+
 def _start(run, node, steps) -> StepRun:
-    ntype = node["type"]
-    sr = StepRun.objects.create(run=run, node_id=node["id"], node_type=ntype, status=S.RUNNING)
-    label = node.get("name", node["id"])
+    sr = StepRun.objects.create(run=run, node_id=node["id"], node_type=node["type"], status=S.RUNNING)
+    label = _label(node)
     add_event(run, "step_started", f"Étape « {label} » démarrée.", node["id"])
     ctx = _ctx(run, steps)
-    pin = (run.definition["graph"].get("pins") or {}).get(node["id"])
-    if isinstance(pin, dict) and run.environment.kind == "dev" and ntype not in ("join", "race", "condition", "switch"):
-        # development only: a pinned output replaces the step (nothing is executed, no effect is produced)
-        _finish(run, sr, S.SUCCEEDED, output=pin)
-        add_event(run, "step_pinned", f"Étape « {label} » : sortie épinglée utilisée (non exécutée).", node["id"])
+    if _start_pinned(run, node, sr):
         return sr
+    starter = _STARTERS.get(node["type"])
     try:
-        if ntype == "action":
-            _dispatch_action(run, node, sr, ctx)
-        elif ntype == "condition":
-            result = bool(evaluate(node["expr"], ctx))
-            _finish(run, sr, S.SUCCEEDED, output={"result": result})
-            add_event(run, "step_succeeded", f"Condition « {label} » : {'oui' if result else 'non'}.", node["id"])
-        elif ntype == "switch":
-            chosen = next((c["id"] for c in node["cases"] if evaluate(c["expr"], ctx)), "default")
-            _finish(run, sr, S.SUCCEEDED, output={"result": chosen})
-            add_event(run, "step_succeeded", f"Choix « {label} » : {chosen}.", node["id"])
-        elif ntype == "ai":
-            _dispatch_ai(run, node, sr, ctx)
-        elif ntype == "script":
-            _dispatch_script(run, node, sr, ctx)
-        elif ntype == "throw":
-            raise _StepError(
-                str(node.get("code") or "THROWN")[:40],
-                str(resolve(node.get("message", "Exception levée par le workflow."), ctx))[:300],
-                "Corrigez la cause indiquée ou relancez avec d'autres entrées.",
-            )
-        elif ntype == "join":
-            _finish(run, sr, S.SUCCEEDED, output={})
-        elif ntype == "race":
-            _start_race(run, node, sr, steps)
-        elif ntype == "wait":
-            sr.status, sr.available_at = S.WAITING, timezone.now() + timedelta(seconds=node["seconds"])
-            sr.save()
-        elif ntype == "approval":
-            Approval.objects.create(
-                step_run=sr,
-                workspace=run.workspace,
-                title=str(resolve(node["title"], ctx))[:200],
-                instructions=str(resolve(node.get("instructions", ""), ctx)),
-                requested_by=run.requested_by,
-                allow_self_approval=bool(node.get("allow_self_approval", False)),
-            )
-            sr.status = S.WAITING
-            sr.save()
-            add_event(run, "approval_requested", f"Approbation demandée : {node['title']}", node["id"])
-        elif ntype == "transform":
-            try:
-                out = transforms.apply(node, ctx)
-            except transforms.TransformError as exc:
-                raise _StepError(
-                    "TRANSFORM_ERROR", str(exc), "Vérifiez la liste en entrée et les expressions."
-                ) from None
-            _finish(run, sr, S.SUCCEEDED, output=out)
-            add_event(run, "step_succeeded", f"Transformation « {label} » terminée.", node["id"])
-        elif ntype == "agent":
-            tools = agent.specs(run, node)
-            if not tools:
-                raise _StepError(
-                    "AGENT_NO_TOOL",
-                    "L'agent n'a aucun outil utilisable (actions introuvables).",
-                    "Choisissez des actions du catalogue.",
-                )
-            agent.start(run, node, sr, str(resolve(node.get("goal", ""), ctx)))
-            add_event(
-                run,
-                "agent_started",
-                f"Agent « {label} » lancé ({'réel' if node.get('mode') == 'reel' else 'test : outils simulés'}).",
-                node["id"],
-            )
-        elif ntype == "sftp":
-            try:
-                spec = sftp_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
-            except sftp_node.SftpStepError as exc:
-                raise _StepError(exc.code, exc.message, exc.next_step) from None
-            if spec["mode"] == "test":
-                _finish(run, sr, S.SUCCEEDED, output=sftp_node.simulated_output(spec))
-                add_event(
-                    run,
-                    "step_succeeded",
-                    f"Fichier SFTP « {label} » simulé (mode test : rien n'est envoyé).",
-                    node["id"],
-                )
-            else:
-                http_node.queue(sr, spec)
-                add_event(run, "http_queued", f"Fichier SFTP « {label} » en attente d'un travailleur.", node["id"])
-        elif ntype == "smtp":
-            try:
-                spec = smtp_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
-            except smtp_node.SmtpStepError as exc:
-                raise _StepError(exc.code, exc.message, exc.next_step) from None
-            if spec["mode"] == "test":
-                _finish(run, sr, S.SUCCEEDED, output=smtp_node.simulated_output(spec))
-                add_event(
-                    run, "step_succeeded", f"E-mail « {label} » simulé (mode test : rien n'est envoyé).", node["id"]
-                )
-            else:
-                http_node.queue(sr, spec)
-                add_event(run, "http_queued", f"E-mail « {label} » en attente d'un travailleur.", node["id"])
-        elif ntype == "ldap":
-            try:
-                spec = ldap_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
-            except ldap_node.LdapStepError as exc:
-                raise _StepError(exc.code, exc.message, exc.next_step) from None
-            if spec["mode"] == "test":
-                _finish(run, sr, S.SUCCEEDED, output=ldap_node.simulated_output(spec))
-                add_event(run, "step_succeeded", f"Recherche d'annuaire « {label} » simulée (mode test).", node["id"])
-            else:
-                http_node.queue(sr, spec)
-                add_event(
-                    run, "http_queued", f"Recherche d'annuaire « {label} » en attente d'un travailleur.", node["id"]
-                )
-        elif ntype == "sql":
-            try:
-                spec = sql_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
-            except sql_node.SqlStepError as exc:
-                raise _StepError(exc.code, exc.message, exc.next_step) from None
-            if spec["mode"] == "test":
-                _finish(run, sr, S.SUCCEEDED, output=sql_node.simulated_output(spec))
-                add_event(
-                    run,
-                    "step_succeeded",
-                    f"Requête SQL « {label} » simulée (mode test : rien n'est envoyé).",
-                    node["id"],
-                )
-            else:
-                http_node.queue(sr, spec)
-                add_event(run, "http_queued", f"Requête SQL « {label} » en attente d'un travailleur.", node["id"])
-        elif ntype == "http":
-            try:
-                spec = http_node.prepare(node, resolve, ctx, run.workspace_id, run.environment_id)
-            except http_node.HttpStepError as exc:
-                raise _StepError(exc.code, exc.message, exc.next_step) from None
-            if spec["mode"] == "test":
-                _finish(run, sr, S.SUCCEEDED, output=http_node.simulated_output(spec))
-                add_event(
-                    run, "step_succeeded", f"Requête « {label} » simulée (mode test : rien n'est envoyé).", node["id"]
-                )
-            else:
-                http_node.queue(sr, spec)
-                add_event(run, "http_queued", f"Requête « {label} » en attente d'un travailleur.", node["id"])
-        elif ntype == "subworkflow":
-            _start_child(run, node, sr, ctx, resolve(node.get("inputs", {}), ctx), None)
-            sr.status = S.WAITING
-            sr.save()
-        elif ntype == "while":
-            sr.output = {"iterations": 0, "results": [], "last": {}, "stopped": ""}
-            _start_child(run, node, sr, ctx, resolve(node.get("inputs", {}), {**ctx, "last": {}, "iteration": 0}), 0)
-            sr.status = S.WAITING
-            sr.save()
-        elif ntype == "foreach":
-            items = evaluate(node["items"], ctx)
-            if not isinstance(items, list) or len(items) > node["max_iterations"]:
-                raise _StepError(
-                    "TOO_MANY_ITEMS" if isinstance(items, list) else "NOT_A_LIST",
-                    "La liste à parcourir est absente ou dépasse la limite de la boucle.",
-                )
-            sr.output = {"items": items, "results": [None] * len(items), "count": len(items)}
-            sr.status = S.WAITING
-            sr.save()
-            _foreach_launch(run, node, sr, ctx)
+        if starter:
+            starter(run, node, sr, ctx, steps)
     except _StepError as exc:
         _finish(run, sr, S.FAILED, error=exc.payload())
         add_event(run, "step_failed", f"Étape « {label} » échouée : {exc.message}", node["id"])
     except ExpressionError as exc:
-        _finish(
-            run,
-            sr,
-            S.FAILED,
-            error={
-                "code": "EXPRESSION_ERROR",
-                "message": str(exc),
-                "next_step": "Corrigez la configuration de l'étape.",
-            },
-        )
+        error = {"code": "EXPRESSION_ERROR", "message": str(exc), "next_step": "Corrigez la configuration de l'étape."}
+        _finish(run, sr, S.FAILED, error=error)
         add_event(run, "step_failed", f"Étape « {label} » échouée : {exc}", node["id"])
     return sr
 
@@ -911,249 +988,335 @@ def _foreach_launch(run, node, sr, ctx):
 
 
 # ----------------------------------------------------------------------------- poll a step
-def _poll(run, node, sr, steps) -> bool:  # noqa: C901
-    now = timezone.now()
-    ntype, label = node["type"], node.get("name", node["id"])
-    if ntype in ("action", "ai", "script"):
-        if sr.status == S.RETRY_WAIT:
-            if sr.available_at and sr.available_at <= now:
-                _dispatch_step(run, node, sr, _ctx(run, steps))
-                add_event(run, "step_retry", f"Étape « {label} » : tentative {sr.attempt}.", node["id"])
-                return True
-            return False
-        if sr.status == S.UNCERTAIN:
-            return False
-        ex = sr.executions.order_by("-created_at").first()
-        if ex is None or ex.status in (Execution.Status.QUEUED, Execution.Status.RUNNING):
-            return False
-        if ex.status == Execution.Status.SUCCEEDED:
-            if ntype == "script":
-                problem = _script_output_problem(node, ex.result)
-                if problem:
-                    _finish(
-                        run,
-                        sr,
-                        S.FAILED,
-                        error={
-                            "code": "OUTPUT_INVALID",
-                            "message": problem,
-                            "next_step": "Corrigez le script ou les types de sortie déclarés.",
-                        },
-                    )
-                    add_event(run, "step_failed", f"Étape « {label} » échouée : {problem}", node["id"])
-                    return True
-            _finish(run, sr, S.SUCCEEDED, output=ex.result)
-            add_event(run, "step_succeeded", f"Étape « {label} » réussie.", node["id"])
-            return True
-        if ex.status == Execution.Status.CANCELLED:
-            _finish(run, sr, S.CANCELLED)
-            return True
-        return _on_action_failure(run, node, sr, ex, label)
-    if ntype == "agent":
-        outcome = agent.advance(run, node, sr)
-        if outcome is None:
-            return False
-        if outcome[0] == "done":
-            _finish(run, sr, S.SUCCEEDED, output=outcome[1])
-            add_event(
-                run,
-                "step_succeeded",
-                f"Agent « {label} » terminé ({outcome[1]['iterations']} tour(s), {outcome[1]['stopped']}).",
-                node["id"],
-            )
-        else:
-            _finish(run, sr, S.FAILED, error=outcome[1])
-            add_event(run, "step_failed", f"Agent « {label} » échoué : {outcome[1].get('message', '')}", node["id"])
-        return True
-    if ntype in ("sql", "ldap", "sftp", "smtp"):
-        job = sr.http_job or {}
-        if job.get("state") == "running" and http_node.lease_expired(job):
-            _finish(
-                run,
-                sr,
-                S.FAILED,
-                error={
-                    "code": "SQL_INTERRUPTED",
-                    "message": "L'appel à la base a été interrompu.",
-                    "next_step": "Relancez l'étape.",
-                },
-            )
-            return True
-        if job.get("state") != "done":
-            return False
-        if job.get("error"):
-            _finish(run, sr, S.FAILED, error=job["error"])
-            add_event(run, "step_failed", f"Étape « {label} » échouée : {job['error']['message']}", node["id"])
-        else:
-            _finish(run, sr, S.SUCCEEDED, output=job["result"])
-            res = job["result"]
-            what = {"sql": "Requête SQL", "ldap": "Recherche d'annuaire", "sftp": "Fichier SFTP", "smtp": "E-mail"}[
-                ntype
-            ]
-            detail = f"{res['count']} résultat(s)" if "count" in res else "terminé"
-            add_event(run, "step_succeeded", f"{what} « {label} » : {detail}.", node["id"])
-        return True
-    if ntype == "http":
-        job = sr.http_job or {}
-        if job.get("state") == "running" and http_node.lease_expired(job):
-            job = {
-                **job,
-                "state": "done",
-                "error": {
-                    "code": "HTTP_INTERRUPTED",
-                    "message": "L'appel a été interrompu : la requête a peut-être été reçue par le service.",
-                    "next_step": "Vérifiez côté service avant de relancer.",
-                },
-            }
-        if job.get("state") != "done":
-            return False
-        spec = job.get("spec") or {}
-        wait = http_node.retry_delay(spec, sr.attempt + 1, job.get("error"), job.get("result"))
-        if wait is not None:
-            sr.attempt += 1
-            sr.http_job = {
-                **job,
-                "state": "queued",
-                "error": None,
-                "result": None,
-                "claimed_at": None,
-                "not_before": time.time() + wait,
-            }
-            sr.save(update_fields=["attempt", "http_job"])
-            add_event(run, "http_retry", f"Requête « {label} » : nouvelle tentative dans {int(wait)} s.", node["id"])
-            return True
-        if job.get("error"):
-            _finish(run, sr, S.FAILED, error=job["error"])
-            add_event(run, "step_failed", f"Requête « {label} » échouée : {job['error']['message']}", node["id"])
-            return True
-        res = job["result"]
-        if not res["ok"] and (job.get("spec") or {}).get("fail_on_status", True):
-            _finish(
-                run,
-                sr,
-                S.FAILED,
-                output=res,
-                error={
-                    "code": f"HTTP_{res['status']}",
-                    "message": f"Le service a répondu {res['status']}.",
-                    "next_step": "Consultez la réponse de l'étape.",
-                },
-            )
-            add_event(run, "step_failed", f"Requête « {label} » : réponse {res['status']}.", node["id"])
-            return True
-        _finish(run, sr, S.SUCCEEDED, output=res)
-        add_event(run, "step_succeeded", f"Requête « {label} » : réponse {res['status']}.", node["id"])
-        return True
-    if ntype == "wait" and node.get("resume") in ("webhook", "form"):
-        if sr.resume_payload is not None:
-            _finish(run, sr, S.SUCCEEDED, output={"resumed": True, "payload": sr.resume_payload})
-            add_event(run, "step_succeeded", f"Attente « {label} » reprise par appel HTTP.", node["id"])
-            return True
+def _poll_action(run, node, sr, steps, now, label) -> bool:
+    ntype = node["type"]
+    if sr.status == S.RETRY_WAIT:
         if sr.available_at and sr.available_at <= now:
-            _finish(run, sr, S.SUCCEEDED, output={"resumed": False, "payload": {}})
-            add_event(
-                run, "step_succeeded", f"Attente « {label} » : délai maximum atteint, aucune reprise reçue.", node["id"]
-            )
+            _dispatch_step(run, node, sr, _ctx(run, steps))
+            add_event(run, "step_retry", f"Étape « {label} » : tentative {sr.attempt}.", node["id"])
             return True
         return False
-    if ntype == "wait":
-        if sr.available_at and sr.available_at <= now:
-            _finish(run, sr, S.SUCCEEDED, output={})
-            add_event(run, "step_succeeded", f"Attente « {label} » terminée.", node["id"])
-            return True
+    if sr.status == S.UNCERTAIN:
         return False
-    if ntype == "approval":
-        ap = sr.approval
-        if ap.status == Approval.Status.PENDING:
-            return False
-        if ap.status == Approval.Status.APPROVED:
-            out = {
-                "approved": True,
-                "decided_by": ap.decided_by.username if ap.decided_by else "",
-                "comment": ap.comment,
-            }
-            _finish(run, sr, S.SUCCEEDED, output=out)
-            add_event(run, "step_succeeded", f"Approbation « {label} » accordée.", node["id"])
-        else:
-            _finish(
-                run,
-                sr,
-                S.FAILED,
-                error={
-                    "code": "APPROVAL_REJECTED",
-                    "message": f"Refusée : {ap.comment or 'sans motif'}",
-                    "next_step": "Corrigez la demande puis relancez le workflow.",
-                },
-            )
-            add_event(run, "step_failed", f"Approbation « {label} » refusée.", node["id"])
-        return True
-    if ntype == "subworkflow":
-        child = sr.child_runs.first()
-        if child.status in (R.RUNNING, R.COMPENSATING):
-            return False
-        if child.status == R.SUCCEEDED:
-            _finish(run, sr, S.SUCCEEDED, output=child.outputs or {})
-        elif child.status == R.CANCELLED:
-            _finish(run, sr, S.CANCELLED)
-        else:
-            _finish(
-                run,
-                sr,
-                S.FAILED,
-                error=child.error or {"code": "CHILD_FAILED", "message": "Le sous-workflow a échoué."},
-            )
-        add_event(run, "step_" + sr.status, f"Sous-workflow « {label} » : {sr.get_status_display()}.", node["id"])
-        return True
-    if ntype == "while":
-        return _poll_while(run, node, sr, steps, now, label)
-    if ntype == "foreach":
-        children = list(sr.child_runs.order_by("child_index"))
-        changed = False
-        results = list(sr.output["results"])
-        for ch in children:
-            if ch.status == R.SUCCEEDED and results[ch.child_index] != (ch.outputs or {}):
-                results[ch.child_index] = ch.outputs or {}
-                changed = True
-        failed = [c for c in children if c.status in (R.FAILED, R.CANCELLED)]
-        if failed:
-            for ch in children:
-                if ch.status == R.RUNNING:
-                    WorkflowRun.objects.filter(pk=ch.pk).update(cancel_requested=True)
-            if all(c.status not in (R.RUNNING, R.COMPENSATING) for c in children):
+    ex = sr.executions.order_by("-created_at").first()
+    if ex is None or ex.status in (Execution.Status.QUEUED, Execution.Status.RUNNING):
+        return False
+    if ex.status == Execution.Status.SUCCEEDED:
+        if ntype == "script":
+            problem = _script_output_problem(node, ex.result)
+            if problem:
                 _finish(
                     run,
                     sr,
                     S.FAILED,
                     error={
-                        "code": "ITERATION_FAILED",
-                        "message": f"L'itération {failed[0].child_index + 1} a échoué.",
-                        "next_step": "Consultez le sous-workflow concerné.",
+                        "code": "OUTPUT_INVALID",
+                        "message": problem,
+                        "next_step": "Corrigez le script ou les types de sortie déclarés.",
                     },
                 )
+                add_event(run, "step_failed", f"Étape « {label} » échouée : {problem}", node["id"])
                 return True
-            return changed
-        if len(children) == sr.output["count"] and all(c.status == R.SUCCEEDED for c in children):
+        _finish(run, sr, S.SUCCEEDED, output=ex.result)
+        add_event(run, "step_succeeded", f"Étape « {label} » réussie.", node["id"])
+        return True
+    if ex.status == Execution.Status.CANCELLED:
+        _finish(run, sr, S.CANCELLED)
+        return True
+    return _on_action_failure(run, node, sr, ex, label)
+
+
+def _poll_agent(run, node, sr, steps, now, label) -> bool:
+    outcome = agent.advance(run, node, sr)
+    if outcome is None:
+        return False
+    if outcome[0] == "done":
+        _finish(run, sr, S.SUCCEEDED, output=outcome[1])
+        add_event(
+            run,
+            "step_succeeded",
+            f"Agent « {label} » terminé ({outcome[1]['iterations']} tour(s), {outcome[1]['stopped']}).",
+            node["id"],
+        )
+    else:
+        _finish(run, sr, S.FAILED, error=outcome[1])
+        add_event(run, "step_failed", f"Agent « {label} » échoué : {outcome[1].get('message', '')}", node["id"])
+    return True
+
+
+def _poll_ssh(run, node, sr, steps, now, label) -> bool:
+    job = sr.http_job or {}
+    if job.get("state") == "running" and http_node.lease_expired(job):
+        # never replayed: the remote command may have gone on, and nothing says it stopped
+        _finish(
+            run,
+            sr,
+            S.FAILED,
+            error={
+                "code": "SSH_INTERRUPTED",
+                "message": "La session SSH a été interrompue : une commande distante a pu se poursuivre.",
+                "next_step": "Vérifiez côté serveur avant de relancer l'étape.",
+                "details": {"error_type": "interrupted", "uncertain": True},
+            },
+        )
+        add_event(run, "step_failed", f"Commandes SSH « {label} » interrompues (issue incertaine).", node["id"])
+        return True
+    if job.get("state") != "done":
+        return False
+    if job.get("error"):  # partial results are kept: the `error` branch may read them
+        _finish(run, sr, S.FAILED, output=job.get("result"), error=job["error"])
+        add_event(run, "step_failed", f"Commandes SSH « {label} » échouées : {job['error']['message']}", node["id"])
+    else:
+        _finish(run, sr, S.SUCCEEDED, output=job["result"])
+        add_event(
+            run,
+            "step_succeeded",
+            f"Commandes SSH « {label} » : {len(job['result']['results'])} résultat(s).",
+            node["id"],
+        )
+    return True
+
+
+def _poll_job(run, node, sr, steps, now, label) -> bool:
+    ntype = node["type"]
+    job = sr.http_job or {}
+    if job.get("state") == "running" and http_node.lease_expired(job):
+        _finish(
+            run,
+            sr,
+            S.FAILED,
+            error={
+                "code": "SQL_INTERRUPTED",
+                "message": "L'appel à la base a été interrompu.",
+                "next_step": "Relancez l'étape.",
+            },
+        )
+        return True
+    if job.get("state") != "done":
+        return False
+    if job.get("error"):
+        _finish(run, sr, S.FAILED, error=job["error"])
+        add_event(run, "step_failed", f"Étape « {label} » échouée : {job['error']['message']}", node["id"])
+    else:
+        _finish(run, sr, S.SUCCEEDED, output=job["result"])
+        res = job["result"]
+        what = {"sql": "Requête SQL", "ldap": "Recherche d'annuaire", "sftp": "Fichier SFTP", "smtp": "E-mail"}[ntype]
+        detail = f"{res['count']} résultat(s)" if "count" in res else "terminé"
+        add_event(run, "step_succeeded", f"{what} « {label} » : {detail}.", node["id"])
+    return True
+
+
+def _poll_http(run, node, sr, steps, now, label) -> bool:
+    job = sr.http_job or {}
+    if job.get("state") == "running" and http_node.lease_expired(job):
+        job = {
+            **job,
+            "state": "done",
+            "error": {
+                "code": "HTTP_INTERRUPTED",
+                "message": "L'appel a été interrompu : la requête a peut-être été reçue par le service.",
+                "next_step": "Vérifiez côté service avant de relancer.",
+            },
+        }
+    if job.get("state") != "done":
+        return False
+    spec = job.get("spec") or {}
+    wait = http_node.retry_delay(spec, sr.attempt + 1, job.get("error"), job.get("result"))
+    if wait is not None:
+        sr.attempt += 1
+        sr.http_job = {
+            **job,
+            "state": "queued",
+            "error": None,
+            "result": None,
+            "claimed_at": None,
+            "not_before": time.time() + wait,
+        }
+        sr.save(update_fields=["attempt", "http_job"])
+        add_event(run, "http_retry", f"Requête « {label} » : nouvelle tentative dans {int(wait)} s.", node["id"])
+        return True
+    if job.get("error"):
+        _finish(run, sr, S.FAILED, error=job["error"])
+        add_event(run, "step_failed", f"Requête « {label} » échouée : {job['error']['message']}", node["id"])
+        return True
+    res = job["result"]
+    if not res["ok"] and (job.get("spec") or {}).get("fail_on_status", True):
+        _finish(
+            run,
+            sr,
+            S.FAILED,
+            output=res,
+            error={
+                "code": f"HTTP_{res['status']}",
+                "message": f"Le service a répondu {res['status']}.",
+                "next_step": "Consultez la réponse de l'étape.",
+            },
+        )
+        add_event(run, "step_failed", f"Requête « {label} » : réponse {res['status']}.", node["id"])
+        return True
+    _finish(run, sr, S.SUCCEEDED, output=res)
+    add_event(run, "step_succeeded", f"Requête « {label} » : réponse {res['status']}.", node["id"])
+    return True
+
+
+def _wait_for_signal(run, node, sr, steps, now, label) -> bool:
+    if sr.resume_payload is not None:
+        _finish(run, sr, S.SUCCEEDED, output={"resumed": True, "payload": sr.resume_payload})
+        add_event(run, "step_succeeded", f"Attente « {label} » reprise par appel HTTP.", node["id"])
+        return True
+    if sr.available_at and sr.available_at <= now:
+        _finish(run, sr, S.SUCCEEDED, output={"resumed": False, "payload": {}})
+        add_event(
+            run, "step_succeeded", f"Attente « {label} » : délai maximum atteint, aucune reprise reçue.", node["id"]
+        )
+        return True
+    return False
+
+
+def _wait_for_timer(run, node, sr, steps, now, label) -> bool:
+    if sr.available_at and sr.available_at <= now:
+        _finish(run, sr, S.SUCCEEDED, output={})
+        add_event(run, "step_succeeded", f"Attente « {label} » terminée.", node["id"])
+        return True
+    return False
+
+
+def _poll_approval(run, node, sr, steps, now, label) -> bool:
+    ap = sr.approval
+    if ap.status == Approval.Status.PENDING:
+        return False
+    if ap.status == Approval.Status.APPROVED:
+        out = {
+            "approved": True,
+            "decided_by": ap.decided_by.username if ap.decided_by else "",
+            "comment": ap.comment,
+        }
+        _finish(run, sr, S.SUCCEEDED, output=out)
+        add_event(run, "step_succeeded", f"Approbation « {label} » accordée.", node["id"])
+    else:
+        _finish(
+            run,
+            sr,
+            S.FAILED,
+            error={
+                "code": "APPROVAL_REJECTED",
+                "message": f"Refusée : {ap.comment or 'sans motif'}",
+                "next_step": "Corrigez la demande puis relancez le workflow.",
+            },
+        )
+        add_event(run, "step_failed", f"Approbation « {label} » refusée.", node["id"])
+    return True
+
+
+def _poll_subworkflow(run, node, sr, steps, now, label) -> bool:
+    child = sr.child_runs.first()
+    if child.status in (R.RUNNING, R.COMPENSATING):
+        return False
+    if child.status == R.SUCCEEDED:
+        _finish(run, sr, S.SUCCEEDED, output=child.outputs or {})
+    elif child.status == R.CANCELLED:
+        _finish(run, sr, S.CANCELLED)
+    else:
+        _finish(
+            run,
+            sr,
+            S.FAILED,
+            error=child.error or {"code": "CHILD_FAILED", "message": "Le sous-workflow a échoué."},
+        )
+    add_event(run, "step_" + sr.status, f"Sous-workflow « {label} » : {sr.get_status_display()}.", node["id"])
+    return True
+
+
+def _poll_foreach(run, node, sr, steps, now, label) -> bool:
+    children = list(sr.child_runs.order_by("child_index"))
+    changed = False
+    results = list(sr.output["results"])
+    for ch in children:
+        if ch.status == R.SUCCEEDED and results[ch.child_index] != (ch.outputs or {}):
+            results[ch.child_index] = ch.outputs or {}
+            changed = True
+    failed = [c for c in children if c.status in (R.FAILED, R.CANCELLED)]
+    if failed:
+        for ch in children:
+            if ch.status == R.RUNNING:
+                WorkflowRun.objects.filter(pk=ch.pk).update(cancel_requested=True)
+        if all(c.status not in (R.RUNNING, R.COMPENSATING) for c in children):
+            culprit = next(
+                (c for c in failed if c.status == R.FAILED), failed[0]
+            )  # not one that was only cancelled because of it
             _finish(
                 run,
                 sr,
-                S.SUCCEEDED,
-                output={k: v for k, v in {**sr.output, "results": results, "items": None}.items() if k != "last_start"},
+                S.FAILED,
+                error={
+                    "code": "ITERATION_FAILED",
+                    "message": f"L'itération {culprit.child_index + 1} a échoué.",
+                    "next_step": "Consultez le sous-workflow concerné.",
+                },
             )
-            add_event(run, "step_succeeded", f"Boucle « {label} » terminée ({len(children)} itérations).", node["id"])
             return True
-        if changed:
-            sr.output = {**sr.output, "results": results}
-            sr.save()
-        node_ctx = _ctx(run, steps)
-        before = sr.child_runs.count()
-        _foreach_launch(run, node, sr, node_ctx)
-        return changed or sr.child_runs.count() != before
-    return False
+        return changed
+    if len(children) == sr.output["count"] and all(c.status == R.SUCCEEDED for c in children):
+        _finish(
+            run,
+            sr,
+            S.SUCCEEDED,
+            output={k: v for k, v in {**sr.output, "results": results, "items": None}.items() if k != "last_start"},
+        )
+        add_event(run, "step_succeeded", f"Boucle « {label} » terminée ({len(children)} itérations).", node["id"])
+        return True
+    if changed:
+        sr.output = {**sr.output, "results": results}
+        sr.save()
+    node_ctx = _ctx(run, steps)
+    before = sr.child_runs.count()
+    _foreach_launch(run, node, sr, node_ctx)
+    return changed or sr.child_runs.count() != before
+
+
+def _poll_wait(run, node, sr, steps, now, label) -> bool:
+    if node.get("resume") in ("webhook", "form"):
+        return _wait_for_signal(run, node, sr, steps, now, label)
+    return _wait_for_timer(run, node, sr, steps, now, label)
+
+
+_POLLERS = {
+    "action": _poll_action,
+    "ai": _poll_action,
+    "script": _poll_action,
+    "agent": _poll_agent,
+    "ssh": _poll_ssh,
+    "sql": _poll_job,
+    "ldap": _poll_job,
+    "sftp": _poll_job,
+    "smtp": _poll_job,
+    "http": _poll_http,
+    "wait": _poll_wait,
+    "approval": _poll_approval,
+    "subworkflow": _poll_subworkflow,
+    "while": lambda run, node, sr, steps, now, label: _poll_while(run, node, sr, steps, now, label),
+    "foreach": _poll_foreach,
+}
+
+
+def _poll(run, node, sr, steps) -> bool:
+    """One look at a running step: finish it, retry it, launch what it waits for. True when something changed."""
+    poller = _POLLERS.get(node["type"])
+    if poller is None:
+        return False
+    return poller(run, node, sr, steps, timezone.now(), node.get("name", node["id"]))
 
 
 def _script_output_problem(node, result) -> str | None:
     """Declared script outputs must exist and have the declared type (never echo the value)."""
-    types = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    types: dict[str, type | tuple[type, ...]] = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
     for o in node.get("outputs", []):
         name, want = o["name"], o.get("type", "string")
         if name not in (result or {}):

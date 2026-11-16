@@ -26,7 +26,7 @@ export function styleProps(style: FormStyle | undefined): { className: string; s
   }
   if (s.radius) vars["--fb-radius"] = RADII[s.radius] ?? RADII.medium;
   const w = s.width ? WIDTHS[s.width] : undefined;
-  if (w) vars["maxWidth"] = `${w}px`;
+  if (w) vars.maxWidth = `${w}px`;
   const { maxWidth, ...cssVars } = vars;
   return {
     className: ["fb-form", `fb-d-${s.density ?? "normal"}`, `fb-l-${s.labels ?? "top"}`, `fb-s-${s.sections ?? "card"}`, `fb-b-${s.button ?? "left"}`].join(" "),

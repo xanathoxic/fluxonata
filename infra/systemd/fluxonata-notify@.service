@@ -1,0 +1,9 @@
+[Unit]
+Description=Notification d'échec de %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fluxonata
+# FLUXONATA_NOTIFY_URL=… dans /etc/fluxonata/notify.env (droits 600, hors dépôt) ; absent : seule une ligne du journal signale l'échec
+EnvironmentFile=-/etc/fluxonata/notify.env
+ExecStart=/opt/fluxonata/scripts/notify-failure.sh %i

@@ -4,6 +4,7 @@ import { Overlay } from "../../components/Overlay";
 import { Kpi } from "../OpsCharts";
 import { AiEvals } from "./AiEvals";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
+import { keyed } from "../../components/keyed";
 
 interface AiPolicy { mode: string; daily_token_budget: number; redact_cloud: boolean; log_content: boolean; dry_run: boolean; used_today: number; modes: Record<string, string> }
 interface Providers { results: { name: string; kind: string; base_url: string; model: string; cloud: boolean; enabled: boolean }[] }
@@ -68,7 +69,7 @@ export function AiTab() {
       <Section title="Utilisation (métadonnées uniquement)" hint="Les appels récents : qui a répondu, pour quel usage et combien de jetons. Le contenu des échanges n'est pas conservé par défaut.">
         <div className="table-wrap"><table className="adm-table"><caption className="sr-only">Appels d'IA récents</caption>
           <thead><tr><th scope="col">Fournisseur</th><th scope="col">Usage</th><th scope="col">Prompt</th><th scope="col">Jetons</th><th scope="col">Résultat</th></tr></thead>
-          <tbody>{paged.slice.map((u, i) => <tr key={i}><td>{u.provider} ({u.kind})</td><td>{u.use_case}</td><td>v{u.prompt_version}</td><td>{u.tokens}</td><td><Badge tone={u.status === "ok" || u.status === "succeeded" ? "ok" : "bad"}>{u.status}{u.error_code ? ` (${u.error_code})` : ""}</Badge></td></tr>)}
+          <tbody>{keyed(paged.slice, (u) => `${u.provider}|${u.use_case}|${u.prompt_version}|${u.tokens}|${u.status}`).map(({ item: u, key }) => <tr key={key}><td>{u.provider} ({u.kind})</td><td>{u.use_case}</td><td>v{u.prompt_version}</td><td>{u.tokens}</td><td><Badge tone={u.status === "ok" || u.status === "succeeded" ? "ok" : "bad"}>{u.status}{u.error_code ? ` (${u.error_code})` : ""}</Badge></td></tr>)}
             {(usage.data?.results.length ?? 0) === 0 && <EmptyRow cols={5}>Aucun appel pour le moment.</EmptyRow>}</tbody></table></div>
         {paged.pager("Pagination de l'utilisation")}
       </Section>

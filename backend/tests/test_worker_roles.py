@@ -110,7 +110,7 @@ def test_a_process_without_exec_never_executes_actions_and_is_not_counted_as_a_w
     assert set(probe["threads"]) == threads
     assert probe["process_one"] == 0 and probe["reconcile"] == 0  # ni prise de tâche, ni reprise de baux
     inst = ServiceInstance.objects.get()
-    assert inst.kind == "worker-aux"  # core/health compte `kind="worker"` : un process aux/ai seul ne doit pas rassurer
+    assert inst.kind == "worker-aux"  # runs/health compte `kind="worker"` : un process aux/ai seul ne doit pas rassurer
 
 
 def test_exec_plus_one_family(probe):

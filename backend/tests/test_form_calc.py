@@ -101,3 +101,9 @@ def test_calculation_is_refused_on_unsuitable_fields_and_in_loops():
         field("b", rules=[{"when": {"field": "a", "op": "not_empty"}, "then": [{"do": "hide"}]}]),
     )
     assert "boucle" in formengine.check_definition(rule_loop)["_"]
+
+
+def test_every_function_the_parser_accepts_has_an_implementation():
+    from triggers import formcalc
+
+    assert set(formcalc.FUNCTIONS) - {"if"} == set(formcalc._CALLS)

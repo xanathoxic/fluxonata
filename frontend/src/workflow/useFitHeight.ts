@@ -25,15 +25,15 @@ export function useFitHeight(ref: RefObject<HTMLElement | null>, min: number, en
   const [h, setH] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     if (!enabled) return;
-    const fit = () => {
+    const fitNow = () => {
       const el = ref.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
       setH(Math.max(min, Math.floor(window.innerHeight - top - spaceBelow(el) - 4)));
     };
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    fitNow();
+    window.addEventListener("resize", fitNow);
+    return () => window.removeEventListener("resize", fitNow);
   });
   return enabled ? h : undefined;
 }

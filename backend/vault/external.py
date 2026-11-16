@@ -210,7 +210,9 @@ def _login(cfg: VaultConfig) -> str:
     status, data = _http(
         cfg, "POST", f"auth/{cfg.auth_mount.strip('/')}/login", {"role_id": cfg.role_id, "secret_id": cfg.secret_id()}
     )
-    auth = data.get("auth") if isinstance(data.get("auth"), dict) else {}
+    auth = data.get("auth")
+    if not isinstance(auth, dict):
+        auth = {}
     if status != 200 or not auth.get("client_token"):
         if status in (400, 403):
             raise ExternalVaultError(
@@ -324,7 +326,7 @@ def configure_managed(secret: Secret, cfg: VaultConfig) -> None:
 
 
 def configure_reference(
-    secret: Secret, cfg: VaultConfig, mode: str, mount: str, path: str, key: str, version=None
+    secret: Secret, cfg: VaultConfig, mode: str, mount: str, path: str | None, key: str, version=None
 ) -> None:
     """Points a secret at something that already exists in Vault (static KV value or dynamic credentials)."""
     if mode not in (Secret.VaultMode.REFERENCE, Secret.VaultMode.DYNAMIC):

@@ -1,0 +1,53 @@
+{
+  "description": "Exemple : exécute une liste de commandes indépendantes sur un serveur, à travers un rebond. Aucun équipement, secret ni motif propre à un système : les commandes viennent des entrées, les connexions sont à créer. En mode test (par défaut), rien n'est ouvert : les résultats sont simulés.",
+  "folder": "",
+  "graph": {
+    "edges": [
+      {"from": "diagnostic", "to": "constat_echec", "label": "error"}
+    ],
+    "inputs": {
+      "properties": {
+        "commandes": {"items": {"type": "string"}, "title": "Commandes à exécuter (une par entrée)", "type": "array"}
+      },
+      "required": ["commandes"],
+      "type": "object"
+    },
+    "nodes": [
+      {
+        "commands": "{{ inputs.commandes }}",
+        "connection": "cible-exemple",
+        "id": "diagnostic",
+        "jumps": ["bastion-exemple"],
+        "max_output_bytes": 65536,
+        "mocks": [
+          {"exit_status": 0, "id": "c1", "stdout": "résultat simulé de la première commande\n"},
+          {"exit_status": 0, "id": "c2", "stdout": "résultat simulé de la deuxième commande\n"}
+        ],
+        "mode": "test",
+        "name": "Commandes sur le serveur",
+        "session": "exec",
+        "stop_on_error": false,
+        "timeout_seconds": 60,
+        "type": "ssh"
+      },
+      {
+        "fields": {
+          "etape_en_echec": "{{ steps.diagnostic.output.failed_step }}",
+          "incertain": "{{ steps.diagnostic.output.uncertain }}",
+          "type_erreur": "{{ steps.diagnostic.output.error_type }}"
+        },
+        "id": "constat_echec",
+        "name": "Constat de l'échec",
+        "op": "set",
+        "type": "transform"
+      }
+    ],
+    "outputs": {
+      "resultats": "{{ steps.diagnostic.output.results }}",
+      "statut": "{{ steps.diagnostic.output.status }}"
+    }
+  },
+  "name": "Exemple SSH : commandes indépendantes",
+  "slug": "exemple-ssh-diagnostic",
+  "tags": ["exemple", "ssh"]
+}

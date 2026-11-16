@@ -9,7 +9,6 @@ from runs.worker import process_one
 from tenancy.models import Environment
 from tests.test_worker import docker_ready
 from tests.wf_helpers import (
-    make_action,  # noqa: F401
     schema,
 )
 

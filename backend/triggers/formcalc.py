@@ -10,9 +10,11 @@ field stays empty rather than showing a wrong number. Every number is a float in
 """
 
 import math
+import operator
 import re
+from collections.abc import Callable
 from datetime import date
-from functools import lru_cache
+from functools import lru_cache, partial
 
 from .formrules import num_of, text_of
 
@@ -155,41 +157,42 @@ class _Parser:
             return self.node(("neg", self.unary()))
         return self.primary()
 
-    def primary(self):  # noqa: C901
+    def call(self, name: str):
+        """`name(` was read: the arguments up to `)`, checked against the function's arity."""
+        if name not in FUNCTIONS:
+            raise FormulaError(f"La fonction « {name} » n'existe pas.")
+        args = []
+        if not self.take_op(")"):
+            while True:
+                args.append(self.expr())
+                if self.take_op(")"):
+                    break
+                if not self.take_op(","):
+                    raise FormulaError(f"« , » ou « ) » attendu dans {name}(…).")
+        low, high = FUNCTIONS[name]
+        if len(args) < low or (high is not None and len(args) > high):
+            wanted = str(low) if high == low else f"{low} à {high}" if high else f"au moins {low}"
+            raise FormulaError(f"{name}(…) attend {wanted} valeur(s).")
+        return self.node(("call", name, args))
+
+    def word(self, name: str):
+        """A bare name: `true`/`false`, or a function call."""
+        if name in ("true", "false"):
+            return self.node(("bool", name == "true"))
+        if not self.take_op("("):
+            raise FormulaError(f"« {name} » n'est pas connu : un champ s'écrit {{champ}}, un texte entre guillemets.")
+        return self.call(name)
+
+    def primary(self):
         t = self.peek()
         if t is None:
             raise FormulaError("La formule se termine trop tôt.")
         self.i += 1
         kind, val = t
-        if kind == "num":
-            return self.node(("num", val))
-        if kind == "str":
-            return self.node(("str", val))
-        if kind == "ref":
-            return self.node(("ref", val))
+        if kind in ("num", "str", "ref"):
+            return self.node((kind, val))
         if kind == "id":
-            name = str(val)
-            if name in ("true", "false"):
-                return self.node(("bool", name == "true"))
-            if not self.take_op("("):
-                raise FormulaError(
-                    f"« {name} » n'est pas connu : un champ s'écrit {{champ}}, un texte entre guillemets."
-                )
-            if name not in FUNCTIONS:
-                raise FormulaError(f"La fonction « {name} » n'existe pas.")
-            args = []
-            if not self.take_op(")"):
-                while True:
-                    args.append(self.expr())
-                    if self.take_op(")"):
-                        break
-                    if not self.take_op(","):
-                        raise FormulaError(f"« , » ou « ) » attendu dans {name}(…).")
-            low, high = FUNCTIONS[name]
-            if len(args) < low or (high is not None and len(args) > high):
-                wanted = str(low) if high == low else f"{low} à {high}" if high else f"au moins {low}"
-                raise FormulaError(f"{name}(…) attend {wanted} valeur(s).")
-            return self.node(("call", name, args))
+            return self.word(str(val))
         if val == "(":
             node = self.expr()
             if not self.take_op(")"):
@@ -269,15 +272,16 @@ def _equal(a, b) -> bool:
     return na == nb if na is not None and nb is not None else text_of(a) == text_of(b)
 
 
+_ORDER = {"<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
+
+
 def _order(op: str, a, b) -> bool:
     na, nb = num_of(a), num_of(b)
     if na is not None and nb is not None:
-        x, y = na, nb
-    elif isinstance(a, str) and isinstance(b, str) and _ISO_DATE.match(a) and _ISO_DATE.match(b):
-        x, y = a, b
-    else:
-        return False
-    return {"<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[op]
+        return _ORDER[op](na, nb)
+    if isinstance(a, str) and isinstance(b, str) and _ISO_DATE.match(a) and _ISO_DATE.match(b):
+        return _ORDER[op](a, b)
+    return False
 
 
 def _arith(op: str, a, b):
@@ -319,69 +323,82 @@ def _days(a, b):
     return float(ms[1] - ms[0])
 
 
-def _call(name: str, args: list, values: dict):  # noqa: C901
+def _aggregate(name: str, vals: list):
+    """min, max, sum, avg of the numbers among the values (empty ones are ignored)."""
+    nums = [n for v in vals if not _empty(v) and (n := _num(v)) is not None]
+    if name == "sum":
+        return sum(nums)
+    if not nums:
+        return None
+    if name == "min":
+        return min(nums)
+    if name == "max":
+        return max(nums)
+    return sum(nums) / len(nums)
+
+
+def _rounding(name: str, vals: list):
+    x = _num(vals[0])
+    if x is None:
+        return None
+    if name == "abs":
+        return abs(x)
+    if name == "floor":
+        return float(math.floor(x))
+    if name == "ceil":
+        return float(math.ceil(x))
+    digits = 0.0 if len(vals) == 1 else _num(vals[1])
+    if digits is None or not digits.is_integer() or not 0 <= digits <= 10:
+        return None
+    return _round(x, int(digits))
+
+
+def _left_right(name: str, vals: list):
+    n = _num(vals[1])
+    if n is None or n < 0:
+        return None
+    n = int(math.floor(n))
+    s = text_of(vals[0])
+    return s[:n] if name == "left" else (s[-n:] if n else "")
+
+
+def _count(vals: list):  # lines of a repeated control, boxes ticked…
+    return float(len(vals[0])) if isinstance(vals[0], list) else (0.0 if _empty(vals[0]) else 1.0)
+
+
+def _sum_col(vals: list):  # the total of one column of a repeated control
+    key = text_of(vals[1])
+    rows = vals[0] if isinstance(vals[0], list) else []
+    return sum(n for r in rows if isinstance(r, dict) and (n := _num(r.get(key))) is not None)
+
+
+# one entry per function of the formula language that takes its arguments already evaluated (`if` is lazy, see `_call`)
+_CALLS: dict[str, Callable[[list], object]] = {
+    "and": lambda vals: all(_truthy(v) for v in vals),
+    "or": lambda vals: any(_truthy(v) for v in vals),
+    "not": lambda vals: not _truthy(vals[0]),
+    **{f: partial(_aggregate, f) for f in ("min", "max", "sum", "avg")},
+    **{f: partial(_rounding, f) for f in ("floor", "ceil", "abs", "round")},
+    "len": lambda vals: float(len(text_of(vals[0]))),
+    "upper": lambda vals: text_of(vals[0]).upper(),
+    "lower": lambda vals: text_of(vals[0]).lower(),
+    "trim": lambda vals: text_of(vals[0]).strip(),
+    "concat": lambda vals: "".join(text_of(v) for v in vals),
+    **{f: partial(_left_right, f) for f in ("left", "right")},
+    "number": lambda vals: _num(vals[0]),
+    "text": lambda vals: text_of(vals[0]),
+    "is_empty": lambda vals: _empty(vals[0]),
+    "count": _count,
+    "sum_col": _sum_col,
+    "coalesce": lambda vals: next((v for v in vals if not _empty(v)), None),
+    "days_between": lambda vals: _days(vals[0], vals[1]),
+}
+
+
+def _call(name: str, args: list, values: dict):
     if name == "if":
         return _eval(args[1] if _truthy(_eval(args[0], values)) else args[2], values)
-    vals = [_eval(a, values) for a in args]
-    if name == "and":
-        return all(_truthy(v) for v in vals)
-    if name == "or":
-        return any(_truthy(v) for v in vals)
-    if name == "not":
-        return not _truthy(vals[0])
-    if name in ("min", "max", "sum", "avg"):
-        nums = [n for v in vals if not _empty(v) and (n := _num(v)) is not None]
-        if name == "sum":
-            return sum(nums)
-        if not nums:
-            return None
-        return {"min": min, "max": max, "avg": lambda xs: sum(xs) / len(xs)}[name](nums)
-    if name in ("floor", "ceil", "abs", "round"):
-        x = _num(vals[0])
-        if x is None:
-            return None
-        if name == "abs":
-            return abs(x)
-        if name == "floor":
-            return float(math.floor(x))
-        if name == "ceil":
-            return float(math.ceil(x))
-        digits = 0.0 if len(vals) == 1 else _num(vals[1])
-        if digits is None or not digits.is_integer() or not 0 <= digits <= 10:
-            return None
-        return _round(x, int(digits))
-    if name == "len":
-        return float(len(text_of(vals[0])))
-    if name == "upper":
-        return text_of(vals[0]).upper()
-    if name == "lower":
-        return text_of(vals[0]).lower()
-    if name == "trim":
-        return text_of(vals[0]).strip()
-    if name == "concat":
-        return "".join(text_of(v) for v in vals)
-    if name in ("left", "right"):
-        n = _num(vals[1])
-        if n is None or n < 0:
-            return None
-        n = int(math.floor(n))
-        s = text_of(vals[0])
-        return s[:n] if name == "left" else (s[-n:] if n else "")
-    if name == "number":
-        return _num(vals[0])
-    if name == "text":
-        return text_of(vals[0])
-    if name == "is_empty":
-        return _empty(vals[0])
-    if name == "count":  # lines of a repeated control, boxes ticked…
-        return float(len(vals[0])) if isinstance(vals[0], list) else (0.0 if _empty(vals[0]) else 1.0)
-    if name == "sum_col":  # the total of one column of a repeated control
-        key = text_of(vals[1])
-        rows = vals[0] if isinstance(vals[0], list) else []
-        return sum(n for r in rows if isinstance(r, dict) and (n := _num(r.get(key))) is not None)
-    if name == "coalesce":
-        return next((v for v in vals if not _empty(v)), None)
-    return _days(vals[0], vals[1])  # days_between
+    return _CALLS[name]([_eval(a, values) for a in args])
 
 
 def _eval(node, values: dict):

@@ -13,6 +13,7 @@ export function BindingsEditor({ node, variables, onUpdate, idPrefix = "b" }: { 
       <legend>Entrées du script (variables liées)</legend>
       {rows.length === 0 && <p className="hint">Aucune entrée liée. Le script peut malgré tout lire <code>inputs</code> et <code>vars</code>.</p>}
       {rows.map(([name, value], i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
         <div className="bind-row" key={i}>
           <label className="sr-only" htmlFor={`${idPrefix}-n-${i}`}>Nom de la variable {i + 1}</label>
           <input id={`${idPrefix}-n-${i}`} value={name} onChange={(e) => write(rows.map(([k, v], j) => (j === i ? [e.target.value.replace(IDENT, "_"), v] : [k, v])))} />
@@ -43,6 +44,7 @@ export function OutputsEditor({ node, onUpdate, idPrefix = "o" }: { node: GraphN
       <legend>Sorties du script</legend>
       {rows.length === 0 && <p className="hint">Aucune sortie : le script ne transmet rien aux étapes suivantes.</p>}
       {rows.map((o, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
         <div className="bind-row out" key={i}>
           <label className="sr-only" htmlFor={`${idPrefix}-n-${i}`}>Nom de la sortie {i + 1}</label>
           <input id={`${idPrefix}-n-${i}`} value={o.name} onChange={(e) => write(rows.map((r, j) => (j === i ? { ...r, name: e.target.value.replace(IDENT, "_") } : r)))} />

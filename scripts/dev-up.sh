@@ -3,13 +3,13 @@
 source "$(dirname "$0")/_common.sh"
 cd "$ROOT"
 if [ ! -f .env ]; then
-  cp .env.example .env
+  (umask 077; cp .env.example .env)  # lisible par le seul propriétaire : le fichier contient la clé secrète
   key="$(python3 -c 'import secrets;print(secrets.token_urlsafe(50))')"
   sed -i "s|^ORCH_SECRET_KEY=.*|ORCH_SECRET_KEY=$key|" .env
   echo "→ .env créé (clé secrète générée, non versionné)"
 fi
 load_env
-[ -d .venv ] || { python3 -m venv .venv && .venv/bin/pip install -q -r backend/requirements.txt -r backend/requirements-dev.txt; }
+[ -d .venv ] || { python3 -m venv .venv && .venv/bin/pip install -q -r backend/requirements.txt -c backend/constraints.txt -r backend/requirements-dev.txt; }
 [ -d frontend/node_modules ] || (cd frontend && npm ci)
 "${COMPOSE[@]}" up -d --wait db testsvc
 (cd backend && "$ROOT"/.venv/bin/python manage.py migrate --noinput >/dev/null && "$ROOT"/.venv/bin/python manage.py seed_demo)

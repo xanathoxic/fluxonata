@@ -9,12 +9,15 @@ artifacts/
 *.log
 .run/
 frontend/test-results/
+frontend/coverage/
 frontend/playwright-report/
 var/
 .env.*
 !.env.example
 !.env.prod.example
+!.env.agent.example
 
 # sauvegardes locales (base de données) et captures d'essai : jamais dans Git
 backups/
 /*.png
+/frontend/node_modules

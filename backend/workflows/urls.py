@@ -1,7 +1,9 @@
 from django.urls import path, re_path
 
 from . import catalog_views as cat
+from . import group_views as gv
 from . import mcp, mcp_design, views
+from . import promotion_views as pr
 from . import views_comments as com
 from . import views_debug as dbg
 from . import views_extra as x
@@ -9,6 +11,11 @@ from . import views_git as git
 from . import views_templates as tpl
 
 urlpatterns = [
+    path("workspaces/<slug:workspace>/groups/", gv.GroupListCreateView.as_view()),
+    path("workspaces/<slug:workspace>/groups/<int:pk>/", gv.GroupDetailView.as_view()),
+    path("workspaces/<slug:workspace>/promotions/", pr.PromotionListView.as_view()),
+    path("workspaces/<slug:workspace>/promotions/<int:pk>/decide/", pr.PromotionDecideView.as_view()),
+    path("workspaces/<slug:workspace>/workflows/<slug:slug>/versions/<str:version>/promote/", pr.PromoteView.as_view()),
     # Les clients MCP enregistrent l'adresse telle qu'on la leur donne et en retirent parfois le « / » final : sans lui, une redirection
     # transformerait le POST en GET (405, ou 500 avec DEBUG). Les deux routes MCP acceptent donc les deux formes.
     re_path(r"^workspaces/(?P<workspace>[-a-zA-Z0-9_]+)/mcp/?$", mcp.McpServerView.as_view()),

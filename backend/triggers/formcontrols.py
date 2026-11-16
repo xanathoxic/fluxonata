@@ -149,6 +149,36 @@ def _check_service(cfg, keys: set, path: str) -> dict[str, str]:
     return shaping.check(cfg, path) if "items_path" in keys else {}
 
 
+def _item_parts_problem(o: dict, at: str, shared: list, editable, mode: str) -> dict[str, str]:
+    """The sub-fields an option opens: allowed, valid, keys not already used by the shared ones."""
+    from . import formengine
+
+    if editable:
+        return {at: "Une liste que le concepteur du formulaire modifie n'a pas de détails propres à chaque choix."}
+    bad = _check_parts(o["parts"], mode, at, key_reserved=True)
+    if bad:
+        return bad
+    keys = [p.get("key") for p in [*shared, *o["parts"]]]
+    if len(set(keys)) != len(keys):
+        return {at: "Une clé est déjà utilisée par les sous-champs communs."}
+    for key, message in formengine.check_definition(row_definition([*shared, *o["parts"]])).items():
+        m = re.match(r"^sections\.0\.fields\.(\d+)(.*)$", key)
+        if m and int(m.group(1)) >= len(shared):
+            bad[f"{at}.{int(m.group(1)) - len(shared)}{m.group(2)}"] = message
+    return bad
+
+
+def _check_item(o: dict, at: str, shared: list, editable, mode: str) -> dict[str, str]:
+    """One option: known keys, group and disabled flag, then its own sub-fields."""
+    if set(o) - ITEM_KEYS:
+        return {at: "Option invalide (valeur, libellé, groupe, désactivée et sous-champs)."}
+    if not _short(o.get("group", ""), 120) or not isinstance(o.get("disabled", False), bool):
+        return {at: "Groupe de 120 caractères au plus ; « désactivée » : vrai ou faux."}
+    if "parts" not in o:
+        return {}
+    return _item_parts_problem(o, f"{at}.parts", shared, editable, mode)
+
+
 def _check_items(spec: dict, mode: str, path: str, draft: bool) -> dict[str, str]:
     """The boxes or the options of a list: value, label and, facultatively, the sub-fields this option opens."""
     from . import formengine
@@ -169,61 +199,15 @@ def _check_items(spec: dict, mode: str, path: str, draft: bool) -> dict[str, str
         return out
     shared = spec.get("parts", [])
     for i, o in enumerate(items):
-        if set(o) - ITEM_KEYS:
-            return {f"{path}.items.{i}": "Option invalide (valeur, libellé, groupe, désactivée et sous-champs)."}
-        if not _short(o.get("group", ""), 120) or not isinstance(o.get("disabled", False), bool):
-            return {f"{path}.items.{i}": "Groupe de 120 caractères au plus ; « désactivée » : vrai ou faux."}
-        if "parts" not in o:
-            continue
-        at = f"{path}.items.{i}.parts"
-        if editable:
-            return {at: "Une liste que le concepteur du formulaire modifie n'a pas de détails propres à chaque choix."}
-        bad = _check_parts(o["parts"], mode, at, key_reserved=True)
-        if not bad:
-            keys = [p.get("key") for p in [*shared, *o["parts"]]]
-            if len(set(keys)) != len(keys):
-                bad = {at: "Une clé est déjà utilisée par les sous-champs communs."}
-        if not bad:
-            for key, message in formengine.check_definition(row_definition([*shared, *o["parts"]])).items():
-                m = re.match(r"^sections\.0\.fields\.(\d+)(.*)$", key)
-                if m and int(m.group(1)) >= len(shared):
-                    bad[f"{at}.{int(m.group(1)) - len(shared)}{m.group(2)}"] = message
+        bad = _check_item(o, f"{path}.items.{i}", shared, editable, mode)
         if bad:
             return bad
     return out
 
 
-def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, str]:  # noqa: C901
-    """Structure of a control spec; {path: message}. A draft may still be empty (no sub-field yet): publishing is stricter."""
-    from . import formengine
-
-    if not isinstance(spec, dict) or set(spec) - SPEC_KEYS:
-        return {path: "Contrôle invalide."}
-    if spec.get("version") != 1:
-        return {f"{path}.version": "Version de description : 1."}
-    mode = spec.get("mode")
-    if mode not in MODES:
-        return {f"{path}.mode": "Mode : group, repeat, items ou choice."}
-    if depth(spec) > MAX_DEPTH:
-        return {path: f"Des contrôles imbriqués sur {MAX_DEPTH} niveaux au plus."}
-    parts = spec.get("parts", [])
-    out = _check_parts(parts, mode, f"{path}.parts", key_reserved=mode in ("items", "choice"))
-    if out:
-        return out
-    data = [p for p in parts if p.get("type") not in BLOCK_PARTS]
-    if mode not in ("items", "choice") and not data and not draft:
-        return {f"{path}.parts": "Ajoutez au moins un sous-champ."}
-    for key, message in formengine.check_definition(row_definition(parts)).items():
-        m = re.match(r"^sections\.0\.fields\.(\d+)(.*)$", key)
-        out[f"{path}.parts.{m.group(1)}{m.group(2)}" if m else path] = message
-    if out:
-        return out
-    if mode in ("items", "choice"):
-        out.update(_check_items(spec, mode, path, draft))
-        if out:
-            return out
-    elif "items" in spec or "items_editable" in spec:
-        out[f"{path}.items"] = "Les choix ne concernent que la liste à cocher et le choix."
+def _check_spec_display(spec: dict, mode: str, path: str) -> dict[str, str]:
+    """Dynamic options, display, column titles and placeholder."""
+    out: dict[str, str] = {}
     if "dynamic" in spec and (
         not isinstance(spec["dynamic"], bool) or mode not in ("items", "choice") or spec.get("items_editable")
     ):
@@ -248,6 +232,12 @@ def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, st
             )
     if "placeholder" in spec and (mode not in ("items", "choice") or not _short(spec["placeholder"], 120)):
         out[f"{path}.placeholder"] = "Texte d'invite de 120 caractères au plus (liste à cocher et choix)."
+    return out
+
+
+def _check_spec_totals(spec: dict, mode: str, path: str, data: list) -> dict[str, str]:
+    """Totals of a table of repeated rows: numeric columns, each once."""
+    out: dict[str, str] = {}
     if "totals" in spec:
         numeric = {p["key"] for p in data if p.get("type") == "number"}
         totals = spec["totals"]
@@ -259,6 +249,12 @@ def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, st
             or len(set(totals)) != len(totals)
         ):
             out[f"{path}.totals"] = "Totaux : colonnes numériques d'un tableau de lignes répétées."
+    return out
+
+
+def _check_spec_bounds(spec: dict, mode: str, path: str) -> dict[str, str]:
+    """Minimum and maximum of a list or of repeated rows, and the labels of rows."""
+    out: dict[str, str] = {}
     cap = MAX_ROWS if mode == "repeat" else MAX_ITEMS
     if mode in ("group", "choice"):
         if "min" in spec or "max" in spec:
@@ -270,6 +266,54 @@ def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, st
     for name in ("row_label", "add_label"):
         if name in spec and (mode != "repeat" or not _short(spec[name], 60)):
             out[f"{path}.{name}"] = "Texte de 60 caractères au plus (lignes répétées seulement)."
+    for name in ("row_label", "add_label"):
+        if name in spec and (mode != "repeat" or not _short(spec[name], 60)):
+            out[f"{path}.{name}"] = "Texte de 60 caractères au plus (lignes répétées seulement)."
+    return out
+
+
+def _check_spec_parts(spec: dict, mode: str, path: str, draft: bool) -> dict[str, str]:
+    """The sub-fields: well formed, at least one unless it is a draft, and valid as a form definition."""
+    from . import formengine
+
+    parts = spec.get("parts", [])
+    out = _check_parts(parts, mode, f"{path}.parts", key_reserved=mode in ("items", "choice"))
+    if out:
+        return out
+    data = [p for p in parts if p.get("type") not in BLOCK_PARTS]
+    if mode not in ("items", "choice") and not data and not draft:
+        return {f"{path}.parts": "Ajoutez au moins un sous-champ."}
+    for key, message in formengine.check_definition(row_definition(parts)).items():
+        m = re.match(r"^sections\.0\.fields\.(\d+)(.*)$", key)
+        out[f"{path}.parts.{m.group(1)}{m.group(2)}" if m else path] = message
+    return out
+
+
+def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, str]:
+    """Structure of a control spec; {path: message}. A draft may still be empty (no sub-field yet): publishing is stricter."""
+    if not isinstance(spec, dict) or set(spec) - SPEC_KEYS:
+        return {path: "Contrôle invalide."}
+    if spec.get("version") != 1:
+        return {f"{path}.version": "Version de description : 1."}
+    mode = spec.get("mode")
+    if mode not in MODES:
+        return {f"{path}.mode": "Mode : group, repeat, items ou choice."}
+    if depth(spec) > MAX_DEPTH:
+        return {path: f"Des contrôles imbriqués sur {MAX_DEPTH} niveaux au plus."}
+    out = _check_spec_parts(spec, mode, path, draft)
+    if out:
+        return out
+    if mode in ("items", "choice"):
+        out.update(_check_items(spec, mode, path, draft))
+        if out:
+            return out
+    elif "items" in spec or "items_editable" in spec:
+        out[f"{path}.items"] = "Les choix ne concernent que la liste à cocher et le choix."
+    data = [p for p in spec.get("parts", []) if p.get("type") not in BLOCK_PARTS]
+    out.update(_check_spec_display(spec, mode, path))
+    if "totals" in spec:
+        out.update(_check_spec_totals(spec, mode, path, data))
+    out.update(_check_spec_bounds(spec, mode, path))
     return out
 
 
@@ -357,7 +401,54 @@ def _choice(field: dict, spec: dict, value):
     return ({"value": v, **(kept or {})} if not problem else value), problem
 
 
-def process(field: dict, value):  # noqa: C901
+def _repeat_rows(rdef: dict, labels: dict, value: list) -> tuple[list[dict], str]:
+    """The lines of a repeated control: blank lines dropped, each line checked. On a problem: (lines so far, message)."""
+    rows: list[dict] = []
+    for i, raw in enumerate(value):
+        if isinstance(raw, dict) and all(v in (None, "", [], False, {}) for v in raw.values()):
+            continue  # a blank line is not a line (and its required sub-fields are not asked)
+        kept, problem = _row(rdef, labels, raw, f"Ligne {i + 1} — ")
+        if problem:
+            return rows, problem
+        if kept:  # a blank line is not a line
+            rows.append(kept)
+    return rows, ""
+
+
+def _picked_items(field: dict, spec: dict, value: list) -> tuple[list, str]:
+    """The boxes ticked: known, once, available, with the details of each; ordered as the control wants. On a problem:
+    (the value as sent, message)."""
+    items = {o["value"]: o for o in items_of(field)}
+    details = has_details(spec)
+    picked: dict[object, dict] = {}  # clés : valeurs des choix (texte ou nombre)
+    for raw in value:
+        v = raw.get("value") if isinstance(raw, dict) else raw
+        item = _known(items, field, v)
+        if item is None:
+            return value, "Choix non proposé."
+        if v in picked:
+            return value, "Choix en double."
+        if item.get("disabled"):
+            return value, "Choix indisponible."
+        if details:
+            extra = {k: x for k, x in raw.items() if k != "value"} if isinstance(raw, dict) else {}
+            odef, olabels = _details(spec, item)
+            kept, problem = _row(odef, olabels, extra, f"{item.get('label') or v} — ")
+            if problem:
+                return value, problem
+            picked[v] = {"value": v, **(kept or {})}
+        else:
+            picked[v] = {"value": v}
+    # the dual list lets the person ORDER what they chose: the order sent is the value
+    if spec.get("display") == "dual":
+        ordered = list(picked.values())
+    else:
+        ordered = [picked[v] for v in items if v in picked]  # in the order of the list, whatever order was sent
+        ordered += [p for v, p in picked.items() if v not in items]  # options of the service: in the order sent
+    return (ordered if details else [p["value"] for p in ordered]), ""
+
+
+def process(field: dict, value):
     """(the value as the server keeps it, a message if it is not acceptable). Hidden and unknown sub-values are dropped, calculated
     ones are computed, blank lines are ignored."""
     spec = field["control"]["spec"]
@@ -378,45 +469,13 @@ def process(field: dict, value):  # noqa: C901
     if len(value) > cap * 2:
         return value, "Trop d'éléments."
     if mode == "repeat":
-        rows: list[dict] = []
-        for i, raw in enumerate(value):
-            if isinstance(raw, dict) and all(v in (None, "", [], False, {}) for v in raw.values()):
-                continue  # a blank line is not a line (and its required sub-fields are not asked)
-            kept, problem = _row(rdef, labels, raw, f"Ligne {i + 1} — ")
-            if problem:
-                return rows, problem
-            if kept:  # a blank line is not a line
-                rows.append(kept)
-        what, result = "ligne", rows
+        result, problem = _repeat_rows(rdef, labels, value)
+        what = "ligne"
     else:
-        items = {o["value"]: o for o in items_of(field)}
-        details = has_details(spec)
-        picked: dict[str, dict] = {}
-        for raw in value:
-            v = raw.get("value") if isinstance(raw, dict) else raw
-            item = _known(items, field, v)
-            if item is None:
-                return value, "Choix non proposé."
-            if v in picked:
-                return value, "Choix en double."
-            if item.get("disabled"):
-                return value, "Choix indisponible."
-            if details:
-                extra = {k: x for k, x in raw.items() if k != "value"} if isinstance(raw, dict) else {}
-                odef, olabels = _details(spec, item)
-                kept, problem = _row(odef, olabels, extra, f"{item.get('label') or v} — ")
-                if problem:
-                    return value, problem
-                picked[v] = {"value": v, **(kept or {})}
-            else:
-                picked[v] = {"value": v}
-        # the dual list lets the person ORDER what they chose: the order sent is the value
-        if spec.get("display") == "dual":
-            ordered = list(picked.values())
-        else:
-            ordered = [picked[v] for v in items if v in picked]  # in the order of the list, whatever order was sent
-            ordered += [p for v, p in picked.items() if v not in items]  # options of the service: in the order sent
-        what, result = "choix", ordered if details else [p["value"] for p in ordered]
+        result, problem = _picked_items(field, spec, value)
+        what = "choix"
+    if problem:
+        return result, problem
     if len(result) < floor:
         return result, f"Au moins {floor} {what}(s)."
     if len(result) > ceiling:

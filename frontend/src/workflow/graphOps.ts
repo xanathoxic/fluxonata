@@ -2,6 +2,7 @@ import type { Action, JsonSchema } from "../api";
 import type { EdgeLabel, Graph, GraphEdge, GraphNode, Issue, NodeType } from "./types";
 import { NODE_LABELS } from "./types";
 import { cleanPoints, type Pt } from "./edgeRoute";
+import staticOutputs from "./staticOutputs.json";
 
 export const emptyGraph = (): Graph => ({ inputs: { type: "object", properties: {}, required: [] }, variables: [], form: null, notes: [], nodes: [], edges: [], outputs: {} });
 
@@ -34,6 +35,7 @@ export function defaultNode(graph: Graph, type: NodeType, action?: Action): Grap
   if (type === "agent") Object.assign(node, { goal: "", tools: [], provider: "", mode: "test", approval: "effectful", max_steps: 5 });
   if (type === "smtp") Object.assign(node, { connection: "", mode: "test", to: "", cc: "", subject: "", body: "" });
   if (type === "sftp") Object.assign(node, { connection: "", mode: "test", operation: "list", path: "/" });
+  if (type === "ssh") Object.assign(node, { connection: "", jumps: [], mode: "test", session: "exec", commands: [{ run: "" }], stop_on_error: true, timeout_seconds: 60 });
   if (type === "ldap") Object.assign(node, { connection: "", mode: "test", filter: "(objectClass=person)", attributes: ["cn", "mail"], scope: "sub", max_rows: 100 });
   if (type === "sql") Object.assign(node, { connection: "", mode: "test", statement: "SELECT 1 AS n", max_rows: 100, timeout_seconds: 15 });
   if (type === "http") Object.assign(node, { method: "GET", path: "/", connection: "", mode: "test", timeout_seconds: 15 });
@@ -208,7 +210,7 @@ export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<st
 
   // 1. order inside each layer: barycentre of the neighbours' rank, a few sweeps down then up
   const rank = new Map<string, number>();
-  const rerank = (l: string[]) => l.forEach((id, i) => rank.set(id, i));
+  const rerank = (l: string[]) => { l.forEach((id, i) => { rank.set(id, i); }); };
   layers.forEach(rerank);
   const mean = (xs: number[], fallback: number) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : fallback);
   const sweep = (idxs: number[], nb: Map<string, string[]>) => {
@@ -227,11 +229,11 @@ export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<st
   const place = (l: string[], want: (id: string, i: number) => number) => {
     const ws = l.map(want);
     const ys: number[] = [];
-    ws.forEach((w, i) => ys.push(i === 0 ? w : Math.max(w, (ys[i - 1] ?? 0) + GRID_Y)));
+    ws.forEach((w, i) => { ys.push(i === 0 ? w : Math.max(w, (ys[i - 1] ?? 0) + GRID_Y)); });
     const shift = mean(ws.map((w, i) => w - (ys[i] ?? w)), 0); // pushed apart: recentre the layer on what its nodes wanted
-    l.forEach((id, i) => y.set(id, (ys[i] ?? 0) + shift));
+    l.forEach((id, i) => { y.set(id, (ys[i] ?? 0) + shift); });
   };
-  layers.forEach((l, li) => place(l, (id, i) => (li % bandLayers === 0 ? i * GRID_Y : mean((preds.get(id) ?? []).filter((p) => y.has(p)).map((p) => y.get(p) ?? 0), i * GRID_Y))));
+  layers.forEach((l, li) => { place(l, (id, i) => (li % bandLayers === 0 ? i * GRID_Y : mean((preds.get(id) ?? []).filter((p) => y.has(p)).map((p) => y.get(p) ?? 0), i * GRID_Y))); });
   for (let li = depth - 2; li >= 0; li--) {
     if (li % bandLayers === bandLayers - 1) continue; // the next layer is on another band
     const l = layers[li] ?? [];
@@ -264,53 +266,56 @@ export function autoLayout(graph: Graph): Graph {
 
 export type OutputField = { path: string; label: string; type?: string | string[] };
 
+/** What each guaranteed output is called in the editor. The list of fields itself comes from the validator (`staticOutputs.json`, generated from `STATIC_OUTPUTS`). */
+const OUTPUT_LABELS: Record<string, Record<string, string>> = {
+  condition: { result: "résultat" },
+  switch: { result: "cas retenu" },
+  approval: { approved: "approuvé", decided_by: "décidé par", comment: "commentaire" },
+  foreach: { results: "résultats", count: "nombre d'éléments" },
+  race: { winner: "branche gagnante (identifiant)", winner_name: "branche gagnante (nom)", value: "valeur de la branche gagnante" },
+  wait_resume: { resumed: "reprise effectuée", payload: "données reçues à la reprise" },
+  smtp: { sent: "envoyé", simulated: "simulé (mode test)", recipients: "nombre de destinataires", message_id: "identifiant du message" },
+  sftp: { operation: "opération", path: "chemin", content: "contenu", file: "fichier", entries: "fichiers", count: "nombre", simulated: "simulé (mode test)" },
+  ldap: { rows: "entrées", count: "nombre", truncated: "tronqué", simulated: "simulé (mode test)" },
+  sql: { rows: "lignes", count: "nombre de lignes", columns: "colonnes", truncated: "tronqué", simulated: "simulé (mode test)" },
+  http: { status: "code HTTP", ok: "succès (2xx)", body: "réponse", headers: "en-têtes", file: "fichier", simulated: "simulé (mode test)" },
+  while: { iterations: "répétitions", results: "résultats", last: "dernier résultat", stopped: "raison de l'arrêt" },
+  agent: { answer: "réponse", iterations: "tours", steps: "étapes de l'agent", stopped: "raison de l'arrêt", simulated: "simulé (mode test)" },
+  ssh: {
+    status: "statut", results: "résultats (par commande ou étape)", failed_step: "étape en échec", error_type: "type d'erreur", uncertain: "résultat incertain",
+    connected: "connexion établie", simulated: "simulé (mode test)", duration_ms: "durée (ms)", hops: "serveurs traversés", error: "erreur (type, message)",
+    truncated: "sortie tronquée", failed_count: "éléments en échec", session: "type de session",
+  },
+};
+const STATIC_OUTPUTS = staticOutputs as Record<string, Record<string, string | null>>;
+/** The useful fields first: the order of `OUTPUT_LABELS` (what people reach for), then any other field the validator knows, alphabetically. */
+const fieldsFor = (n: GraphNode, kind: string): OutputField[] => {
+  const rank = Object.keys(OUTPUT_LABELS[kind] ?? {});
+  const at = (k: string) => (rank.includes(k) ? rank.indexOf(k) : rank.length);
+  return Object.entries(STATIC_OUTPUTS[kind] ?? {})
+    .sort(([a], [b]) => at(a) - at(b) || a.localeCompare(b))
+    .map(([k, t]) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${OUTPUT_LABELS[kind]?.[k] ?? k}`, ...(t ? { type: t } : {}) }));
+};
+
 function fieldsOfNode(n: GraphNode, actions: Action[]): OutputField[] {
   if (n.type === "action") {
     const act = actions.find((a) => a.slug === n.action);
     const props: Record<string, JsonSchema> = act?.latest_version?.output_schema.properties ?? {};
     return Object.entries(props).map(([k, p]) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${p.title ?? k}`, type: p.type }));
   }
-  if (n.type === "condition") return [{ path: `steps.${n.id}.output.result`, label: `${n.name} → résultat`, type: "boolean" }];
-  if (n.type === "switch") return [{ path: `steps.${n.id}.output.result`, label: `${n.name} → cas retenu`, type: "string" }];
   if (n.type === "transform") return n.op === "set" ? Object.keys(n.fields ?? {}).map((k) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${k}` })) : [
     { path: `steps.${n.id}.output.items`, label: `${n.name} → éléments`, type: "array" },
     { path: `steps.${n.id}.output.count`, label: `${n.name} → nombre`, type: "integer" },
   ];
-  if (n.type === "agent") return [
-    { path: `steps.${n.id}.output.answer`, label: `${n.name} → réponse`, type: "string" },
-    { path: `steps.${n.id}.output.iterations`, label: `${n.name} → tours`, type: "integer" },
-  ];
-  if (n.type === "smtp") return [
-    { path: `steps.${n.id}.output.sent`, label: `${n.name} → envoyé`, type: "boolean" },
-    { path: `steps.${n.id}.output.recipients`, label: `${n.name} → destinataires`, type: "integer" },
-  ];
-  if (n.type === "sftp") return [
-    { path: `steps.${n.id}.output.content`, label: `${n.name} → contenu` },
-    { path: `steps.${n.id}.output.entries`, label: `${n.name} → fichiers`, type: "array" },
-  ];
-  if (n.type === "ldap") return [
-    { path: `steps.${n.id}.output.rows`, label: `${n.name} → entrées`, type: "array" },
-    { path: `steps.${n.id}.output.count`, label: `${n.name} → nombre`, type: "integer" },
-  ];
-  if (n.type === "sql") return [
-    { path: `steps.${n.id}.output.rows`, label: `${n.name} → lignes`, type: "array" },
-    { path: `steps.${n.id}.output.count`, label: `${n.name} → nombre de lignes`, type: "integer" },
-  ];
-  if (n.type === "http") return [
-    { path: `steps.${n.id}.output.status`, label: `${n.name} → code HTTP`, type: "integer" },
-    { path: `steps.${n.id}.output.ok`, label: `${n.name} → succès (2xx)`, type: "boolean" },
-    { path: `steps.${n.id}.output.body`, label: `${n.name} → réponse` },
-  ];
-  if (n.type === "approval") return [{ path: `steps.${n.id}.output.approved`, label: `${n.name} → approuvé`, type: "boolean" }];
-  if (n.type === "while") return [
-    { path: `steps.${n.id}.output.iterations`, label: `${n.name} → répétitions`, type: "integer" },
-    { path: `steps.${n.id}.output.last`, label: `${n.name} → dernier résultat`, type: "object" },
-    { path: `steps.${n.id}.output.results`, label: `${n.name} → résultats`, type: "array" },
-  ];
-  if (n.type === "foreach") return [{ path: `steps.${n.id}.output.results`, label: `${n.name} → résultats`, type: "array" }];
+  if (n.type === "wait") return n.resume === "webhook" || n.resume === "form" ? fieldsFor(n, "wait_resume") : [];
   if (n.type === "script") return (n.outputs ?? []).map((o) => ({ path: `steps.${n.id}.output.${o.name}`, label: `${n.name} → ${o.name}`, type: o.type }));
   if (n.type === "ai") return Object.entries(n.output_schema?.properties ?? {}).map(([k, p]) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${p.title ?? k}`, type: p.type }));
-  return [];
+  return fieldsFor(n, n.type);
+}
+
+/** The output variables of one step, as `steps.<id>.output.<field>` paths (what the next steps and the workflow outputs can read). */
+export function nodeOutputFields(n: GraphNode, actions: Action[]): OutputField[] {
+  return fieldsOfNode(n, actions);
 }
 
 function baseFields(graph: Graph): OutputField[] {
@@ -380,6 +385,10 @@ export function clientValidate(graph: Graph, actions: Action[]): Issue[] {
     if (n.type === "smtp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SMTP »)." });
     if (n.type === "smtp" && (!(n.to ?? "").trim() || !(n.subject ?? "").trim() || !String(n.body ?? "").trim())) issues.push({ node: n.id, level: "error", code: "bad_smtp", message: "Indiquez le destinataire, l'objet et le corps du message." });
     if (n.type === "sftp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SFTP »)." });
+    if (n.type === "ssh" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion cible (type « Serveur SSH »)." });
+    if (n.type === "ssh" && (n.session ?? "exec") === "exec" && typeof n.commands !== "string" && !(Array.isArray(n.commands) ? n.commands : []).some((c) => (typeof c === "string" ? c : (c?.run ?? "")).trim())) issues.push({ node: n.id, level: "error", code: "bad_ssh", message: "Indiquez au moins une commande." });
+    if (n.type === "ssh" && n.session === "shell" && !(n.steps ?? []).length) issues.push({ node: n.id, level: "error", code: "bad_ssh", message: "Indiquez au moins une étape de session." });
+    if (n.type === "ssh" && (n.jumps ?? []).some((j) => !(typeof j === "string" ? j : j?.connection))) issues.push({ node: n.id, level: "error", code: "bad_ssh", message: "Choisissez une connexion pour chaque rebond (ou retirez-le)." });
     if (n.type === "ldap" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Annuaire LDAP »)." });
     if (n.type === "sql" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Base PostgreSQL »)." });
     if (n.type === "http" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Service HTTP ») utilisée par la requête." });
@@ -415,6 +424,7 @@ export function summarize(n: GraphNode, actions: Action[]): string {
     case "agent": return `${n.mode === "reel" ? "" : "[test] "}Agent · ${(n.tools ?? []).length} outil(s)`;
     case "smtp": return `${n.mode === "reel" ? "" : "[test] "}E-mail à ${n.to || "?"} : ${n.subject || "objet à saisir"}`.slice(0, 70);
     case "sftp": return `${n.mode === "reel" ? "" : "[test] "}SFTP ${n.operation ?? "list"} ${n.path ?? ""}`.slice(0, 70);
+    case "ssh": return `${n.mode === "reel" ? "" : "[test] "}SSH ${(n.jumps ?? []).length ? `via ${(n.jumps ?? []).length} rebond(s) ` : ""}${n.session === "shell" ? `session · ${(n.steps ?? []).length} étape(s)` : `${typeof n.commands === "string" ? "liste dynamique" : `${(n.commands ?? []).length} commande(s)`}`}`.slice(0, 70);
     case "ldap": return `${n.mode === "reel" ? "" : "[test] "}Annuaire ${n.filter ?? ""}`.slice(0, 70);
     case "sql": return `${n.mode === "reel" ? "" : "[test] "}${(n.statement ?? "").replace(/\s+/g, " ").slice(0, 50) || "requête à saisir"}`;
     case "http": if (n.integration) return `${n.mode === "reel" ? "" : "[test] "}${n.integration} · ${n.operation ?? "?"}`; return `${n.mode === "reel" ? "" : "[test] "}${n.method ?? "GET"} ${n.connection || "?"}${n.path ?? ""}`.slice(0, 70);

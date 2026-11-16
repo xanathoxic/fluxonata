@@ -81,7 +81,7 @@ function readRules(text: string, media: string | null, depth: number): Rule[] | 
 
 /** null when the text is not in the canonical form (then only the code editor can handle it). */
 export function parse(css: string | undefined): Rule[] | null {
-  if (!css || !css.trim()) return [];
+  if (!css?.trim()) return [];
   return readRules(css, null, 0);
 }
 

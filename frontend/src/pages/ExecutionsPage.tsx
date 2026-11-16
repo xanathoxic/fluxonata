@@ -65,6 +65,8 @@ export function ExecutionsPage() {
     to && { k: "to", label: `Jusqu'au ${to}`, clear: () => reset(setTo)("") },
     minDur && { k: "dur", label: `Durée ≥ ${minDur} s`, clear: () => reset(setMinDur)("") },
   ].filter(Boolean) as { k: string; label: string; clear: () => void }[];
+  // le texte, le statut, la période et la durée sont filtrés côté serveur (le type, côté client) : « aucune ligne » avec un filtre actif n'est pas « aucune exécution »
+  const filtered = active.length > 0 || status !== "";
   const clearAll = () => { setQ(""); setKind(""); setEnv(""); setFrom(""); setTo(""); setMinDur(""); setStatus(""); setPage(1); };
   return (
     <>
@@ -73,6 +75,7 @@ export function ExecutionsPage() {
           <a className="button" href={`/api/v1/workspaces/${workspace.slug}/workflow-runs/export/${serverQs ? `?${serverQs}` : ""}`} download>Exporter en CSV</a>
           <button type="button" disabled={picked.length !== 2} onClick={() => navigate(`/runs/compare?a=${picked[0]}&b=${picked[1]}`)}>Comparer les 2 exécutions cochées</button>
         </>} />
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <section className="xsearch" role="search" aria-label="Rechercher dans les exécutions">
         <div className="xs-box">
           <Magnifier />
@@ -81,9 +84,11 @@ export function ExecutionsPage() {
           <button type="button" className="xs-toggle" aria-expanded={filters} aria-controls="ex-filters" onClick={() => setFilters(!filters)}>{filters ? "Masquer les filtres" : "Afficher les filtres"}</button>
         </div>
         <div className="xs-row">
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="xs-chips" role="group" aria-label="Statut">
             {STATUSES.map(([v, l]) => <button key={v} type="button" className={`xs-chip xs-${v || "all"}`} aria-pressed={status === v} onClick={() => reset(setStatus)(v)}>{l} <span className="xs-n">{count(v)}</span></button>)}
           </div>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="xs-seg" role="group" aria-label="Type">
             {KINDS.map(([v, l]) => <button key={v} type="button" aria-pressed={kind === v} onClick={() => reset(setKind)(v)}>{l}</button>)}
           </div>
@@ -97,6 +102,7 @@ export function ExecutionsPage() {
           </div>
         )}
         {active.length > 0 && (
+          // biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran
           <div className="xs-active" aria-label="Filtres actifs">
             {active.map((a) => <span key={a.k} className="xs-tag">{a.label}<button type="button" onClick={a.clear} aria-label={`Retirer le filtre : ${a.label}`}>×</button></span>)}
             <button type="button" className="xs-clear" onClick={clearAll}>Tout effacer</button>
@@ -105,7 +111,7 @@ export function ExecutionsPage() {
       </section>
       {loading && <p role="status">{t("common.loading")}</p>}
       {(actions.isError || flows.isError) && <p role="alert">{t("common.error")}</p>}
-      {!loading && rows.length === 0 && <p className="empty-state">{t("exec.empty")}</p>}
+      {!loading && !actions.isError && !flows.isError && rows.length === 0 && !filtered && <p className="empty-state">{t("exec.empty")}</p>}
       {rows.length > 0 && (
         <div className="table-wrap xtable">
           <table>
@@ -126,7 +132,7 @@ export function ExecutionsPage() {
           </table>
         </div>
       )}
-      {rows.length > 0 && shownAll.length === 0 && (
+      {!loading && !actions.isError && !flows.isError && shownAll.length === 0 && (rows.length > 0 || filtered) && (
         <div className="ops-empty"><strong>Aucune exécution ne correspond à ces filtres</strong><p className="hint">Essayez un autre mot, une autre période ou retirez un filtre.</p><button type="button" className="primary" onClick={clearAll}>Tout effacer</button></div>
       )}
       {shownAll.length > 0 && <Pagination total={shownAll.length} page={cur} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} label="Pagination des exécutions" />}

@@ -4,7 +4,6 @@ import time
 
 from ai import dryrun
 from runs.runners import SubprocessRunner
-from tests.test_ai import ai_ws  # noqa: F401  (fixture)
 
 
 def script(nid, code, bindings=None, outputs=(("x", "integer"),), **kw):
@@ -428,7 +427,10 @@ def test_a_chain_of_retries_is_walked_when_every_link_fails_in_turn(ai_ws, world
         outputs={"statut": "{{ steps.e.output.longest_word }}"},
         user=world["designer"],
     )
-    call = lambda i, n: {"id": i, "type": "subworkflow", "name": n, "workflow": "redem", "inputs": {}}  # noqa: E731
+
+    def call(i, n):
+        return {"id": i, "type": "subworkflow", "name": n, "workflow": "redem", "inputs": {}}
+
     g = graph(
         [
             call("r1", "Redémarrage"),
@@ -454,7 +456,10 @@ def test_a_chain_of_retries_is_walked_when_every_link_fails_in_turn(ai_ws, world
 
 def test_a_multi_way_choice_follows_its_case_and_every_case_gets_a_scenario(ai_ws):
     ws, _ = ai_ws
-    wait = lambda i: {"id": i, "type": "wait", "name": i.title(), "seconds": 1}  # noqa: E731
+
+    def wait(i):
+        return {"id": i, "type": "wait", "name": i.title(), "seconds": 1}
+
     g = graph(
         [
             {

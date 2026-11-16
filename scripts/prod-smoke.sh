@@ -33,7 +33,7 @@ curl -fs "$BASE/api/v1/health/ready/" || { echo "API non prête"; "${C[@]}" logs
 echo; "${C[@]}" exec -T -e ADMIN_PW=prod-smoke-pass-123 "$API" python manage.py bootstrap --workspace principal --password-env ADMIN_PW | tail -2
 "${C[@]}" exec -T "$API" python manage.py seed_demo --password prod-smoke-pass-123 >/dev/null
 if [ "$AGENT" = 1 ]; then  # enregistrer le runner (jeton de l'environnement), PUIS démarrer l'agent : sans base ni clé, il ne parle qu'à runner-gw
-  "${C[@]}" exec -T -e ORCH_EXEC_AGENT_TOKEN "$API" python manage.py runner_bootstrap
+  scripts/agent-register.sh
   "${C[@]}" --profile agent up -d --build exec-agent 2>&1 | tail -2
   for _ in $(seq 1 30); do [ "$("${C[@]}" exec -T "$API" python manage.py shell -c "from runs.models import Runner; print(Runner.objects.filter(name='exec-agent', last_contact_at__isnull=False).count())" 2>/dev/null | tail -1)" = 1 ] && break; sleep 2; done
 fi

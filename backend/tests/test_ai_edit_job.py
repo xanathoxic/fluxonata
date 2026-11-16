@@ -5,7 +5,7 @@ import pytest
 from ai import jobs, service
 from ai.models import AiJob, AiPolicy
 from tests.conftest import client_for
-from tests.test_ai import BASE, ai_ws  # noqa: F401
+from tests.test_ai import BASE
 from tests.test_ai_edit import body
 from workflows.models import Workflow
 

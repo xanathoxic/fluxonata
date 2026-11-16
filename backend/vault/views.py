@@ -17,7 +17,7 @@ from core import netsec
 from tenancy.models import Environment
 from tenancy.permissions import MANAGE_CONNECTIONS, VIEW, get_workspace, has_perm
 
-from . import auth, external
+from . import auth, external, registry
 from .models import Connection, Secret
 
 OAUTH_SALT = "fluxonata.oauth.state"
@@ -200,7 +200,7 @@ class WorkspaceVaultView(APIView):
 
 
 class ConnectionSerializer(serializers.ModelSerializer):
-    secret = serializers.SlugRelatedField(slug_field="name", read_only=True)
+    secret: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="name", read_only=True)
     secret_provider = serializers.CharField(source="secret.provider", default=None, read_only=True)
     environment = serializers.CharField(source="environment.kind", default=None, read_only=True)
 
@@ -223,7 +223,8 @@ class ConnectionSerializer(serializers.ModelSerializer):
 
 class ConnectionCreateSerializer(serializers.Serializer):
     name = serializers.SlugField(max_length=60)
-    label = serializers.CharField(max_length=120)
+    # `label` est un nom du contrat d'API ; il masque l'attribut `label` de DRF `Field` : exemption ciblée.
+    label = serializers.CharField(max_length=120)  # type: ignore[assignment]
     kind = serializers.ChoiceField(choices=Connection.Kind.choices)
     config = serializers.DictField(required=False, default=dict)
     secret = serializers.SlugField(required=False, help_text="Nom d'un secret existant")
@@ -235,6 +236,31 @@ class ConnectionCreateSerializer(serializers.Serializer):
         choices=[p.value for p in Secret.Provider], default=Secret.Provider.INTERNAL, required=False
     )
     vault = VaultRefSerializer(required=False)
+    new_secret_name = serializers.SlugField(
+        max_length=60, required=False, help_text="Nom du secret créé avec la connexion (facultatif)"
+    )
+
+
+class ConnectionUpdateSerializer(serializers.Serializer):
+    """What can change on an existing connection. NOT the identifier, the type or the environment (workflows refer to the identifier; the
+    type decides what the settings mean). The secret: keep it (send nothing), choose an existing one (`secret`), or create a new one
+    (`secret_value` or an external reference, optionally named by `new_secret_name`)."""
+
+    label = serializers.CharField(max_length=120, required=False)  # type: ignore[assignment]
+    config = serializers.DictField(required=False)
+    name = serializers.SlugField(max_length=60, required=False)
+    # only compared with the stored values (they never change): plain text, so no new choice set is published in the API contract
+    kind = serializers.CharField(max_length=20, required=False)
+    environment = serializers.CharField(max_length=10, required=False, allow_null=True)
+    secret = serializers.SlugField(required=False, help_text="Nom d'un secret existant de l'espace")
+    secret_value = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, max_length=MAX_SECRET, trim_whitespace=False
+    )
+    secret_provider = serializers.ChoiceField(
+        choices=[p.value for p in Secret.Provider], default=Secret.Provider.INTERNAL, required=False
+    )
+    vault = VaultRefSerializer(required=False)
+    new_secret_name = serializers.SlugField(max_length=60, required=False)
 
 
 CONFIG_FIELDS = {
@@ -248,6 +274,15 @@ CONFIG_FIELDS = {
     Connection.Kind.MYSQL: ("host", "port", "database", "username", "tls"),
     Connection.Kind.LDAP: ("host", "port", "bind_dn", "base_dn", "tls"),
     Connection.Kind.SFTP: ("host", "port", "username", "host_key_sha256"),
+    Connection.Kind.SSH: (
+        "host",
+        "port",
+        "username",
+        "host_key_sha256",
+        "passphrase_secret",
+        "connect_timeout_seconds",
+        "auth_timeout_seconds",
+    ),
     Connection.Kind.SMTP: ("host", "port", "username", "tls", "from_address", "from_name"),
     Connection.Kind.AWS_SIGV4: ("base_url", "access_key_id", "region", "service"),
 }
@@ -274,22 +309,25 @@ def _check_config(kind, config, dynamic: bool = False):
                     "port",
                     "host_key_sha256",
                     "from_name",
+                    "passphrase_secret",
+                    "connect_timeout_seconds",
+                    "auth_timeout_seconds",
                 )
                 or key == "description"
                 or (dynamic and key in ("username", "bind_dn"))
+                or (
+                    kind == Connection.Kind.SSH and key == "host"
+                )  # a connection without a host is a reusable identity (key)
             ):
                 continue
             if not str(config.get(key) or "").strip():
                 raise serializers.ValidationError(
                     {"config": f"Le paramètre « {key} » est requis pour ce type de connexion."}
                 )
-        if kind == Connection.Kind.SMTP:
-            from runs import smtp_node
-
-            try:
-                smtp_node.check_connection_config(config)
-            except smtp_node.SmtpStepError as exc:
-                raise serializers.ValidationError({"config": exc.message}) from None
+        try:
+            registry.check_config(kind, config)  # SMTP and SSH settings are checked by the steps that use them
+        except registry.ConfigRefused as exc:
+            raise serializers.ValidationError({"config": exc.message}) from None
         if kind == Connection.Kind.API_KEY and config.get("in", "header") not in ("header", "query"):
             raise serializers.ValidationError({"config": "« in » : header ou query."})
         for key in URL_FIELDS:
@@ -300,6 +338,42 @@ def _check_config(kind, config, dynamic: bool = False):
                     raise serializers.ValidationError({"config": f"{key} : {exc}"}) from None
     keep = (*(wanted or ()), "description")
     return {k: v for k, v in config.items() if k in keep and isinstance(v, str)}
+
+
+SSH_IDENTITY_NEEDS_KEY = (
+    "Sans hôte, la connexion doit porter une clé privée (lignes « -----BEGIN … PRIVATE KEY----- ») : "
+    "un mot de passe ne peut pas être envoyé à un hôte choisi par une étape."
+)
+
+
+def secret_is_dynamic(secret: Secret | None) -> bool:
+    return secret is not None and secret.is_external and secret.vault_mode == Secret.VaultMode.DYNAMIC
+
+
+def ssh_identity_problem(
+    secret: Secret | None = None, *, value: str | None = None, dynamic: bool = False
+) -> str | None:
+    """Why this secret cannot be the key of an SSH connection that has no host (None when it can): only a private key may be used with a host
+    that a step names. A `value` is checked as typed; an existing secret is read here, server side, and never returned."""
+    if dynamic or secret_is_dynamic(secret):
+        return SSH_IDENTITY_NEEDS_KEY
+    if value is None:
+        if secret is None:
+            return SSH_IDENTITY_NEEDS_KEY
+        try:
+            value = secret.reveal()
+        except Exception:  # noqa: BLE001 - an unreadable secret cannot be proven to be a key
+            return "Le secret choisi est illisible (clé absente, donnée corrompue ou coffre externe indisponible) : impossible de vérifier que c'est une clé privée."
+    return None if value.lstrip().startswith("-----BEGIN") else SSH_IDENTITY_NEEDS_KEY
+
+
+def unique_secret_name(ws, base: str) -> str:
+    """`base`, or `base-2`, `base-3`… : a name no secret of the workspace has."""
+    name, n = base[:60], 2
+    while Secret.objects.filter(workspace=ws, name=name).exists():
+        suffix = f"-{n}"
+        name, n = f"{base[: 60 - len(suffix)]}{suffix}", n + 1
+    return name
 
 
 class ConnectionListCreateView(APIView):
@@ -325,11 +399,27 @@ class ConnectionListCreateView(APIView):
         external_secret = d.get("secret_provider") == Secret.Provider.VAULT
         dynamic = external_secret and vault_ref.get("mode") == Secret.VaultMode.DYNAMIC
         config = _check_config(d["kind"], d.get("config", {}), dynamic)
+        if d["kind"] == Connection.Kind.SSH and not config.get("host"):
+            # an identity without a host is used with a host that workflows name: only a private key may be used that way (a password would be
+            # handed to whatever server the step names)
+            if d.get("secret") and not (external_secret or d.get("secret_value")):
+                chosen = Secret.objects.filter(workspace=ws, name=d["secret"]).first()
+                problem = ssh_identity_problem(chosen) if chosen is not None else None
+            elif external_secret:
+                problem = (
+                    ssh_identity_problem(dynamic=dynamic) if dynamic else None
+                )  # an external key is verified when it is read
+            else:
+                problem = ssh_identity_problem(value=d.get("secret_value") or "")
+            if problem:
+                raise serializers.ValidationError({"secret_value": problem})
         secret = None
         if external_secret or d.get("secret_value"):
-            secret_name = f"{d['name']}-{(env.kind if env else 'all')}"
+            secret_name = d.get("new_secret_name") or f"{d['name']}-{(env.kind if env else 'all')}"
             if Secret.objects.filter(workspace=ws, name=secret_name).exists():
-                raise serializers.ValidationError({"name": "Un secret de ce nom existe déjà."})
+                raise serializers.ValidationError(
+                    {"new_secret_name" if d.get("new_secret_name") else "name": "Un secret de ce nom existe déjà."}
+                )
             secret = build_secret(
                 ws,
                 request.user,
@@ -356,7 +446,134 @@ class ConnectionListCreateView(APIView):
         return Response(ConnectionSerializer(conn).data, status=201)
 
 
+def _refuse_identity_change(d: dict, conn):
+    """What identifies a connection (name, type, environment) never changes: workflows refer to it."""
+    if "name" in d and d["name"] != conn.name:
+        raise serializers.ValidationError(
+            {
+                "name": "L'identifiant d'une connexion ne change pas (les workflows s'y réfèrent) : créez une autre connexion."
+            }
+        )
+    if "kind" in d and d["kind"] != conn.kind:
+        raise serializers.ValidationError(
+            {"kind": "Le type d'une connexion ne change pas : créez une autre connexion."}
+        )
+    if "environment" in d and d["environment"] != (conn.environment.kind if conn.environment else None):
+        raise serializers.ValidationError(
+            {"environment": "L'environnement d'une connexion ne change pas : créez une autre connexion."}
+        )
+
+
+def _refuse_two_secrets(d: dict):
+    """An existing secret OR a new one, never both."""
+    choices = [k for k in ("secret", "secret_value") if d.get(k)] + (
+        ["vault"] if d.get("secret_provider") == Secret.Provider.VAULT else []
+    )
+    if d.get("secret") and len(choices) > 1:
+        raise serializers.ValidationError(
+            {"secret": "Choisissez un secret existant OU créez-en un nouveau, pas les deux."}
+        )
+
+
+def _check_ssh_identity(conn, config: dict, d: dict, creating: bool, new_external: bool, dynamic: bool, final):
+    """An SSH connection without its own host must carry an identity the platform can use."""
+    if conn.kind == Connection.Kind.SSH and not config.get("host"):
+        if creating:
+            problem = (
+                ssh_identity_problem(value=d.get("secret_value") or "", dynamic=dynamic)
+                if not new_external
+                else (ssh_identity_problem(dynamic=True) if dynamic else None)
+            )
+        else:
+            problem = ssh_identity_problem(final)
+        if problem:
+            raise serializers.ValidationError({"secret_value" if creating else "secret": problem})
+
+
+def _apply_secret(ws, user, conn, d: dict, creating: bool, chosen, vault_ref: dict):
+    """Gives the connection its new secret (created or chosen); True when it changed."""
+    secret_changed = False
+    if creating:
+        env_kind = conn.environment.kind if conn.environment else "all"
+        name = unique_secret_name(ws, d.get("new_secret_name") or f"{conn.name}-{env_kind}")
+        if d.get("new_secret_name") and name != d["new_secret_name"]:
+            raise serializers.ValidationError(
+                {
+                    "new_secret_name": "Un secret de ce nom existe déjà : choisissez-le comme secret existant ou donnez un autre nom."
+                }
+            )
+        conn.secret = build_secret(
+            ws, user, name, d.get("secret_provider", "internal"), d.get("secret_value", ""), vault_ref
+        )
+        secret_changed = True
+    elif chosen is not None and chosen != conn.secret:
+        conn.secret = chosen
+        secret_changed = True
+    return secret_changed
+
+
 class ConnectionDetailView(APIView):
+    serializer_class = ConnectionUpdateSerializer
+
+    @transaction.atomic
+    def patch(self, request, workspace, pk):
+        ws = get_workspace(request.user, workspace, MANAGE_CONNECTIONS)
+        conn = (
+            Connection.objects.select_related("secret", "environment")
+            .select_for_update(of=("self",))
+            .filter(workspace=ws, pk=pk)
+            .first()
+        )
+        if conn is None:
+            raise Http404()
+        ser = ConnectionUpdateSerializer(data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        _refuse_identity_change(d, conn)
+        _refuse_two_secrets(d)
+        vault_ref = d.get("vault") or {}
+        new_external = d.get("secret_provider") == Secret.Provider.VAULT
+        creating = bool(d.get("secret_value")) or new_external
+        # the secret the connection will have once saved
+        chosen = None
+        if d.get("secret"):
+            chosen = Secret.objects.filter(workspace=ws, name=d["secret"]).first()
+            if chosen is None:
+                raise serializers.ValidationError({"secret": "Secret inconnu dans cet espace."})
+        final = chosen if chosen is not None else (None if creating else conn.secret)
+        dynamic = (
+            (new_external and vault_ref.get("mode") == Secret.VaultMode.DYNAMIC)
+            if creating
+            else secret_is_dynamic(final)
+        )
+        config = _check_config(conn.kind, d["config"] if "config" in d else conn.config, dynamic)
+        _check_ssh_identity(conn, config, d, creating, new_external, dynamic, final)
+        changed = [k for k in ("label", "config") if k in d and d[k] != getattr(conn, k)]
+        if "label" in d:
+            conn.label = d["label"]
+        conn.config = config
+        previous = conn.secret.name if conn.secret else None
+        secret_changed = _apply_secret(ws, request.user, conn, d, creating, chosen, vault_ref)
+        if config != conn.__class__.objects.values_list("config", flat=True).get(pk=conn.pk) or secret_changed:
+            conn.last_test_ok, conn.last_test_at, conn.last_test_message = (
+                None,
+                None,
+                "",
+            )  # what was tested is no longer what is saved
+        conn.save()
+        record(
+            "connection.update",
+            actor=request.user,
+            workspace=ws,
+            target=conn,
+            kind=conn.kind,
+            changed=changed,  # field names only, never a value
+            secret_changed=secret_changed,
+            previous_secret=previous if secret_changed else None,
+            secret=conn.secret.name if conn.secret else None,
+        )
+        return Response(ConnectionSerializer(conn).data)
+
     def delete(self, request, workspace, pk):
         ws = get_workspace(request.user, workspace, MANAGE_CONNECTIONS)
         conn = Connection.objects.filter(workspace=ws, pk=pk).first()

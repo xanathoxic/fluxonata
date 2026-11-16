@@ -7,10 +7,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.models import record
-from workflows.models import CatalogGrant, Workflow
+from tenancy.models import Membership, UserGroup
+from tenancy.permissions import ADMINISTER, get_workspace
 
-from .models import Membership, UserGroup
-from .permissions import ADMINISTER, get_workspace
+from .models import CatalogGrant, Workflow
 
 MAX_GROUPS = 200
 

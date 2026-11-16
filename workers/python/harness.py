@@ -3,6 +3,7 @@
 Reads /work-relative input.json, imports action.py, calls entrypoint(inputs) and prints ONE JSON
 envelope on the real stdout. Everything the action prints goes to stderr (logs).
 """
+
 import importlib.util
 import json
 import os

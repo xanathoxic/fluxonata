@@ -19,6 +19,8 @@ import { HelpTip } from "../../components/HelpTip";
 import { Menu } from "../../components/Menu";
 import { Overlay } from "../../components/Overlay";
 import { StepFinder } from "../StepFinder";
+import { WorkflowPreview } from "../WorkflowPreview";
+import { keyed } from "../../components/keyed";
 
 const CHAT_W = 380; // px, colonne de l'assistant IA (à droite des propriétés)
 const VIEW_KEY = "orch.schema.view";
@@ -37,6 +39,7 @@ export function SchemaTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<"canvas" | "list">(readView);
   const [scriptOpen, setScriptOpen] = useState<string | null>(null);
+  const [previewSlug, setPreviewSlug] = useState<string | null>(null); // the called workflow shown in an overlay
   const [showIssues, setShowIssues] = useState(false);
   const [finder, setFinder] = useState(false);
   const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null); // asks the canvas to centre on a node
@@ -77,9 +80,10 @@ export function SchemaTab() {
     if (item.kind === "integration") {
       const integ = integrations.find((i) => i.slug === item.slug);
       if (!integ) return;
-      const first = integ.operations[0]!;
+      const first = integ.operations[0];
+      if (!first) return;
       const only = connections.filter((c) => c.kind === integ.connection.kind);
-      const base = { ...defaultNode(graph, "http"), name: `${integ.name} — ${first.name}`, integration: integ.slug, operation: first.id, params: {}, connection: only.length === 1 ? only[0]!.name : "" } as GraphNode;
+      const base = { ...defaultNode(graph, "http"), name: `${integ.name} — ${first.name}`, integration: integ.slug, operation: first.id, params: {}, connection: only.length === 1 ? (only[0]?.name ?? "") : "" } as GraphNode;
       const node = pos ? { ...base, ui: { x: Math.round(pos.x), y: Math.round(pos.y) } } : base;
       delete node.method;
       delete node.path;
@@ -152,7 +156,11 @@ export function SchemaTab() {
         <div className="schema-center">
           {view === "canvas" ? (
             <CanvasView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={pick} focus={focus} readOnly={!editable}
-              onOpen={(id) => graph.nodes.find((n) => n.id === id)?.type === "script" && setScriptOpen(id)}
+              onOpen={(id) => {
+                const n = graph.nodes.find((x) => x.id === id);
+                if (n?.type === "script") setScriptOpen(id);
+                else if (n?.type === "subworkflow" && n.workflow) setPreviewSlug(n.workflow);
+              }}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
               onRouteEdge={(f, t, points) => editable && setGraph(setEdgePoints(graph, f, t, points))}
               onConnect={(f, t) => editable && setGraph(connect(graph, f, t, (() => { const src = graph.nodes.find((n) => n.id === f); return src ? defaultLabel(graph, src) : "next"; })()))}
@@ -202,8 +210,8 @@ export function SchemaTab() {
         <Overlay title="Validation du schéma" description={errors ? `${errors} problème(s) bloquant(s) à corriger avant de publier.` : "Aucun problème bloquant."} onClose={() => setShowIssues(false)} footer={<button type="button" onClick={() => setShowIssues(false)}>Fermer</button>}>
           {issues.length === 0 ? <p>Aucun problème détecté.</p> : (
             <ul className="issue-list">
-              {issues.map((i, k) => (
-                <li key={k} className={`issue issue-${i.level}`}>
+              {keyed(issues, (i) => `${i.node}|${i.code}|${i.message}`).map(({ item: i, key }) => (
+                <li key={key} className={`issue issue-${i.level}`}>
                   <span aria-hidden="true">{i.level === "error" ? "✖ " : "⚠ "}</span><span className="sr-only">{i.level === "error" ? "Erreur : " : "Avertissement : "}</span>
                   {i.node ? <button type="button" className="linklike" onClick={() => { setSelectedId(i.node); setFocus({ id: i.node as string, seq: Date.now() }); setShowIssues(false); }}>{graph.nodes.find((n) => n.id === i.node)?.name ?? i.node}</button> : null}{i.node ? " — " : ""}{i.message}
                 </li>
@@ -212,6 +220,7 @@ export function SchemaTab() {
           )}
         </Overlay>
       )}
+      {previewSlug && <WorkflowPreview slug={previewSlug} onClose={() => setPreviewSlug(null)} />}
       {finder && <StepFinder graph={graph} onPick={(id) => { setSelectedId(id); setFocus({ id, seq: Date.now() }); setLayout((l) => ({ ...l, panOpen: true })); setFinder(false); }} onClose={() => setFinder(false)} />}
       {scriptNode && <ScriptEditorDialog node={scriptNode} graph={graph} actions={actions} slug={d.slug} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}
     </div>

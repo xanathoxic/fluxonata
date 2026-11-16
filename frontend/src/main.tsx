@@ -13,7 +13,9 @@ const isPublic = location.pathname.startsWith("/f/") || location.pathname.starts
 
 /** Public form addresses load only the form page: no session call, and none of the application's code is sent to a visitor. */
 async function start() {
-  const root = createRoot(document.getElementById("root")!);
+  const rootElement = document.getElementById("root");
+  if (!rootElement) throw new Error("Élément #root introuvable dans la page.");
+  const root = createRoot(rootElement);
   const page = isPublic ? (
     <Routes>
       <Route path="/f/:token" element={<PublicFormPage />} />
@@ -21,17 +23,25 @@ async function start() {
     </Routes>
   ) : (
     (() => {
-      const { App } = app!;
+      if (!app) throw new Error("L'application n'est pas chargée.");
+      const { App } = app;
       return <App />;
     })()
   );
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>{page}</BrowserRouter>
+        {/* Sans transition : pendant le téléchargement d'une page différée, l'ancienne page disparaît aussitôt au profit du message de chargement (avec
+            des transitions elle resterait affichée et cliquable, et un clic partirait sur un écran qui va disparaître). */}
+        <BrowserRouter useTransitions={false}>{page}</BrowserRouter>
       </QueryClientProvider>
     </StrictMode>,
   );
 }
 let app: typeof import("./App") | undefined;
-(isPublic ? Promise.resolve() : import("./App").then((m) => { app = m; })).then(start);
+(isPublic
+  ? Promise.resolve()
+  : import("./App").then((m) => {
+      app = m;
+    })
+).then(start);

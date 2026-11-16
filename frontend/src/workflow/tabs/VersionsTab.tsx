@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { ApiError } from "../../api";
 import { Badge } from "../../components/AdminUi";
@@ -8,6 +8,7 @@ import { errorText, useWsMutation, useWsQuery } from "../../lib";
 import { useDraft } from "../DraftContext";
 import type { Issue } from "../types";
 import { HelpTip } from "../../components/HelpTip";
+import { useAnchorFocus } from "../../components/useAnchorFocus";
 
 interface Ver { version: string; digest: string; changelog: string; created_at: string }
 interface NodeRef { id: string; name: string; type: string }
@@ -30,7 +31,7 @@ export function VersionsTab() {
   const [cmp, setCmp] = useState<Cmp | null>(null);
   const errors = d.issues.filter((i) => i.level === "error").length;
   const { hash } = useLocation();
-  useEffect(() => { if (hash === "#publier") { const el = document.getElementById("bump"); el?.scrollIntoView({ block: "center" }); el?.focus(); } }, [hash, q.isSuccess]);
+  useAnchorFocus(hash, "#publier", q.isSuccess, "bump"); // l'ancre #publier est rejouée quand l'adresse ou le chargement des versions change
 
   const doPublish = async () => {
     setMsg(null);

@@ -57,6 +57,7 @@ export function RunsChart({ data }: { data: DayPoint[] }) {
           <tbody>{data.map((p) => <tr key={p.day}><th scope="row">{longDay(p.day)}</th><td>{p.succeeded}</td><td>{p.failed}</td><td>{p.succeeded + p.failed ? `${Math.round((100 * p.failed) / (p.succeeded + p.failed))} %` : "—"}</td></tr>)}</tbody></table></div>
       ) : (
         <div className="viz-plot" ref={ref}>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`Exécutions terminées par jour : ${totals.ok} réussies et ${totals.ko} échouées sur ${data.length} jour(s)`} className="viz-svg">
             <defs>
               <pattern id={`${id}h`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--err)" /><line x1="0" y1="0" x2="0" y2="6" stroke="#fff" strokeOpacity=".45" strokeWidth="2" /></pattern>
@@ -73,6 +74,7 @@ export function RunsChart({ data }: { data: DayPoint[] }) {
                   {p.succeeded > 0 && <path d={p.failed > 0 ? `M${x},${y(0)}V${y(p.succeeded)}H${x + bw}V${y(0)}Z` : topRounded(x, y(p.succeeded), bw, hOk, 4)} fill="var(--ok)" stroke="var(--surface)" strokeWidth="2" />}
                   {p.failed > 0 && <path d={topRounded(x, y(p.succeeded + p.failed), bw, hKo, 4)} fill={`url(#${id}h)`} stroke="var(--surface)" strokeWidth="2" />}
                   {i % step === 0 && <text x={cx} y={H - 6} textAnchor="middle" className="viz-tick">{shortDay(p.day)}</text>}
+                  {/* biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: zone de survol focalisable qui annonce sa valeur (graphique) */}
                   <rect x={ML + band * i} y={MT} width={band} height={ih} fill="transparent" tabIndex={0} role="img" aria-label={`${longDay(p.day)} : ${p.succeeded} réussie(s), ${p.failed} échouée(s)`}
                     onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)} className="viz-hit" />
                 </g>

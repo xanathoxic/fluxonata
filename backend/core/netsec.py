@@ -11,6 +11,7 @@ import re
 import socket
 import ssl
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -62,21 +63,31 @@ def env_allowlist() -> set[str]:
     return {h.strip().lower() for h in getattr(settings, "ORCH_EGRESS_ALLOWLIST", "").split(",") if h.strip()}
 
 
-# What a platform administrator adds in the web interface (`tenancy.EgressHost`), read from the database every few seconds so every
-# process (API, workers) follows a change without a restart. If the database cannot be read, the last known list stays.
+# What a platform administrator adds in the web interface (`tenancy.EgressHost`), read every few seconds so every process (API, workers)
+# follows a change without a restart. The application that owns that list registers how to read it (`set_managed_source`, done by the
+# `tenancy` app when it starts): this module, used by every outgoing connection, depends on no application. Without a source, or if it
+# cannot be read, the last known list stays, and the environment's list still applies: the failure never allows more.
 MANAGED_TTL = 5.0
 _managed: dict = {"at": float("-inf"), "hosts": frozenset()}
+_managed_source: Callable[[], Iterable[str]] | None = None
+
+
+def set_managed_source(source: Callable[[], Iterable[str]] | None) -> None:
+    global _managed_source
+    _managed_source = source
+    _managed["hosts"] = frozenset()  # a new source starts from nothing: what the previous one gave is never kept
+    reset_allowlist_cache()
 
 
 def managed_allowlist() -> frozenset[str]:
     if time.monotonic() - _managed["at"] < MANAGED_TTL:
         return _managed["hosts"]
     try:
-        from tenancy.models import EgressHost
-
-        _managed["hosts"] = frozenset(EgressHost.objects.values_list("host", flat=True))
+        if _managed_source is None:
+            raise LookupError("aucune source de liste gérée")
+        _managed["hosts"] = frozenset(_managed_source())
         _managed["at"] = time.monotonic()
-    except Exception:  # noqa: BLE001 - no database (runner agent, early start): the environment's list still applies
+    except Exception:  # noqa: BLE001 - no source or no database (runner agent, early start): the environment's list still applies
         _managed["at"] = time.monotonic() - MANAGED_TTL + 1.0
     return _managed["hosts"]
 
@@ -154,7 +165,9 @@ def _order(ip: str) -> tuple[int, str]:
 
 def resolve(host: str) -> list[str]:
     try:
-        return sorted({info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)}, key=_order)
+        return sorted(
+            {str(info[4][0]) for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)}, key=_order
+        )
     except socket.gaierror:
         raise UnsafeURL("Nom d'hôte introuvable.") from None
 

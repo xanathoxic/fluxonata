@@ -15,6 +15,7 @@ from django.http import Http404
 from rest_framework.exceptions import APIException, PermissionDenied
 
 from audit.models import record
+from runs import ssh_node
 from tenancy.permissions import has_perm
 
 from . import access
@@ -256,8 +257,8 @@ def get_workflow(request, ws, args):
         _workflow_row(w)
         | {
             "draft_revision": w.draft_revision,
-            "draft_graph": w.draft_graph,
-            "published_graph": v.graph if v else None,
+            "draft_graph": ssh_node.redact_graph(w.draft_graph),  # sensitive SSH texts are never shown to an assistant
+            "published_graph": ssh_node.redact_graph(v.graph) if v else None,
             "input_schema": v.input_schema if v else (w.draft_graph or {}).get("inputs"),
         }
     )
@@ -276,7 +277,13 @@ def list_connections(request, ws, args):
 
     q = _text(args)
     rows = [
-        {"name": c.name, "label": c.label, "kind": c.kind}  # ni `config`, ni secret, ni identifiant
+        {
+            "name": c.name,
+            "label": c.label,
+            "kind": c.kind,
+            # ni `config`, ni secret, ni identifiant ; seul fait ajouté (SSH) : une connexion sans hôte est une identité dont l'étape doit nommer l'hôte
+            **({"host_required": not (c.config or {}).get("host")} if c.kind == "ssh" else {}),
+        }
         for c in Connection.objects.filter(workspace=ws).order_by("name", "id")
         if _match(q, c.name, c.label, c.kind)
     ]

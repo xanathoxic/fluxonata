@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, available_timezones
 from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import serializers
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import APIException, AuthenticationFailed
@@ -364,6 +365,19 @@ class NoAuth(BaseAuthentication):
         return "HMAC-SHA256"
 
 
+class NoAuthScheme(OpenApiAuthenticationExtension):
+    """Aucun schéma d'authentification d'API à déclarer : Le webhook s'authentifie lui-même (signature HMAC ou secret du fournisseur). Documentation seulement."""
+
+    target_class = "triggers.views.NoAuth"
+    name: list[str] = []
+
+    def get_security_requirement(self, auto_schema):
+        return []
+
+    def get_security_definition(self, auto_schema):
+        return []
+
+
 def sign(secret: str, timestamp: str, body: bytes) -> str:
     return hmac.new(secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
 
@@ -442,14 +456,15 @@ def _accept_delivery(hook, delivery_id: str, prepare):
             with transaction.atomic():  # point de sauvegarde : seule la collision d'identifiant est un « doublon »
                 delivery = WebhookDelivery.objects.create(webhook=hook, delivery_id=key)
         except IntegrityError:
-            delivery = WebhookDelivery.objects.select_for_update().filter(webhook=hook, delivery_id=key).first()
-            if delivery is not None and delivery.run_id is not None:
+            existing = WebhookDelivery.objects.select_for_update().filter(webhook=hook, delivery_id=key).first()
+            if existing is not None and existing.run_id is not None:
                 return None, Response(
-                    {"status": "duplicate", "message": "Livraison déjà traitée.", "run_id": str(delivery.run_id)},
+                    {"status": "duplicate", "message": "Livraison déjà traitée.", "run_id": str(existing.run_id)},
                     status=200,
                 )
-            if delivery is None:  # supprimée entre-temps (conservation des données) : l'expéditeur réessaiera
+            if existing is None:  # supprimée entre-temps (conservation des données) : l'expéditeur réessaiera
                 raise
+            delivery = existing
         owner, version, inputs = prepare()
         run, _ = engine.start_run(
             workspace=hook.workspace,
@@ -514,7 +529,7 @@ def _waiting_step(token: str, kind: str):
         if step_id is not None
         else None
     )
-    node = next((n for n in sr.run.definition["graph"]["nodes"] if n["id"] == sr.node_id), {}) if sr else {}
+    node: dict = next((n for n in sr.run.definition["graph"]["nodes"] if n["id"] == sr.node_id), {}) if sr else {}
     if (
         sr is None
         or sr.node_type != "wait"

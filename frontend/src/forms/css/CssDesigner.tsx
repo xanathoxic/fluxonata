@@ -8,8 +8,9 @@ import { Pop } from "../StyleEditor";
 import { isBlock, type FormDefinition } from "../types";
 import { Inspector } from "./Inspector";
 import { parse, ruleKey, serialize, setDecl, setMany, type Rule } from "./model";
-import { CUSTOM, PARTS, SCREENS, STATES, defaultTarget, describe, ruleOf, selectorsFor, targetFromElement, targetOf, type Scope, type Target } from "./targets";
+import { CUSTOM, PARTS, SCREENS, STATES, defaultTarget, describe as describeTarget, ruleOf, selectorsFor, targetFromElement, targetOf, type Scope, type Target } from "./targets";
 import { THEMES, applyTheme } from "./themes";
+import { ReadRegion } from "../../components/ReadRegion";
 
 const icon = (n: string) => n as FormIconName;
 const GROUPS: [string, string][] = [["form", "Formulaire"], ["field", "Champs"], ["content", "Contenu"], ["action", "Boutons"]];
@@ -174,8 +175,8 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
               {rules.length === 0 && <MenuRow on={false} iconName="info" onClick={close}>Aucune règle : choisissez un élément et réglez-le.</MenuRow>}
               {rules.map((r) => (
                 <div key={ruleKey(r)} className="cs-rulerow">
-                  <MenuRow on={ruleKey(r) === selKey} iconName="design" onClick={() => { setTarget(targetOf(r)); close(); }}>{describe(r)} <small>({r.decls.length})</small></MenuRow>
-                  {edit && <button type="button" role="menuitem" className="cs-x" aria-label={`Supprimer la règle : ${describe(r)}`} title="Supprimer la règle" onClick={() => apply(rules.filter((x) => ruleKey(x) !== ruleKey(r)))}><FormIcon name="trash" size={14} /></button>}
+                  <MenuRow on={ruleKey(r) === selKey} iconName="design" onClick={() => { setTarget(targetOf(r)); close(); }}>{describeTarget(r)} <small>({r.decls.length})</small></MenuRow>
+                  {edit && <button type="button" role="menuitem" className="cs-x" aria-label={`Supprimer la règle : ${describeTarget(r)}`} title="Supprimer la règle" onClick={() => apply(rules.filter((x) => ruleKey(x) !== ruleKey(r)))}><FormIcon name="trash" size={14} /></button>}
                 </div>
               ))}
             </div>
@@ -184,6 +185,7 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
         {edit && (
           <Pop label="Thèmes prêts à l'emploi" icon={<FormIcon name="palette" />}>
             {(close) => (
+              // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
               <div role="group" aria-label="Thèmes" className="cs-themes">
                 {THEMES.map((t) => (
                   <div key={t.id} className="cs-theme">
@@ -206,7 +208,7 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
           <DefinitionForm definition={{ ...def, css: previewCss || undefined }} values={values} onChange={setValues} lookup={lookup}><button type="button" className="primary">Envoyer</button></DefinitionForm>
         </section>
         <section className="cs-side" aria-label="Réglages de la règle">
-          <p className="cs-now" title="La règle en cours de modification"><FormIcon name="design" size={14} /> {describe(at) || "Choisissez un élément"}</p>
+          <p className="cs-now" title="La règle en cours de modification"><FormIcon name="design" size={14} /> {describeTarget(at) || "Choisissez un élément"}</p>
           {usable ? <Inspector rule={rule} set={set} setMany={many} active={panel} onActive={setPanel} disabled={!edit} /> : <p className="hint">Saisissez un sélecteur dans le menu « Élément à styler ».</p>}
         </section>
       </div>
@@ -216,7 +218,7 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
           <button type="button" onClick={() => { void navigator.clipboard?.writeText(text); }} disabled={!text}><FormIcon name="copy" size={14} /> Copier</button>
           <button type="button" onClick={onCode}><FormIcon name="code" size={14} /> Modifier à la main</button>
         </div>
-        <pre className="cs-code" aria-label="CSS généré" tabIndex={0}>{gen.before}{gen.mark && <mark>{gen.mark}</mark>}{gen.after}{text ? "" : "/* Le CSS apparaît ici dès que vous réglez un élément. */"}</pre>
+        <ReadRegion className="cs-code" label="CSS généré">{gen.before}{gen.mark && <mark>{gen.mark}</mark>}{gen.after}{text ? "" : "/* Le CSS apparaît ici dès que vous réglez un élément. */"}</ReadRegion>
       </details>
     </div>
   );

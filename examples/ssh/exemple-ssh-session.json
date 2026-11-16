@@ -1,0 +1,42 @@
+{
+  "description": "Exemple : session interactive (shell) avec un pseudo-terminal, attente d'un prompt, une commande, une interaction qui répond à une demande de mot de passe par référence à un secret, et un motif d'échec. Les motifs ci-dessous sont des modèles génériques à adapter à votre serveur : rien n'est intégré à la plateforme. Mode test par défaut.",
+  "folder": "",
+  "graph": {
+    "edges": [],
+    "inputs": {"properties": {}, "required": [], "type": "object"},
+    "nodes": [
+      {
+        "connection": "cible-exemple",
+        "id": "session",
+        "mocks": [
+          {"id": "invite", "stdout": "Bienvenue\n$ "},
+          {"id": "commande", "stdout": "résultat simulé\n$ "}
+        ],
+        "mode": "test",
+        "name": "Session interactive",
+        "pty": {"cols": 120, "enabled": true, "rows": 40, "term": "xterm"},
+        "secrets": {"mot_de_passe": "secret-exemple"},
+        "session": "shell",
+        "steps": [
+          {"expect": ["[#$>] ?$"], "id": "invite", "timeout_seconds": 20},
+          {
+            "expect": ["[#$>] ?$"],
+            "failure": ["(?i)permission denied|command not found"],
+            "id": "commande",
+            "responses": [{"expect": "(?i)password:\\s*$", "max": 1, "send_secret": "mot_de_passe"}],
+            "send": "uptime",
+            "timeout_seconds": 30
+          },
+          {"id": "fin", "send": "exit"}
+        ],
+        "stop_on_error": true,
+        "timeout_seconds": 120,
+        "type": "ssh"
+      }
+    ],
+    "outputs": {"statut": "{{ steps.session.output.status }}"}
+  },
+  "name": "Exemple SSH : session interactive",
+  "slug": "exemple-ssh-session",
+  "tags": ["exemple", "ssh"]
+}

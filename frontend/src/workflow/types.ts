@@ -1,12 +1,23 @@
 import type { JsonSchema } from "../api";
 
-export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "transform";
+export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform";
 export type ScriptLanguage = "python" | "javascript";
 export type VarType = "string" | "integer" | "number" | "boolean" | "array" | "object";
 export interface ScriptOutput { name: string; type: VarType }
 // "next", "true", "false", "error", or the id of a case of a multi-way choice ("default" included)
 export type EdgeLabel = string;
 export interface SwitchCase { id: string; expr: string }
+
+/** The server accepts a pattern as a text or as a list, and a command as a text or as an object: the editor reads both. */
+export interface SshCommand { id?: string; run: string; sensitive?: boolean; ignore_error?: boolean; expect_exit?: number[]; timeout_seconds?: number }
+export interface SshResponse { expect: string; send?: string; send_secret?: string; eol?: string; max?: number; sensitive?: boolean }
+export interface SshStep {
+  id?: string; send?: string; send_secret?: string; eol?: string; expect?: string | string[]; success?: string | string[]; failure?: string | string[];
+  responses?: SshResponse[]; sensitive?: boolean; ignore_error?: boolean; timeout_seconds?: number;
+}
+/** A jump written with its own host (its connection is a reusable identity); a jump whose host comes from the connection is a plain name. */
+export interface SshJump { connection: string; host?: string; port?: number | string; host_key_sha256?: string }
+export interface SshPty { enabled?: boolean; term?: string; cols?: number; rows?: number }
 
 export interface GraphNode {
   id: string;
@@ -23,6 +34,20 @@ export interface GraphNode {
   ai_review?: boolean; // script written by the AI: blocks publication until a person confirms having read it
   seconds?: number;
   connection?: string;
+  jumps?: (string | SshJump)[]; // SSH: jump connections, in order (a name, or an object when the step names the host)
+  host?: string; // SSH: host of the target when its connection has none (a reusable identity)
+  port?: number | string;
+  host_key_sha256?: string; // SSH: fingerprint of that host's server key (mandatory with `host`)
+  session?: "exec" | "shell";
+  commands?: SshCommand[] | string; // SSH exec: a list, or an expression that produces one
+  steps?: SshStep[]; // SSH shell
+  pty?: SshPty;
+  stop_on_error?: boolean;
+  command_timeout_seconds?: number;
+  max_output_bytes?: number;
+  connect_retries?: number;
+  secrets?: Record<string, string>; // SSH: alias -> name of a secret of the workspace (never a value)
+  mocks?: unknown[];
   integration?: string;
   operation?: string;
   content?: unknown;
@@ -154,6 +179,7 @@ export const NODE_LABELS: Record<NodeType, string> = {
   while: "Répéter tant que",
   ldap: "Annuaire LDAP",
   sftp: "Fichier SFTP",
+  ssh: "Commandes SSH",
   smtp: "Envoyer un e-mail",
   transform: "Transformer les données",
 };

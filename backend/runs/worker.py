@@ -38,9 +38,9 @@ def _heartbeat_loop(execution_id, attempt, stop: threading.Event, cancel: thread
             close_old_connections()
 
 
-def process_one(worker_id: str, runner=None) -> bool:
-    """Claim and process one execution. Returns False when the queue is empty."""
-    claimed = services.claim_next(worker_id)
+def process_one(worker_id: str, runner=None, runtimes=None) -> bool:
+    """Claim and process one execution. Returns False when the queue is empty. `runtimes` : voir `services.claim_next`."""
+    claimed = services.claim_next(worker_id, runtimes=runtimes)
     if claimed is None:
         return False
     execution, attempt = claimed
@@ -90,6 +90,7 @@ def _process_claimed(execution, attempt, runner):
 #   aux  : étapes HTTP/SQL/SFTP/SMTP/LDAP, interrogation de déclencheurs, listes dynamiques, alertes, rappels sortants, synchronisation Git
 #   ai   : tâches de l'assistant (plan, génération, édition) et évaluations
 WORKER_ROLES = ("exec", "aux", "ai")
+AI_STEP_RUNTIMES = ("ai",)
 ROLE_THREADS = {  # rôle -> (nom du fil, module qui expose `run_loop(worker_id)`)
     "ai": (("ai-jobs", "ai.jobs"), ("ai-evals", "ai.evals.runner")),
     "aux": (
@@ -176,7 +177,7 @@ def run_forever(poll_seconds: float = 1.0, once: bool = False, roles=None) -> No
     threads = (
         [] if once else _start_threads(roles, worker_id)
     )  # these run in the worker, never in the web process; the AI ones need the same sandbox
-    # Seul un process qui exécute des actions est un « worker » pour la santé de la plateforme (core/health) : un process aux/ai seul ne doit pas la rassurer.
+    # Seul un process qui exécute des actions est un « worker » pour la santé de la plateforme (runs/health) : un process aux/ai seul ne doit pas la rassurer.
     kind = "worker" if "exec" in roles else "worker-aux"
     slots = []
     if "exec" in roles and not once:  # ORCH_WORKER_CONCURRENCY actions à la fois (défaut 1 = comportement historique)
@@ -195,6 +196,9 @@ def run_forever(poll_seconds: float = 1.0, once: bool = False, roles=None) -> No
                     did = process_one(
                         worker_id
                     )  # une action en cours va jusqu'au bout : l'arrêt est pris en compte juste après
+                elif "aux" in roles and settings.ORCH_AUX_RUNS_AI_STEPS:
+                    # Sans le rôle exec (donc sans socket) : seulement les étapes IA, qui s'exécutent dans le process (AiRunner), jamais en conteneur.
+                    did = process_one(worker_id, runtimes=AI_STEP_RUNTIMES)
             except Exception:  # noqa: BLE001
                 log.exception("worker iteration failed")
                 did = False

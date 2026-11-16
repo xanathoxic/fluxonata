@@ -1,0 +1,117 @@
+{
+  "description": "Démonstration entièrement simulée : une session interactive (shell) sur une connexion SSH, avec des chaînes « enable » et « show » associées à des réponses factices (mocks). Aucune connexion n'est ouverte, aucun nom n'est résolu, aucun secret n'est lu : les sorties sont marquées simulées et ne prouvent ni la disponibilité ni l'authentification d'un serveur réel. Les étapes de résumé et de diagnostic ne font que lire les résultats (aucun effet externe).",
+  "folder": "Infrastructure/Réseau/Tests",
+  "graph": {
+    "edges": [
+      {
+        "from": "session",
+        "to": "resume"
+      },
+      {
+        "from": "session",
+        "label": "error",
+        "to": "diagnostic"
+      }
+    ],
+    "inputs": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "nodes": [
+      {
+        "connection": "fluxonata_client_key",
+        "id": "session",
+        "mocks": [
+          {
+            "id": "invite",
+            "stdout": "Bienvenue\n> "
+          },
+          {
+            "id": "privilege",
+            "stdout": "enable\n# "
+          },
+          {
+            "id": "etat",
+            "stdout": "show demo status\nstatut simulé : correct\n# "
+          }
+        ],
+        "mode": "test",
+        "name": "Session simulée",
+        "pty": {
+          "cols": 120,
+          "enabled": true,
+          "rows": 40,
+          "term": "xterm"
+        },
+        "session": "shell",
+        "steps": [
+          {
+            "expect": [
+              "[#>$] ?$"
+            ],
+            "id": "invite",
+            "timeout_seconds": 20
+          },
+          {
+            "expect": [
+              "[#>$] ?$"
+            ],
+            "failure": [
+              "(?i)denied|invalid"
+            ],
+            "id": "privilege",
+            "send": "enable",
+            "timeout_seconds": 20
+          },
+          {
+            "expect": [
+              "[#>$] ?$"
+            ],
+            "failure": [
+              "(?i)denied|invalid"
+            ],
+            "id": "etat",
+            "send": "show demo status",
+            "timeout_seconds": 30
+          }
+        ],
+        "stop_on_error": true,
+        "timeout_seconds": 120,
+        "type": "ssh"
+      },
+      {
+        "fields": {
+          "etapes": "{{ len(steps.session.output.results) }}",
+          "simule": "{{ steps.session.output.simulated }}",
+          "statut": "{{ steps.session.output.status }}"
+        },
+        "id": "resume",
+        "name": "Résumé",
+        "op": "set",
+        "type": "transform"
+      },
+      {
+        "fields": {
+          "etape_en_echec": "{{ steps.session.output.failed_step }}",
+          "incertain": "{{ steps.session.output.uncertain }}",
+          "type_erreur": "{{ steps.session.output.error_type }}"
+        },
+        "id": "diagnostic",
+        "name": "Diagnostic",
+        "op": "set",
+        "type": "transform"
+      }
+    ],
+    "outputs": {
+      "statut": "{{ steps.session.output.status }}"
+    }
+  },
+  "name": "Tester une connexion SSH simulée",
+  "slug": "tester-connexion-ssh-simulee",
+  "tags": [
+    "exemple",
+    "ssh",
+    "simulation"
+  ]
+}

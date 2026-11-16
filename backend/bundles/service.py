@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from typing import TypedDict
 
 from django.db import transaction
 from rest_framework import serializers
@@ -177,10 +178,19 @@ def _item(kind, slug, version, status, *messages):
     return {"kind": kind, "slug": slug, "version": version, "status": status, "messages": list(messages)}
 
 
-def import_package(workspace, user, data: bytes, *, apply: bool, strategy: str = "abort") -> dict:
+class _Rapport(TypedDict, total=False):
+    package: dict | None
+    items: list[dict]
+    errors: list[str]
+    applied: bool
+    can_apply: bool
+    signature: dict
+
+
+def import_package(workspace, user, data: bytes, *, apply: bool, strategy: str = "abort") -> _Rapport:
     """Validate (and optionally apply) an archive. Always returns a report; raises ImportRefused only inside
     the transaction machinery to roll back."""
-    report = {"package": None, "items": [], "errors": [], "applied": False}
+    report: _Rapport = {"package": None, "items": [], "errors": [], "applied": False}
     try:
         manifest, files = archive.read(data)
     except archive.PackageError as exc:
@@ -227,161 +237,165 @@ def import_package(workspace, user, data: bytes, *, apply: bool, strategy: str =
     return report
 
 
-def _process(workspace, user, manifest, files, report, strategy):  # noqa: C901
+def _process_action(workspace, user, ref, files, report) -> None:
+    """One action of the package: read, checked, compared with what exists, created when new."""
+    slug, version = ref["slug"], ref["version"]
+    try:
+        meta = json.loads(files[ref["path"]])
+        source = files[ref["source"]].decode()
+    except (KeyError, ValueError, UnicodeDecodeError):
+        report["items"].append(_item("action", slug, version, "invalid", "Fichier d'action illisible."))
+        return
+    if meta.get("slug") != slug or meta.get("version") != version:
+        report["items"].append(_item("action", slug, version, "invalid", "Le manifeste et l'action ne concordent pas."))
+        return
+    ser = VersionInput(
+        data={**{k: meta[k] for k in meta if k in VersionInput().fields}, "source": source, "version": version},
+        partial=False,
+    )
+    if not ser.is_valid():
+        report["items"].append(
+            _item("action", slug, version, "invalid", json.dumps(ser.errors, ensure_ascii=False)[:300])
+        )
+        return
+    d = ser.validated_data
+    existing = ActionVersion.objects.filter(action__workspace=workspace, action__slug=slug, version=version).first()
+    digest = "sha256:" + hashlib.sha256(source.encode()).hexdigest()
+    if existing:
+        same = (
+            existing.source_digest == digest
+            and existing.input_schema == d["input_schema"]
+            and existing.output_schema == d["output_schema"]
+        )
+        report["items"].append(
+            _item(
+                "action",
+                slug,
+                version,
+                "identical" if same else "conflict",
+                *(
+                    []
+                    if same
+                    else [
+                        "Une version publiée différente existe déjà : une version publiée est immuable, incrémentez le numéro de version."
+                    ]
+                ),
+            )
+        )
+        return
+    action = Action.objects.filter(workspace=workspace, slug=slug).first() or Action.objects.create(
+        workspace=workspace,
+        slug=slug,
+        name=str(meta.get("name", slug))[:160],
+        description=str(meta.get("description", "")),
+        domain=str(meta.get("domain", ""))[:80],
+        tags=list(meta.get("tags", []))[:10],
+        owner=user,
+    )
+    fields = {
+        k: d[k]
+        for k in (
+            "runtime",
+            "entrypoint",
+            "source",
+            "input_schema",
+            "output_schema",
+            "license",
+            "side_effects",
+            "idempotent",
+            "network_policy",
+            "limits",
+            "examples",
+            "secrets_required",
+            "required_tags",  # validated, defaults to [] for packages exported before runners existed
+            "changelog",
+        )
+    }
+    ActionVersion.objects.create(action=action, version=version, created_by=user, **fields)
+    report["items"].append(_item("action", slug, version, "new"))
+
+
+def _process_workflow(workspace, user, ref, files, report) -> None:
+    """One workflow of the package: read, pinned, valid, compared with what exists, created when new."""
+    slug, version = ref["slug"], ref["version"]
+    try:
+        w = json.loads(files[ref["path"]])
+        graph = w["graph"]
+    except (KeyError, ValueError):
+        report["items"].append(_item("workflow", slug, version, "invalid", "Fichier de workflow illisible."))
+        return
+    if w.get("slug") != slug or w.get("version") != version:
+        report["items"].append(
+            _item("workflow", slug, version, "invalid", "Le manifeste et le workflow ne concordent pas.")
+        )
+        return
+    digest = "sha256:" + hashlib.sha256(json.dumps(graph, sort_keys=True).encode()).hexdigest()
+    existing = WorkflowVersion.objects.filter(
+        workflow__workspace=workspace, workflow__slug=slug, version=version
+    ).first()
+    if existing:
+        same = existing.digest == digest
+        report["items"].append(
+            _item(
+                "workflow",
+                slug,
+                version,
+                "identical" if same else "conflict",
+                *([] if same else ["Une version publiée différente existe déjà."]),
+            )
+        )
+        return
+    unpinned = [
+        n["id"]
+        for n in graph.get("nodes", [])
+        if n.get("type") in ("action", "subworkflow", "foreach") and not n.get("version")
+    ]
+    if unpinned:
+        report["items"].append(
+            _item("workflow", slug, version, "invalid", f"Étapes sans version exacte : {unpinned[:3]}")
+        )
+        return
+    # sub-workflows must exist already or come earlier in this package
+    issues = [i for i in validate_graph(graph, workspace, slug) if i["level"] == "error"]
+    if issues:
+        msgs = [i["message"] for i in issues[:3]]
+        missing = [i for i in issues if i["code"] in ("unknown_action", "version_unavailable", "unknown_workflow")]
+        report["items"].append(
+            _item(
+                "workflow",
+                slug,
+                version,
+                "invalid",
+                *(["Dépendance manquante dans l'espace : "] if missing else []),
+                *msgs,
+            )
+        )
+        return
+    wf = Workflow.objects.filter(workspace=workspace, slug=slug).first() or Workflow.objects.create(
+        workspace=workspace,
+        slug=slug,
+        name=str(w.get("name", slug))[:160],
+        description=str(w.get("description", "")),
+        owner=user,
+        draft_graph=graph,
+    )
+    WorkflowVersion.objects.create(
+        workflow=wf,
+        version=version,
+        graph=graph,
+        input_schema=w.get("input_schema") or graph.get("inputs", {}),
+        changelog=str(w.get("changelog", ""))[:300],
+        created_by=user,
+    )
+    report["items"].append(_item("workflow", slug, version, "new"))
+
+
+def _process(workspace, user, manifest, files, report, strategy):
     contents = manifest["contents"]
-    created_actions: dict[tuple, bool] = {}
     for ref in contents.get("actions", []):
-        slug, version = ref["slug"], ref["version"]
-        try:
-            meta = json.loads(files[ref["path"]])
-            source = files[ref["source"]].decode()
-        except (KeyError, ValueError, UnicodeDecodeError):
-            report["items"].append(_item("action", slug, version, "invalid", "Fichier d'action illisible."))
-            continue
-        if meta.get("slug") != slug or meta.get("version") != version:
-            report["items"].append(
-                _item("action", slug, version, "invalid", "Le manifeste et l'action ne concordent pas.")
-            )
-            continue
-        ser = VersionInput(
-            data={**{k: meta[k] for k in meta if k in VersionInput().fields}, "source": source, "version": version},
-            partial=False,
-        )
-        if not ser.is_valid():
-            report["items"].append(
-                _item("action", slug, version, "invalid", json.dumps(ser.errors, ensure_ascii=False)[:300])
-            )
-            continue
-        d = ser.validated_data
-        existing = ActionVersion.objects.filter(action__workspace=workspace, action__slug=slug, version=version).first()
-        digest = "sha256:" + hashlib.sha256(source.encode()).hexdigest()
-        if existing:
-            same = (
-                existing.source_digest == digest
-                and existing.input_schema == d["input_schema"]
-                and existing.output_schema == d["output_schema"]
-            )
-            report["items"].append(
-                _item(
-                    "action",
-                    slug,
-                    version,
-                    "identical" if same else "conflict",
-                    *(
-                        []
-                        if same
-                        else [
-                            "Une version publiée différente existe déjà : une version publiée est immuable, incrémentez le numéro de version."
-                        ]
-                    ),
-                )
-            )
-            continue
-        action = Action.objects.filter(workspace=workspace, slug=slug).first() or Action.objects.create(
-            workspace=workspace,
-            slug=slug,
-            name=str(meta.get("name", slug))[:160],
-            description=str(meta.get("description", "")),
-            domain=str(meta.get("domain", ""))[:80],
-            tags=list(meta.get("tags", []))[:10],
-            owner=user,
-        )
-        fields = {
-            k: d[k]
-            for k in (
-                "runtime",
-                "entrypoint",
-                "source",
-                "input_schema",
-                "output_schema",
-                "license",
-                "side_effects",
-                "idempotent",
-                "network_policy",
-                "limits",
-                "examples",
-                "secrets_required",
-                "required_tags",  # validated, defaults to [] for packages exported before runners existed
-                "changelog",
-            )
-        }
-        ActionVersion.objects.create(action=action, version=version, created_by=user, **fields)
-        created_actions[(slug, version)] = True
-        report["items"].append(_item("action", slug, version, "new"))
-
+        _process_action(workspace, user, ref, files, report)
     for ref in contents.get("workflows", []):
-        slug, version = ref["slug"], ref["version"]
-        try:
-            w = json.loads(files[ref["path"]])
-            graph = w["graph"]
-        except (KeyError, ValueError):
-            report["items"].append(_item("workflow", slug, version, "invalid", "Fichier de workflow illisible."))
-            continue
-        if w.get("slug") != slug or w.get("version") != version:
-            report["items"].append(
-                _item("workflow", slug, version, "invalid", "Le manifeste et le workflow ne concordent pas.")
-            )
-            continue
-        digest = "sha256:" + hashlib.sha256(json.dumps(graph, sort_keys=True).encode()).hexdigest()
-        existing = WorkflowVersion.objects.filter(
-            workflow__workspace=workspace, workflow__slug=slug, version=version
-        ).first()
-        if existing:
-            same = existing.digest == digest
-            report["items"].append(
-                _item(
-                    "workflow",
-                    slug,
-                    version,
-                    "identical" if same else "conflict",
-                    *([] if same else ["Une version publiée différente existe déjà."]),
-                )
-            )
-            continue
-        unpinned = [
-            n["id"]
-            for n in graph.get("nodes", [])
-            if n.get("type") in ("action", "subworkflow", "foreach") and not n.get("version")
-        ]
-        if unpinned:
-            report["items"].append(
-                _item("workflow", slug, version, "invalid", f"Étapes sans version exacte : {unpinned[:3]}")
-            )
-            continue
-        # sub-workflows must exist already or come earlier in this package
-        issues = [i for i in validate_graph(graph, workspace, slug) if i["level"] == "error"]
-        if issues:
-            msgs = [i["message"] for i in issues[:3]]
-            missing = [i for i in issues if i["code"] in ("unknown_action", "version_unavailable", "unknown_workflow")]
-            report["items"].append(
-                _item(
-                    "workflow",
-                    slug,
-                    version,
-                    "invalid",
-                    *(["Dépendance manquante dans l'espace : "] if missing else []),
-                    *msgs,
-                )
-            )
-            continue
-        wf = Workflow.objects.filter(workspace=workspace, slug=slug).first() or Workflow.objects.create(
-            workspace=workspace,
-            slug=slug,
-            name=str(w.get("name", slug))[:160],
-            description=str(w.get("description", "")),
-            owner=user,
-            draft_graph=graph,
-        )
-        WorkflowVersion.objects.create(
-            workflow=wf,
-            version=version,
-            graph=graph,
-            input_schema=w.get("input_schema") or graph.get("inputs", {}),
-            changelog=str(w.get("changelog", ""))[:300],
-            created_by=user,
-        )
-        report["items"].append(_item("workflow", slug, version, "new"))
-
+        _process_workflow(workspace, user, ref, files, report)
     for ref in contents.get("forms", []):
         _process_form(workspace, user, ref, files, report)
 

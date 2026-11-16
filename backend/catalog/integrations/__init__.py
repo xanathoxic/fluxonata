@@ -97,47 +97,65 @@ def render(op: dict, params: dict) -> dict:
     }
 
 
+def _integration_problems(i: dict, seen: set) -> list[str]:
+    problems: list[str] = []
+    slug = i.get("slug", "?")
+    if slug in seen or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+        problems.append(f"{slug}: identifiant invalide ou en double")
+    seen.add(slug)
+    for key in ("name", "category", "description", "connection", "operations"):
+        if not i.get(key):
+            problems.append(f"{slug}: {key} manquant")
+    conn = i.get("connection") or {}
+    if conn.get("kind") not in CONNECTION_KINDS:
+        problems.append(f"{slug}: type de connexion invalide")
+    if not str((conn.get("config") or {}).get("base_url", "")).startswith("https://"):
+        problems.append(f"{slug}: base_url https manquante")
+    ids: set = set()
+    for op in i.get("operations", []):
+        problems += _operation_problems(slug, op, ids)
+    return problems
+
+
+def _param_problems(oid: str, op: dict) -> list[str]:
+    problems: list[str] = []
+    names = [p.get("name") for p in op.get("params", [])]
+    if len(set(names)) != len(names):
+        problems.append(f"{oid}: paramètres en double")
+    for p in op.get("params", []):
+        if p.get("in") not in PARAM_IN or p.get("type") not in PARAM_TYPES or not p.get("label"):
+            problems.append(f"{oid}: paramètre {p.get('name')} invalide")
+    in_path = set(_PLACEHOLDER.findall(op.get("path", "")))
+    declared = {p["name"] for p in op.get("params", []) if p.get("in") == "path"}
+    if in_path != declared:
+        problems.append(f"{oid}: variables de chemin {sorted(in_path)} ≠ paramètres {sorted(declared)}")
+    if op.get("body_format") == "text" and sum(1 for p in op["params"] if p["in"] == "body") != 1:
+        problems.append(f"{oid}: un corps texte prend exactement un paramètre de corps")
+    if op["method"] == "GET" and any(p["in"] == "body" for p in op.get("params", [])):
+        problems.append(f"{oid}: GET avec corps")
+    return problems
+
+
+def _operation_problems(slug: str, op: dict, ids: set) -> list[str]:
+    problems: list[str] = []
+    oid = f"{slug}/{op.get('id', '?')}"
+    if op.get("id") in ids or not re.fullmatch(r"[a-z0-9_]+", op.get("id", "")):
+        problems.append(f"{oid}: identifiant invalide ou en double")
+    ids.add(op.get("id"))
+    if op.get("method") not in METHODS:
+        problems.append(f"{oid}: méthode invalide")
+    if not str(op.get("path", "")).startswith("/") or not op.get("name") or not op.get("description"):
+        problems.append(f"{oid}: chemin/nom/description invalides")
+    if op.get("body_format", "json") not in BODY_FORMATS:
+        problems.append(f"{oid}: body_format invalide")
+    problems += _param_problems(oid, op)
+    return problems
+
+
 def check() -> list[str]:
     """Structural problems in the catalogue (empty = all good). Used by the test-suite."""
     problems: list[str] = []
     seen: set = set()
     for i in INTEGRATIONS:
-        slug = i.get("slug", "?")
-        if slug in seen or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
-            problems.append(f"{slug}: identifiant invalide ou en double")
-        seen.add(slug)
-        for key in ("name", "category", "description", "connection", "operations"):
-            if not i.get(key):
-                problems.append(f"{slug}: {key} manquant")
-        conn = i.get("connection") or {}
-        if conn.get("kind") not in CONNECTION_KINDS:
-            problems.append(f"{slug}: type de connexion invalide")
-        if not str((conn.get("config") or {}).get("base_url", "")).startswith("https://"):
-            problems.append(f"{slug}: base_url https manquante")
-        ids: set = set()
-        for op in i.get("operations", []):
-            oid = f"{slug}/{op.get('id', '?')}"
-            if op.get("id") in ids or not re.fullmatch(r"[a-z0-9_]+", op.get("id", "")):
-                problems.append(f"{oid}: identifiant invalide ou en double")
-            ids.add(op.get("id"))
-            if op.get("method") not in METHODS:
-                problems.append(f"{oid}: méthode invalide")
-            if not str(op.get("path", "")).startswith("/") or not op.get("name") or not op.get("description"):
-                problems.append(f"{oid}: chemin/nom/description invalides")
-            if op.get("body_format", "json") not in BODY_FORMATS:
-                problems.append(f"{oid}: body_format invalide")
-            names = [p.get("name") for p in op.get("params", [])]
-            if len(set(names)) != len(names):
-                problems.append(f"{oid}: paramètres en double")
-            for p in op.get("params", []):
-                if p.get("in") not in PARAM_IN or p.get("type") not in PARAM_TYPES or not p.get("label"):
-                    problems.append(f"{oid}: paramètre {p.get('name')} invalide")
-            in_path = set(_PLACEHOLDER.findall(op.get("path", "")))
-            declared = {p["name"] for p in op.get("params", []) if p.get("in") == "path"}
-            if in_path != declared:
-                problems.append(f"{oid}: variables de chemin {sorted(in_path)} ≠ paramètres {sorted(declared)}")
-            if op.get("body_format") == "text" and sum(1 for p in op["params"] if p["in"] == "body") != 1:
-                problems.append(f"{oid}: un corps texte prend exactement un paramètre de corps")
-            if op["method"] == "GET" and any(p["in"] == "body" for p in op.get("params", [])):
-                problems.append(f"{oid}: GET avec corps")
+        problems += _integration_problems(i, seen)
     return problems

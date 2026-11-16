@@ -93,6 +93,7 @@ export function DualList({ id, labelledBy, describedBy, options, value, onChange
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className={`fb-dual${invalid ? " invalid" : ""}`} role="group" aria-labelledby={labelledBy} aria-describedby={describedBy}>
       <div className="fb-dual-pane">
         <h4>{leftTitle} ({options.length - [...taken].filter((v) => byValue.has(v)).length})</h4>
@@ -101,6 +102,7 @@ export function DualList({ id, labelledBy, describedBy, options, value, onChange
           {segments.map((s) => (s.group ? <optgroup key={s.group + s.items[0]?.value} label={s.group}>{s.items.map(optionOf)}</optgroup> : s.items.map(optionOf)))}
         </select>
       </div>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <div className="fb-dual-actions" role="group" aria-label="Déplacer">
         <button type="button" aria-label="Ajouter la sélection" title="Ajouter la sélection" disabled={disabled || room === 0 || !markedAvailable.length} onClick={() => add(markedAvailable)}>›</button>
         <button type="button" aria-label="Tout ajouter" title={max !== undefined ? `Tout ajouter (au plus ${max})` : "Tout ajouter"} disabled={disabled || room === 0 || !available.some((o) => !o.disabled)} onClick={() => add(available.map((o) => o.value))}>»</button>
@@ -113,6 +115,7 @@ export function DualList({ id, labelledBy, describedBy, options, value, onChange
         <select multiple size={10} aria-label={rightTitle} disabled={disabled} value={markedChosen} onChange={(e) => setMarkedChosen(picked(e))} onDoubleClick={(e) => dbl(e, "chosen")} onKeyDown={(e) => keys(e, "chosen")}>
           {chosenShown.map((v) => <option key={v} value={v}>{labelOf(v)}</option>)}
         </select>
+        {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
         <div className="fb-dual-order" role="group" aria-label="Mettre en ordre">
           <button type="button" aria-label="Tout en haut" title="Tout en haut" disabled={!canOrder} onClick={() => edge("top")}>⤒</button>
           <button type="button" aria-label="Monter" title="Monter (Alt + ↑)" disabled={!canOrder} onClick={() => step(-1)}>↑</button>

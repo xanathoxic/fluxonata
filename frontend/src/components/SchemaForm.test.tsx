@@ -1,5 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { defaultsFor, SchemaForm, validateValues } from "./SchemaForm";
@@ -76,9 +76,13 @@ function typeInto(container: HTMLElement, index: number, text: string) {
   act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
 }
 
+/** The code editor is downloaded on first use: wait for its two instances before typing into them. */
+const editorsLoaded = (container: HTMLElement, n: number) => waitFor(() => expect(container.querySelectorAll(".cm-editor")).toHaveLength(n));
+
 describe("SchemaForm : objets et listes", () => {
-  it("affiche le JSON dans un éditeur (pas « [object Object] ») et renvoie des valeurs structurées", () => {
+  it("affiche le JSON dans un éditeur (pas « [object Object] ») et renvoie des valeurs structurées", async () => {
     const { container } = render(<JsonHarness initial={{ data: { a: 1 }, fields: ["a"] }} />);
+    await editorsLoaded(container, 2);
     expect(screen.getByLabelText(/Objet source \(JSON objet\)/)).toHaveTextContent('"a": 1');
     expect(container).not.toHaveTextContent("[object Object]");
     typeInto(container, 0, '{"x": 10, "y": [1, 2]}');
@@ -89,6 +93,7 @@ describe("SchemaForm : objets et listes", () => {
 
   it("garde le texte tant que le JSON est invalide, le signale, puis se met en forme", async () => {
     const { container } = render(<JsonHarness initial={{ data: {}, fields: [] }} />);
+    await editorsLoaded(container, 2);
     typeInto(container, 0, "{ pas du json");
     expect(latest.data).toBe("{ pas du json");
     expect(validateValues(structured, latest).data).toMatch(/^JSON invalide/);

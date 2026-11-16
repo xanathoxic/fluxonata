@@ -1,9 +1,12 @@
 from django.urls import path
 
 from . import catalog_views, ops_views, run_views, runner_api, views
+from . import platform_views as pf
 from . import runner_admin as ra
 
 urlpatterns = [
+    path("platform/workers/", pf.WorkersView.as_view()),
+    path("platform/workers/purge/", pf.WorkersPurgeView.as_view()),
     path("workspaces/<slug:workspace>/ops/dashboard/", ops_views.DashboardView.as_view()),
     path("workspaces/<slug:workspace>/ops/retention/", ops_views.RetentionView.as_view()),
     path("workspaces/<slug:workspace>/ops/alerts/", ops_views.AlertListCreateView.as_view()),

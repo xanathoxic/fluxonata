@@ -10,7 +10,7 @@ from ai.models import AiPolicy
 from ai.providers import FakeProvider
 from audit.models import AuditEvent
 from tests.conftest import client_for
-from tests.test_ai import ai_ws, cfg
+from tests.test_ai import cfg
 from workflows.models import Workflow
 
 BASE = "/api/v1/workspaces/team-a"
@@ -880,7 +880,9 @@ def test_a_script_writing_into_vars_or_inputs_is_blocked_because_it_has_no_effec
 
 
 def test_joins_are_reused_never_stacked_and_a_useless_one_is_removed(ai_ws):
-    node = lambda i, t="action": {"id": i, "type": t, "name": "Jonction" if i.startswith("jonction_") else i}  # noqa: E731
+    def node(i, t="action"):
+        return {"id": i, "type": t, "name": "Jonction" if i.startswith("jonction_") else i}
+
     # `fin` already receives a join; a third flow arrives directly: it must join the existing one
     nodes = [node("a"), node("b"), node("c"), node("jonction_fin", "join"), node("fin")]
     edges = [

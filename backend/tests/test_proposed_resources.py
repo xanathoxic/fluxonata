@@ -133,7 +133,10 @@ def test_validation_flags_the_proposed_action_and_publication_is_refused(ws, wor
 def test_proposals_are_listed_only_on_request_and_only_for_people_who_can_edit(ws, world):
     propose()
     d, v = client_for(world["designer"]), client_for(world["viewer"])
-    slugs = lambda c, q="": {a["slug"] for a in c.get(f"{BASE}/actions/{q}").json()["results"]}  # noqa: E731
+
+    def slugs(c, q=""):
+        return {a["slug"] for a in c.get(f"{BASE}/actions/{q}").json()["results"]}
+
     assert "echo" not in slugs(d) and "echo" in slugs(d, "?status=proposed")
     assert slugs(v, "?status=proposed").isdisjoint({"echo"}) and "echo" not in slugs(v)  # le lecteur ne les voit jamais
     assert d.get(f"{BASE}/actions/echo/").status_code == 200 and v.get(f"{BASE}/actions/echo/").status_code == 404
@@ -145,7 +148,10 @@ def test_proposed_skills_follow_the_same_visibility(ws, world):
     s = AiSkill.objects.create(workspace=ws, slug="sk", name="sk", status="proposed")
     AiSkillVersion.objects.create(skill=s, version="1.0.0", instructions="x", input_schema={}, output_schema={})
     d, v = client_for(world["designer"]), client_for(world["viewer"])
-    names = lambda c, q="": {a["slug"] for a in c.get(f"{BASE}/ai/skills/{q}").json()["results"]}  # noqa: E731
+
+    def names(c, q=""):
+        return {a["slug"] for a in c.get(f"{BASE}/ai/skills/{q}").json()["results"]}
+
     assert names(d) == set() and names(d, "?status=proposed") == {"sk"} and names(v, "?status=proposed") == set()
     assert d.get(f"{BASE}/ai/skills/sk/").status_code == 200 and v.get(f"{BASE}/ai/skills/sk/").status_code == 404
 

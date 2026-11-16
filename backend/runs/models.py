@@ -222,6 +222,8 @@ class Approval(models.Model):
     workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="approvals")
     title = models.CharField(max_length=200)
     instructions = models.TextField(blank=True)
+    subject = models.CharField(max_length=200, blank=True)  # the object of the request
+    body = models.TextField(blank=True)  # the request itself, written in Markdown
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")

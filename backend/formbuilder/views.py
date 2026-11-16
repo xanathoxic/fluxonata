@@ -2,6 +2,7 @@
 
 from django.db import IntegrityError, transaction
 from django.http import Http404
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
@@ -80,6 +81,7 @@ def _get(request, workspace, slug, perm):
     return ws, form
 
 
+@extend_schema_serializer(component_name="FormCreate")
 class CreateSerializer(serializers.Serializer):
     slug = serializers.SlugField(max_length=50)
     name = serializers.CharField(max_length=160)
@@ -92,9 +94,57 @@ class CreateSerializer(serializers.Serializer):
     definition = serializers.JSONField(required=False)
 
 
+# --- Réponses réelles, décrites pour le schéma OpenAPI (documentation seulement : jamais utilisées pour répondre) ---
+class FormVersionLightSerializer(serializers.Serializer):
+    version = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    changelog = serializers.CharField(allow_blank=True)
+    digest = serializers.CharField()
+
+
+class FormCardSerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    folder = serializers.CharField(allow_blank=True)
+    tags = serializers.ListField(child=serializers.CharField())
+    is_template = serializers.BooleanField()
+    owner = serializers.CharField(allow_null=True)
+    latest_version = FormVersionLightSerializer(allow_null=True)
+    draft_revision = serializers.IntegerField()
+    # `fields` est une clé de la réponse réelle (nombre de champs) ; elle masque l'attribut `fields` de DRF `Serializer` : exemption ciblée.
+    fields = serializers.IntegerField()  # type: ignore[assignment]
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class FormListSerializer(serializers.Serializer):
+    results = FormCardSerializer(many=True)
+
+
+class FormDraftSerializer(FormCardSerializer):
+    definition = serializers.JSONField()
+
+
+class FormDetailResponseSerializer(FormDraftSerializer):
+    versions = FormVersionLightSerializer(many=True)
+    usage = serializers.JSONField()  # {workflows: […], public_forms: […]} : voir service.usage
+
+
+class FormPublishResponseSerializer(serializers.Serializer):
+    version = serializers.CharField()
+    digest = serializers.CharField()
+
+
+class FormCheckResponseSerializer(serializers.Serializer):
+    css = serializers.JSONField(required=False)  # {css, problems}
+    definition = serializers.JSONField(required=False)  # problèmes par chemin
+
+
 class FormListCreateView(APIView):
     serializer_class = CreateSerializer
 
+    @extend_schema(responses={200: FormListSerializer})
     def get(self, request, workspace):
         ws = get_workspace(request.user, workspace, VIEW)
         rows = access.visible(Form.objects.filter(workspace=ws).select_related("owner"), request.user, ws)
@@ -103,6 +153,7 @@ class FormListCreateView(APIView):
             rows = rows.filter(is_template=flag == "1")
         return Response({"results": [card(f) for f in rows.prefetch_related("versions")]})
 
+    @extend_schema(responses={201: FormCardSerializer})
     def post(self, request, workspace):
         ws = get_workspace(request.user, workspace, EDIT)
         ser = CreateSerializer(data=request.data)
@@ -130,6 +181,7 @@ class FormListCreateView(APIView):
         return Response(card(form), status=201)
 
 
+@extend_schema_serializer(component_name="FormPatch")
 class PatchSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=160, required=False)
     description = serializers.CharField(required=False, allow_blank=True, max_length=2000)
@@ -143,6 +195,7 @@ class PatchSerializer(serializers.Serializer):
 class FormDetailView(APIView):
     serializer_class = PatchSerializer
 
+    @extend_schema(responses={200: FormDetailResponseSerializer})
     def get(self, request, workspace, slug):
         ws, form = _get(request, workspace, slug, VIEW)
         return Response(
@@ -154,6 +207,7 @@ class FormDetailView(APIView):
             }
         )
 
+    @extend_schema(responses={200: FormDraftSerializer})
     def patch(self, request, workspace, slug):
         ws, form = _get(request, workspace, slug, EDIT)
         ser = PatchSerializer(data=request.data)
@@ -198,6 +252,7 @@ class FormDetailView(APIView):
         return Response(status=204)
 
 
+@extend_schema_serializer(component_name="FormPublish")
 class PublishSerializer(serializers.Serializer):
     changelog = serializers.CharField(required=False, allow_blank=True, max_length=300, default="")
     bump = serializers.ChoiceField(choices=["major", "minor", "patch"], default="minor")
@@ -206,6 +261,7 @@ class PublishSerializer(serializers.Serializer):
 class FormPublishView(APIView):
     serializer_class = PublishSerializer
 
+    @extend_schema(responses={201: FormPublishResponseSerializer})
     def post(self, request, workspace, slug):
         ws, form = _get(request, workspace, slug, PUBLISH)
         if form.is_template:
@@ -281,6 +337,7 @@ class BuiltinTemplatesView(APIView):
         return Response({"results": builtin.TEMPLATES})
 
 
+@extend_schema_serializer(component_name="FormCheck")
 class CheckSerializer(serializers.Serializer):
     css = serializers.CharField(required=False, allow_blank=True, max_length=60_000)
     definition = serializers.JSONField(required=False)
@@ -292,6 +349,7 @@ class FormCheckView(APIView):
 
     serializer_class = CheckSerializer
 
+    @extend_schema(responses={200: FormCheckResponseSerializer})
     def post(self, request, workspace):
         get_workspace(request.user, workspace, EDIT)
         ser = CheckSerializer(data=request.data)

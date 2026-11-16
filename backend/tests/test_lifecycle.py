@@ -13,9 +13,8 @@ from django.core.management import call_command
 from django.db import connection
 from django.utils import timezone
 
-from core import health
+from runs import health, registry
 from runs import orchestrator as orch
-from runs import registry
 from runs import worker as w
 from runs.models import ServiceInstance
 

@@ -4,6 +4,9 @@ Dans Claude Code elles apparaissent comme des commandes (`/mcp__<serveur>__<invi
 la demande de la personne dans la bonne méthode (lire le guide, chercher avant de créer, décider action ou script, ne rien publier,
 résumer ce qui reste à relire). Aucune donnée n'est lue ni écrite par ce module."""
 
+from collections.abc import Callable
+from typing import TypedDict
+
 MAX_NEED = 4000
 
 METHOD = (
@@ -26,7 +29,13 @@ def _need(args: dict) -> str:
     return value.strip()[:MAX_NEED]
 
 
-PROMPTS = {
+class _Invite(TypedDict):
+    description: str
+    arguments: list[dict[str, object]]
+    build: Callable[[dict], str]
+
+
+PROMPTS: dict[str, _Invite] = {
     "concevoir_workflow": {
         "description": "Concevoir un workflow complet (formulaire, étapes, actions manquantes) à partir d'un besoin, en brouillon.",
         "arguments": [

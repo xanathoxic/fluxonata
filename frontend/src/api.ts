@@ -202,6 +202,9 @@ export interface Approval {
   id: number;
   title: string;
   instructions: string;
+  /** Object of the request, and its body in Markdown (both written in the workflow step). */
+  subject: string;
+  body: string;
   status: "pending" | "approved" | "rejected";
   requested_by: string | null;
   decided_by: string | null;

@@ -4,7 +4,7 @@ import pytest
 
 from ai import service
 from ai.providers import FakeProvider
-from tests.test_ai import ai_ws, cfg  # noqa: F401  (fixture)
+from tests.test_ai import cfg
 from tests.test_ai_edit import COVERED, Scripted, blocking, other_steps, run_edit, script_node
 from tests.test_ai_edit import graph as app_graph
 

@@ -11,6 +11,7 @@ interface Props {
   footer?: ReactNode;
   description?: string;
   wide?: boolean;
+  className?: string;
 }
 
 let openCount = 0;
@@ -25,13 +26,14 @@ function useInertBackground() {
 }
 
 /** Accessible overlay: role=dialog, focus trapped, Escape closes, focus returns to the opener. Keeps long forms off the page. */
-export function Overlay({ title, onClose, children, variant = "drawer", footer, description, wide }: Props) {
+export function Overlay({ title, onClose, children, variant = "drawer", footer, description, wide, className }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
   useInertBackground(); // declared before the focus trap: inert is lifted before focus returns to the opener
   useFocusTrap(ref, onClose);
   return createPortal(
-    <div className={`overlay-backdrop overlay-${variant}${wide ? " overlay-wide" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: rideau cliquable pour fermer à la souris ; au clavier, Échap ferme via useFocusTrap
+    <div className={`overlay-backdrop overlay-${variant}${wide ? " overlay-wide" : ""}${className ? ` ${className}` : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={description ? `${id}-d` : undefined} tabIndex={-1} className="overlay-panel">
         <header className="overlay-head">
           <div>

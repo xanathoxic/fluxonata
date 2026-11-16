@@ -9,7 +9,6 @@ from runs import engine
 from runs.models import Approval
 from tenancy.models import Role
 from tests.conftest import make_user
-from tests.test_ai import ai_ws  # noqa: F401  (fixture: AI policy on, catalogue)
 from tests.wf_helpers import drain, launch, make_action, node, publish
 
 

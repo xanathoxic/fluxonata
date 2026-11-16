@@ -248,8 +248,10 @@ def _heuristic(user: str) -> dict:
     """Keyword-overlap 'model': good enough to make the whole pipeline testable and deterministic."""
     m = re.search(r"<task>(.*?)</task>", user, re.S)
     task = m.group(1).strip() if m else ""
-    ctx = json.loads(re.search(r"<context>(.*?)</context>", user, re.S).group(1)) if "<context>" in user else {}
-    data = (re.search(r"<data>(.*?)</data>", user, re.S) or [None, ""])[1]
+    context_block = re.search(r"<context>(.*?)</context>", user, re.S)
+    ctx = json.loads(context_block.group(1)) if context_block else {}
+    data_block = re.search(r"<data>(.*?)</data>", user, re.S)
+    data = data_block.group(1) if data_block else ""
     if task == "catalog_search":
         q = _words(data)
         scored = sorted(

@@ -1,12 +1,10 @@
 import { AiJobsTray } from "./components/AiJobsTray";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { useHeadingTitle } from "./components/useHeadingTitle";
 import { PHONE, useMediaQuery } from "./components/useMediaQuery";
 import { ToastProvider } from "./components/Toast";
 import { CatalogRunDetailPage, CatalogRunsPage } from "./pages/catalog/CatalogRuns";
 import { Logo } from "./components/Logo";
-import { SkillDetailPage } from "./pages/skills/SkillDetailPage";
-import { SkillsPage } from "./pages/skills/SkillsPage";
-import { PlatformPage } from "./pages/PlatformPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { AccountPage, ForcedPasswordPage } from "./pages/AccountPage";
 import { NavIcon } from "./components/NavIcon";
@@ -18,28 +16,35 @@ import { api, type ApiError, type Me } from "./api";
 import { AppContext } from "./context";
 import { t } from "./i18n";
 import { roleLabel } from "./lib";
-import { ActionDetailPage } from "./pages/ActionDetailPage";
 import { CatalogDetailPage, CatalogPage } from "./pages/CatalogPage";
-import { ExecutionDetailPage } from "./pages/ExecutionDetailPage";
-import { OpsPage } from "./pages/OpsPage";
-import { ExecutionsPage } from "./pages/ExecutionsPage";
-import { ActionLibraryPage } from "./pages/ActionLibraryPage";
-import { AdminPage } from "./pages/AdminPage";
-import { ApprovalsPage } from "./pages/ApprovalsPage";
-import { ConnectionsPage } from "./pages/ConnectionsPage";
 import { HomePage } from "./pages/HomePage";
-import { LibraryPage } from "./pages/LibraryPage";
 import { LoginPage } from "./pages/LoginPage";
-import { CompareRunsPage } from "./pages/CompareRunsPage";
-import { RunDetailPage } from "./pages/RunDetailPage";
-import { TriggersPage } from "./pages/TriggersPage";
-import { FormsPage } from "./pages/forms/FormsPage";
-import { FormPage } from "./pages/forms/FormPage";
-import { ControlsPage } from "./pages/controls/ControlsPage";
-import { ControlPage } from "./pages/controls/ControlPage";
-import { WorkflowRunPage } from "./pages/WorkflowRunPage";
-import { WorkflowsPage } from "./pages/WorkflowsPage";
-import { WorkflowPage } from "./workflow/WorkflowPage";
+import { LazyBoundary } from "./components/LazyBoundary";
+import { lazyPage } from "./components/lazyPage";
+
+// Pages loaded on demand: the first screen after the login only carries what it shows.
+const SkillDetailPage = lazyPage(() => import("./pages/skills/SkillDetailPage"), "SkillDetailPage");
+const SkillsPage = lazyPage(() => import("./pages/skills/SkillsPage"), "SkillsPage");
+const PlatformPage = lazyPage(() => import("./pages/PlatformPage"), "PlatformPage");
+const ActionDetailPage = lazyPage(() => import("./pages/ActionDetailPage"), "ActionDetailPage");
+const ExecutionDetailPage = lazyPage(() => import("./pages/ExecutionDetailPage"), "ExecutionDetailPage");
+const OpsPage = lazyPage(() => import("./pages/OpsPage"), "OpsPage");
+const ExecutionsPage = lazyPage(() => import("./pages/ExecutionsPage"), "ExecutionsPage");
+const ActionLibraryPage = lazyPage(() => import("./pages/ActionLibraryPage"), "ActionLibraryPage");
+const AdminPage = lazyPage(() => import("./pages/AdminPage"), "AdminPage");
+const ApprovalsPage = lazyPage(() => import("./pages/ApprovalsPage"), "ApprovalsPage");
+const ConnectionsPage = lazyPage(() => import("./pages/ConnectionsPage"), "ConnectionsPage");
+const LibraryPage = lazyPage(() => import("./pages/LibraryPage"), "LibraryPage");
+const CompareRunsPage = lazyPage(() => import("./pages/CompareRunsPage"), "CompareRunsPage");
+const RunDetailPage = lazyPage(() => import("./pages/RunDetailPage"), "RunDetailPage");
+const TriggersPage = lazyPage(() => import("./pages/TriggersPage"), "TriggersPage");
+const FormsPage = lazyPage(() => import("./pages/forms/FormsPage"), "FormsPage");
+const FormPage = lazyPage(() => import("./pages/forms/FormPage"), "FormPage");
+const ControlsPage = lazyPage(() => import("./pages/controls/ControlsPage"), "ControlsPage");
+const ControlPage = lazyPage(() => import("./pages/controls/ControlPage"), "ControlPage");
+const WorkflowRunPage = lazyPage(() => import("./pages/WorkflowRunPage"), "WorkflowRunPage");
+const WorkflowsPage = lazyPage(() => import("./pages/WorkflowsPage"), "WorkflowsPage");
+const WorkflowPage = lazyPage(() => import("./workflow/WorkflowPage"), "WorkflowPage");
 
 function stored(key: string): string | null {
   try {
@@ -58,12 +63,14 @@ function store(key: string, value: string) {
 
 export function App() {
   const qc = useQueryClient();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPath, setMenuPath] = useState<string | null>(null); // page sur laquelle le menu a été ouvert : un changement de page le referme
   const [searching, setSearching] = useState(false);
   const phone = useMediaQuery(PHONE);
   const [collapsed, setCollapsed] = useState(stored("orch.sidebar") === "collapsed"); // desktop: icon-only rail
   const location = useLocation();
-  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useHeadingTitle();
+  const menuOpen = menuPath === location.pathname;
+  const setMenuOpen = (open: boolean) => setMenuPath(open ? location.pathname : null);
   const meQuery = useQuery<Me, ApiError>({
     queryKey: ["me"],
     queryFn: () => api<Me>("/auth/me/"),
@@ -82,7 +89,7 @@ export function App() {
     if (!phone) return;
     const label = () => document.querySelectorAll("table.adm-table").forEach((t) => {
       const heads = [...t.querySelectorAll("thead th")].map((h) => (h.querySelector(".sr-only") ? "" : (h.textContent ?? "").trim()));
-      t.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => { if (td instanceof HTMLElement && td.dataset.label !== (heads[i] ?? "")) td.dataset.label = heads[i] ?? ""; }));
+      t.querySelectorAll("tbody tr").forEach((tr) => { [...tr.children].forEach((td, i) => { if (td instanceof HTMLElement && td.dataset.label !== (heads[i] ?? "")) td.dataset.label = heads[i] ?? ""; }); });
     });
     label();
     const mo = new MutationObserver(label);
@@ -113,7 +120,7 @@ export function App() {
   const workspace = me.workspaces.find((w) => w.slug === wsSlug) ?? me.workspaces[0];
   if (!workspace) {
     return me.is_platform_admin
-      ? <main className="platform-only"><div className="actions" style={{ justifyContent: "space-between" }}><Logo size={26} /><button type="button" onClick={logout}>{t("nav.logout")}</button></div><PlatformPage /></main>
+      ? <main className="platform-only"><div className="actions" style={{ justifyContent: "space-between" }}><Logo size={26} /><button type="button" onClick={logout}>{t("nav.logout")}</button></div><LazyBoundary><PlatformPage /></LazyBoundary></main>
       : <p className="center">Aucun espace n'est associé à votre compte.</p>;
   }
   const environment = workspace.environments.some((e) => e.kind === env) ? env : (workspace.environments[0]?.kind ?? "test");
@@ -198,6 +205,7 @@ export function App() {
           ))}</ul>
         </nav>
         <main id="main" tabIndex={-1}>
+          <LazyBoundary>
           {catalogOnly ? (
             <Routes>
               <Route path="/catalog" element={<CatalogPage />} />
@@ -243,6 +251,7 @@ export function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
           )}
+          </LazyBoundary>
         </main>
       </div>
       {!catalogOnly && <AiJobsTray />}

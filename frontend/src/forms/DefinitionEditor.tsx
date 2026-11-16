@@ -16,6 +16,7 @@ import { StyleEditor } from "./StyleEditor";
 import { controlIcon, fieldForControl, type ControlCard } from "./controls";
 import { FIELD_TYPES, PART_TYPES, isBlock, type FieldType, type FormDefinition, type FormField, type FormSection, type FormStyle, type Layout } from "./types";
 import "./forms.css";
+import { keyed } from "../components/keyed";
 
 interface Sel { s: number; key: string | null }
 const move = <T,>(a: T[], i: number, d: -1 | 1): T[] => {
@@ -158,18 +159,21 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
 
   const toolbar = current && edit && (
     <div className="fb-toolbar" role="toolbar" aria-label={`Placer « ${current.label || current.key} »`}>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <span className="fb-tgroup" role="group" aria-label="Déplacer">
       <IconButton icon="back" label="Décaler d'une colonne vers la gauche" onClick={() => placeField(current.key, { ...(current.layout as Layout), col: (current.layout as Layout).col - 1 })} />
       <IconButton icon="right" label="Décaler d'une colonne vers la droite" onClick={() => placeField(current.key, { ...(current.layout as Layout), col: (current.layout as Layout).col + 1 })} />
       <IconButton icon="up" label="Monter d'une ligne" onClick={() => placeField(current.key, { ...(current.layout as Layout), row: (current.layout as Layout).row - 1 })} disabled={(current.layout as Layout).row <= 1} />
       <IconButton icon="down" label="Descendre d'une ligne" onClick={() => placeField(current.key, { ...(current.layout as Layout), row: (current.layout as Layout).row + 1 })} />
       </span>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <span className="fb-tgroup" role="group" aria-label="Redimensionner">
       <IconButton icon="narrower" label="Réduire d'une colonne" onClick={() => placeField(current.key, { ...(current.layout as Layout), span: (current.layout as Layout).span - 1 })} disabled={(current.layout as Layout).span <= 1} />
       <IconButton icon="taller" label="Plus haut d'une ligne" onClick={() => placeField(current.key, { ...(current.layout as Layout), height: ((current.layout as Layout).height ?? 1) + 1 })} disabled={((current.layout as Layout).height ?? 1) >= MAX_HEIGHT} />
       <IconButton icon="shorter" label="Moins haut d'une ligne" onClick={() => placeField(current.key, { ...(current.layout as Layout), height: ((current.layout as Layout).height ?? 1) - 1 })} disabled={((current.layout as Layout).height ?? 1) <= 1} />
       <IconButton icon="wider" label="Élargir d'une colonne" onClick={() => placeField(current.key, { ...(current.layout as Layout), span: (current.layout as Layout).span + 1 })} disabled={(current.layout as Layout).span >= COLS} />
       </span>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <span className="fb-tgroup fb-tdel" role="group" aria-label="Supprimer">
       <IconButton icon="trash" danger label={`Supprimer le champ ${current.label || current.key}`} onClick={() => removeField(current.key)} />
       </span>
@@ -252,7 +256,7 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
         {toolbarExtra}
         {pill}
       </div>
-      {bad > 0 && <ul className="fb-problems" aria-label="Problèmes du formulaire">{(problems ?? []).slice(0, 4).map((p, i) => <li key={i}>{p}</li>)}{bad > 4 && <li>… et {bad - 4} autre(s)</li>}</ul>}
+      {bad > 0 && <ul className="fb-problems" aria-label="Problèmes du formulaire">{keyed((problems ?? []).slice(0, 4), (p) => p).map(({ item: p, key }) => <li key={key}>{p}</li>)}{bad > 4 && <li>… et {bad - 4} autre(s)</li>}</ul>}
       {narrow && <p role="note" className="notice">Édition recommandée sur grand écran : sur un téléphone, vous pouvez consulter l'aperçu du formulaire. Ouvrez-le sur un ordinateur ou une tablette pour le modifier.</p>}
       <div className="fb-body">
       {!narrow && tab === "build" && (

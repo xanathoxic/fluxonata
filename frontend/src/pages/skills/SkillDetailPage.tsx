@@ -16,6 +16,7 @@ import { SkillForm } from "./SkillForm";
 import { schemaToFields } from "./fields";
 import { HelpTip } from "../../components/HelpTip";
 import { TagInput, TagList } from "../../components/Tags";
+import { ReadRegion } from "../../components/ReadRegion";
 
 const TYPE: Record<string, string> = { string: "Texte", integer: "Entier", number: "Nombre", boolean: "Oui / non" };
 
@@ -78,7 +79,7 @@ export function SkillDetailPage() {
         <div className="detail-grid">
           <section className="card" aria-labelledby="sk-ins">
             <h2 id="sk-ins">Instructions (version {v.version})</h2>
-            <pre tabIndex={0} aria-label="Instructions du skill" className="wrap">{v.instructions}</pre>
+            <ReadRegion className="wrap" label="Instructions du skill">{v.instructions}</ReadRegion>
             <h3>Entrées</h3><FieldsTable schema={v.input_schema} label="Entrées du skill" />
             <h3>Réponse attendue</h3><FieldsTable schema={v.output_schema} label="Champs de la réponse" />
           </section>

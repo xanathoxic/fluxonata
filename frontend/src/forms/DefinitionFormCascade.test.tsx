@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { DefinitionForm, type LookupFn } from "./DefinitionForm";
-import type { FormDefinition } from "./types";
+import type { FormDefinition, FormField } from "./types";
 
 const definition: FormDefinition = {
   version: 1,
@@ -54,19 +54,20 @@ describe("liste dépendante d'un autre champ (cascade)", () => {
   });
 });
 
+const multi: FormDefinition = {
+  version: 1,
+  sections: [{ id: "s", title: "Chemin", fields: [
+    { key: "champ1", type: "text", label: "Champ 1" },
+    { key: "champ2", type: "text", label: "Champ 2" },
+    { key: "choix", type: "select", label: "Choix", source: { connection: "svc", path: "/acl/{champ1}/org/{champ2}", params: ["champ1", "champ2"] } },
+  ] }],
+};
+function Multi({ lookup, def = multi }: { lookup: LookupFn; def?: FormDefinition }) {
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  return <DefinitionForm definition={def} values={values} onChange={setValues} lookup={lookup} />;
+}
+
 describe("chemin composé de plusieurs champs", () => {
-  const multi: FormDefinition = {
-    version: 1,
-    sections: [{ id: "s", title: "Chemin", fields: [
-      { key: "champ1", type: "text", label: "Champ 1" },
-      { key: "champ2", type: "text", label: "Champ 2" },
-      { key: "choix", type: "select", label: "Choix", source: { connection: "svc", path: "/acl/{champ1}/org/{champ2}", params: ["champ1", "champ2"] } },
-    ] }],
-  };
-  function Multi({ lookup, def = multi }: { lookup: LookupFn; def?: FormDefinition }) {
-    const [values, setValues] = useState<Record<string, unknown>>({});
-    return <DefinitionForm definition={def} values={values} onChange={setValues} lookup={lookup} />;
-  }
   const calls = (lookup: ReturnType<typeof lookupFor>) => lookup.mock.calls.filter(([key]) => key === "choix");
 
   it("n'interroge le service que lorsque les deux champs du chemin sont renseignés", async () => {
@@ -90,7 +91,7 @@ describe("chemin composé de plusieurs champs", () => {
     const def: FormDefinition = { version: 1, sections: [{ id: "s", title: "Chemin", fields: [
       { key: "champ1", type: "text", label: "Champ 1", compute: "upper(\"prod\")" },
       { key: "champ2", type: "text", label: "Champ 2", compute: "upper(\"web\")" },
-      multi.sections[0]!.fields[2]!,
+      multi.sections[0]?.fields[2] as FormField,
     ] }] };
     render(<Multi lookup={lookup} def={def} />);
     await waitFor(() => expect(calls(lookup).at(-1)).toEqual(["choix", { champ1: "PROD", champ2: "WEB" }]));

@@ -11,10 +11,19 @@
 # (expand/contract : ajouter nullable ou avec défaut, ne supprimer/renommer qu'une version plus tard).
 #
 # Hors périmètre, volontairement : « nouveau code sur ancien schéma ». La pile impose migrate → reste (`service_completed_successfully`),
-# donc ce cas ne se produit pas en exploitation normale ; un retour arrière de migration n'est pas une opération supportée (voir UPGRADE.md).
+# donc ce cas ne se produit pas en exploitation normale ; un retour arrière de migration n'est pas une opération supportée (voir docs/INSTALL.md §7.2, « Retour arrière »).
+# Sonde « jeton personnel » (scripts/compat_probe_tokens.py), après la suite : un jeton créé pour une PERSONNE par le code courant, présenté à l'API de
+# l'ancien code, doit être refusé proprement (401) ou accepté, jamais provoquer d'erreur serveur ; « non applicable » si l'ancien code n'a pas de jetons.
+# Portabilité : COMPAT_PYTHON (interpréteur ; défaut .venv du dépôt, la CI vise 3.13) ; si ORCH_DB_HOST est déjà défini, l'environnement fourni est
+# utilisé tel quel et `.env` n'est PAS lu (PostgreSQL jetable, CI) ; sinon `.env` du dépôt. La base `test_fluxonata_compat` est créée puis supprimée.
 # Limites : les dépendances Python sont celles de l'environnement courant (pas celles de l'ancienne version) ; les tests marqués `docker` sont exclus.
-source "$(dirname "$0")/_common.sh"; cd "$ROOT"; load_env
-PY="$ROOT/.venv/bin/python"
+source "$(dirname "$0")/_common.sh"; cd "$ROOT"
+[ -n "${ORCH_DB_HOST:-}" ] || load_env
+PY="${COMPAT_PYTHON:-$ROOT/.venv/bin/python}"
+[ -x "$PY" ] || { echo "interpréteur introuvable : $PY (COMPAT_PYTHON=chemin vers un Python avec les dépendances du backend)" >&2; exit 2; }
+for v in ORCH_DB_HOST ORCH_DB_PORT ORCH_DB_USER ORCH_DB_PASSWORD; do
+  [ -n "${!v:-}" ] || { echo "variable $v absente : définissez-la ou créez .env (docs/INSTALL.md)" >&2; exit 2; }
+done
 BASE="${COMPAT_BASE_REF:-}"; SELFTEST=0; PYTEST_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -58,6 +67,13 @@ git archive "$BASE" -- . ':(exclude)frontend' | tar -x -C "$TMP/old"
 set +e
 (cd "$TMP/old/backend" && PYTHONPATH="$ROOT/scripts" ORCH_DB_NAME=fluxonata_compat "$PY" -m pytest -p compat_plugin --reuse-db -p no:cacheprovider -m "not docker" "${PYTEST_ARGS[@]}")
 rc=$?
+if [ "$SELFTEST" != 1 ]; then
+  echo "== sonde « jeton personnel » (ancien code $(git rev-parse --short "$BASE"))"
+  ORCH_DB_NAME="$DB" "$PY" -I scripts/compat_probe_tokens.py new "$ROOT/backend" "$TMP/probe.json" && \
+    (cd "$TMP/old/backend" && ORCH_DB_NAME="$DB" "$PY" -I "$ROOT/scripts/compat_probe_tokens.py" old "$TMP/old/backend" "$TMP/probe.json")
+  probe=$?
+  [ $probe -eq 0 ] || { echo "COMPAT : la sonde « jeton personnel » signale un écart (code $probe)." >&2; [ $rc -ne 0 ] || rc=$probe; }
+fi
 set -e
 if [ "$SELFTEST" = 1 ]; then
   [ $rc -ne 0 ] && { echo "AUTO-TEST OK : la migration hostile a bien été détectée (pytest a échoué comme attendu)."; exit 0; }

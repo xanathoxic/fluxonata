@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { FormIcon } from "../FormIcon";
 import { applyRules, describeEffect, evalNode, initialState, isGroup, TOKEN_RE, type Node, type Rule } from "../rules";
 import type { FormField } from "../types";
 
 function involved(n: Node, out: Set<string>) {
-  if (isGroup(n)) n.items.forEach((i) => involved(i, out));
+  if (isGroup(n)) n.items.forEach((i) => { involved(i, out); });
   else { if (n.field !== undefined) out.add(n.field); for (const m of (n.template ?? "").matchAll(TOKEN_RE)) out.add(m[1] as string); if (n.ref) out.add(n.ref); }
 }
 
 /** « Essayer » : type values for the fields the rule reads and see what it decides, without leaving the editor. */
 export function Tryout({ rule, field, fields }: { rule: Rule; field: FormField; fields: FormField[] }) {
+  const base = useId();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const keys = new Set<string>();
   involved(rule.when, keys);
@@ -25,13 +26,13 @@ export function Tryout({ rule, field, fields }: { rule: Rule; field: FormField; 
       {shown.length === 0 && <p className="hint">Ajoutez une condition pour l'essayer.</p>}
       <div className="rl-tryfields">
         {shown.map((f) => (
-          <label key={f.key} className="rl-tryf">
+          <label key={f.key} htmlFor={`${base}-${f.key}`} className="rl-tryf">
             <span>{f.label || f.key}</span>
-            {f.type === "checkbox" ? <input type="checkbox" checked={values[f.key] === true} onChange={(e) => set(f.key, e.target.checked)} />
-              : f.options && f.type !== "checkbox_list" ? <select value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}><option value="">(vide)</option>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}</select>
-              : f.type === "checkbox_list" ? <input placeholder="a, b" value={((values[f.key] as string[]) ?? []).join(", ")} onChange={(e) => set(f.key, e.target.value.split(",").map((v) => v.trim()).filter(Boolean))} />
-              : f.type === "number" ? <input type="number" value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value === "" ? undefined : Number(e.target.value))} />
-              : <input value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />}
+            {f.type === "checkbox" ? <input id={`${base}-${f.key}`} type="checkbox" checked={values[f.key] === true} onChange={(e) => set(f.key, e.target.checked)} />
+              : f.options && f.type !== "checkbox_list" ? <select id={`${base}-${f.key}`} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)}><option value="">(vide)</option>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}</select>
+              : f.type === "checkbox_list" ? <input id={`${base}-${f.key}`} placeholder="a, b" value={((values[f.key] as string[]) ?? []).join(", ")} onChange={(e) => set(f.key, e.target.value.split(",").map((v) => v.trim()).filter(Boolean))} />
+              : f.type === "number" ? <input id={`${base}-${f.key}`} type="number" value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value === "" ? undefined : Number(e.target.value))} />
+              : <input id={`${base}-${f.key}`} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />}
           </label>
         ))}
       </div>

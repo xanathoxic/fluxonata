@@ -15,6 +15,7 @@ import { errorText } from "../../lib";
 import { controlIcon, emptySpec, MODES, type ControlCard, type ControlMode } from "../../forms/controls";
 import { FormIcon, IconLabel, type FormIconName } from "../../forms/FormIcon";
 import { slugify } from "../../forms/library";
+import { useRadioGroup } from "../../components/useRadioGroup";
 
 /** « Contrôles » : the library of custom controls (a group of fields, repeated lines, boxes with details…), published in versions
  * and then offered in the palette of the form editor. */
@@ -101,6 +102,7 @@ export function ControlsPage() {
 }
 
 function NewControl({ folder, existing, onClose, onCreated }: { folder: string; existing: ControlCard[]; onClose: () => void; onCreated: (slug: string) => void }) {
+  const modes = useRadioGroup<HTMLDivElement>();
   const { workspace } = useApp();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"group" | "repeat" | "list">("group");
@@ -116,10 +118,12 @@ function NewControl({ folder, existing, onClose, onCreated }: { folder: string; 
     <Overlay variant="modal" title="Nouveau contrôle" description="Donnez un nom et choisissez le type : il ne pourra plus être changé ensuite." onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="submit" form="nc-form" className="primary" disabled={!name.trim() || !slug || taken || create.isPending}>Créer</button></>}>
       <form id="nc-form" onSubmit={(e: FormEvent) => { e.preventDefault(); create.mutate(); }}>
+        {/* biome-ignore lint/a11y/noAutofocus: le champ reçoit le focus à l'ouverture de la boîte de dialogue */}
         <div className="field"><label htmlFor="nc-name">Nom du contrôle</label><input id="nc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={160} required autoFocus />
           {slug && <p className="hint">Identifiant : <code>{slug}</code>{taken && " — déjà utilisé"}</p>}</div>
-        <div className="ctl-modes" role="radiogroup" aria-label="Type de contrôle">
+        <div ref={modes.ref} onKeyDown={modes.onKeyDown} className="ctl-modes" role="radiogroup" aria-label="Type de contrôle">
           {KINDS.map((k) => (
+            // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
             <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} className={`ctl-mode${kind === k.id ? " on" : ""}`} onClick={() => setKind(k.id)}>
               <FormIcon name={k.icon} size={22} /><strong>{k.label}</strong><span>{k.hint}</span>
             </button>

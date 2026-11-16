@@ -1,6 +1,7 @@
 import { FormIcon } from "../FormIcon";
 import { isGroup, operatorsFor, type Cond, type CondOp, type Group, type Node } from "../rules";
 import type { FormField } from "../types";
+import { useRadioGroup } from "../../components/useRadioGroup";
 
 export const MAX_DEPTH = 4;
 const COMPOSED = "__composed";
@@ -27,12 +28,16 @@ interface TreeProps { group: Group; fields: FormField[]; path: number[]; onChang
 /** A group of conditions (all of them, or at least one), which may hold other groups. */
 export function GroupEditor({ group, fields, path, onChange, onRemove }: TreeProps) {
   const depth = path.length;
+  const combine = useRadioGroup<HTMLSpanElement>();
   const set = (items: Node[]) => onChange({ ...group, items });
   return (
+    // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className={`rl-group d${Math.min(depth, 3)}`} role="group" aria-label={depth === 0 ? "Conditions" : `Groupe ${path.map((p) => p + 1).join(".")}`}>
       <div className="rl-ghead">
-        <span className="rl-seg" role="radiogroup" aria-label={`Combinaison${depth ? ` du groupe ${path.map((p) => p + 1).join(".")}` : ""}`}>
+        <span ref={combine.ref} onKeyDown={combine.onKeyDown} className="rl-seg" role="radiogroup" aria-label={`Combinaison${depth ? ` du groupe ${path.map((p) => p + 1).join(".")}` : ""}`}>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={group.op === "all"} className={group.op === "all" ? "on" : ""} title="Toutes les conditions doivent être vraies" onClick={() => onChange({ ...group, op: "all" })}>ET</button>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={group.op === "any"} className={group.op === "any" ? "on" : ""} title="Au moins une condition doit être vraie" onClick={() => onChange({ ...group, op: "any" })}>OU</button>
         </span>
         <span className="hint">{group.op === "all" ? "toutes les conditions" : "au moins une condition"}</span>
@@ -47,7 +52,9 @@ export function GroupEditor({ group, fields, path, onChange, onRemove }: TreePro
           const replace = (n: Node) => set(group.items.map((x, k) => (k === i ? n : x)));
           const remove = () => set(group.items.filter((_, k) => k !== i));
           return isGroup(item)
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             ? <GroupEditor key={i} group={item} fields={fields} path={at} onChange={replace} onRemove={remove} />
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             : <CondRow key={i} cond={item} fields={fields} label={`Condition ${at.map((p) => p + 1).join(".")}`} onChange={replace} onRemove={group.items.length > 1 || depth > 0 ? remove : undefined} />;
         })}
       </div>
@@ -57,6 +64,7 @@ export function GroupEditor({ group, fields, path, onChange, onRemove }: TreePro
 
 function CondRow({ cond, fields, label, onChange, onRemove }: { cond: Cond; fields: FormField[]; label: string; onChange: (c: Cond) => void; onRemove?: () => void }) {
   const composed = cond.template !== undefined;
+  const compare = useRadioGroup<HTMLSpanElement>();
   const src = composed ? undefined : fields.find((f) => f.key === cond.field);
   const ops = operatorsFor(composed ? "composed" : (src?.type ?? "text"));
   const info = ops.find((o) => o.id === cond.op);
@@ -74,6 +82,7 @@ function CondRow({ cond, fields, label, onChange, onRemove }: { cond: Cond; fiel
   const setOp = (op: CondOp) => onChange(shape({ ...cond, op }));
   const mode = cond.ref !== undefined ? "ref" : "value";
   return (
+    // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className="rl-cond" role="group" aria-label={label}>
       <select aria-label={`${label} : champ`} value={composed ? COMPOSED : cond.field} onChange={(e) => setField(e.target.value)}>
         {!src && !composed && <option value={cond.field}>{cond.field} (introuvable)</option>}
@@ -93,8 +102,10 @@ function CondRow({ cond, fields, label, onChange, onRemove }: { cond: Cond; fiel
         {ops.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
       </select>
       {info && !info.unary && !info.list && (
-        <span className="rl-mode" role="radiogroup" aria-label={`${label} : comparer à`}>
+        <span ref={compare.ref} onKeyDown={compare.onKeyDown} className="rl-mode" role="radiogroup" aria-label={`${label} : comparer à`}>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={mode === "value"} className={mode === "value" ? "on" : ""} aria-label="Une valeur" title="Comparer à une valeur" onClick={() => onChange(shape({ ...cond, ref: undefined, value: cond.value ?? "" }))}><FormIcon name="text" size={14} /></button>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={mode === "ref"} className={mode === "ref" ? "on" : ""} aria-label="La valeur d'un autre champ" title="Comparer à la valeur d'un autre champ" disabled={others.length === 0} onClick={() => onChange(shape({ ...cond, value: undefined, ref: others[0]?.key }))}><FormIcon name="link" size={14} /></button>
         </span>
       )}
@@ -125,6 +136,7 @@ function ListOperand({ cond, src, label, onChange }: { cond: Cond; src?: FormFie
   const values = (cond.values ?? []).map(String);
   if (src?.options)
     return (
+      // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
       <span className="rl-chips" role="group" aria-label={`${label} : valeurs`}>
         {src.options.map((o) => {
           const on = values.includes(o.value);

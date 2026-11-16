@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import time
+import urllib.error
 import urllib.request
 import uuid
 
@@ -39,9 +40,20 @@ def _api(address, method, path, body=None, token=ROOT):
         data=json.dumps(body).encode() if body is not None else None,
         headers={"X-Vault-Token": token, "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 - serveur Vault de test, adresse issue de l'environnement du test
         raw = resp.read()
     return json.loads(raw) if raw else {}
+
+
+def _api_retry(address, method, path, body=None, seconds=30):
+    deadline = time.time() + seconds
+    while True:
+        try:
+            return _api(address, method, path, body)
+        except urllib.error.HTTPError:
+            if time.time() >= deadline:
+                raise
+            time.sleep(1)
 
 
 @pytest.fixture(scope="module")
@@ -114,7 +126,9 @@ def real():
     role_id = _api(address, "GET", "auth/approle/role/fluxonata/role-id")["data"]["role_id"]
     secret_id = _api(address, "POST", "auth/approle/role/fluxonata/secret-id")["data"]["secret_id"]
     _api(address, "POST", "sys/mounts/database", {"type": "database"})
-    _api(
+    # Vault checks the connection when it records the configuration: PostgreSQL answers « ready » on its local socket a moment before it
+    # accepts connections from another container, so a refused first attempt is retried (a few seconds at most), never ignored
+    _api_retry(
         address,
         "POST",
         "database/config/pg",

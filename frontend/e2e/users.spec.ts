@@ -14,6 +14,14 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   const name = `usr${uniq()}`;
   const mine = `Mon-mot-de-passe-${uniq()}`;
   await login(page, "admin");
+  // préparation : la démonstration n'a qu'un espace, or le test place la personne dans deux espaces (« Ajouter un espace »
+  // reste grisé sans espace libre) ; on crée donc un second espace, nommé et unique, sans dépendre d'autres données.
+  const second = await page.evaluate(async (id) => {
+    const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
+    const r = await fetch("/api/v1/platform/workspaces/", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ slug: `e2e-${id}`, name: `Espace E2E ${id}` }) });
+    return r.status;
+  }, uniq());
+  expect(second).toBe(201);
   await goNav(page, "Plate-forme");
   await page.getByRole("tab", { name: "Utilisateurs" }).click();
   await expect(page.getByRole("cell", { name: /alice/ }).first()).toBeVisible();
@@ -31,6 +39,7 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   await expectNoA11yViolations(page);
   await form.getByRole("button", { name: "Créer l'utilisateur" }).click();
   const secret = page.getByRole("dialog", { name: "Utilisateur créé" });
+  // biome-ignore lint/performance/useDomNodeTextContent: méthode Playwright `innerText()` (texte rendu, tel que la personne le lit), pas la propriété DOM — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
   const temp = (await secret.getByLabel("Mot de passe provisoire").innerText()).trim();
   expect(temp.length).toBeGreaterThanOrEqual(16);
   await expectNoA11yViolations(page);
@@ -86,6 +95,7 @@ test("plate-forme : créer un utilisateur dans deux espaces, mot de passe provis
   await page.getByRole("button", { name: `Réinitialiser le mot de passe de ${name}` }).click();
   await page.getByRole("dialog", { name: /Réinitialiser le mot de passe/ }).getByRole("button", { name: "Réinitialiser" }).click();
   const again = page.getByRole("dialog", { name: "Mot de passe réinitialisé" });
+  // biome-ignore lint/performance/useDomNodeTextContent: méthode Playwright `innerText()` (texte rendu, tel que la personne le lit), pas la propriété DOM — faux positif accepté (décision du 2026-11-12), à cet emplacement seulement
   const temp2 = (await again.getByLabel("Mot de passe provisoire").innerText()).trim();
   await again.getByRole("button", { name: "J'ai transmis le mot de passe" }).click();
   await signIn(person, name, mine);

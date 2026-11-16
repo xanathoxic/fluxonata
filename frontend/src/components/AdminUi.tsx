@@ -1,5 +1,5 @@
 import { FormIcon } from "../forms/FormIcon";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { HelpTip } from "./HelpTip";
 import { Pagination } from "./Pagination";
 
@@ -37,7 +37,8 @@ export function usePaged<T>(rows: T[], initialSize = 10, sizes?: number[]) {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(initialSize);
   const pages = Math.max(1, Math.ceil(rows.length / size));
-  useEffect(() => setPage(1), [rows.length]); // a new search or filter starts at the first page
+  const [seenRows, setSeenRows] = useState(rows.length);
+  if (seenRows !== rows.length) { setSeenRows(rows.length); setPage(1); } // a new search or filter starts at the first page
   useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
   const slice = useMemo(() => rows.slice((Math.min(page, pages) - 1) * size, Math.min(page, pages) * size), [rows, page, pages, size]);
   const pager = (label: string) => rows.length > 10
@@ -67,15 +68,16 @@ export function EmptyRow({ cols, children }: { cols: number; children: ReactNode
 /** Sorting of a loaded list: click a column header to sort, again to reverse. */
 export function useSort<T>(rows: T[], keys: Record<string, (r: T) => string | number>, initial: { key: string; dir: "asc" | "desc" }) {
   const [sort, setSort] = useState(initial);
+  const keysRef = useRef(keys); // recréé à chaque rendu par l'appelant : seuls les lignes et le tri demandé relancent le calcul
+  keysRef.current = keys;
   const sorted = useMemo(() => {
-    const get = keys[sort.key];
+    const get = keysRef.current[sort.key];
     if (!get) return rows;
     const out = [...rows].sort((a, b) => {
       const x = get(a), y = get(b);
       return typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "fr", { numeric: true, sensitivity: "base" });
     });
     return sort.dir === "desc" ? out.reverse() : out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, sort]);
   const toggle = (key: string) => setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   return { sorted, sort, toggle };

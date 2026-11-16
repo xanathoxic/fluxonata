@@ -31,7 +31,10 @@ def diff_graphs(a: dict, b: dict) -> dict:
                 changed.append({"id": i, "name": nb[i].get("name", i), "type": nb[i]["type"], "fields": fields})
     ea = {(e["from"], e["to"], e.get("label")) for e in a.get("edges", [])}
     eb = {(e["from"], e["to"], e.get("label")) for e in b.get("edges", [])}
-    edge = lambda t: {"from": t[0], "to": t[1], "label": t[2]}  # noqa: E731
+
+    def edge(t):
+        return {"from": t[0], "to": t[1], "label": t[2]}
+
     sections = {}
     for key in ("inputs", "outputs", "variables", "form", "input_form"):
         if a.get(key) != b.get(key):

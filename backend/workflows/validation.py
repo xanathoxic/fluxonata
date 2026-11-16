@@ -88,6 +88,7 @@ NODE_TYPES = {
     "ldap",
     "sftp",
     "smtp",
+    "ssh",
     "transform",
 }
 HTTP_CONNECTION_KINDS = ("http_bearer", "api_key", "basic", "oauth2_client", "oauth2_code", "aws_sigv4")
@@ -109,6 +110,21 @@ STATIC_OUTPUTS = {
         "simulated": {"type": "boolean"},
         "recipients": {"type": "integer"},
         "message_id": {"type": "string"},
+    },
+    "ssh": {
+        "status": {"type": "string"},
+        "connected": {"type": "boolean"},
+        "simulated": {"type": "boolean"},
+        "session": {"type": "string"},
+        "duration_ms": {"type": "integer"},
+        "hops": {"type": "array"},
+        "results": {"type": "array"},
+        "failed_step": {"type": "string"},
+        "error_type": {"type": "string"},
+        "error": {"type": "object"},
+        "truncated": {"type": "boolean"},
+        "uncertain": {"type": "boolean"},
+        "failed_count": {"type": "integer"},
     },
     "sftp": {
         "operation": {"type": "string"},
@@ -169,6 +185,7 @@ ERROR_CAPABLE = {
     "ldap",
     "sftp",
     "smtp",
+    "ssh",
 }
 
 
@@ -261,6 +278,71 @@ def _dominators(edges, order):
     return dom
 
 
+def _choice_options(nodes, kind, expr, incoming, outgoing) -> dict:
+    """The open choices of a graph and the values each can take: a decision (by its expression), whether a step with an error exit
+    fails, the case of a multi-way choice, and which branch of a race arrives first."""
+    options: dict = {("d", x): [True, False] for x in expr.values()}
+    options |= {("f", n): [False, True] for n in kind if any(e.get("label") == "error" for e in outgoing[n])}
+    for n in nodes:
+        if n["type"] == "switch":
+            options[("s", n["id"])] = [*case_ids(n), "default"]
+        if n["type"] == "race" and incoming[n["id"]]:  # which branch arrives first
+            options[("r", n["id"])] = [e["from"] for e in incoming[n["id"]]]
+    return options
+
+
+def _upstream(order, incoming) -> dict[str, set]:
+    up: dict[str, set] = {}
+    for nid in order:
+        up[nid] = set().union(*[{e["from"]} | up[e["from"]] for e in incoming[nid]]) if incoming[nid] else set()
+    return up
+
+
+def _edge_is_taken(e, nid, kind, expr, pick, status) -> bool:
+    """Whether the connection `e` lets `nid` start in this scenario, given how its source ended."""
+    src, label = status.get(e["from"]), e.get("label") or "next"
+    if kind[nid] == "race" and e["from"] != pick.get(("r", nid)):
+        return False  # a race starts with the branch that arrives first, whatever the others do
+    if src != "ok":
+        return src == "failed" and label == "error"
+    if kind[e["from"]] == "condition":
+        return label == str(pick[("d", expr[e["from"]])]).lower()
+    if kind[e["from"]] == "switch":
+        return label == pick[("s", e["from"])]
+    return label == "next"
+
+
+def _play_scenario(order, incoming, kind, expr, pick) -> tuple[dict[str, str], bool]:
+    """How each step ends ("ok" or "failed"; a step that does not run is absent) for one combination of the open choices, and whether
+    the run ends in an exception."""
+    status: dict[str, str] = {}
+    ends_badly = False
+    for nid in order:
+        if incoming[nid] and not any(_edge_is_taken(e, nid, kind, expr, pick, status) for e in incoming[nid]):
+            continue
+        if kind[nid] == "throw":
+            ends_badly = True
+            status[nid] = "failed"
+        else:
+            status[nid] = "failed" if pick.get(("f", nid)) else "ok"
+    return status, ends_badly
+
+
+def _certain_in_scenario(status, up, races, pick) -> dict[str, set]:
+    """For each step that ran: the outputs that exist when it runs. After a race, what the slower branches produce is not certain
+    (cancelled or still running)."""
+    done = {n for n, st in status.items() if st == "ok"}
+    out = {}
+    for nid in status:
+        certain = done
+        for r in races:
+            if status.get(r) == "ok" and (r == nid or r in up[nid]):
+                win = pick[("r", r)]
+                certain = certain - (up[r] - up[win] - {win})
+        out[nid] = certain
+    return out
+
+
 def always_run_map(nodes, edges, order):
     """For each step N, the steps whose output certainly exists whenever N runs and the run is not ending in an
     exception. The graph is walked with the engine's rules for every combination of the open choices (each distinct
@@ -273,64 +355,22 @@ def always_run_map(nodes, edges, order):
     for e in edges:
         incoming[e["to"]].append(e)
         outgoing[e["from"]].append(e)
-    options: dict = {("d", x): [True, False] for x in expr.values()}
-    options |= {("f", n): [False, True] for n in kind if any(e.get("label") == "error" for e in outgoing[n])}
-    for n in nodes:
-        if n["type"] == "switch":
-            options[("s", n["id"])] = [*case_ids(n), "default"]
-        if n["type"] == "race" and incoming[n["id"]]:  # which branch arrives first
-            options[("r", n["id"])] = [e["from"] for e in incoming[n["id"]]]
-    up: dict[str, set] = {}
-    for nid in order:
-        up[nid] = set().union(*[{e["from"]} | up[e["from"]] for e in incoming[nid]]) if incoming[nid] else set()
-    races = [n for n in kind if kind[n] == "race"]
+    options = _choice_options(nodes, kind, expr, incoming, outgoing)
     choices = sorted(options, key=str)
     total = 1
     for c in choices:
         total *= len(options[c])
     if total > 1 << MAX_SCENARIO_VARS:  # too many open choices to enumerate: the cruder, safe rule
         return _dominators(edges, order)
+    up = _upstream(order, incoming)
+    races = [n for n in kind if kind[n] == "race"]
     must: dict = {nid: None for nid in order}  # None: never runs without ending in an exception
     for values in itertools.product(*(options[c] for c in choices)):
         pick = dict(zip(choices, values, strict=True))
-        status: dict[str, str] = {}
-        ends_badly = False
-        for nid in order:
-            runs = not incoming[nid]
-            for e in incoming[nid]:
-                src, label = status.get(e["from"]), e.get("label") or "next"
-                if kind[nid] == "race" and e["from"] != pick.get(("r", nid)):
-                    continue  # a race starts with the branch that arrives first, whatever the others do
-                if src == "ok":
-                    if kind[e["from"]] == "condition":
-                        ok = label == str(pick[("d", expr[e["from"]])]).lower()
-                    elif kind[e["from"]] == "switch":
-                        ok = label == pick[("s", e["from"])]
-                    else:
-                        ok = label == "next"
-                else:
-                    ok = src == "failed" and label == "error"
-                if ok:
-                    runs = True
-                    break
-            if not runs:
-                continue
-            if kind[nid] == "throw":
-                ends_badly = True
-                status[nid] = "failed"
-            else:
-                status[nid] = "failed" if pick.get(("f", nid)) else "ok"
+        status, ends_badly = _play_scenario(order, incoming, kind, expr, pick)
         if ends_badly:
             continue
-        done = {n for n, st in status.items() if st == "ok"}
-        for nid in status:
-            certain = done
-            for (
-                r
-            ) in races:  # after a race, what the slower branches produce is not certain (cancelled or still running)
-                if status.get(r) == "ok" and (r == nid or r in up[nid]):
-                    win = pick[("r", r)]
-                    certain = certain - (up[r] - up[win] - {win})
+        for nid, certain in _certain_in_scenario(status, up, races, pick).items():
             must[nid] = certain if must[nid] is None else must[nid] & certain
     everything = set(order)
     return {nid: ({nid} | must[nid]) if must[nid] is not None else everything for nid in order}
@@ -365,23 +405,18 @@ def resolve_workflow_version(workspace, slug, wanted=None):
     return wf, version
 
 
-def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:  # noqa: C901
-    issues: list[dict] = []
-    nodes = graph.get("nodes") or []
-    edges = graph.get("edges") or []
-    inputs_schema = graph.get("inputs") or {}
-    declared_inputs = inputs_schema.get("properties") or {}
-    variables = graph.get("variables") or []
-    declared_vars = {v["name"] for v in variables if isinstance(v, dict) and isinstance(v.get("name"), str)}
-
+def _graph_shape_issues(graph: dict, issues: list) -> bool:
+    """Nodes and edges are lists, not too many, every step well formed with a known type. True when the check must stop."""
+    nodes, edges = graph.get("nodes") or [], graph.get("edges") or []
     if not isinstance(nodes, list) or not isinstance(edges, list):
-        return [issue(None, "graph_malformed", "Le graphe est mal formé.")]
+        issues.append(issue(None, "graph_malformed", "Le graphe est mal formé."))
+        return True
     if len(nodes) > MAX_NODES:
-        return [issue(None, "too_many_nodes", f"Un workflow est limité à {MAX_NODES} étapes.")]
-
-    ids = [n.get("id") for n in nodes if isinstance(n, dict)]
-    if len(ids) != len(nodes):
-        return [issue(None, "graph_malformed", "Une étape est mal formée.")]
+        issues.append(issue(None, "too_many_nodes", f"Un workflow est limité à {MAX_NODES} étapes."))
+        return True
+    if len([n for n in nodes if isinstance(n, dict)]) != len(nodes):
+        issues.append(issue(None, "graph_malformed", "Une étape est mal formée."))
+        return True
     seen = set()
     for n in nodes:
         nid = n.get("id")
@@ -394,45 +429,26 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
             issues.append(issue(nid, "bad_type", f"Type d'étape inconnu : {n.get('type')}."))
         if not str(n.get("name", "")).strip():
             issues.append(issue(nid, "missing_name", "Donnez un nom à cette étape.", "warning"))
-    if any(i["level"] == "error" for i in issues):
-        return issues
+    return any(i["level"] == "error" for i in issues)
 
-    issues += _validate_variables(variables)
-    issues += _validate_form(graph.get("form"), declared_inputs)
-    issues += _validate_input_form(graph.get("input_form"), graph.get("inputs"), workspace)
-    issues += [issue(None, "bad_pins", m) for m in debug.validate_pins(graph.get("pins"), set(ids))]
-    by_id = {n["id"]: n for n in nodes}
-    clean_edges = []
+
+def _usable_edges(edges: list, by_id: dict, issues: list) -> list:
+    """The edges between two existing, different steps (the others are reported)."""
+    clean = []
     for e in edges:
         if e.get("from") not in by_id or e.get("to") not in by_id:
             issues.append(issue(None, "dangling_edge", "Une connexion référence une étape absente."))
         elif e["from"] == e["to"]:
             issues.append(issue(e["from"], "cycle", "Une étape ne peut pas se connecter à elle-même."))
         else:
-            clean_edges.append(e)
-    if any(i["level"] == "error" for i in issues):
-        return issues
+            clean.append(e)
+    return clean
 
-    order = topo_order(nodes, clean_edges)
-    if order is None:
-        issues.append(
-            issue(
-                None, "cycle", "Le workflow contient un cycle. Utilisez une boucle explicite (étape « Pour chaque »)."
-            )
-        )
-        return issues
-    anc = ancestors_map(nodes, clean_edges, order)
-    dom = always_run_map(nodes, clean_edges, order)
-    incoming = defaultdict(list)
-    outgoing = defaultdict(list)
-    for e in clean_edges:
-        incoming[e["to"]].append(e)
-        outgoing[e["from"]].append(e)
 
+def _entry_issues(nodes: list, incoming: dict, issues: list) -> None:
     if nodes and not any(not incoming[n["id"]] for n in nodes):
         issues.append(issue(None, "no_entry", "Aucune étape de départ."))
-    starts = [n for n in nodes if not incoming[n["id"]]]
-    for n in starts[1:]:
+    for n in [n for n in nodes if not incoming[n["id"]]][1:]:
         issues.append(
             issue(
                 n["id"],
@@ -443,197 +459,266 @@ def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = N
             )
         )
 
-    out_types: dict[str, dict | None] = {}  # node id -> {field: schema} or None when unknown
 
+def _flow_issues(n: dict, incoming: list, labels: list, issues: list) -> None:
+    """How many flows reach a step and how its exits are labelled."""
+    nid, ntype = n["id"], n["type"]
+    if len(incoming) > 1 and ntype not in ("join", "race"):
+        issues.append(issue(nid, "implicit_join", "Plusieurs flux arrivent ici : ajoutez une étape « Jonction »."))
+    if ntype == "join" and len(incoming) < 2:
+        issues.append(issue(nid, "weak_join", "Une jonction attend au moins deux flux entrants.", "warning"))
+    if ntype == "race":
+        if len(incoming) < 2:
+            issues.append(issue(nid, "weak_race", "Un « premier arrivé » attend au moins deux branches.", "warning"))
+        if n.get("losers", "cancel") not in ("cancel", "finish"):
+            issues.append(
+                issue(nid, "bad_race", "Branches plus lentes : « cancel » (annulées) ou « finish » (terminées).")
+            )
+    _label_issues(n, labels, issues)
+
+
+def _label_issues(n: dict, labels: list, issues: list) -> None:
+    nid, ntype = n["id"], n["type"]
+    if ntype == "condition":
+        if not set(labels) <= {"true", "false"} or len(set(labels)) != len(labels) or not labels:
+            issues.append(
+                issue(nid, "bad_branches", "Une condition a au plus une sortie « oui » et une sortie « non ».")
+            )
+    elif ntype == "switch":
+        allowed = {*case_ids(n), "default"}
+        if not set(labels) <= allowed or len(set(labels)) != len(labels) or not labels:
+            issues.append(
+                issue(
+                    nid,
+                    "bad_branches",
+                    "Un choix multiple a au plus une sortie par cas (et une sortie « default »), chacune étiquetée "
+                    "par l'identifiant du cas.",
+                )
+            )
+    else:
+        for lab in set(labels):
+            if lab == "error" and ntype not in ERROR_CAPABLE:
+                issues.append(issue(nid, "bad_branches", "Cette étape ne peut pas avoir de sortie d'erreur."))
+            elif lab not in ("next", "error"):
+                issues.append(issue(nid, "bad_branches", f"Étiquette de connexion invalide : {lab}."))
+        if labels.count("error") > 1:
+            issues.append(issue(nid, "bad_branches", "Une seule sortie d'erreur est possible."))
+
+
+class _Scan:
+    """What the per-step checks share: the findings, the graph's reading (ancestors, certain steps, declared names) and the
+    output fields known so far for each step."""
+
+    def __init__(self, workspace, slug, issues, by_id, anc, dom, declared_inputs, declared_vars):
+        self.workspace, self.slug, self.issues = workspace, slug, issues
+        self.by_id, self.anc, self.dom = by_id, anc, dom
+        self.declared_inputs, self.declared_vars = declared_inputs, declared_vars
+        self.out_types: dict[str, dict | None] = {}  # node id -> {field: schema} or None when unknown
+
+    def check(self, nid, srcs, roots=()) -> None:
+        """Checks the expression(s) read by step `nid` (`roots`: extra names it may use, e.g. `item`)."""
+        for src in [srcs] if isinstance(srcs, str) else srcs:
+            _check_expr(
+                src, nid, self.anc[nid], self.by_id, self.declared_inputs, self.out_types, self.issues,
+                self.declared_vars, self.dom[nid], roots,
+            )  # fmt: skip
+
+
+def _cfg_action(s: _Scan, n: dict) -> None:
+    _validate_action(n, s.workspace, s.issues, s.out_types, s.declared_inputs)
+
+
+def _cfg_condition(s: _Scan, n: dict) -> None:
+    if not str(n.get("expr", "")).strip():
+        s.issues.append(issue(n["id"], "missing_expr", "La condition est vide."))
+    else:
+        s.check(n["id"], n["expr"])
+    s.out_types[n["id"]] = STATIC_OUTPUTS["condition"]
+
+
+def _cfg_switch(s: _Scan, n: dict) -> None:
+    _validate_switch(n, s.issues)
+    for c in n.get("cases") or []:
+        if isinstance(c, dict) and str(c.get("expr", "")).strip():
+            s.check(n["id"], c["expr"])
+    s.out_types[n["id"]] = STATIC_OUTPUTS["switch"]
+
+
+def _cfg_wait(s: _Scan, n: dict) -> None:
+    nid = n["id"]
+    seconds = n.get("seconds")
+    if not isinstance(seconds, int) or not 1 <= seconds <= 30 * 86400:
+        s.issues.append(issue(nid, "bad_wait", "Délai d'attente : entre 1 seconde et 30 jours."))
+    if n.get("resume") not in (None, "timer", "webhook", "form"):
+        s.issues.append(
+            issue(
+                nid,
+                "bad_wait",
+                "Reprise : « timer » (à l'échéance), « webhook » (appel HTTP) ou « form » (formulaire).",
+            )
+        )
+    if n.get("resume") == "form":
+        props = (n.get("form") or {}).get("properties") if isinstance(n.get("form"), dict) else None
+        if not isinstance(props, dict) or not props or len(props) > 20:
+            s.issues.append(issue(nid, "bad_wait", "Formulaire de reprise : de 1 à 20 champs."))
+    s.out_types[nid] = WEBHOOK_WAIT_OUTPUTS if n.get("resume") in ("webhook", "form") else {}
+
+
+def _cfg_with_connection(validator, kind: str):
+    """A step that calls a service: its own checks, then every expression it evaluates, outputs fixed by its kind."""
+
+    def cfg(s: _Scan, n: dict) -> None:
+        validator(n, s.workspace, s.issues)
+        s.check(n["id"], _node_expressions(n))
+        s.out_types[n["id"]] = STATIC_OUTPUTS[kind]
+
+    return cfg
+
+
+def _cfg_transform(s: _Scan, n: dict) -> None:
+    _validate_transform(n, s.issues)
+    plain, per = transforms.expressions(n)
+    s.check(n["id"], plain)
+    s.check(n["id"], per, ("item",))
+    s.out_types[n["id"]] = transforms.output_fields(n)
+
+
+def _cfg_approval(s: _Scan, n: dict) -> None:
+    nid = n["id"]
+    if not str(n.get("title", "")).strip():
+        s.issues.append(issue(nid, "missing_title", "Indiquez ce qui doit être approuvé."))
+    for key, limit, label in (("subject", 200, "L'objet"), ("body", 20000, "Le corps")):
+        value = n.get(key)
+        if value is not None and (not isinstance(value, str) or len(value) > limit):
+            s.issues.append(
+                issue(nid, "bad_approval", f"{label} de la demande : du texte de {limit} caractères au plus.")
+            )
+    s.check(nid, _node_expressions(n))
+    s.out_types[n["id"]] = STATIC_OUTPUTS["approval"]
+
+
+def _cfg_script(s: _Scan, n: dict) -> None:
+    s.out_types[n["id"]] = _validate_script(n, s.issues)
+    s.check(n["id"], template_expressions(n.get("bindings", {})))
+
+
+def _cfg_throw(s: _Scan, n: dict) -> None:
+    s.out_types[n["id"]] = {}
+    s.check(n["id"], template_expressions(n.get("message", "")))
+
+
+def _cfg_ai(s: _Scan, n: dict) -> None:
+    s.out_types[n["id"]] = _validate_ai(n, s.workspace, s.issues, s.out_types, s.declared_inputs)
+    s.check(n["id"], template_expressions([n.get("prompt", ""), n.get("inputs", {})]))
+
+
+def _cfg_join(s: _Scan, n: dict) -> None:
+    s.out_types[n["id"]] = {}
+
+
+def _cfg_race(s: _Scan, n: dict) -> None:
+    s.out_types[n["id"]] = STATIC_OUTPUTS["race"]
+
+
+def _cfg_while(s: _Scan, n: dict) -> None:
+    nid = n["id"]
+    _validate_subworkflow(n, s.workspace, s.slug, s.issues, s.out_types, s.declared_inputs)
+    s.out_types[nid] = STATIC_OUTPUTS["while"]
+    if not str(n.get("condition") or "").strip():
+        s.issues.append(
+            issue(nid, "missing_expr", "Indiquez la condition pour continuer à répéter (ex. last.statut != 'termine').")
+        )
+    delay = n.get("delay_seconds", 0)
+    if not isinstance(delay, int) or not 0 <= delay <= 86400:
+        s.issues.append(issue(nid, "bad_wait", "Délai entre deux répétitions : de 0 à 86400 secondes."))
+    s.check(
+        nid,
+        [x for x in [n.get("condition", ""), *template_expressions(n.get("inputs", {}))] if str(x).strip()],
+        ("last", "iteration"),
+    )
+
+
+def _cfg_subworkflow(s: _Scan, n: dict) -> None:
+    nid = n["id"]
+    _validate_subworkflow(n, s.workspace, s.slug, s.issues, s.out_types, s.declared_inputs)
+    s.out_types[nid] = STATIC_OUTPUTS["foreach"] if n["type"] == "foreach" else None
+    if n["type"] == "foreach":
+        items = n.get("items")
+        if not isinstance(items, str) or not items.strip():
+            s.issues.append(issue(nid, "missing_items", "Indiquez la liste à parcourir."))
+        else:
+            s.check(nid, items)
+
+
+def _scan_steps(s: _Scan, nodes: list, incoming: dict, outgoing: dict) -> None:
     for n in nodes:
         nid, ntype = n["id"], n["type"]
-        if len(incoming[nid]) > 1 and ntype not in ("join", "race"):
-            issues.append(issue(nid, "implicit_join", "Plusieurs flux arrivent ici : ajoutez une étape « Jonction »."))
-        if ntype == "join" and len(incoming[nid]) < 2:
-            issues.append(issue(nid, "weak_join", "Une jonction attend au moins deux flux entrants.", "warning"))
-        if ntype == "race":
-            if len(incoming[nid]) < 2:
-                issues.append(
-                    issue(nid, "weak_race", "Un « premier arrivé » attend au moins deux branches.", "warning")
-                )
-            if n.get("losers", "cancel") not in ("cancel", "finish"):
-                issues.append(
-                    issue(nid, "bad_race", "Branches plus lentes : « cancel » (annulées) ou « finish » (terminées).")
-                )
-        labels = [e.get("label") or "next" for e in outgoing[nid]]
-        if ntype == "condition":
-            if not set(labels) <= {"true", "false"} or len(set(labels)) != len(labels) or not labels:
-                issues.append(
-                    issue(nid, "bad_branches", "Une condition a au plus une sortie « oui » et une sortie « non ».")
-                )
-        elif ntype == "switch":
-            allowed = {*case_ids(n), "default"}
-            if not set(labels) <= allowed or len(set(labels)) != len(labels) or not labels:
-                issues.append(
-                    issue(
-                        nid,
-                        "bad_branches",
-                        "Un choix multiple a au plus une sortie par cas (et une sortie « default »), chacune étiquetée "
-                        "par l'identifiant du cas.",
-                    )
-                )
-        else:
-            for lab in set(labels):
-                if lab == "error" and ntype not in ERROR_CAPABLE:
-                    issues.append(issue(nid, "bad_branches", "Cette étape ne peut pas avoir de sortie d'erreur."))
-                elif lab not in ("next", "error"):
-                    issues.append(issue(nid, "bad_branches", f"Étiquette de connexion invalide : {lab}."))
-            if labels.count("error") > 1:
-                issues.append(issue(nid, "bad_branches", "Une seule sortie d'erreur est possible."))
+        _flow_issues(n, incoming[nid], [e.get("label") or "next" for e in outgoing[nid]], s.issues)
+        check = _NODE_CHECKS.get(ntype)
+        if check:
+            check(s, n)
+        if ntype in ("action", "subworkflow", "foreach"):  # template references in the inputs
+            s.check(nid, template_expressions(n.get("inputs", {})))
 
-        # ---- per-type configuration
-        if ntype == "action":
-            _validate_action(n, workspace, issues, out_types, declared_inputs)
-        elif ntype == "condition":
-            if not str(n.get("expr", "")).strip():
-                issues.append(issue(nid, "missing_expr", "La condition est vide."))
-            else:
-                _check_expr(
-                    n["expr"], nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid]
-                )
-            out_types[nid] = STATIC_OUTPUTS["condition"]
-        elif ntype == "switch":
-            _validate_switch(n, issues)
-            for c in n.get("cases") or []:
-                if isinstance(c, dict) and str(c.get("expr", "")).strip():
-                    _check_expr(
-                        c["expr"], nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid]
-                    )
-            out_types[nid] = STATIC_OUTPUTS["switch"]
-        elif ntype == "wait":
-            s = n.get("seconds")
-            if not isinstance(s, int) or not 1 <= s <= 30 * 86400:
-                issues.append(issue(nid, "bad_wait", "Délai d'attente : entre 1 seconde et 30 jours."))
-            if n.get("resume") not in (None, "timer", "webhook", "form"):
-                issues.append(
-                    issue(
-                        nid,
-                        "bad_wait",
-                        "Reprise : « timer » (à l'échéance), « webhook » (appel HTTP) ou « form » (formulaire).",
-                    )
-                )
-            if n.get("resume") == "form":
-                props = (n.get("form") or {}).get("properties") if isinstance(n.get("form"), dict) else None
-                if not isinstance(props, dict) or not props or len(props) > 20:
-                    issues.append(issue(nid, "bad_wait", "Formulaire de reprise : de 1 à 20 champs."))
-            out_types[nid] = WEBHOOK_WAIT_OUTPUTS if n.get("resume") in ("webhook", "form") else {}
-        elif ntype == "http":
-            _validate_http(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["http"]
-        elif ntype == "smtp":
-            _validate_smtp(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["smtp"]
-        elif ntype == "sftp":
-            _validate_sftp(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["sftp"]
-        elif ntype == "ldap":
-            _validate_ldap(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["ldap"]
-        elif ntype == "agent":
-            _validate_agent(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["agent"]
-        elif ntype == "sql":
-            _validate_sql(n, workspace, issues)
-            for src in _node_expressions(n):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            out_types[nid] = STATIC_OUTPUTS["sql"]
-        elif ntype == "transform":
-            _validate_transform(n, issues)
-            plain, per = transforms.expressions(n)
-            for src in plain:
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-            for src in per:
-                _check_expr(
-                    src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid], ("item",)
-                )
-            out_types[nid] = transforms.output_fields(n)
-        elif ntype == "approval":
-            if not str(n.get("title", "")).strip():
-                issues.append(issue(nid, "missing_title", "Indiquez ce qui doit être approuvé."))
-            out_types[nid] = STATIC_OUTPUTS["approval"]
-        elif ntype == "script":
-            out_types[nid] = _validate_script(n, issues)
-            for src in template_expressions(n.get("bindings", {})):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-        elif ntype == "throw":
-            out_types[nid] = {}
-            for src in template_expressions(n.get("message", "")):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-        elif ntype == "ai":
-            out_types[nid] = _validate_ai(n, workspace, issues, out_types, declared_inputs)
-            for src in template_expressions([n.get("prompt", ""), n.get("inputs", {})]):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
-        elif ntype == "join":
-            out_types[nid] = {}
-        elif ntype == "race":
-            out_types[nid] = STATIC_OUTPUTS["race"]
-        elif ntype == "while":
-            _validate_subworkflow(n, workspace, current_workflow_slug, issues, out_types, declared_inputs)
-            out_types[nid] = STATIC_OUTPUTS["while"]
-            if not str(n.get("condition") or "").strip():
-                issues.append(
-                    issue(
-                        nid,
-                        "missing_expr",
-                        "Indiquez la condition pour continuer à répéter (ex. last.statut != 'termine').",
-                    )
-                )
-            delay = n.get("delay_seconds", 0)
-            if not isinstance(delay, int) or not 0 <= delay <= 86400:
-                issues.append(issue(nid, "bad_wait", "Délai entre deux répétitions : de 0 à 86400 secondes."))
-            for src in [n.get("condition", ""), *template_expressions(n.get("inputs", {}))]:
-                if str(src).strip():
-                    _check_expr(
-                        src,
-                        nid,
-                        anc[nid],
-                        by_id,
-                        declared_inputs,
-                        out_types,
-                        issues,
-                        declared_vars,
-                        dom[nid],
-                        ("last", "iteration"),
-                    )
-        elif ntype in ("subworkflow", "foreach"):
-            _validate_subworkflow(n, workspace, current_workflow_slug, issues, out_types, declared_inputs)
-            out_types[nid] = STATIC_OUTPUTS["foreach"] if ntype == "foreach" else None
-            if ntype == "foreach":
-                items = n.get("items")
-                if not isinstance(items, str) or not items.strip():
-                    issues.append(issue(nid, "missing_items", "Indiquez la liste à parcourir."))
-                else:
-                    _check_expr(
-                        items, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid]
-                    )
-        # template references in inputs of any node
-        if ntype in ("action", "subworkflow", "foreach"):
-            for src in template_expressions(n.get("inputs", {})):
-                _check_expr(src, nid, anc[nid], by_id, declared_inputs, out_types, issues, declared_vars, dom[nid])
 
-    for src in template_expressions(graph.get("outputs", {})):
-        _check_expr(src, None, set(by_id), by_id, declared_inputs, out_types, issues, declared_vars)
-    _check_failure_branches(nodes, clean_edges, by_id, issues)
+def _dedupe(issues: list) -> list:
     seen: set = set()  # the same step read twice on one line gives the same finding twice
-    return [i for i in issues if (k := (i["node"], i["code"], i["message"])) not in seen and not seen.add(k)]
+    out = []
+    for i in issues:
+        k = (i["node"], i["code"], i["message"])
+        if k not in seen:
+            seen.add(k)
+            out.append(i)
+    return out
 
 
-def _validate_http(n: dict, workspace, issues: list) -> None:
+def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:
+    issues: list[dict] = []
+    if _graph_shape_issues(graph, issues):
+        return issues
+    nodes, edges = graph.get("nodes") or [], graph.get("edges") or []
+    declared_inputs = (graph.get("inputs") or {}).get("properties") or {}
+    variables = graph.get("variables") or []
+    declared_vars = {v["name"] for v in variables if isinstance(v, dict) and isinstance(v.get("name"), str)}
+    issues += _validate_variables(variables)
+    issues += _validate_form(graph.get("form"), declared_inputs)
+    issues += _validate_input_form(graph.get("input_form"), graph.get("inputs"), workspace)
+    issues += [issue(None, "bad_pins", m) for m in debug.validate_pins(graph.get("pins"), {n["id"] for n in nodes})]
+    by_id = {n["id"]: n for n in nodes}
+    clean_edges = _usable_edges(edges, by_id, issues)
+    if any(i["level"] == "error" for i in issues):
+        return issues
+    order = topo_order(nodes, clean_edges)
+    if order is None:
+        issues.append(
+            issue(
+                None, "cycle", "Le workflow contient un cycle. Utilisez une boucle explicite (étape « Pour chaque »)."
+            )
+        )
+        return issues
+    incoming, outgoing = defaultdict(list), defaultdict(list)
+    for e in clean_edges:
+        incoming[e["to"]].append(e)
+        outgoing[e["from"]].append(e)
+    _entry_issues(nodes, incoming, issues)
+    scan = _Scan(
+        workspace,
+        current_workflow_slug,
+        issues,
+        by_id,
+        ancestors_map(nodes, clean_edges, order),
+        always_run_map(nodes, clean_edges, order),
+        declared_inputs,
+        declared_vars,
+    )
+    _scan_steps(scan, nodes, incoming, outgoing)
+    for src in template_expressions(graph.get("outputs", {})):
+        _check_expr(src, None, set(by_id), by_id, declared_inputs, scan.out_types, issues, declared_vars)
+    _check_failure_branches(nodes, clean_edges, by_id, issues)
+    return _dedupe(issues)
+
+
+def _http_target_issues(n: dict, issues: list) -> None:
     nid = n["id"]
     if n.get("integration"):
         from catalog import integrations
@@ -642,7 +727,9 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
         if op is None:
             issues.append(issue(nid, "bad_http", "Intégration ou opération inconnue."))
         else:
-            given = n.get("params") if isinstance(n.get("params"), dict) else {}
+            given = n.get("params")
+            if not isinstance(given, dict):
+                given = {}
             for prm in op["params"]:
                 if prm.get("required") and given.get(prm["name"]) in (None, ""):
                     issues.append(issue(nid, "missing_param", f"Renseignez « {prm['label']} »."))
@@ -658,6 +745,10 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
                     "Le chemin de la requête doit commencer par « / » (l'adresse vient de la connexion).",
                 )
             )
+
+
+def _http_connection_issues(n: dict, workspace, issues: list) -> None:
+    nid = n["id"]
     cname = n.get("connection")
     if not isinstance(cname, str) or not cname:
         issues.append(
@@ -665,6 +756,10 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
         )
     elif not Connection.objects.filter(workspace=workspace, name=cname, kind__in=HTTP_CONNECTION_KINDS).exists():
         issues.append(issue(nid, "unknown_connection", f"Connexion « Service HTTP » introuvable : {cname}."))
+
+
+def _http_options_issues(n: dict, issues: list) -> None:
+    nid = n["id"]
     if n.get("body_format") not in (None, "json", "form", "multipart", "file"):
         issues.append(issue(nid, "bad_http", "Format du corps : json, form, multipart ou file."))
     if n.get("body_format") == "file" and not n.get("file"):
@@ -694,6 +789,12 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
                 level="warning",
             )
         )
+
+
+def _validate_http(n: dict, workspace, issues: list) -> None:
+    _http_target_issues(n, issues)
+    _http_connection_issues(n, workspace, issues)
+    _http_options_issues(n, issues)
 
 
 def _validate_smtp(n: dict, workspace, issues: list) -> None:
@@ -740,6 +841,31 @@ def _validate_sftp(n: dict, workspace, issues: list) -> None:
                 nid,
                 "sftp_test_mode",
                 "Mode test : rien n'est envoyé au serveur (la sortie est simulée).",
+                level="warning",
+            )
+        )
+
+
+def _validate_ssh(n: dict, workspace, issues: list) -> None:
+    """Static check of an SSH step. The same rules run again, on the evaluated values, when the step starts (`ssh_node.prepare`)."""
+    from runs import ssh_node
+
+    nid = n["id"]
+    session = n.get("session", "exec")
+    if session not in ssh_node.SESSIONS:
+        issues.append(issue(nid, "bad_ssh", "Session : « exec » ou « shell »."))
+    for code, message in ssh_node.chain_problems(n, workspace):
+        issues.append(issue(nid, code, message))
+    if n.get("mode", "test") not in ("test", "reel"):
+        issues.append(issue(nid, "bad_ssh", "Mode : « test » (simulation) ou « reel »."))
+    for problem in ssh_node.static_problems(n):
+        issues.append(issue(nid, "bad_ssh", problem))
+    if n.get("mode", "test") == "test":
+        issues.append(
+            issue(
+                nid,
+                "ssh_test_mode",
+                "Mode test : aucune connexion n'est ouverte (la sortie est simulée).",
                 level="warning",
             )
         )
@@ -884,40 +1010,55 @@ def _validate_transform(n: dict, issues: list) -> None:
         issues.append(issue(nid, "bad_transform", "Indiquez le nombre d'éléments à garder (entier)."))
 
 
+def _t(*keys):
+    """Template expressions of the given fields of a step."""
+    return lambda n: template_expressions([n.get(k, "") for k in keys])
+
+
+def _tp(key):
+    return lambda n: template_expressions(n.get(key) or {})
+
+
+def _transform_sources(n):
+    plain, per = transforms.expressions(n)
+    return plain + per
+
+
+_EXPRESSIONS_BEFORE_INPUTS = {
+    "condition": lambda n: [n.get("expr", "")],
+    "foreach": lambda n: [n.get("items", "")],
+    "switch": lambda n: [c.get("expr", "") for c in n.get("cases") or [] if isinstance(c, dict)],
+}
+_EXPRESSIONS_AFTER_INPUTS = {
+    "transform": _transform_sources,
+    "while": lambda n: [str(n.get("condition") or "")],
+    "smtp": _t("to", "cc", "subject", "body"),
+    "approval": _t("title", "subject", "body", "instructions"),
+    "sftp": _t("path", "content"),
+    "ssh": lambda n: template_expressions([n.get("commands", ""), n.get("steps", [])]),
+    "ldap": _tp("params"),
+    "throw": lambda n: template_expressions(n.get("message") or ""),
+    "agent": lambda n: template_expressions(n.get("goal") or ""),
+    "sql": _tp("params"),
+    "http": lambda n: [
+        e
+        for key in ("path", "query", "headers", "body", "params", "files")
+        for e in template_expressions(n.get(key) or "")
+    ],
+    "script": _tp("bindings"),
+    "ai": lambda n: template_expressions(n.get("prompt") or ""),
+}
+
+
 def _node_expressions(n) -> list[str]:
     """Every expression a step evaluates (decision, loop list, template values of its inputs, bindings and prompt)."""
     out = []
-    if n["type"] == "condition":
-        out.append(n.get("expr", ""))
-    if n["type"] == "foreach":
-        out.append(n.get("items", ""))
-    if n["type"] == "switch":
-        out += [c.get("expr", "") for c in n.get("cases") or [] if isinstance(c, dict)]
+    before, after = _EXPRESSIONS_BEFORE_INPUTS.get(n["type"]), _EXPRESSIONS_AFTER_INPUTS.get(n["type"])
+    if before:
+        out += before(n)
     out += template_expressions(n.get("inputs") or {})
-    if n["type"] == "transform":
-        plain, per = transforms.expressions(n)
-        out += plain + per
-    if n["type"] == "while":
-        out.append(str(n.get("condition") or ""))
-    if n["type"] == "smtp":
-        out += template_expressions([n.get("to", ""), n.get("cc", ""), n.get("subject", ""), n.get("body", "")])
-    if n["type"] == "sftp":
-        out += template_expressions([n.get("path", ""), n.get("content", "")])
-    if n["type"] == "ldap":
-        out += template_expressions(n.get("params") or {})
-    if n["type"] == "throw":
-        out += template_expressions(n.get("message") or "")
-    if n["type"] == "agent":
-        out += template_expressions(n.get("goal") or "")
-    if n["type"] == "sql":
-        out += template_expressions(n.get("params") or {})
-    if n["type"] == "http":
-        for key in ("path", "query", "headers", "body", "params", "files"):
-            out += template_expressions(n.get(key) or "")
-    if n["type"] == "script":
-        out += template_expressions(n.get("bindings") or {})
-    if n["type"] == "ai":
-        out += template_expressions(n.get("prompt") or "")
+    if after:
+        out += after(n)
     return [e for e in out if isinstance(e, str)]
 
 
@@ -951,7 +1092,9 @@ def failed_reads(nodes, edges) -> list[tuple[str, str]]:
     for n in nodes:
         sid = n["id"]
         handlers = [e["to"] for e in out[sid] if e.get("label") == "error"]
-        if not handlers:
+        if (
+            not handlers or n.get("type") == "ssh"
+        ):  # a failed SSH step keeps its partial results (redacted) for the error branch
             continue
         only_on_failure = reach(handlers) - reach([e["to"] for e in out[sid] if e.get("label") != "error"])
         found += [(nid, sid) for nid in sorted(only_on_failure) if sid in reads.get(nid, ())]
@@ -972,68 +1115,81 @@ def _check_failure_branches(nodes, edges, by_id, issues):
         )
 
 
+_SYNTAX_HINT = (
+    " Les expressions n'acceptent que des calculs simples (+ - * / %) et les fonctions len, lower, upper, trim, str, number,"
+    " round, abs, min, max, sum, join, split, replace, starts_with, ends_with, first, last, keys, unique, sort, default :"
+    " calculez le reste dans une étape script (sortie booléenne ou numérique), puis comparez cette sortie ici."
+)
+
+
+def _check_simple_root(root, path, nid, declared_inputs, declared_vars, issues) -> None:
+    """References to inputs, vars and run."""
+    shown = ".".join(map(str, path))
+    if root == "inputs" and (len(path) < 2 or path[1] not in declared_inputs):
+        issues.append(issue(nid, "unknown_input", f"Entrée inconnue : {shown}."))
+    elif root == "run" and (len(path) != 2 or path[1] not in ("id", "started_at", "environment")):
+        issues.append(issue(nid, "bad_reference", "run : id, started_at ou environment."))
+    elif root == "vars" and (len(path) < 2 or path[1] not in declared_vars):
+        issues.append(issue(nid, "unknown_variable", f"Variable inconnue : {shown}."))
+
+
+def _check_step_reference(path, strict, nid, allowed_steps, by_id, out_types, issues, must_run) -> None:
+    """A reference `steps.<step>.output.<field>`: the step exists, is upstream, produces the field, always runs."""
+    if len(path) < 3 or path[2] != "output":
+        issues.append(issue(nid, "bad_reference", "Référence attendue : steps.<étape>.output.<champ>."))
+        return
+    step = path[1]
+    if step not in by_id:
+        issues.append(issue(nid, "unknown_step", f"Étape inconnue : {step}."))
+        return
+    label = by_id[step].get("name") or step
+    if step not in allowed_steps:
+        issues.append(
+            issue(
+                nid,
+                "not_upstream",
+                f"L'étape « {label} » n'est pas en amont de celle-ci : reliez-la avant cette étape.",
+            )
+        )
+        return
+    fields = out_types.get(step)
+    if fields is not None and len(path) > 3 and path[3] not in fields:
+        issues.append(issue(nid, "unknown_output", f"« {step} » ne produit pas de champ « {path[3]} »."))
+    if must_run is not None and step not in must_run and path in strict:
+        issues.append(
+            issue(
+                nid,
+                "maybe_skipped",
+                f"L'étape « {label} » n'est pas sur tous les chemins qui "
+                "mènent ici : un chemin (branche d'une décision, branche parallèle ou sortie d'erreur) peut "
+                "arriver jusqu'ici sans être passé par elle, et sa sortie n'existerait alors pas. Si l'autre "
+                "chemin fait de toute façon échouer le workflow, c'est sans risque. Sinon : "
+                "{{ default(steps.<étape>.output.<champ>, 'valeur de repli') }} lit la valeur si l'étape a "
+                "tourné et prend le repli sinon ; ou lisez une valeur produite avant la séparation.",
+                "warning",
+                ref=step,
+            )
+        )
+
+
 def _check_expr(
     src, nid, allowed_steps, by_id, declared_inputs, out_types, issues, declared_vars, must_run=None, extra_roots=()
 ):
     try:
         tree = parse(src)
     except ExpressionError as exc:
-        hint = ""
-        if re.search(r"[-+*/%]|Fonction inconnue", f"{src} {exc}"):
-            hint = (
-                " Les expressions n'acceptent que des calculs simples (+ - * / %) et les fonctions len, lower, upper, trim, str, number,"
-                " round, abs, min, max, sum, join, split, replace, starts_with, ends_with, first, last, keys, unique, sort, default :"
-                " calculez le reste dans une étape script (sortie booléenne ou numérique), puis comparez cette sortie ici."
-            )
+        hint = _SYNTAX_HINT if re.search(r"[-+*/%]|Fonction inconnue", f"{src} {exc}") else ""
         issues.append(issue(nid, "bad_expression", f"Expression invalide « {src.strip()} » : {exc}{hint}"))
         return
     strict = set(paths_in(tree, strict=True))
     for path in paths_in(tree):
         root = path[0]
-        if root == "inputs":
-            if len(path) < 2 or path[1] not in declared_inputs:
-                issues.append(issue(nid, "unknown_input", f"Entrée inconnue : {'.'.join(map(str, path))}."))
-        elif root in extra_roots:
-            pass
-        elif root == "run":
-            if len(path) != 2 or path[1] not in ("id", "started_at", "environment"):
-                issues.append(issue(nid, "bad_reference", "run : id, started_at ou environment."))
-        elif root == "vars":
-            if len(path) < 2 or path[1] not in declared_vars:
-                issues.append(issue(nid, "unknown_variable", f"Variable inconnue : {'.'.join(map(str, path))}."))
+        if root in extra_roots:
+            continue
+        if root in ("inputs", "run", "vars"):
+            _check_simple_root(root, path, nid, declared_inputs, declared_vars, issues)
         elif root == "steps":
-            if len(path) < 3 or path[2] != "output":
-                issues.append(issue(nid, "bad_reference", "Référence attendue : steps.<étape>.output.<champ>."))
-            elif path[1] not in by_id:
-                issues.append(issue(nid, "unknown_step", f"Étape inconnue : {path[1]}."))
-            elif path[1] not in allowed_steps:
-                issues.append(
-                    issue(
-                        nid,
-                        "not_upstream",
-                        f"L'étape « {by_id[path[1]].get('name') or path[1]} » n'est pas en amont de celle-ci : "
-                        "reliez-la avant cette étape.",
-                    )
-                )
-            else:
-                fields = out_types.get(path[1])
-                if fields is not None and len(path) > 3 and path[3] not in fields:
-                    issues.append(issue(nid, "unknown_output", f"« {path[1]} » ne produit pas de champ « {path[3]} »."))
-                if must_run is not None and path[1] not in must_run and path in strict:
-                    issues.append(
-                        issue(
-                            nid,
-                            "maybe_skipped",
-                            f"L'étape « {by_id[path[1]].get('name') or path[1]} » n'est pas sur tous les chemins qui "
-                            "mènent ici : un chemin (branche d'une décision, branche parallèle ou sortie d'erreur) peut "
-                            "arriver jusqu'ici sans être passé par elle, et sa sortie n'existerait alors pas. Si l'autre "
-                            "chemin fait de toute façon échouer le workflow, c'est sans risque. Sinon : "
-                            "{{ default(steps.<étape>.output.<champ>, 'valeur de repli') }} lit la valeur si l'étape a "
-                            "tourné et prend le repli sinon ; ou lisez une valeur produite avant la séparation.",
-                            "warning",
-                            ref=path[1],
-                        )
-                    )
+            _check_step_reference(path, strict, nid, allowed_steps, by_id, out_types, issues, must_run)
         else:
             issues.append(
                 issue(nid, "bad_reference", f"Racine inconnue : {root} (utilisez inputs, vars, steps ou run).")
@@ -1203,7 +1359,14 @@ def _validate_variables(variables) -> list[dict]:
     out, seen = [], set()
     if not isinstance(variables, list):
         return [issue(None, "bad_variables", "Les variables du workflow sont mal formées.")]
-    py = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    py: dict[str, type | tuple[type, ...]] = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
     for v in variables:
         name = v.get("name") if isinstance(v, dict) else None
         if not isinstance(name, str) or not IDENT.match(name) or name in RESERVED:
@@ -1393,6 +1556,83 @@ def _script_static_checks(nid, lang, code, tree, bound, outputs, issues):
             )
 
 
+def _python_script_issues(nid, code, issues):
+    """Syntax and context-use findings of a Python script; returns its syntax tree (None when unreadable)."""
+    try:
+        tree = ast.parse(code)  # syntax only: never executed here
+    except SyntaxError as exc:
+        tree = None
+        issues.append(issue(nid, "script_syntax", f"Erreur de syntaxe ligne {exc.lineno} : {exc.msg}."))
+    else:
+        used = {x.id for x in ast.walk(tree) if isinstance(x, ast.Name) and x.id in CONTEXT_ROOTS}
+        _script_reads_context(nid, used, issues)
+        dotted = {
+            x.value.id
+            for x in ast.walk(tree)
+            if isinstance(x, ast.Attribute)
+            and isinstance(x.ctx, ast.Load)
+            and isinstance(x.value, ast.Name)
+            and x.value.id in ("inputs", "vars")
+        }
+        writes = {
+            x.value.id
+            for x in ast.walk(tree)
+            if isinstance(x, (ast.Attribute, ast.Subscript))
+            and isinstance(x.ctx, (ast.Store, ast.Del))
+            and isinstance(x.value, ast.Name)
+            and x.value.id in ("inputs", "vars")
+        }
+        for root in sorted(writes):
+            issues.append(
+                issue(
+                    nid,
+                    "script_writes_context",
+                    f"Le script écrit dans « {root} » : sans effet (lecture seule). Pour transmettre une valeur, "
+                    "déclarez-la dans les sorties du script et affectez-la.",
+                )
+            )
+        for root in sorted(dotted):  # in Python they are dictionaries: inputs.x raises AttributeError
+            issues.append(
+                issue(
+                    nid,
+                    "script_dict_access",
+                    f"En Python, « {root} » est un dictionnaire : écrivez {root}['nom'] (ou {root}.get('nom')), "
+                    f"pas {root}.nom.",
+                )
+            )
+    return tree
+
+
+def _script_binding_names(nid, n, lang, issues) -> set:
+    names = set()
+    for k in n.get("bindings") or {}:
+        if (
+            not IDENT.match(k)
+            or k in RESERVED
+            or (lang == "python" and keyword.iskeyword(k))
+            or (lang == "javascript" and k in JS_RESERVED)
+        ):
+            issues.append(issue(nid, "bad_binding", f"Nom de variable d'entrée invalide ou réservé : {k}."))
+        names.add(k)
+    return names
+
+
+def _script_outputs(nid, n, names, issues) -> dict:
+    outs = {}
+    for o in n.get("outputs") or []:
+        name, t = (
+            (o.get("name") if isinstance(o, dict) else None),
+            (o.get("type", "string") if isinstance(o, dict) else None),
+        )
+        if not isinstance(name, str) or not IDENT.match(name) or name in RESERVED or name in names or name in outs:
+            issues.append(issue(nid, "bad_output", f"Nom de sortie invalide, réservé ou en double : {name!r}."))
+        elif t not in VAR_TYPES:
+            issues.append(issue(nid, "bad_output", f"Type de sortie inconnu pour {name} : {t}."))
+        else:
+            outs[name] = {"type": t}
+    return outs
+
+
 def _validate_script(n, issues):
     """A script task: language, code, bound variables and typed outputs. Returns {output: schema} for downstream checks."""
     nid = n["id"]
@@ -1413,72 +1653,11 @@ def _validate_script(n, issues):
     elif len(code) > MAX_SCRIPT:
         issues.append(issue(nid, "script_too_large", "Le script dépasse 100 Ko."))
     elif lang == "python":
-        try:
-            tree = ast.parse(code)  # syntax only: never executed here
-        except SyntaxError as exc:
-            tree = None
-            issues.append(issue(nid, "script_syntax", f"Erreur de syntaxe ligne {exc.lineno} : {exc.msg}."))
-        else:
-            used = {x.id for x in ast.walk(tree) if isinstance(x, ast.Name) and x.id in CONTEXT_ROOTS}
-            _script_reads_context(nid, used, issues)
-            dotted = {
-                x.value.id
-                for x in ast.walk(tree)
-                if isinstance(x, ast.Attribute)
-                and isinstance(x.ctx, ast.Load)
-                and isinstance(x.value, ast.Name)
-                and x.value.id in ("inputs", "vars")
-            }
-            writes = {
-                x.value.id
-                for x in ast.walk(tree)
-                if isinstance(x, (ast.Attribute, ast.Subscript))
-                and isinstance(x.ctx, (ast.Store, ast.Del))
-                and isinstance(x.value, ast.Name)
-                and x.value.id in ("inputs", "vars")
-            }
-            for root in sorted(writes):
-                issues.append(
-                    issue(
-                        nid,
-                        "script_writes_context",
-                        f"Le script écrit dans « {root} » : sans effet (lecture seule). Pour transmettre une valeur, "
-                        "déclarez-la dans les sorties du script et affectez-la.",
-                    )
-                )
-            for root in sorted(dotted):  # in Python they are dictionaries: inputs.x raises AttributeError
-                issues.append(
-                    issue(
-                        nid,
-                        "script_dict_access",
-                        f"En Python, « {root} » est un dictionnaire : écrivez {root}['nom'] (ou {root}.get('nom')), "
-                        f"pas {root}.nom.",
-                    )
-                )
+        tree = _python_script_issues(nid, code, issues)
     elif lang == "javascript":
         _script_reads_context(nid, set(re.findall(r"\bsteps\s*[.\[]", code)), issues)
-    names = set()
-    for k in n.get("bindings") or {}:
-        if (
-            not IDENT.match(k)
-            or k in RESERVED
-            or (lang == "python" and keyword.iskeyword(k))
-            or (lang == "javascript" and k in JS_RESERVED)
-        ):
-            issues.append(issue(nid, "bad_binding", f"Nom de variable d'entrée invalide ou réservé : {k}."))
-        names.add(k)
-    outs = {}
-    for o in n.get("outputs") or []:
-        name, t = (
-            (o.get("name") if isinstance(o, dict) else None),
-            (o.get("type", "string") if isinstance(o, dict) else None),
-        )
-        if not isinstance(name, str) or not IDENT.match(name) or name in RESERVED or name in names or name in outs:
-            issues.append(issue(nid, "bad_output", f"Nom de sortie invalide, réservé ou en double : {name!r}."))
-        elif t not in VAR_TYPES:
-            issues.append(issue(nid, "bad_output", f"Type de sortie inconnu pour {name} : {t}."))
-        else:
-            outs[name] = {"type": t}
+    names = _script_binding_names(nid, n, lang, issues)
+    outs = _script_outputs(nid, n, names, issues)
     if (
         isinstance(code, str)
         and code.strip()
@@ -1621,3 +1800,29 @@ def pin_graph(graph: dict, workspace) -> dict:
         except formservice.FormRefError as exc:
             raise ValueError(f"Formulaire d'entrée : {exc}") from None
     return pinned
+
+
+# the checks reference the per-kind validators above, so the table is built once they all exist
+_NODE_CHECKS = {
+    "action": _cfg_action,
+    "condition": _cfg_condition,
+    "switch": _cfg_switch,
+    "wait": _cfg_wait,
+    "http": _cfg_with_connection(_validate_http, "http"),
+    "smtp": _cfg_with_connection(_validate_smtp, "smtp"),
+    "sftp": _cfg_with_connection(_validate_sftp, "sftp"),
+    "ssh": _cfg_with_connection(_validate_ssh, "ssh"),
+    "ldap": _cfg_with_connection(_validate_ldap, "ldap"),
+    "agent": _cfg_with_connection(_validate_agent, "agent"),
+    "sql": _cfg_with_connection(_validate_sql, "sql"),
+    "transform": _cfg_transform,
+    "approval": _cfg_approval,
+    "script": _cfg_script,
+    "throw": _cfg_throw,
+    "ai": _cfg_ai,
+    "join": _cfg_join,
+    "race": _cfg_race,
+    "while": _cfg_while,
+    "subworkflow": _cfg_subworkflow,
+    "foreach": _cfg_subworkflow,
+}

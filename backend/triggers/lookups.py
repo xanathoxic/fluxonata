@@ -127,10 +127,12 @@ def enqueue_for_version(
 
 def _context(lookup: FormLookup) -> tuple[dict | None, int, int | None]:
     """(definition, workspace id, environment id) the lookup runs in; nothing for a form switched off meanwhile."""
-    if lookup.form_id:
-        form = lookup.form
+    form = lookup.form if lookup.form_id else None
+    if form is not None:
         return (form.published_definition if form.enabled else None), form.workspace_id, form.environment_id
     version = lookup.workflow_version
+    if version is None:
+        raise ValueError("La recherche n'est rattachée ni à un formulaire ni à une version de workflow.")
     return (version.graph or {}).get("input_form"), version.workflow.workspace_id, lookup.environment_id
 
 
@@ -156,7 +158,7 @@ def _data(item, keys) -> dict:
     """What an option carries for the fields it opens (flat, by field key): scalars only, they pre-fill the details when it is chosen."""
     if not isinstance(item, dict):
         return {}
-    out = {}
+    out: dict[str, bool | int | float | str] = {}
     for key in keys:
         v = item.get(key)
         if isinstance(v, bool) or (isinstance(v, (int, float)) and abs(v) < 1e15):
@@ -186,7 +188,7 @@ def to_options(body, source: dict, limit: int = MAX_OPTIONS, keys=(), params: di
         if value in seen:
             continue
         seen.add(value)
-        option = {"value": value, "label": str(label if label is not None else value)[:200]}
+        option: dict[str, object] = {"value": value, "label": str(label if label is not None else value)[:200]}
         group = http_node._dig(item, source["group_path"]) if source.get("group_path") else None
         if isinstance(group, (str, int, float)) and not isinstance(group, bool) and str(group):
             option["group"] = str(group)[:120]

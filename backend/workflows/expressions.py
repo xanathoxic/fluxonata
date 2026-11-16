@@ -9,6 +9,7 @@ Templates: "{{ expr }}" inside strings (whole-string template keeps the value's 
 """
 
 import json
+import operator
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -121,7 +122,7 @@ def tokenize(src: str) -> list[tuple[str, str]]:
         if src[pos:].strip() == "":
             break
         m = TOKEN_RE.match(src, pos)
-        if not m or m.end() == pos:
+        if not m or m.end() == pos or m.lastgroup is None:
             raise ExpressionError(f"Caractère inattendu près de « {src[pos : pos + 10].strip()} ».")
         pos = m.end()
         kind = m.lastgroup
@@ -206,6 +207,29 @@ class Parser:
                 self.depth -= 1
         return self.primary()
 
+    def identifier(self, val):
+        """A name: a constant, a function call or a path."""
+        if val in ("true", "false", "null"):
+            return ("lit", {"true": True, "false": False, "null": None}[val])
+        if val in KEYWORDS:
+            raise ExpressionError(f"Mot réservé « {val} » mal placé.")
+        if self.peek() != ("p", "("):
+            return self.path(val)
+        if val not in FUNCS and val not in SPECIAL:
+            raise ExpressionError(f"Fonction inconnue : {val}.")
+        self.take()
+        args = []
+        if self.peek() != ("p", ")"):
+            args.append(self.or_())
+            while self.peek() == ("p", ","):
+                self.take()
+                args.append(self.or_())
+        if self.take() != ("p", ")"):
+            raise ExpressionError("Parenthèse fermante manquante.")
+        if val == "default" and len(args) != 2:
+            raise ExpressionError("default(valeur, repli) attend deux arguments.")
+        return ("call", val, args)
+
     def primary(self):
         self.depth += 1
         if self.depth > MAX_DEPTH:
@@ -222,26 +246,7 @@ class Parser:
                     raise ExpressionError("Parenthèse fermante manquante.")
                 return node
             if kind == "id":
-                if val in ("true", "false", "null"):
-                    return ("lit", {"true": True, "false": False, "null": None}[val])
-                if val in KEYWORDS:
-                    raise ExpressionError(f"Mot réservé « {val} » mal placé.")
-                if self.peek() == ("p", "("):
-                    if val not in FUNCS and val not in SPECIAL:
-                        raise ExpressionError(f"Fonction inconnue : {val}.")
-                    self.take()
-                    args = []
-                    if self.peek() != ("p", ")"):
-                        args.append(self.or_())
-                        while self.peek() == ("p", ","):
-                            self.take()
-                            args.append(self.or_())
-                    if self.take() != ("p", ")"):
-                        raise ExpressionError("Parenthèse fermante manquante.")
-                    if val == "default" and len(args) != 2:
-                        raise ExpressionError("default(valeur, repli) attend deux arguments.")
-                    return ("call", val, args)
-                return self.path(val)
+                return self.identifier(val)
             raise ExpressionError("Expression incomplète.")
         finally:
             self.depth -= 1
@@ -299,73 +304,85 @@ def _lookup(parts, ctx):
     return cur
 
 
+_ARITHMETIC = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv, "%": operator.mod}
+_COMPARISON = {
+    "==": operator.eq,
+    "!=": operator.ne,
+    "in": lambda a, b: a in b,
+    "contains": lambda a, b: b in a,
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+}
+
+
+def _eval_default(node, ctx):
+    """`default(valeur, repli)` : le repli remplace une valeur absente (chemin inconnu) ou nulle, jamais une valeur fausse."""
+    try:
+        value = evaluate_ast(node[2][0], ctx)
+    except ExpressionError:
+        value = None
+    return evaluate_ast(node[2][1], ctx) if value is None else value
+
+
+def _eval_call(node, ctx):
+    if node[1] == "default":
+        return _eval_default(node, ctx)
+    args = [evaluate_ast(a, ctx) for a in node[2]]
+    try:
+        return FUNCS[node[1]](*args)
+    except Exception as exc:  # noqa: BLE001
+        raise ExpressionError(f"Appel de {node[1]}() impossible : {exc}") from None
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _eval_arith(node, ctx):
+    op, a, b = node[1], evaluate_ast(node[2], ctx), evaluate_ast(node[3], ctx)
+    if op == "+" and isinstance(a, str) and isinstance(b, str):
+        if len(a) + len(b) > MAX_TEXT:
+            raise ExpressionError("Texte trop long.")
+        return a + b
+    if not (_is_number(a) and _is_number(b)):
+        raise ExpressionError(
+            f"Calcul impossible : « {op} » attend deux nombres (ou deux textes pour +), "
+            f"pas {type(a).__name__} et {type(b).__name__}."
+        )
+    try:
+        return _ARITHMETIC[op](a, b)
+    except ZeroDivisionError:
+        raise ExpressionError("Division par zéro.") from None
+
+
+def _eval_cmp(node, ctx):
+    op, a, b = node[1], evaluate_ast(node[2], ctx), evaluate_ast(node[3], ctx)
+    try:
+        return _COMPARISON[op](a, b)
+    except TypeError:
+        raise ExpressionError(f"Comparaison impossible entre {type(a).__name__} et {type(b).__name__}.") from None
+
+
+_EVALUATORS = {
+    "lit": lambda node, ctx: node[1],
+    "path": lambda node, ctx: _lookup(node[1], ctx),
+    "or": lambda node, ctx: bool(evaluate_ast(node[1], ctx)) or bool(evaluate_ast(node[2], ctx)),
+    "and": lambda node, ctx: bool(evaluate_ast(node[1], ctx)) and bool(evaluate_ast(node[2], ctx)),
+    "not": lambda node, ctx: not evaluate_ast(node[1], ctx),
+    "call": _eval_call,
+    "arith": _eval_arith,
+    "cmp": _eval_cmp,
+}
+
+
 def evaluate_ast(node, ctx):
-    kind = node[0]
-    if kind == "lit":
-        return node[1]
-    if kind == "path":
-        return _lookup(node[1], ctx)
-    if kind == "or":
-        return bool(evaluate_ast(node[1], ctx)) or bool(evaluate_ast(node[2], ctx))
-    if kind == "and":
-        return bool(evaluate_ast(node[1], ctx)) and bool(evaluate_ast(node[2], ctx))
-    if kind == "not":
-        return not evaluate_ast(node[1], ctx)
-    if kind == "call" and node[1] == "default":
-        try:
-            value = evaluate_ast(node[2][0], ctx)
-        except ExpressionError:
-            value = None
-        return evaluate_ast(node[2][1], ctx) if value is None else value
-    if kind == "call":
-        args = [evaluate_ast(a, ctx) for a in node[2]]
-        try:
-            return FUNCS[node[1]](*args)
-        except Exception as exc:  # noqa: BLE001
-            raise ExpressionError(f"Appel de {node[1]}() impossible : {exc}") from None
-    if kind == "arith":
-        op, a, b = node[1], evaluate_ast(node[2], ctx), evaluate_ast(node[3], ctx)
-        if op == "+" and isinstance(a, str) and isinstance(b, str):
-            if len(a) + len(b) > MAX_TEXT:
-                raise ExpressionError("Texte trop long.")
-            return a + b
-        if (
-            isinstance(a, bool)
-            or isinstance(b, bool)
-            or not isinstance(a, (int, float))
-            or not isinstance(b, (int, float))
-        ):
-            raise ExpressionError(
-                f"Calcul impossible : « {op} » attend deux nombres (ou deux textes pour +), "
-                f"pas {type(a).__name__} et {type(b).__name__}."
-            )
-        try:
-            if op == "+":
-                return a + b
-            if op == "-":
-                return a - b
-            if op == "*":
-                return a * b
-            if op == "/":
-                return a / b
-            return a % b
-        except ZeroDivisionError:
-            raise ExpressionError("Division par zéro.") from None
-    if kind == "cmp":
-        op, a, b = node[1], evaluate_ast(node[2], ctx), evaluate_ast(node[3], ctx)
-        try:
-            if op == "==":
-                return a == b
-            if op == "!=":
-                return a != b
-            if op == "in":
-                return a in b
-            if op == "contains":
-                return b in a
-            return {"<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b}[op]
-        except TypeError:
-            raise ExpressionError(f"Comparaison impossible entre {type(a).__name__} et {type(b).__name__}.") from None
-    raise ExpressionError("Expression invalide.")
+    """Évalue un arbre produit par `parse` : une table de formes de nœuds, aucune évaluation dynamique de texte."""
+    evaluator = _EVALUATORS.get(node[0])
+    if evaluator is None:
+        raise ExpressionError("Expression invalide.")
+    return evaluator(node, ctx)
 
 
 def evaluate(src: str, ctx: dict):

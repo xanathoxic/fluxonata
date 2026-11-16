@@ -178,7 +178,7 @@ def execute_spec(spec: dict, workspace, environment_id, audit_target) -> tuple[d
             "Vérifiez le coffre externe (Plate-forme → Coffre externe) et le secret de la connexion.",
         )
     started = time.monotonic()
-    server = None
+    server: smtplib.SMTP | None = None
     try:
         context = tls_context()
         if tls == "ssl":

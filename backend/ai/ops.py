@@ -154,18 +154,8 @@ class _Refused(Exception):
 
 
 # ---------------------------------------------------------------------------------------------------------- steps
-def _add_step(w: _Graph, op: dict):
-    step = op.get("step")
-    if not isinstance(step, dict) or step.get("type") not in ADDABLE:
-        raise _Refused(f"step doit être un objet dont le type est l'un de : {', '.join(ADDABLE)}.")
-    wanted = step.get("id")
-    nid = w.new_id(wanted or step.get("name"), f"etape_{len(w.nodes) + 1}")
-    if (
-        isinstance(wanted, str) and wanted != nid and wanted not in w.ids()
-    ):  # a taken id keeps meaning the existing step
-        w.renamed[wanted] = nid
-    node = {k: v for k, v in step.items() if k not in ("ui", "version", "skill_version")}
-    node["id"] = nid
+def _add_position(w: _Graph, op: dict):
+    """Where a new step goes: (after, before, label), checked against the graph."""
     after, before, label = (w.ref(op.get("after")), w.ref(op.get("before")), op.get("label") or None)
     if after is not None and w.node(after).get("type") == "condition" and label not in ("true", "false", "error"):
         raise _Refused(f"« {after} » est une décision : précise label « true » ou « false ».")
@@ -180,8 +170,11 @@ def _add_step(w: _Graph, op: dict):
         after = sinks[0]
     if before is not None:
         w.node(before)
-    onward = "true" if node["type"] == "condition" else None
-    w.nodes.append(node)
+    return after, before, label
+
+
+def _splice(w: _Graph, nid: str, after, before, label, onward) -> None:
+    """Puts the new step on the link(s) between `after` and `before` (or at one end)."""
     if after is not None and before is not None:
         between = [e for e in w.out(after) if e["to"] == before]
         if not between:
@@ -202,6 +195,24 @@ def _add_step(w: _Graph, op: dict):
         w.edge(nid, before, onward)
 
 
+def _add_step(w: _Graph, op: dict):
+    step = op.get("step")
+    if not isinstance(step, dict) or step.get("type") not in ADDABLE:
+        raise _Refused(f"step doit être un objet dont le type est l'un de : {', '.join(ADDABLE)}.")
+    wanted = step.get("id")
+    nid = w.new_id(wanted or step.get("name"), f"etape_{len(w.nodes) + 1}")
+    if (
+        isinstance(wanted, str) and wanted != nid and wanted not in w.ids()
+    ):  # a taken id keeps meaning the existing step
+        w.renamed[wanted] = nid
+    node = {k: v for k, v in step.items() if k not in ("ui", "version", "skill_version")}
+    node["id"] = nid
+    after, before, label = _add_position(w, op)
+    onward = "true" if node["type"] == "condition" else None
+    w.nodes.append(node)
+    _splice(w, nid, after, before, label, onward)
+
+
 def _switch_label(w: _Graph, nid: str, label, what: str = "label"):
     allowed = [*case_ids(w.node(nid)), "default"]
     if label not in allowed:
@@ -217,7 +228,7 @@ def _add_branch(w: _Graph, op: dict):
     if w.node(op.get("after")).get("type") == "condition" and (op.get("label") or None) not in ("true", "false"):
         raise _Refused(f"« {op.get('after')} » est une décision : précise label « true » ou « false ».")
     if w.node(op.get("after")).get("type") == "switch":
-        _switch_label(w, op.get("after"), op.get("label") or None)
+        _switch_label(w, str(op.get("after")), op.get("label") or None)
     prev, label = op.get("after"), op.get("label")
     for step in steps[:10]:
         wanted = step.get("id")
@@ -281,7 +292,7 @@ def _set_fields(w: _Graph, op: dict):
     fields = op.get("fields")
     if not isinstance(fields, dict) or not fields:
         raise _Refused("fields doit être un objet non vide.")
-    allowed = ("name", *FIELDS.get(node.get("type"), ()))
+    allowed = ("name", *FIELDS.get(str(node.get("type")), ()))
     bad = [k for k in fields if k not in allowed]
     if bad:
         raise _Refused(
@@ -336,7 +347,7 @@ def _set_variable(w: _Graph, op: dict):
 
 def _remove_variable(w: _Graph, op: dict):
     name = op.get("name")
-    if name not in {v.get("name") for v in w.g.get("variables") or []}:
+    if not isinstance(name, str) or name not in {v.get("name") for v in w.g.get("variables") or []}:
         raise _Refused(f"La variable « {name} » n'existe pas.")
     w.g["variables"] = [v for v in w.g["variables"] if v.get("name") != name]
     w.removed_variables.append(name)
@@ -421,7 +432,7 @@ def apply_ops(graph: dict, ops) -> tuple[dict, list[str]]:
         return w.g, ["ops doit être une liste d'opérations."]
     for i, op in enumerate(ops[:MAX_OPS], 1):
         name = op.get("op") if isinstance(op, dict) else None
-        handler = HANDLERS.get(name)
+        handler = HANDLERS.get(name) if isinstance(name, str) else None
         if handler is None:
             errors.append(f"Opération {i} : « {name} » est inconnue (possibles : {', '.join(HANDLERS)}).")
             continue

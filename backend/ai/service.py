@@ -12,6 +12,7 @@ import ast
 import json
 import re
 from datetime import timedelta
+from typing import Any, NotRequired, TypedDict
 
 import jsonschema
 from django.db import transaction
@@ -58,7 +59,7 @@ STEP_TYPES_RULES = (
     'd\'une étape déclare bindings {"variable": "{{ steps.<id>.output.<sortie> }}"} puis utilise la variable ; chaque '
     "sortie déclarée dans outputs (name, type parmi string, integer, number, boolean, array, object) est une variable "
     'affectée par le script ; System.log("...") écrit dans le journal. wait : seconds (1 à 2592000). approval : title = '
-    "ce qui doit être approuvé, instructions facultatives (n'ajoute JAMAIS allow_self_approval) ; sorties approved et "
+    "ce qui doit être approuvé, objet et body (Markdown) facultatifs (n'ajoute JAMAIS allow_self_approval) ; sorties approved et "
     "comment. throw : message, code court facultatif (fait échouer le workflow). subworkflow : workflow = slug de "
     "workflows du bloc context, inputs = ses entrées. foreach : workflow = slug de workflows, items = expression SANS "
     "accolades qui donne la liste (inputs.liste ou steps.id.output.champ), item_input = entrée du workflow appelé qui "
@@ -103,7 +104,16 @@ STEP_TYPES_RULES = (
     "(déclarée en sortie, la liste en liaison), puis {{ steps.<id>.output.ips_texte }} ; fournis aussi toutes les entrées "
     "obligatoires du workflow appelé (workflows du bloc context : inputs, required)."
 )
-PROMPTS = {
+
+
+class _Invite(TypedDict):
+    version: str
+    format: str
+    instr: str
+    min_tokens: NotRequired[int]
+
+
+PROMPTS: dict[str, _Invite] = {
     "catalog_search": {
         "version": "1.0",
         "format": '{"matches":[{"slug":"...","reason":"..."}]}',
@@ -380,9 +390,10 @@ def build_provider(cfg: AiProvider):
     if cfg.kind == AiProvider.Kind.LOCAL_OPENAI:
         return OpenAICompatProvider(cfg.base_url, cfg.model, _api_key(cfg))
     if cfg.kind == AiProvider.Kind.CLOUD_ANTHROPIC:
-        if cfg.secret is None:
+        key = _api_key(cfg) if cfg.secret is not None else None
+        if key is None:
             raise AiRefused("PROVIDER_NO_KEY", "Aucune clé n'est configurée pour ce fournisseur cloud.")
-        return AnthropicProvider(cfg.model, _api_key(cfg), cfg.base_url or "https://api.anthropic.com")
+        return AnthropicProvider(cfg.model, key, cfg.base_url or "https://api.anthropic.com")
     raise AiRefused("PROVIDER_UNKNOWN", "Type de fournisseur inconnu.")
 
 
@@ -447,9 +458,9 @@ def run_prompt(
     try:
         parsed = _parse_json(comp.text)
     except AiRefused as invalid:
-        exc = invalid
+        refusal = invalid
         if comp.output_tokens >= limit * 0.95:  # the model ran out of room: say so, the fix is a setting, not a retry
-            exc = AiRefused(
+            refusal = AiRefused(
                 "MODEL_OUTPUT_TRUNCATED",
                 "La réponse du modèle a été coupée (limite de longueur atteinte) : demandez un workflow plus court "
                 "ou augmentez « jetons maximum » du fournisseur dans Administration → Assistant IA.",
@@ -463,10 +474,10 @@ def run_prompt(
             spec,
             comp=comp,
             status="invalid",
-            code=exc.code,
+            code=refusal.code,
             content={"output": comp.text} if pol.log_content else None,
         )
-        raise exc from None
+        raise refusal from None
     _log(
         workspace,
         user,
@@ -522,7 +533,7 @@ def catalog_search(workspace, user, query: str, **kw):
     ctx = {"catalog": _offered_workflows(workspace, user)}
     out = run_prompt(workspace, user, "catalog_search", data=query[:500], context=ctx, **kw)
     known = {a["slug"]: a for a in ctx["catalog"]}
-    matches = []
+    matches: list[dict] = []
     for m in (out.get("matches") if isinstance(out, dict) else None) or []:
         if isinstance(m, dict) and m.get("slug") in known and len(matches) < 5:  # unknown slugs are discarded
             matches.append(
@@ -565,7 +576,10 @@ def run_diagnosis(run) -> dict:
     steps = list(StepRun.objects.filter(run=run).order_by("seq", "id"))
     by_node = {st.node_id: st for st in steps}
     failed = next((st for st in reversed(steps) if st.status == "failed"), None)
-    name = lambda nid: nodes.get(nid, {}).get("name") or nid  # noqa: E731
+
+    def name(nid):
+        return nodes.get(nid, {}).get("name") or nid
+
     diag: dict = {
         "timeline": [{"step": name(st.node_id), "status": st.status} for st in steps][:25],
         "not_reached": [name(i) for i in nodes if i not in by_node and nodes[i]["type"] not in ("start", "end")][:10],
@@ -618,7 +632,7 @@ def run_diagnosis(run) -> dict:
 def explain_error(
     workspace, user, *, code: str, message: str, step_name: str = "", diagnosis: dict | None = None, **kw
 ):
-    ctx = {"code": code[:40], "step": step_name[:100]}
+    ctx: dict[str, object] = {"code": code[:40], "step": step_name[:100]}
     if diagnosis:
         ctx["diagnosis"] = diagnosis
     out = run_prompt(workspace, user, "explain_error", data=message[:600], context=ctx, **kw)
@@ -636,6 +650,52 @@ def _spans(source: str, edits: list) -> str:
         head, tail = lines[l1 - 1][:c1], lines[l2 - 1][c2:]
         lines[l1 - 1 : l2] = [head + text.encode() + tail]
     return b"\n".join(lines).decode()
+
+
+def _list_of(d: dict, key: str) -> list:
+    """`d[key]` si c'est une liste, sinon une liste vide (sortie de modèle : rien n'est garanti)."""
+    value = d.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _dict_of(d: dict, key: str) -> dict:
+    """`d[key]` si c'est un objet, sinon un objet vide."""
+    value = d.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _python_fixes(tree, declared: set, var_for) -> list[tuple[int, int, int, int, str]]:
+    """Source spans of a Python script to rewrite (see `_autofix_script`)."""
+    edits: list[tuple[int, int, int, int, str]] = []
+    for x in ast.walk(tree):
+        if not isinstance(x, ast.Attribute) or x.end_lineno is None or x.end_col_offset is None:
+            continue
+        mid = x.value
+        if (
+            isinstance(mid, ast.Attribute)
+            and mid.attr == "output"
+            and isinstance(mid.value, ast.Attribute)
+            and isinstance(mid.value.value, ast.Name)
+            and mid.value.value.id == "steps"
+        ):
+            edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, var_for(mid.value.attr, x.attr)))
+        elif isinstance(mid, ast.Name) and mid.id in ("inputs", "vars") and isinstance(x.ctx, ast.Load):
+            edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, f"{mid.id}['{x.attr}']"))
+    for x in ast.walk(tree):  # outputs['total'] = v  (the output IS the variable `total`)
+        if not isinstance(x, ast.Subscript):
+            continue
+        key = x.slice
+        if (
+            isinstance(x.ctx, ast.Store)
+            and isinstance(x.value, ast.Name)
+            and x.value.id == "outputs"
+            and isinstance(key, ast.Constant)
+            and key.value in declared
+            and x.end_lineno is not None
+            and x.end_col_offset is not None
+        ):
+            edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, str(key.value)))
+    return edits
 
 
 def _autofix_script(d: dict) -> dict:
@@ -664,34 +724,7 @@ def _autofix_script(d: dict) -> dict:
             tree = ast.parse(code)
         except SyntaxError:
             return d
-        edits = []
-        for x in ast.walk(tree):
-            if not isinstance(x, ast.Attribute) or x.end_lineno is None:
-                continue
-            mid = x.value
-            if (
-                isinstance(mid, ast.Attribute)
-                and mid.attr == "output"
-                and isinstance(mid.value, ast.Attribute)
-                and isinstance(mid.value.value, ast.Name)
-                and mid.value.value.id == "steps"
-            ):
-                edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, var_for(mid.value.attr, x.attr)))
-            elif isinstance(mid, ast.Name) and mid.id in ("inputs", "vars") and isinstance(x.ctx, ast.Load):
-                edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, f"{mid.id}['{x.attr}']"))
-        declared = {o["name"] for o in d["outputs"]}
-        for x in ast.walk(tree):  # outputs['total'] = v  (the output IS the variable `total`)
-            key = x.slice if isinstance(x, ast.Subscript) else None
-            if (
-                key is not None
-                and isinstance(x.ctx, ast.Store)
-                and isinstance(x.value, ast.Name)
-                and x.value.id == "outputs"
-                and isinstance(key, ast.Constant)
-                and key.value in declared
-                and x.end_lineno is not None
-            ):
-                edits.append((x.lineno, x.col_offset, x.end_lineno, x.end_col_offset, key.value))
+        edits = _python_fixes(tree, {o["name"] for o in d["outputs"]}, var_for)
         if edits:
             code = _spans(code, edits)
     else:
@@ -706,10 +739,10 @@ def _draft_script(n: dict) -> dict:
     workflow cannot be published until a person has read it (validation rule `ai_review_required`)."""
     outs = [
         {"name": str(o["name"])[:60], "type": o.get("type") if isinstance(o.get("type"), str) else "string"}
-        for o in (n.get("outputs") if isinstance(n.get("outputs"), list) else [])[:10]
+        for o in _list_of(n, "outputs")[:10]
         if isinstance(o, dict) and isinstance(o.get("name"), str)
     ]
-    binds = n.get("bindings") if isinstance(n.get("bindings"), dict) else {}
+    binds = _dict_of(n, "bindings")
     timeout = n.get("timeout_seconds")
     return _autofix_script(
         {
@@ -828,7 +861,7 @@ def sanitize_draft(raw, workspace, slug: str):
     """Reduce an untrusted model graph to a safe structure. Never trust types, sizes or references."""
     if not isinstance(raw, dict):
         raise AiRefused("MODEL_OUTPUT_INVALID", "Le brouillon proposé n'est pas un objet.", 502)
-    nodes_in = raw.get("nodes") if isinstance(raw.get("nodes"), list) else []
+    nodes_in = _list_of(raw, "nodes")
     if not nodes_in or len(nodes_in) > MAX_DRAFT_NODES:
         raise AiRefused("MODEL_OUTPUT_INVALID", f"Le brouillon doit comporter 1 à {MAX_DRAFT_NODES} étapes.", 502)
     nodes = []
@@ -896,7 +929,10 @@ def _catalog_with_io(workspace) -> list[dict]:
     for c in _catalog_context(workspace):
         act = Action.objects.get(workspace=workspace, slug=c["slug"])
         v = act.latest_version()
-        props = lambda sch: {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}  # noqa: E731
+
+        def props(sch):
+            return {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}
+
         rows.append(
             {
                 **c,
@@ -941,7 +977,10 @@ def _skills_context(workspace) -> list[dict]:
         v = sk.latest_version()
         if v is None:
             continue
-        props = lambda sch: {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}  # noqa: E731
+
+        def props(sch):
+            return {k: p.get("type", "string") for k, p in (sch or {}).get("properties", {}).items()}
+
         rows.append(
             {"slug": sk.slug, "name": sk.name, "inputs": props(v.input_schema), "outputs": props(v.output_schema)}
         )
@@ -961,7 +1000,10 @@ def _blocking(issues) -> list[dict]:
 
 def _touched(old: dict, new: dict) -> set:
     """Steps the model added or changed: only the problems it caused are its to repair."""
-    rows = lambda g: {r["id"]: r for r in _compact_graph(g)["nodes"]}  # noqa: E731  (what the model sees of each step)
+
+    def rows(g):
+        return {r["id"]: r for r in _compact_graph(g)["nodes"]}  # what the model sees of each step
+
     before = rows(old)
     return {i for i, r in rows(new).items() if before.get(i) != r}
 
@@ -1036,19 +1078,22 @@ def _review(workspace, user, graph: dict, request: str, ctx: dict, kw: dict, cha
     if not isinstance(raw, dict):
         return None
     ids = {n.get("id") for n in graph.get("nodes", [])}
-    step = lambda v: v if v in ids else None  # noqa: E731
+
+    def step(v):
+        return v if v in ids else None
+
     coverage, findings = [], []
-    for c in (raw.get("coverage") if isinstance(raw.get("coverage"), list) else [])[:20]:
+    for c in _list_of(raw, "coverage")[:20]:
         if isinstance(c, dict) and isinstance(c.get("requirement"), str) and c.get("status") in REVIEW_STATUSES:
             coverage.append(
                 {"requirement": c["requirement"].strip()[:200], "status": c["status"], "step": step(c.get("step"))}
             )
-    for f in (raw.get("findings") if isinstance(raw.get("findings"), list) else [])[:10]:
+    for f in _list_of(raw, "findings")[:10]:
         if isinstance(f, dict) and isinstance(f.get("message"), str) and f["message"].strip():
             sev = "error" if f.get("severity") == "error" else "warning"
             findings.append({"step": step(f.get("step")), "severity": sev, "message": f["message"].strip()[:300]})
-    for sc in (raw.get("scripts") if isinstance(raw.get("scripts"), list) else [])[:20]:
-        for o in (sc.get("outputs") if isinstance(sc, dict) and isinstance(sc.get("outputs"), list) else [])[:10]:
+    for sc in _list_of(raw, "scripts")[:20]:
+        for o in (_list_of(sc, "outputs") if isinstance(sc, dict) else [])[:10]:
             if isinstance(o, dict) and o.get("matches_request") is False and isinstance(o.get("name"), str):
                 why = str(o.get("why") or "").strip()[:200]
                 findings.append(
@@ -1147,14 +1192,12 @@ def _clean_samples(raw, graph: dict) -> list[dict]:
     """Samples the model proposed, kept only when they satisfy the workflow's input schema (a wrong one is dropped)."""
     ids = {n.get("id") for n in graph.get("nodes", [])}
     out = []
-    for s in (raw.get("samples") if isinstance(raw, dict) and isinstance(raw.get("samples"), list) else [])[
-        :MAX_SAMPLES
-    ]:
+    for s in (_list_of(raw, "samples") if isinstance(raw, dict) else [])[:MAX_SAMPLES]:
         if not isinstance(s, dict) or not dryrun.valid_inputs(graph.get("inputs"), s.get("inputs")):
             continue
         expected = [
             {"step": e["step"], "field": e["field"], "value": e["value"]}
-            for e in (s.get("expected") if isinstance(s.get("expected"), list) else [])[:8]
+            for e in _list_of(s, "expected")[:8]
             if isinstance(e, dict) and e.get("step") in ids and isinstance(e.get("field"), str) and "value" in e
         ]
         out.append({"label": str(s.get("label") or "essai")[:60], "inputs": s["inputs"], "expected": expected})
@@ -1458,7 +1501,10 @@ def _clean_outline(raw) -> dict:
     """The plan a model proposed, reduced to a bounded, plain structure the person can edit (everything is just text)."""
     if not isinstance(raw, dict):
         raise AiRefused("OUTLINE_INVALID", "Le plan proposé n'est pas exploitable.", 502)
-    rows = lambda key: raw.get(key) if isinstance(raw.get(key), list) else []  # noqa: E731
+
+    def rows(key):
+        return raw.get(key) if isinstance(raw.get(key), list) else []
+
     inputs = []
     for i in rows("inputs")[:12]:
         name = re.sub(r"[^a-z0-9_]", "_", _clip(i.get("name") if isinstance(i, dict) else "", 40).lower()).strip("_")
@@ -1520,7 +1566,7 @@ def make_outline(workspace, user, request_text: str, previous=None, feedback=Non
             for k in _skills_context(workspace)
         ],
     }
-    data = {"request": request_text[:MAX_REQUEST]}
+    data: dict[str, object] = {"request": request_text[:MAX_REQUEST]}
     if isinstance(previous, dict):
         data["previous"] = _clean_outline(previous) if previous.get("steps") else previous
     if feedback:
@@ -1559,7 +1605,7 @@ def outline_to_request(request_text: str, outline: dict) -> str:
         lines.append("Hypothèses validées par l'utilisateur :\n" + "\n".join(f"- {a}" for a in o["assumptions"]))
     answered = [
         (_clip(a.get("question"), 220), _clip(a.get("answer"), 300))
-        for a in (outline.get("answers") if isinstance(outline.get("answers"), list) else [])[:6]
+        for a in _list_of(outline, "answers")[:6]
         if isinstance(a, dict) and _clip(a.get("answer"), 300)
     ]
     if answered:
@@ -1569,7 +1615,7 @@ def outline_to_request(request_text: str, outline: dict) -> str:
 
 def build_draft(workspace, user, request_text: str, slug: str, **kw):
     """Generate, validate, correct and check a draft WITHOUT storing anything. Returns (graph, issues, check, cfg)."""
-    ctx = {
+    ctx: dict[str, list | dict] = {
         "catalog": _catalog_with_io(workspace),
         "workflows": _callable_workflows(workspace, slug, user),
         "skills": _skills_context(workspace),
@@ -1697,7 +1743,7 @@ STEP_KEYS = {
         "fields",
         "aggregates",
     ),
-    "approval": ("title", "instructions"),
+    "approval": ("title", "instructions", "subject", "body"),
     "throw": ("code", "message"),
     "subworkflow": ("workflow", "inputs"),
     "foreach": ("workflow", "items", "item_input", "max_iterations", "concurrency", "inputs"),
@@ -1852,7 +1898,8 @@ def _clean_node(n: dict) -> dict:
 
 def _clean_cases(raw) -> list:
     """The cases of a multi-way choice: an id (what labels its exit) and a condition, in order; ids made valid and unique."""
-    out, seen = [], set()
+    out: list[dict] = []
+    seen: set[str] = set()
     for c in (raw if isinstance(raw, list) else [])[:MAX_CASES]:
         if not isinstance(c, dict):
             continue
@@ -1872,18 +1919,25 @@ def _int_between(v, low: int, high: int):
     return min(max(v, low), high) if isinstance(v, int) and not isinstance(v, bool) else None
 
 
+def _approval_fields(n: dict) -> dict:
+    """What the assistant may write on an approval step: the title, optional instructions, object and Markdown body (bounded)."""
+    out = {"title": _text(n.get("title"), 200)}
+    for key, limit in (("instructions", 1000), ("subject", 200), ("body", 4000)):
+        if _text(n.get(key), limit):
+            out[key] = _text(n.get(key), limit)
+    return out
+
+
 def _clean_step(n: dict) -> dict:
     """Wait, approval, exception, sub-workflow, loop and AI steps: only known fields, bounded. Whether the referenced
     workflow, skill or provider exists is left to the validator every human goes through."""
     t = n["type"]
     out: dict = {}
-    inputs = n.get("inputs") if isinstance(n.get("inputs"), dict) else {}
+    inputs = _dict_of(n, "inputs")
     if t == "wait":
         out["seconds"] = _int_between(n.get("seconds"), 1, 30 * 86400) or 60
     elif t == "approval":
-        out["title"] = _text(n.get("title"), 200)
-        if _text(n.get("instructions"), 1000):
-            out["instructions"] = _text(n.get("instructions"), 1000)
+        out.update(_approval_fields(n))
     elif t == "throw":
         out["message"] = _text(n.get("message"), 300)
         if re.fullmatch(r"[A-Z0-9_]{1,40}", str(n.get("code") or "")):
@@ -1963,7 +2017,7 @@ def _clean_http(n: dict) -> dict:
     integ, op = integrations.find(_text(n.get("integration"), 40), _text(n.get("operation"), 40))
     if op is not None:
         declared = {p["name"] for p in op["params"]}
-        given = n.get("params") if isinstance(n.get("params"), dict) else {}
+        given = _dict_of(n, "params")
         out.update(
             integration=integ["slug"],
             operation=op["id"],
@@ -2025,7 +2079,7 @@ def _clean_transform(n: dict) -> dict:
         }
     aggs = [
         {"name": _text(a.get("name"), 60), "fn": a.get("fn"), "expr": _bare_expr(_text(a.get("expr"), 200)) or "item"}
-        for a in (n.get("aggregates") if isinstance(n.get("aggregates"), list) else [])[:10]
+        for a in _list_of(n, "aggregates")[:10]
         if isinstance(a, dict) and a.get("fn") in transforms.AGGREGATES and _text(a.get("name"), 60)
     ]
     if aggs:
@@ -2061,19 +2115,53 @@ def _failure_branches_on_the_error_exit(kind: dict, edges: list) -> None:
             failing[0]["label"] = "error"
 
 
-def _fix_labels(kind: dict, edges: list, cases: dict | None = None) -> list:
-    """Models label edges loosely. Only a decision has « true »/« false » exits (a multi-way choice has one per case); its two exits get one each; « error »
-    exits belong to steps that can fail."""
-    can_fail = ERROR_CAPABLE
-    cases = cases or {}
+def _plausible_labels(kind: dict, edges: list) -> list:
+    """Copies the edges, dropping a label the step cannot have (true/false off a decision, error off a step that cannot fail)."""
     out = []
     for e in edges:
         label = e.get("label")
         if label in ("true", "false") and kind.get(e["from"]) != "condition":
             label = None
-        if label == "error" and kind.get(e["from"]) not in can_fail:
+        if label == "error" and kind.get(e["from"]) not in ERROR_CAPABLE:
             label = None
         out.append({"from": e["from"], "to": e["to"], **({"label": label} if label else {})})
+    return out
+
+
+def _label_switch_exits(out: list, nid: str, allowed: list) -> None:
+    """One exit per case: a repeated or unknown label is dropped, the free cases go to the unlabelled exits."""
+    seen = set()
+    for e in [x for x in out if x["from"] == nid]:
+        if e.get("label") in allowed and e["label"] not in seen:
+            seen.add(e["label"])
+        else:
+            e.pop("label", None)
+    free = [x for x in allowed if x not in seen]
+    for e in [x for x in out if x["from"] == nid and not x.get("label")]:
+        if free:
+            e["label"] = free.pop(0)
+
+
+def _label_condition_exits(out: list, nid: str) -> None:
+    """A decision has one « true » and one « false » exit (besides its error exit)."""
+    mine = [e for e in out if e["from"] == nid and e.get("label") not in ("error",)]
+    seen = set()
+    for e in mine:  # a label used twice is as wrong as a missing one
+        if e.get("label") in ("true", "false") and e["label"] not in seen:
+            seen.add(e["label"])
+        else:
+            e.pop("label", None)
+    free = [x for x in ("true", "false") if x not in seen]
+    for e in mine:
+        if "label" not in e and free:
+            e["label"] = free.pop(0)
+
+
+def _fix_labels(kind: dict, edges: list, cases: dict | None = None) -> list:
+    """Models label edges loosely. Only a decision has « true »/« false » exits (a multi-way choice has one per case); its two exits get one each; « error »
+    exits belong to steps that can fail."""
+    cases = cases or {}
+    out = _plausible_labels(kind, edges)
     for e in out:  # « refusé » after an approval: a throw on the plain exit would also fire when it is approved
         siblings = [x for x in out if x["from"] == e["from"] and x is not e and not x.get("label")]
         if kind.get(e["from"]) == "approval" and kind.get(e["to"]) == "throw" and not e.get("label") and siblings:
@@ -2081,32 +2169,46 @@ def _fix_labels(kind: dict, edges: list, cases: dict | None = None) -> list:
     _failure_branches_on_the_error_exit(kind, out)
     for nid, t in kind.items():
         if t == "switch":
-            allowed = [*cases.get(nid, []), "default"]
-            seen = set()
-            for e in [x for x in out if x["from"] == nid]:
-                if e.get("label") in allowed and e["label"] not in seen:
-                    seen.add(e["label"])
-                else:
-                    e.pop("label", None)
-            free = [x for x in allowed if x not in seen]
-            for e in [x for x in out if x["from"] == nid and not x.get("label")]:
-                if free:
-                    e["label"] = free.pop(0)
-            continue
-        if t != "condition":
-            continue
-        mine = [e for e in out if e["from"] == nid and e.get("label") not in ("error",)]
-        seen = set()
-        for e in mine:  # a label used twice is as wrong as a missing one
-            if e.get("label") in ("true", "false") and e["label"] not in seen:
-                seen.add(e["label"])
-            else:
-                e.pop("label", None)
-        free = [x for x in ("true", "false") if x not in seen]
-        for e in mine:
-            if "label" not in e and free:
-                e["label"] = free.pop(0)
+            _label_switch_exits(out, nid, [*cases.get(nid, []), "default"])
+        elif t == "condition":
+            _label_condition_exits(out, nid)
     return out
+
+
+def _merge_edited(old: dict | None, n: dict, clean: dict) -> dict:
+    """An edited step: the model's fields over the existing step (a field it left out is kept as it was, never reset to a
+    default); a version pin is dropped when its target changed; a script it wrote or changed must be read by a person."""
+    if old is None or old.get("type") != clean["type"]:
+        return {**({"ui": old["ui"]} if old and old.get("ui") else {}), **clean}
+    merged = {**old, **{k: v for k, v in clean.items() if k in n or k in ("id", "type")}}
+    kind = clean["type"]
+    if (kind == "action" and clean.get("action") != old.get("action")) or (
+        kind in ("subworkflow", "foreach") and clean.get("workflow") != old.get("workflow")
+    ):
+        merged.pop("version", None)  # pinned to the previous target
+    if kind == "ai" and clean.get("skill") != old.get("skill"):
+        merged.pop("skill_version", None)
+    if kind == "script":
+        changed = any(old.get(k) != clean.get(k) for k in SCRIPT_KEYS)
+        merged["ai_review"] = bool(old.get("ai_review")) or changed
+    return merged
+
+
+def _model_edges(raw: dict, nodes: list, ids: set) -> list:
+    """The links the model proposed: both ends exist, one per pair of steps, only a label that can exist."""
+    edges, pairs = [], set()
+    labels = {c for n in nodes for c in case_ids(n)} | {"default"}
+    for e in raw.get("edges") or []:
+        if isinstance(e, dict) and e.get("from") in ids and e.get("to") in ids and (e["from"], e["to"]) not in pairs:
+            pairs.add((e["from"], e["to"]))
+            edges.append(
+                {
+                    "from": e["from"],
+                    "to": e["to"],
+                    **({"label": e["label"]} if e.get("label") in ("true", "false", "error", *labels) else {}),
+                }
+            )
+    return edges
 
 
 def sanitize_edit(raw, original: dict, workspace, slug: str):
@@ -2130,20 +2232,7 @@ def sanitize_edit(raw, original: dict, workspace, slug: str):
         if n.get("type") not in EDIT_NODE_TYPES:
             raise AiRefused("MODEL_OUTPUT_INVALID", "Type d'étape non autorisé dans une modification générée.", 502)
         clean = _clean_node(n)
-        if old is not None and old.get("type") == clean["type"]:
-            # a field the model left out is kept as it was, never reset to a default
-            merged = {**old, **{k: v for k, v in clean.items() if k in n or k in ("id", "type")}}
-            if clean["type"] == "action" and clean.get("action") != old.get("action"):
-                merged.pop("version", None)  # pinned to the previous action
-            if clean["type"] in ("subworkflow", "foreach") and clean.get("workflow") != old.get("workflow"):
-                merged.pop("version", None)
-            if clean["type"] == "ai" and clean.get("skill") != old.get("skill"):
-                merged.pop("skill_version", None)
-            if clean["type"] == "script":
-                changed = any(old.get(k) != clean.get(k) for k in SCRIPT_KEYS)
-                merged["ai_review"] = bool(old.get("ai_review")) or changed
-        else:
-            merged = {**({"ui": old["ui"]} if old and old.get("ui") else {}), **clean}
+        merged = _merge_edited(old, n, clean)
         nodes.append(merged)
     nodes += [
         o
@@ -2154,18 +2243,7 @@ def sanitize_edit(raw, original: dict, workspace, slug: str):
         raise AiRefused("MODEL_OUTPUT_INVALID", f"Le workflow doit comporter 1 à {MAX_EDIT_NODES} étapes.", 502)
     ids = {n["id"] for n in nodes}
     kind = {n["id"]: n.get("type") for n in nodes}
-    edges, pairs = [], set()
-    labels = {c for n in nodes for c in case_ids(n)} | {"default"}
-    for e in raw.get("edges") or []:
-        if isinstance(e, dict) and e.get("from") in ids and e.get("to") in ids and (e["from"], e["to"]) not in pairs:
-            pairs.add((e["from"], e["to"]))
-            edges.append(
-                {
-                    "from": e["from"],
-                    "to": e["to"],
-                    **({"label": e["label"]} if e.get("label") in ("true", "false", "error", *labels) else {}),
-                }
-            )
+    edges = _model_edges(raw, nodes, ids)
     edges = _with_joins(nodes, _fix_labels(kind, edges, {n["id"]: case_ids(n) for n in nodes}))
     routed = {(e["from"], e["to"]): e["ui"] for e in original.get("edges", []) if isinstance(e.get("ui"), dict)}
     edges = [
@@ -2175,7 +2253,7 @@ def sanitize_edit(raw, original: dict, workspace, slug: str):
     inputs = _draft_inputs(given) if isinstance(given, dict) and given else original.get("inputs")
     # existing workflow outputs are not the model's to rewrite (it may only add some)
     outputs = {
-        **(raw.get("outputs") if isinstance(raw.get("outputs"), dict) else {}),
+        **_dict_of(raw, "outputs"),
         **(original.get("outputs") or {}),
     }
     graph = {**original, "inputs": inputs or _draft_inputs(None), "nodes": nodes, "edges": edges, "outputs": outputs}
@@ -2188,78 +2266,114 @@ def sanitize_edit(raw, original: dict, workspace, slug: str):
     return graph, validate_graph(graph, workspace, slug)
 
 
-def describe_changes(old: dict, new: dict) -> list[str]:
+_KIND_WORDS = {
+    "action": "action",
+    "condition": "décision",
+    "switch": "choix multiple",
+    "join": "jonction",
+    "script": "script",
+    "wait": "attente",
+    "approval": "approbation",
+    "throw": "exception",
+    "subworkflow": "workflow",
+    "foreach": "pour chaque",
+    "ai": "étape IA",
+    "http": "requête HTTP",
+    "transform": "transformation",
+}
+
+
+def _changes_of_step(o: dict, n: dict) -> list[str]:
+    """What changed on a step that exists before and after, in a fixed order."""
+    kind = n["type"]
+    parts = []
+    if o.get("name") != n.get("name"):
+        parts.append("renommée")
+    if kind == "action" and (o.get("action") != n.get("action") or o.get("inputs") != n.get("inputs")):
+        parts.append("action ou paramètres modifiés")
+    if kind == "condition" and o.get("expr") != n.get("expr"):
+        parts.append("condition modifiée")
+    if kind == "switch" and o.get("cases") != n.get("cases"):
+        parts.append("cas modifiés")
+    if kind == "script" and any(o.get(k) != n.get(k) for k in SCRIPT_KEYS):
+        parts.append("script modifié")
+    if kind in STEP_KEYS and any(o.get(k) != n.get(k) for k in STEP_KEYS[kind]):
+        parts.append("paramètres modifiés")
+    return parts
+
+
+def _describe_steps(old: dict, new: dict) -> list[str]:
     before = {n["id"]: n for n in old.get("nodes", [])}
     after = {n["id"]: n for n in new.get("nodes", [])}
-    kinds = {
-        "action": "action",
-        "condition": "décision",
-        "switch": "choix multiple",
-        "join": "jonction",
-        "script": "script",
-        "wait": "attente",
-        "approval": "approbation",
-        "throw": "exception",
-        "subworkflow": "workflow",
-        "foreach": "pour chaque",
-        "ai": "étape IA",
-        "http": "requête HTTP",
-        "transform": "transformation",
-    }
-    out = []
+    out = [
+        f"Étape ajoutée : « {n.get('name') or i} » ({_KIND_WORDS.get(n['type'], n['type'])})"
+        for i, n in after.items()
+        if i not in before
+    ]
+    out += [f"Étape supprimée : « {n.get('name') or i} »" for i, n in before.items() if i not in after]
     for i, n in after.items():
-        if i not in before:
-            out.append(f"Étape ajoutée : « {n.get('name') or i} » ({kinds.get(n['type'], n['type'])})")
-    for i, n in before.items():
-        if i not in after:
-            out.append(f"Étape supprimée : « {n.get('name') or i} »")
-    for i, n in after.items():
-        o = before.get(i)
-        if o is None:
-            continue
-        parts = []
-        if o.get("name") != n.get("name"):
-            parts.append("renommée")
-        if n["type"] == "action" and (o.get("action") != n.get("action") or o.get("inputs") != n.get("inputs")):
-            parts.append("action ou paramètres modifiés")
-        if n["type"] == "condition" and o.get("expr") != n.get("expr"):
-            parts.append("condition modifiée")
-        if n["type"] == "switch" and o.get("cases") != n.get("cases"):
-            parts.append("cas modifiés")
-        if n["type"] == "script" and any(o.get(k) != n.get(k) for k in SCRIPT_KEYS):
-            parts.append("script modifié")
-        if n["type"] in STEP_KEYS and any(o.get(k) != n.get(k) for k in STEP_KEYS[n["type"]]):
-            parts.append("paramètres modifiés")
+        parts = _changes_of_step(before[i], n) if i in before else []
         if parts:
             out.append(f"Étape « {n.get('name') or i} » : {', '.join(parts)}")
-    ea = {(e["from"], e["to"], e.get("label")) for e in new.get("edges", [])}
-    eb = {(e["from"], e["to"], e.get("label")) for e in old.get("edges", [])}
-    if ea - eb:
-        out.append(f"{len(ea - eb)} liaison(s) ajoutée(s) ou modifiée(s)")
-    if eb - ea:
-        out.append(f"{len(eb - ea)} liaison(s) retirée(s) ou modifiée(s)")
+    return out
+
+
+def _describe_links(old: dict, new: dict) -> list[str]:
+    added = {(e["from"], e["to"], e.get("label")) for e in new.get("edges", [])}
+    removed = {(e["from"], e["to"], e.get("label")) for e in old.get("edges", [])}
+    out = []
+    if added - removed:
+        out.append(f"{len(added - removed)} liaison(s) ajoutée(s) ou modifiée(s)")
+    if removed - added:
+        out.append(f"{len(removed - added)} liaison(s) retirée(s) ou modifiée(s)")
+    return out
+
+
+def _describe_notes(old: dict, new: dict) -> list[str]:
     old_notes = {n.get("id"): n for n in old.get("notes") or []}
+    out = []
     for n in new.get("notes") or []:
         if n.get("id") not in old_notes:
             out.append(f"Note ajoutée : « {n['text'][:60]} »")
         elif old_notes[n["id"]].get("text") != n.get("text"):
             out.append(f"Note {n['id']} : texte modifié")
-    kept_notes = {n.get("id") for n in new.get("notes") or []}
-    out += [f"Note supprimée : « {str(n.get('text'))[:60]} »" for i, n in old_notes.items() if i not in kept_notes]
+    kept = {n.get("id") for n in new.get("notes") or []}
+    out += [f"Note supprimée : « {str(n.get('text'))[:60]} »" for i, n in old_notes.items() if i not in kept]
+    return out
+
+
+def _describe_variables(old: dict, new: dict) -> list[str]:
     old_vars = {v.get("name"): v for v in old.get("variables") or []}
+    out = []
     for v in new.get("variables") or []:
         if v["name"] not in old_vars:
             out.append(f"Variable ajoutée : {v['name']}")
         elif old_vars[v["name"]].get("value") != v.get("value"):
             out.append(f"Variable {v['name']} : valeur modifiée")
-    kept_vars = {v.get("name") for v in new.get("variables") or []}
-    out += [f"Variable supprimée : {name}" for name in old_vars if name not in kept_vars]
-    pa, pb = (new.get("inputs") or {}).get("properties", {}), (old.get("inputs") or {}).get("properties", {})
-    if set(pa) - set(pb):
-        out.append("Entrée(s) du workflow ajoutée(s) : " + ", ".join(sorted(set(pa) - set(pb))))
+    kept = {v.get("name") for v in new.get("variables") or []}
+    out += [f"Variable supprimée : {name}" for name in old_vars if name not in kept]
+    return out
+
+
+def _describe_interface(old: dict, new: dict) -> list[str]:
+    now, before = (new.get("inputs") or {}).get("properties", {}), (old.get("inputs") or {}).get("properties", {})
+    out = []
+    if set(now) - set(before):
+        out.append("Entrée(s) du workflow ajoutée(s) : " + ", ".join(sorted(set(now) - set(before))))
     if (new.get("outputs") or {}) != (old.get("outputs") or {}):
         out.append("Sorties du workflow modifiées")
     return out
+
+
+def describe_changes(old: dict, new: dict) -> list[str]:
+    """A summary in French of what a change did, section by section in a fixed order: steps, connections, notes, variables, interface."""
+    return [
+        *_describe_steps(old, new),
+        *_describe_links(old, new),
+        *_describe_notes(old, new),
+        *_describe_variables(old, new),
+        *_describe_interface(old, new),
+    ]
 
 
 def _clean_history(history) -> list[dict]:
@@ -2291,18 +2405,9 @@ def _current_issues(graph: dict, workspace, slug: str) -> list[dict]:
     return [{"step": i["node"], "level": i["level"], "code": i["code"], "message": i["message"]} for i in rows[:20]]
 
 
-def edit_workflow(
-    workspace, user, workflow: Workflow, message: str, history, graph: dict, *, dry_run: bool = True, **kw
-):
-    """One conversation turn: the model proposes a modified draft. Nothing is stored here: the person reviews the
-    summary and applies it in the editor (undoable); publication stays a separate, human act. What the reply says is
-    checked against what the graph really changes: a claimed change that is not there is retried, then dropped.
-    `dry_run=False` is for callers inside the web process, which never executes anything: the dry run (scripts run in the
-    sandbox) belongs to the worker (`ai.jobs`, kind « edit »)."""
-    if kw.get("cfg") is None:
-        _, kw["cfg"] = select_provider(workspace, kw.pop("provider_name", None))
-    mark = _mark(workspace)
-    ctx = {
+def _edit_context(workspace, user, workflow: Workflow, graph: dict) -> dict:
+    """Everything the model is told about the workspace and the current draft."""
+    return {
         "catalog": _catalog_with_io(workspace),
         "workflows": _callable_workflows(workspace, workflow.slug, user),
         "skills": _skills_context(workspace),
@@ -2314,6 +2419,11 @@ def edit_workflow(
         "issues": _current_issues(graph, workspace, workflow.slug),
         "graph": _compact_graph(graph),
     }
+
+
+def _propose_edit(workspace, user, graph, message, history, workflow, ctx, kw):
+    """The model's proposal, with one more try when it claims a change that is not there or its operations were refused.
+    Returns (reply, deep, new_graph, issues, changes, refused operations, attempts)."""
     feedback, attempts = None, 0
     while attempts < 2:
         attempts += 1
@@ -2327,7 +2437,9 @@ def edit_workflow(
         proposed, op_errors = _proposal(raw, graph)
         ops = raw.get("ops") if isinstance(raw, dict) and isinstance(raw.get("ops"), list) else None
         deep = ops is None or len(ops) > 2 or any(isinstance(o, dict) and o.get("op") == "add_step" for o in ops)
-        new_graph, issues, changes = None, [], []
+        new_graph: dict | None = None
+        issues: list = []
+        changes: list = []
         if proposed is not None:
             new_graph, issues = sanitize_edit(proposed, graph, workspace, workflow.slug)
             changes = describe_changes(graph, new_graph)
@@ -2338,8 +2450,32 @@ def edit_workflow(
             if op_errors
             else NO_CHANGE_FEEDBACK
         )
-    result = {"reply": reply or "Je n'ai pas de modification à proposer.", "graph": None, "changes": [], "issues": []}
-    if changes:
+    return reply, deep, new_graph, issues, changes, op_errors, attempts
+
+
+def edit_workflow(
+    workspace, user, workflow: Workflow, message: str, history, graph: dict, *, dry_run: bool = True, **kw
+):
+    """One conversation turn: the model proposes a modified draft. Nothing is stored here: the person reviews the
+    summary and applies it in the editor (undoable); publication stays a separate, human act. What the reply says is
+    checked against what the graph really changes: a claimed change that is not there is retried, then dropped.
+    `dry_run=False` is for callers inside the web process, which never executes anything: the dry run (scripts run in the
+    sandbox) belongs to the worker (`ai.jobs`, kind « edit »)."""
+    if kw.get("cfg") is None:
+        _, kw["cfg"] = select_provider(workspace, kw.pop("provider_name", None))
+    mark = _mark(workspace)
+    ctx = _edit_context(workspace, user, workflow, graph)
+    reply, deep, new_graph, issues, changes, op_errors, attempts = _propose_edit(
+        workspace, user, graph, message, history, workflow, ctx, kw
+    )
+    # enveloppe JSON de la réponse : valeurs de natures différentes (texte, graphe, listes, essai à blanc, relecture)
+    result: dict[str, Any] = {
+        "reply": reply or "Je n'ai pas de modification à proposer.",
+        "graph": None,
+        "changes": [],
+        "issues": [],
+    }
+    if changes and new_graph is not None:
         check = None
         shown = {(i["step"], i["code"]) for i in ctx["issues"] if i["level"] == "error"}
         if _touched(graph, new_graph):  # a note or a variable alone is not worth a second reading
@@ -2443,7 +2579,7 @@ def _existing_slugs(model, workspace) -> list[dict]:
     return list(model.objects.filter(workspace=workspace).values("slug", "name")[:200])
 
 
-def _unique_slug(model, workspace, slug: str, fallback: str) -> tuple[str, bool]:
+def _unique_slug(model, workspace, slug: str | None, fallback: str) -> tuple[str, bool]:
     base = slug_id(str(slug or fallback), "nouveau").replace("_", "-")[:44]
     taken = set(model.objects.filter(workspace=workspace, slug__startswith=base).values_list("slug", flat=True))
     if base not in taken:
@@ -2511,7 +2647,7 @@ def propose_action(workspace, user, need: str, *, runtime: str = "python", previ
     and publishes it (the creation endpoint requires the « reviewed » confirmation for generated code)."""
     if runtime not in ACTION_RUNTIMES:
         raise AiRefused("RUNTIME_UNSUPPORTED", "Langage non proposé par l'assistant (Python ou Node.js).", 400)
-    ctx = {"runtime": runtime, "existing": _existing_slugs(Action, workspace)}
+    ctx: dict[str, object] = {"runtime": runtime, "existing": _existing_slugs(Action, workspace)}
     if isinstance(previous, dict):
         ctx["previous"] = {
             k: previous.get(k)

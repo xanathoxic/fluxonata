@@ -30,7 +30,12 @@ if action == "setup":
     for name, scopes in (("design", ["view", "edit"]), ("big", ["view", "edit", "run", "publish"])):
         raw, prefix, digest = new_token()
         ApiToken.objects.create(
-            workspace=ws, service_account=sa, name=f"essai-{name}", prefix=prefix, token_hash=digest, scopes=scopes,
+            workspace=ws,
+            service_account=sa,
+            name=f"essai-{name}",
+            prefix=prefix,
+            token_hash=digest,
+            scopes=scopes,
             expires_at=timezone.now() + timedelta(hours=2),
         )
         fd = os.open(os.path.join(out, f"token-{name}"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -51,7 +56,10 @@ elif action == "check":  # ce que l'assistant ne devait PAS pouvoir faire
     if WorkflowRun.objects.filter(workspace=ws).exists() or Execution.objects.filter(workspace=ws).exists():
         problems.append("une exécution a été lancée")
     # les actions internes du moteur (« __script_python »…) naissent de toute exécution de script, y compris l'essai à blanc : ce ne sont pas celles de l'assistant
-    if Action.objects.filter(workspace=ws, status="active").exclude(slug__startswith="__").exists() or AiSkill.objects.filter(workspace=ws, status="active").exists():
+    if (
+        Action.objects.filter(workspace=ws, status="active").exclude(slug__startswith="__").exists()
+        or AiSkill.objects.filter(workspace=ws, status="active").exists()
+    ):
         problems.append("une action ou un skill est actif")
     if not Action.objects.filter(workspace=ws, status="proposed").exists():
         problems.append("la proposition d'action n'existe pas")

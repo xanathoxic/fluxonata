@@ -3,7 +3,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView
 
-from core import folder_api, health
+from runs import health
+from workflows import folder_api
 
 from .apiroles import API_ROLES, parse_api_roles, role_of
 

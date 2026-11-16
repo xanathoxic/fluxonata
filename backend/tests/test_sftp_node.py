@@ -54,6 +54,68 @@ def sftp_server():
         subprocess.run(["docker", "rm", "-f", cid], capture_output=True)
 
 
+@pytest.fixture(scope="module")
+def sftp_key_server(tmp_path_factory):
+    """A disposable SFTP server whose only way in is a SYNTHETIC public key (generated here, never written outside a temporary directory)."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker indisponible")
+    import base64
+    import hashlib
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    private = ed25519.Ed25519PrivateKey.generate()
+    pem = private.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, serialization.NoEncryption()
+    ).decode()
+    public = (
+        private.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode()
+    )
+    keydir = tmp_path_factory.mktemp("cles-sftp")
+    (keydir / "synthetique.pub").write_text(public + " synthetique\n")
+    port = _free_port()
+    cid = subprocess.run(
+        [
+            "docker", "run", "-d", "--rm", "-p", f"127.0.0.1:{port}:22",
+            "-v", f"{keydir / 'synthetique.pub'}:/home/robot/.ssh/keys/synthetique.pub:ro",
+            "atmoz/sftp:alpine", "robot::::depot",
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()  # fmt: skip
+    if not cid:
+        pytest.skip("image atmoz/sftp indisponible")
+    try:
+        from runs.ssh_core import load_private_key
+
+        key = load_private_key(pem)
+        started, last = time.time(), None
+        while True:
+            try:
+                t = paramiko.Transport(socket.create_connection(("127.0.0.1", port), 3))
+                t.start_client(timeout=5)
+                t.auth_publickey("robot", key)
+                client = paramiko.SFTPClient.from_transport(t)
+                break
+            except Exception as exc:  # noqa: BLE001  (still starting, or the key is refused: the reason is reported, not guessed)
+                last = f"{type(exc).__name__}: {str(exc)[:80]}"
+                if time.time() - started > 90:
+                    pytest.skip(
+                        f"le serveur SFTP à clé ne démarre pas après {int(time.time() - started)} s ; dernière erreur : {last}"
+                    )
+                time.sleep(1)
+        with client.open("/depot/bonjour.txt", "wb") as fh:
+            fh.write(b"salut")
+        fingerprint = "SHA256:" + base64.b64encode(
+            hashlib.sha256(t.get_remote_server_key().asbytes()).digest()
+        ).decode().rstrip("=")
+        t.close()
+        yield port, fingerprint, pem
+    finally:
+        subprocess.run(["docker", "rm", "-f", cid], capture_output=True)
+
+
 @pytest.fixture
 def ws(world, sftp_server, settings):
     settings.ORCH_EGRESS_ALLOWLIST = "127.0.0.1"
@@ -235,3 +297,45 @@ def test_binary_files_are_read_into_the_run_and_written_back_intact(ws, world, s
     finally:
         client.close()
         t.close()
+
+
+def test_key_authentication_against_a_real_sftp_server_then_simple_operations(world, sftp_key_server, settings):
+    """Proof for the repaired key loading: a real SFTP server that accepts only a synthetic public key, a connection whose secret is the matching
+    private key, then list / write / read / delete through the node. Also: another synthetic key is refused."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    port, fingerprint, pem = sftp_key_server
+    settings.ORCH_EGRESS_ALLOWLIST = "127.0.0.1"
+    ws = world["ws_a"]
+    for slug in ACTIONS:
+        make_action(ws, slug)
+    secret = Secret(workspace=ws, name="sftpcle")
+    secret.set_value(pem)
+    secret.save()
+    Connection.objects.create(
+        workspace=ws,
+        name="depot",
+        label="Dépôt",
+        kind="sftp",
+        secret=secret,
+        config={"host": "127.0.0.1", "port": str(port), "username": "robot", "host_key_sha256": fingerprint},
+    )
+    run, sr = _run(ws, world, "cle-a", operation="list", path="/depot")
+    assert run.status == "succeeded" and "bonjour.txt" in [e["name"] for e in sr.output["entries"]]
+    assert sr.output["host_fingerprint"] == fingerprint
+    run, sr = _run(ws, world, "cle-b", operation="write", path="/depot/cle.txt", content="écrit avec une clé")
+    assert run.status == "succeeded" and sr.output["size"] == len("écrit avec une clé".encode())
+    run, sr = _run(ws, world, "cle-c", operation="read", path="/depot/cle.txt")
+    assert sr.output["content"] == "écrit avec une clé"
+    run, _ = _run(ws, world, "cle-d", operation="delete", path="/depot/cle.txt")
+    assert run.status == "succeeded"
+    other = (
+        ed25519.Ed25519PrivateKey.generate()
+        .private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, serialization.NoEncryption())
+        .decode()
+    )
+    secret.set_value(other)
+    secret.save()
+    run, _ = _run(ws, world, "cle-e", operation="list", path="/depot")
+    assert run.error["code"] == "SFTP_AUTH" and "BEGIN" not in str(run.error)

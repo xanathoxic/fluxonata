@@ -1,7 +1,9 @@
 import json
+from typing import Any, cast
 
 from django.db import transaction
 from django.http import Http404
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from rest_framework.generics import ListAPIView, RetrieveAPIView
@@ -47,7 +49,7 @@ class WorkflowVersionSerializer(serializers.ModelSerializer):
 class WorkflowSerializer(serializers.ModelSerializer):
     latest_version = serializers.SerializerMethodField()
     folder_level = serializers.SerializerMethodField()
-    owner = serializers.SlugRelatedField(slug_field="username", read_only=True)
+    owner: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="username", read_only=True)
 
     class Meta:
         model = Workflow
@@ -75,9 +77,10 @@ class WorkflowSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is None:
             return None
-        rules = self.context.get("_folder_rules")
+        context = cast("dict[str, Any]", self.context)  # DRF fournit toujours un dict ; le stub le type en Mapping
+        rules = context.get("_folder_rules")
         if rules is None:  # read once for the whole list, not once per workflow
-            rules = self.context["_folder_rules"] = access.rules(request.user, obj.workspace)
+            rules = context["_folder_rules"] = access.rules(request.user, obj.workspace)
         level = rules.level(obj.folder)
         return level if level in ("view", "run", "edit") else None
 
@@ -113,6 +116,7 @@ class DraftSerializer(serializers.Serializer):
     revision = serializers.IntegerField(min_value=1)
 
 
+@extend_schema_serializer(component_name="WorkflowPublish")
 class PublishSerializer(serializers.Serializer):
     bump = serializers.ChoiceField(choices=["patch", "minor", "major"], default="minor")
     changelog = serializers.CharField(required=False, allow_blank=True, default="", max_length=300)
@@ -208,6 +212,7 @@ def _next_version(latest: str | None, bump: str) -> str:
 class PublishView(APIView):
     serializer_class = PublishSerializer
 
+    @extend_schema(responses={201: WorkflowVersionSerializer})
     def post(self, request, workspace, slug):
         ws = get_workspace(request.user, workspace, PUBLISH)
         ser = PublishSerializer(data=request.data)

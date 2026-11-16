@@ -92,103 +92,152 @@ def _owner_of(request: str, upto: int, context: str, ctx: dict):
     return (lambda n: n.get("type") == "approval") if refusal else (lambda n: n.get("type") != "approval")
 
 
-def spec_lint(request: str, graph: dict, ctx: dict, *, additions_only: bool = False) -> list[dict]:
-    if additions_only and REMOVAL.search(request):
-        return []  # « supprime l'attente de 2 minutes » must not demand a 2 minute wait
-    out: list[dict] = []
-    nodes = graph.get("nodes", [])
+def _finding(message: str, step=None) -> dict:
+    return {"step": step, "severity": "error", "message": message}
 
-    def add(message, step=None):
-        out.append({"step": step, "severity": "error", "message": message})
 
+def _recreated_variables(graph: dict, nodes: list) -> list[dict]:
+    """A variable of the workflow exists once: a script must not recreate it as an output."""
     declared = {v.get("name") for v in graph.get("variables") or [] if isinstance(v, dict)}
-    for n in nodes:  # a variable of the workflow exists once: a script must not recreate it as an output
-        for o in n.get("outputs") or []:
-            if isinstance(o, dict) and o.get("name") in declared:
-                add(
-                    f"La variable du workflow « {o['name']} » est déjà déclarée : lis-la par vars.{o['name']} (dans une "
-                    "expression ou un binding) au lieu de la recréer comme sortie d'un script.",
-                    n.get("id"),
-                )
+    return [
+        _finding(
+            f"La variable du workflow « {o['name']} » est déjà déclarée : lis-la par vars.{o['name']} (dans une "
+            "expression ou un binding) au lieu de la recréer comme sortie d'un script.",
+            n.get("id"),
+        )
+        for n in nodes
+        for o in n.get("outputs") or []
+        if isinstance(o, dict) and o.get("name") in declared
+    ]
 
+
+def _missing_names(request: str, graph: dict, ctx: dict) -> list[dict]:
     present = _names_in_graph(graph, ctx)
     wanted = {g for rx in (NAME_TYPED, NAME_AFTER_NOUN) for m in rx.finditer(request) for g in m.groups() if g}
-    for name in sorted(w for w in wanted if w.lower() not in STOP and w not in present):
-        add(
+    return [
+        _finding(
             f"Le nom « {name} » est demandé tel quel (entrée, sortie ou variable) mais n'existe nulle part : utilise "
             "exactement ce nom, sans le traduire ni le renommer. Pour une étape IA, un nom de sortie précis exige un "
             "prompt avec output_schema (un skill impose les sorties du skill)."
         )
+        for name in sorted(w for w in wanted if w.lower() not in STOP and w not in present)
+    ]
+
+
+def _text_pool(kind: str, nodes: list, blob: str) -> str:
+    """Where a quoted text must appear: an exception's text on an exception step, an approval's on an approval."""
+    wanted = {"exception": "throw", "approbation": "approval"}.get(kind)
+    picked = [n for n in nodes if n["type"] == wanted] if wanted else []
+    return _norm(json.dumps(picked, ensure_ascii=False)) if picked else blob
+
+
+_MISSING_STEP_HINT = {
+    "exception": " Il manque une étape exception (throw) portant ce texte ; si la demande la place « si elle est "
+    "refusée / si l'étape échoue », accroche-la à la sortie d'erreur de cette étape (add_branch after=<étape> "
+    "label=error, avec la notification éventuelle avant l'exception).",
+    "approbation": " Il manque une étape approbation (approval) dont le titre est ce texte.",
+}
+
+
+def _quoted_text_finding(request: str, m, graph: dict, nodes: list, ctx: dict, blob: str) -> dict | None:
+    text = m.group(1).strip()
+    before = request[max(0, m.start() - 40) : m.start()]
+    label = LABELLED.search(before)
+    # only a text introduced as a label to reproduce: « pour chaque » names a kind of step, not a message
+    kind = re.match(r"(exception|approbation)", label.group(0), re.I) if label else None
+    kind_name = kind.group(1).lower() if kind else ""
+    context = _norm(request[max(0, m.start() - 110) : m.start()])
+    on_error = bool(kind_name == "exception" and re.search(r"refus|echou|erreur|echec", context))
+    found = _norm(text) in _text_pool(kind_name, nodes, blob)
+    if found and on_error:  # « si elle est refusée / échoue, une exception… »: it must hang on that step's error exit
+        found = _on_error_exit(graph, _norm(text), _owner_of(request, m.start(), context, ctx))
+    if " " not in text or not label or found:
+        return None
+    excerpt = " ".join(request[max(0, m.start() - 110) : m.end() + 10].split())
+    return _finding(
+        f"Le texte demandé « {text} » n'apparaît dans aucune étape adaptée (titre, message ou nom) : reprends-le "
+        f"tel quel.{_MISSING_STEP_HINT.get(kind_name, '')} Extrait de la demande : « …{excerpt} »."
+    )
+
+
+def _missing_quoted_texts(request: str, graph: dict, nodes: list, ctx: dict) -> list[dict]:
     blob = _norm(json.dumps(graph, ensure_ascii=False))
+    found = (_quoted_text_finding(request, m, graph, nodes, ctx, blob) for m in QUOTED.finditer(request))
+    return [f for f in found if f]
 
-    def pool(kind: str) -> str:
-        """Where a quoted text must appear: an exception's text on an exception step, an approval's on an approval."""
-        wanted = {"exception": "throw", "approbation": "approval"}.get(kind)
-        picked = [n for n in nodes if n["type"] == wanted] if wanted else []
-        return _norm(json.dumps(picked, ensure_ascii=False)) if picked else blob
 
-    for m in QUOTED.finditer(request):
-        text = m.group(1).strip()
-        before = request[max(0, m.start() - 40) : m.start()]
-        label = LABELLED.search(before)
-        # only a text introduced as a label to reproduce: « pour chaque » names a kind of step, not a message
-        kind = re.match(r"(exception|approbation)", label.group(0), re.I) if label else None
-        context = _norm(request[max(0, m.start() - 110) : m.start()])
-        on_error = bool(
-            kind and kind.group(1).lower() == "exception" and re.search(r"refus|echou|erreur|echec", context)
-        )
-        present = _norm(text) in pool(kind.group(1).lower() if kind else "")
-        if (
-            present and on_error
-        ):  # « si elle est refusée / échoue, une exception… »: it must hang on that step's error exit
-            present = _on_error_exit(graph, _norm(text), _owner_of(request, m.start(), context, ctx))
-        if " " in text and label and not present:
-            where = {
-                "exception": " Il manque une étape exception (throw) portant ce texte ; si la demande la place « si elle est "
-                "refusée / si l'étape échoue », accroche-la à la sortie d'erreur de cette étape (add_branch after=<étape> "
-                "label=error, avec la notification éventuelle avant l'exception).",
-                "approbation": " Il manque une étape approbation (approval) dont le titre est ce texte.",
-            }.get(kind.group(1).lower() if kind else "", "")
-            excerpt = " ".join(request[max(0, m.start() - 110) : m.end() + 10].split())
-            add(
-                f"Le texte demandé « {text} » n'apparaît dans aucune étape adaptée (titre, message ou nom) : reprends-le "
-                f"tel quel.{where} Extrait de la demande : « …{excerpt} »."
-            )
+def _missing_waits(request: str, nodes: list) -> list[dict]:
     waits = {n.get("seconds") for n in nodes if n["type"] == "wait"}
+    out = []
     for m in WAIT.finditer(request):
         seconds = int(m.group(1)) * UNIT[m.group(2).lower()]
         if seconds not in waits:
-            add(
-                f"Une attente de {m.group(1)} {m.group(2)}(s) est demandée : aucune étape d'attente ne dure {seconds} s."
+            out.append(
+                _finding(
+                    f"Une attente de {m.group(1)} {m.group(2)}(s) est demandée : aucune étape d'attente ne dure {seconds} s."
+                )
             )
+    return out
+
+
+def _loop_bounds(request: str, nodes: list) -> list[dict]:
     loops = [n for n in nodes if n["type"] == "foreach"]
+    out = []
     for m in ITERATIONS.finditer(request):
         if loops and not any(n.get("max_iterations") == int(m.group(1)) for n in loops):
-            add(
-                f"{m.group(1)} itérations au maximum sont demandées : max_iterations de la boucle doit valoir {m.group(1)}."
+            out.append(
+                _finding(
+                    f"{m.group(1)} itérations au maximum sont demandées : max_iterations de la boucle doit valoir {m.group(1)}."
+                )
             )
     for m in PARALLEL.finditer(request):
         if loops and not any(n.get("concurrency") == int(m.group(1)) for n in loops):
-            add(f"{m.group(1)} en parallèle est demandé : concurrency de la boucle doit valoir {m.group(1)}.")
+            out.append(
+                _finding(f"{m.group(1)} en parallèle est demandé : concurrency de la boucle doit valoir {m.group(1)}.")
+            )
+    return out
+
+
+def _comparison_operators(request: str, nodes: list) -> list[dict]:
     exprs = [n.get("expr", "") for n in nodes if n["type"] == "condition"]
     exprs += [
         c.get("expr", "") for n in nodes if n["type"] == "switch" for c in n.get("cases") or [] if isinstance(c, dict)
     ]
+    out = []
     for m in STRICT.finditer(request):
         op, n = (">" if m.group(1).lower() == "supérieur" else "<"), m.group(2)
-        if (
-            exprs
-            and not any(re.search(rf"(?<![<>=]){op}\s*{n}\b", e) for e in exprs)
-            and any(f"{op}= {n}" in e or f"{op}={n}" in e for e in exprs)
-        ):
-            add(f"« strictement {m.group(1)} à {n} » demande l'opérateur {op} et non {op}=.")
+        wide_only = not any(re.search(rf"(?<![<>=]){op}\s*{n}\b", e) for e in exprs) and any(
+            f"{op}= {n}" in e or f"{op}={n}" in e for e in exprs
+        )
+        if exprs and wide_only:
+            out.append(_finding(f"« strictement {m.group(1)} à {n} » demande l'opérateur {op} et non {op}=."))
     for m in INCLUSIVE.finditer(request):
         op, n = (">=" if m.group(1).lower() == "supérieur" else "<="), m.group(2)
         if exprs and not any(re.search(rf"{op}\s*{n}\b", e) for e in exprs):
-            add(f"« {m.group(1)} ou égal à {n} » demande l'opérateur {op}.")
-    called = {n.get("workflow") for n in nodes if n["type"] in ("subworkflow", "foreach")}
-    for wf in ctx.get("workflows") or []:
-        slug = wf["slug"]
-        if re.search(rf"(?<![\w-]){re.escape(slug)}(?![\w-])", request) and slug not in called:
-            add(f"Le workflow « {slug} » est cité dans la demande mais aucune étape ne l'appelle.")
+            out.append(_finding(f"« {m.group(1)} ou égal à {n} » demande l'opérateur {op}."))
     return out
+
+
+def _uncalled_workflows(request: str, nodes: list, ctx: dict) -> list[dict]:
+    called = {n.get("workflow") for n in nodes if n["type"] in ("subworkflow", "foreach")}
+    return [
+        _finding(f"Le workflow « {wf['slug']} » est cité dans la demande mais aucune étape ne l'appelle.")
+        for wf in ctx.get("workflows") or []
+        if re.search(rf"(?<![\w-]){re.escape(wf['slug'])}(?![\w-])", request) and wf["slug"] not in called
+    ]
+
+
+def spec_lint(request: str, graph: dict, ctx: dict, *, additions_only: bool = False) -> list[dict]:
+    """The findings of every family of checks, in a fixed order (see the module docstring)."""
+    if additions_only and REMOVAL.search(request):
+        return []  # « supprime l'attente de 2 minutes » must not demand a 2 minute wait
+    nodes = graph.get("nodes", [])
+    return [
+        *_recreated_variables(graph, nodes),
+        *_missing_names(request, graph, ctx),
+        *_missing_quoted_texts(request, graph, nodes, ctx),
+        *_missing_waits(request, nodes),
+        *_loop_bounds(request, nodes),
+        *_comparison_operators(request, nodes),
+        *_uncalled_workflows(request, nodes, ctx),
+    ]

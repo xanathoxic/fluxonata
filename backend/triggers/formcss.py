@@ -351,6 +351,29 @@ def _selector(raw: str, line: int) -> str:
     return re.sub(r" {2,}", " ", "".join(out)).strip()
 
 
+def _check_token(m, prop: str, raw: str, stack: list, line: int) -> None:
+    """One token of a value: text only where a text is allowed, known units and functions, balanced parentheses."""
+    if m.group("str") is not None and prop not in STRING_PROPERTIES:
+        raise _Bad(line, f"« {prop} » n'accepte pas de texte entre guillemets.")
+    if m.group("num") is not None and m.group("unit") and m.group("unit").lower() not in UNITS:
+        raise _Bad(line, f"Unité « {m.group('unit')} » non autorisée.")
+    if m.group("fn") is not None:
+        name = m.group("fn")[:-1].lower()
+        if name not in FUNCTIONS:
+            raise _Bad(line, f"Fonction « {name}() » non autorisée (pas de url(), image-set(), attr()…).")
+        stack.append(name)
+        if name == "var" and not re.match(r"\s*--[a-zA-Z0-9-]+\s*[,)]", raw[m.end() :]):
+            raise _Bad(line, "var() ne lit qu'une propriété personnalisée (--nom).")
+    elif m.group("p") == "(":
+        if not stack:
+            raise _Bad(line, "Parenthèse non autorisée ici.")  # only inside a function such as calc()
+        stack.append("(")
+    elif m.group("p") == ")":
+        if not stack:
+            raise _Bad(line, "Parenthèse fermante en trop.")
+        stack.pop()
+
+
 def _value(prop: str, raw: str, line: int) -> str:
     raw = " ".join(raw.split())
     if not raw:
@@ -360,31 +383,14 @@ def _value(prop: str, raw: str, line: int) -> str:
     allowed = ENUMS.get(prop)
     if allowed is not None and raw.lower() not in allowed:
         raise _Bad(line, f"« {prop} » accepte : {', '.join(sorted(allowed))}.")
-    pos, stack, tokens = 0, [], 0
+    pos, tokens = 0, 0
+    stack: list[str] = []
     while pos < len(raw):
         m = _VALUE_TOKEN.match(raw, pos)
         if not m or m.end() == pos:
             raise _Bad(line, f"Valeur non autorisée pour « {prop} » : « {raw[pos : pos + 20].strip()} ».")
         tokens += 1
-        if m.group("str") is not None and prop not in STRING_PROPERTIES:
-            raise _Bad(line, f"« {prop} » n'accepte pas de texte entre guillemets.")
-        if m.group("num") is not None and m.group("unit") and m.group("unit").lower() not in UNITS:
-            raise _Bad(line, f"Unité « {m.group('unit')} » non autorisée.")
-        if m.group("fn") is not None:
-            name = m.group("fn")[:-1].lower()
-            if name not in FUNCTIONS:
-                raise _Bad(line, f"Fonction « {name}() » non autorisée (pas de url(), image-set(), attr()…).")
-            stack.append(name)
-            if name == "var" and not re.match(r"\s*--[a-zA-Z0-9-]+\s*[,)]", raw[m.end() :]):
-                raise _Bad(line, "var() ne lit qu'une propriété personnalisée (--nom).")
-        elif m.group("p") == "(":
-            if not stack:
-                raise _Bad(line, "Parenthèse non autorisée ici.")  # only inside a function such as calc()
-            stack.append("(")
-        elif m.group("p") == ")":
-            if not stack:
-                raise _Bad(line, "Parenthèse fermante en trop.")
-            stack.pop()
+        _check_token(m, prop, raw, stack, line)
         pos = m.end()
     if stack:
         raise _Bad(line, "Parenthèse non fermée.")
@@ -436,6 +442,31 @@ def _body_end(text: str, i: int, nested: bool) -> int:
     raise _Bad(_line(text, len(text) - 1), "Accolade non fermée.")
 
 
+def _media_rule(m, inner: list[str]) -> str:
+    """The canonical @media block around the rules read inside it."""
+    if m.group("scheme"):
+        cond = f"(prefers-color-scheme: {m.group('scheme')})"
+    elif m.group("k1"):
+        cond = f"({m.group('k1')}-width: {int(m.group('v1'))}px)"
+        if m.group("k2"):
+            cond += f" and ({m.group('k2')}-width: {int(m.group('v2'))}px)"
+    else:
+        cond = "(prefers-reduced-motion: reduce)"
+    return f"@media {cond} {{\n" + "\n".join("  " + ln if ln else ln for r in inner for ln in r.split("\n")) + "\n}"
+
+
+def _split_selectors(prelude: str) -> list[str]:
+    parts = []
+    k = 0
+    while k <= len(prelude):
+        e = _scan(prelude, k, ",")
+        parts.append(prelude[k:e])
+        k = e + 1
+        if e >= len(prelude):
+            break
+    return parts
+
+
 def _rules(text: str, start: int, end: int, src: str, counter: list[int], in_media: bool) -> list[str]:
     out: list[str] = []
     i = start
@@ -469,31 +500,11 @@ def _rules(text: str, start: int, end: int, src: str, counter: list[int], in_med
                     f"Règle « {name} » non autorisée (seul @media avec min-width, max-width, prefers-color-scheme ou prefers-reduced-motion l'est, sans imbrication).",
                 )
             close = _body_end(text, j + 1, True)
-            inner = _rules(text, j + 1, close, src, counter, True)
-            if m.group("scheme"):
-                cond = f"(prefers-color-scheme: {m.group('scheme')})"
-            elif m.group("k1"):
-                cond = f"({m.group('k1')}-width: {int(m.group('v1'))}px)"
-                if m.group("k2"):
-                    cond += f" and ({m.group('k2')}-width: {int(m.group('v2'))}px)"
-            else:
-                cond = "(prefers-reduced-motion: reduce)"
-            out.append(
-                f"@media {cond} {{\n"
-                + "\n".join("  " + ln if ln else ln for r in inner for ln in r.split("\n"))
-                + "\n}"
-            )
+            out.append(_media_rule(m, _rules(text, j + 1, close, src, counter, True)))
             i = close + 1
             continue
         close = _body_end(text, j + 1, False)
-        parts = []
-        k = 0
-        while k <= len(prelude):
-            e = _scan(prelude, k, ",")
-            parts.append(prelude[k:e])
-            k = e + 1
-            if e >= len(prelude):
-                break
+        parts = _split_selectors(prelude)
         if len(parts) > MAX_SELECTORS:
             raise _Bad(line, f"{MAX_SELECTORS} sélecteurs au plus par règle.")
         selectors = [_selector(p, line) for p in parts]

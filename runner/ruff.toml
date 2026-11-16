@@ -1,0 +1,2 @@
+# Mêmes règles et même mise en forme que le backend : un contrôle lancé depuis la racine ou depuis backend/ donne le même résultat.
+extend = "../backend/ruff.toml"

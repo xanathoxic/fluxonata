@@ -1,6 +1,12 @@
 import type { GraphNode } from "./types";
+
+/** Valeur attendue présente : échoue avec un message clair plutôt que par une erreur de type à l'exécution. */
+function must<T>(v: T | null | undefined): T {
+  if (v === null || v === undefined) throw new Error("valeur attendue absente");
+  return v;
+}
 import type { Action } from "../api";
-import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, setEdgePoints, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, setEdgePoints, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -128,12 +134,12 @@ describe("script tasks, variables and horizontal layout", () => {
   it("positions the steps proposed by the assistant right of their predecessor without moving anything else", () => {
     let g = emptyGraph();
     g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
-    const before = g.nodes[0]!.ui;
+    const before = must(g.nodes[0]).ui;
     const proposed = { ...g, nodes: [...g.nodes, { id: "b", type: "wait" as const, name: "B" }, { id: "c", type: "wait" as const, name: "C" }], edges: [{ from: "a", to: "b" }, { from: "a", to: "c" }] };
     const out = placeNewNodes(proposed);
-    expect(out.nodes[0]!.ui).toEqual(before);
-    const [b, c] = [out.nodes[1]!.ui!, out.nodes[2]!.ui!];
-    expect(b.x).toBe(before!.x + 200);
+    expect(must(out.nodes[0]).ui).toEqual(before);
+    const [b, c] = [must(must(out.nodes[1]).ui), must(must(out.nodes[2]).ui)];
+    expect(b.x).toBe(must(before).x + 200);
     expect(`${c.x}:${c.y}`).not.toBe(`${b.x}:${b.y}`); // two branches do not overlap
   });
 
@@ -141,9 +147,10 @@ describe("script tasks, variables and horizontal layout", () => {
     let g = emptyGraph();
     g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
     const out = placeNewNodes({ ...g, notes: [{ id: "note_1", text: "a", ui: { x: 5, y: 5 } }, { id: "note_2", text: "b" } as never, { id: "note_3", text: "c" } as never] });
-    expect(out.notes![0]!.ui).toEqual({ x: 5, y: 5 }); // existing note untouched
-    const [n2, n3] = [out.notes![1]!.ui!, out.notes![2]!.ui!];
-    expect(n2.y).toBeLessThan(g.nodes[0]!.ui!.y);
+    expect(must(must(out.notes)[0]).ui).toEqual({ x: 5, y: 5 }); // existing note untouched
+    const notes = must(out.notes);
+    const [n2, n3] = [must(must(notes[1]).ui), must(must(notes[2]).ui)];
+    expect(n2.y).toBeLessThan(must(must(g.nodes[0]).ui).y);
     expect(n3.x).toBeGreaterThan(n2.x);
   });
 
@@ -254,5 +261,54 @@ describe("layered auto-layout", () => {
     expect(out.nodes.find((x) => x.id === "b")?.ui?.x).toBe(GRID_X);
     const partly = { ...base, nodes: base.nodes.map((x) => (x.id === "a" ? { ...x, ui: { x: 7, y: 9 } } : x)) };
     expect(placeNewNodes(partly).nodes.find((x) => x.id === "a")?.ui).toEqual({ x: 7, y: 9 });
+  });
+});
+
+describe("SSH step", () => {
+  const ssh = (over: Partial<GraphNode> = {}): GraphNode => ({ ...defaultNode(emptyGraph(), "ssh"), ...over });
+
+  it("starts in test mode, direct, with one empty command and stop on error", () => {
+    const n = ssh();
+    expect(n).toMatchObject({ type: "ssh", mode: "test", session: "exec", jumps: [], stop_on_error: true, commands: [{ run: "" }] });
+  });
+
+  it("asks for a connection and for something to run, in each session kind", () => {
+    const msgs = (n: GraphNode) => clientValidate({ ...emptyGraph(), nodes: [n] }, []).map((i) => i.code);
+    expect(msgs(ssh())).toEqual(expect.arrayContaining(["missing_connection", "bad_ssh"]));
+    expect(msgs(ssh({ connection: "c", commands: [{ run: "uptime" }] }))).toEqual([]);
+    expect(msgs(ssh({ connection: "c", commands: "{{ steps.a.output.l }}" }))).toEqual([]); // a dynamic list is checked by the server
+    expect(msgs(ssh({ connection: "c", session: "shell", steps: [] }))).toContain("bad_ssh");
+    expect(msgs(ssh({ connection: "c", jumps: [""], commands: [{ run: "x" }] }))).toContain("bad_ssh");
+  });
+
+  it("summarizes without exposing commands", () => {
+    expect(summarize(ssh({ connection: "c", jumps: ["a", "b"], commands: [{ run: "secret-command" }] }), [])).toBe("[test] SSH via 2 rebond(s) 1 commande(s)");
+    expect(summarize(ssh({ session: "shell", steps: [{}, {}], mode: "reel" }), [])).toBe("SSH session · 2 étape(s)");
+  });
+
+  it("exposes the structured outputs to the following steps", () => {
+    const g = { ...emptyGraph(), nodes: [{ ...ssh({ connection: "c", id: "pose" }) }, { ...defaultNode(emptyGraph(), "action", echo), id: "suite" }], edges: [{ from: "pose", to: "suite", label: "next" }] };
+    const paths = availableVariables(g, "suite", []).map((v) => v.path);
+    expect(paths).toEqual(expect.arrayContaining(["steps.pose.output.results", "steps.pose.output.status", "steps.pose.output.failed_step", "steps.pose.output.uncertain"]));
+  });
+});
+
+describe("output variables of every step type", () => {
+  it("lists, for each type the validator knows, exactly the fields it guarantees (one source: staticOutputs.json)", async () => {
+    const guaranteed = (await import("./staticOutputs.json")).default as Record<string, Record<string, string | null>>;
+    for (const [type, fields] of Object.entries(guaranteed)) {
+      if (type === "join" || type === "wait" || type === "wait_resume") continue;
+      const node = { ...defaultNode(emptyGraph(), type as GraphNode["type"]), id: "x", name: "X" };
+      const g = { ...emptyGraph(), nodes: [node, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "x", to: "y", label: "next" }] };
+      const paths = availableVariables(g, "y", [echo]).map((v) => v.path).filter((p) => p.startsWith("steps.x.output."));
+      expect(paths.sort(), type).toEqual(Object.keys(fields).map((k) => `steps.x.output.${k}`).sort());
+    }
+  });
+
+  it("gives a wait step outputs only when it resumes by webhook or form", () => {
+    const base = { ...defaultNode(emptyGraph(), "wait"), id: "w", name: "W" };
+    const at = (n: GraphNode) => availableVariables({ ...emptyGraph(), nodes: [n, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "w", to: "y", label: "next" }] }, "y", [echo]).filter((v) => v.path.startsWith("steps.w.")).length;
+    expect(at(base)).toBe(0);
+    expect(at({ ...base, resume: "webhook" })).toBe(2);
   });
 });

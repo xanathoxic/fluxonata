@@ -1,0 +1,122 @@
+{
+ "_doc": "Baseline de couverture (scripts/coverage.sh --write-baseline) ; `--gate` échoue si le total ou un paquet baisse au-delà d'une marge. Lignes + branches, code applicatif du backend hors tests et migrations ; seul le processus pytest est mesuré (les processus lancés par les tests ne le sont pas).",
+ "commit": "393fb3f",
+ "measured_at": "2026-11-16",
+ "python": "3.14.4",
+ "coverage_version": "7.17.2",
+ "files_measured": 213,
+ "tests": {
+  "tests": 3265,
+  "passed": 3263,
+  "failed": 0,
+  "skipped": 1,
+  "xfailed": 1,
+  "skip_reasons": {
+   "host node lacks TypeScript type stripping": 1
+  }
+ },
+ "omissions": {
+  "omit": [
+   "tests/*",
+   "*/migrations/*",
+   "manage.py"
+  ],
+  "exclude_also": [
+   "if TYPE_CHECKING:",
+   "raise NotImplementedError"
+  ]
+ },
+ "total": {
+  "statements": 22767,
+  "covered": 21321,
+  "branches": 7518,
+  "covered_branches": 6560,
+  "percent": 92.06
+ },
+ "packages": {
+  "ai": {
+   "statements": 3660,
+   "covered": 3339,
+   "branches": 1316,
+   "covered_branches": 1111,
+   "percent": 89.43
+  },
+  "audit": {
+   "statements": 19,
+   "covered": 19,
+   "branches": 2,
+   "covered_branches": 2,
+   "percent": 100.0
+  },
+  "bundles": {
+   "statements": 589,
+   "covered": 537,
+   "branches": 180,
+   "covered_branches": 151,
+   "percent": 89.47
+  },
+  "catalog": {
+   "statements": 1060,
+   "covered": 883,
+   "branches": 320,
+   "covered_branches": 232,
+   "percent": 80.8
+  },
+  "core": {
+   "statements": 292,
+   "covered": 277,
+   "branches": 70,
+   "covered_branches": 62,
+   "percent": 93.65
+  },
+  "fluxonata": {
+   "statements": 219,
+   "covered": 210,
+   "branches": 54,
+   "covered_branches": 43,
+   "percent": 92.67
+  },
+  "formbuilder": {
+   "statements": 658,
+   "covered": 627,
+   "branches": 118,
+   "covered_branches": 94,
+   "percent": 92.91
+  },
+  "runs": {
+   "statements": 6068,
+   "covered": 5760,
+   "branches": 1826,
+   "covered_branches": 1645,
+   "percent": 93.81
+  },
+  "tenancy": {
+   "statements": 1355,
+   "covered": 1293,
+   "branches": 306,
+   "covered_branches": 251,
+   "percent": 92.96
+  },
+  "triggers": {
+   "statements": 3429,
+   "covered": 3160,
+   "branches": 1492,
+   "covered_branches": 1300,
+   "percent": 90.63
+  },
+  "vault": {
+   "statements": 1323,
+   "covered": 1281,
+   "branches": 340,
+   "covered_branches": 309,
+   "percent": 95.61
+  },
+  "workflows": {
+   "statements": 4095,
+   "covered": 3935,
+   "branches": 1494,
+   "covered_branches": 1360,
+   "percent": 94.74
+  }
+ }
+}

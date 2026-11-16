@@ -63,7 +63,7 @@ MIDDLEWARE = [
 ]
 ROOT_URLCONF = "fluxonata.urls"
 WSGI_APPLICATION = "fluxonata.wsgi.application"
-TEMPLATES = []
+TEMPLATES: list[dict[str, object]] = []
 
 # 1 = ORCH_DB_HOST/PORT designate a transaction-mode pooler (PgBouncer), see docs/INSTALL.md and ADR 0022. Never for `migrate`.
 ORCH_DB_POOLED = env("ORCH_DB_POOLED", "0") == "1"
@@ -194,6 +194,9 @@ ORCH_VERSION = env(
 )  # posés à la construction de l'image (ARG du Dockerfile) : voir health.live, /metrics (fluxonata_build_info)
 ORCH_REVISION = env("ORCH_REVISION", "")
 ORCH_ROLES = env("ORCH_ROLES", "")
+# 1 = un worker SANS le rôle « exec » (donc sans socket Docker) prend aussi les étapes IA des workflows (runtime « ai », exécutées dans le process, jamais en conteneur).
+# Nécessaire à la topologie par agents (docker-compose.agent.yml), où aucun worker « exec » n'existe ; sans effet sur un worker qui porte déjà le rôle « exec ».
+ORCH_AUX_RUNS_AI_STEPS = env("ORCH_AUX_RUNS_AI_STEPS", "0") == "1"
 ORCH_RUNNER = env("ORCH_RUNNER", "docker")
 # MCP de conception (ADR 0025) : tester le CODE d'une action proposée exige un runner ISOLÉ ; 1 = l'autoriser sur le runner « subprocess » (développement seulement, jamais en production).
 ORCH_MCP_ACTION_TEST_UNISOLATED = env("ORCH_MCP_ACTION_TEST_UNISOLATED", "0") == "1"
@@ -227,14 +230,55 @@ ORCH_MAX_RESULT_BYTES = 1024 * 1024
 
 ORCH_LOG_FORMAT = env("ORCH_LOG_FORMAT", "json")  # json | text
 ORCH_METRICS_TOKEN = env("ORCH_METRICS_TOKEN", "")  # empty -> /metrics disabled
+# Rapports d'erreur : valeurs POST masquées (voir core/logging.py).
+DEFAULT_EXCEPTION_REPORTER_FILTER = "core.logging.MaskedPostReporterFilter"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"ctx": {"()": "core.logging.ContextFilter"}},
+    "filters": {
+        "ctx": {"()": "core.logging.ContextFilter"},
+        "redact_url_tokens": {"()": "core.logging.RedactUrlTokensFilter"},  # jetons d'adresse : voir core/urlredact.py
+        "require_debug_true": {"()": "django.utils.log.RequireDebugTrue"},
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+    },
     "formatters": {
+        "django_server": {
+            "()": "django.utils.log.ServerFormatter",
+            "format": "[{server_time}] {message}",
+            "style": "{",
+        },
         "json": {"()": "core.logging.JsonFormatter"},
         "text": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
     },
-    "handlers": {"console": {"class": "logging.StreamHandler", "filters": ["ctx"], "formatter": ORCH_LOG_FORMAT}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["ctx", "redact_url_tokens"],
+            "formatter": ORCH_LOG_FORMAT,
+        },
+        # Mêmes gestionnaires que ceux que Django attache à son enregistreur « django » par défaut (django.utils.log.DEFAULT_LOGGING), avec le
+        # masquage en plus : sans cela ils écrivent « Internal Server Error: <adresse> » (et envoient le même texte par e-mail si ADMINS est réglé) tels quels.
+        "django_server": {
+            "class": "logging.StreamHandler",
+            "formatter": "django_server",
+            "filters": ["redact_url_tokens"],
+        },
+        "django_console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "filters": ["require_debug_true", "redact_url_tokens"],
+        },
+        "django_mail_admins": {
+            "class": "core.logging.RedactingAdminEmailHandler",
+            "level": "ERROR",
+            "filters": ["require_debug_false", "redact_url_tokens"],
+        },
+    },
     "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django": {"handlers": ["django_console", "django_mail_admins"], "level": "INFO"},
+        # Serveur de développement (runserver) : même configuration que DEFAULT_LOGGING de Django (gestionnaire propre, sans propagation), masquage en plus.
+        # Redéclarée en entier : une entrée de LOGGING qui ne cite pas ses gestionnaires retire ceux de Django, et ses messages seraient perdus.
+        "django.server": {"handlers": ["django_server"], "level": "INFO", "propagate": False},
+    },
 }

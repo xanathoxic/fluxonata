@@ -77,6 +77,7 @@ export function LayoutCanvas({ fields, selectedKey, onSelect, onPlace, edit, lab
   return (
     <>
       <p id="fb-lgrid-help" className="sr-only">Flèches : déplacer le champ sélectionné. Maj + flèche gauche ou droite : changer sa largeur ; Maj + flèche haut ou bas : changer sa hauteur.</p>
+      {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <div ref={grid} className="fb-lgrid" role="group" aria-label={label} style={{ gridTemplateRows: `repeat(${rows}, ${ROW_H}px)` }}>
         {fields.map((f) => {
           const l = ghost?.key === f.key ? ghost.layout : (f.layout as Layout);

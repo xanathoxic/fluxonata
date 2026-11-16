@@ -14,6 +14,7 @@ const GENERIC: { type: NodeType; hint: string; cat: StepCat }[] = [
   { type: "sql", hint: "Lit des données dans une base PostgreSQL (lecture seule)", cat: "comm" },
   { type: "http", hint: "Appelle un service web via une connexion", cat: "comm" },
   { type: "smtp", hint: "Envoie un e-mail texte par un serveur SMTP (mode test par défaut)", cat: "comm" },
+  { type: "ssh", hint: "Exécute des commandes sur un serveur SSH (direct ou par rebonds), ou pilote une session interactive (mode test par défaut)", cat: "comm" },
   { type: "sftp", hint: "Liste, lit, écrit ou supprime un fichier texte sur un serveur SFTP", cat: "comm" },
   { type: "condition", hint: "Choisit une branche selon une règle", cat: "flow" },
   { type: "switch", hint: "Choisit parmi plusieurs cas (le premier qui correspond)", cat: "flow" },
@@ -89,6 +90,7 @@ export function Palette({ actions, integrations = [], selectedName, onAdd }: Pro
         <input id="pal-q" type="search" placeholder="Rechercher un élément" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {f === "" && (
+        // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="seg" role="group" aria-label="Type d'élément">
           {sections.map((s) => <button key={s.id} type="button" className="seg-btn" aria-pressed={section === s.id} onClick={() => setSection(s.id)}>{s.label}<span className="seg-n">{s.id === "steps" ? "" : s.n}</span></button>)}
         </div>

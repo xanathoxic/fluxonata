@@ -8,7 +8,6 @@ are never retried. `mode: test` sends nothing."""
 
 import base64
 import hashlib
-import io
 import logging
 import posixpath
 import time
@@ -18,6 +17,7 @@ from core import netsec
 from vault.external import ExternalVaultError
 
 from . import files
+from .ssh_core import load_private_key
 
 log = logging.getLogger("fluxonata.sftp")
 MAX_BYTES = 256 * 1024
@@ -161,7 +161,15 @@ def execute_spec(
                 "next_step": "Vérifiez le serveur : c'est peut-être une usurpation.",
             }
         if secret.lstrip().startswith("-----BEGIN"):
-            pkey = paramiko.PKey.from_private_key(io.StringIO(secret))
+            pkey = load_private_key(
+                secret
+            )  # no passphrase setting on an SFTP connection: a protected key is refused, not guessed
+            if pkey is None:
+                return None, {
+                    "code": "SFTP_AUTH",
+                    "message": "Clé privée illisible, ou protégée par une phrase secrète (non prise en charge pour une connexion SFTP).",
+                    "next_step": "Collez une clé privée non protégée (Ed25519, ECDSA ou RSA) ou utilisez un mot de passe.",
+                }
             transport.auth_publickey(user, pkey)
         else:
             transport.auth_password(user, secret)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type ApiError, type Execution } from "../api";
-import { CodeEditor, type CodeEditorHandle, type Completion } from "../components/CodeEditor";
+import type { CodeEditorHandle, Completion } from "../components/CodeEditor";
+import { LazyCodeEditor as CodeEditor } from "../components/LazyCodeEditor";
 import { Tabs } from "../components/Tabs";
 import { useFocusTrap } from "../components/useFocusTrap";
 import { useApp } from "../context";
@@ -10,6 +11,7 @@ import { BindingsEditor, OutputsEditor } from "./ScriptParts";
 import type { Action } from "../api";
 import type { Graph, GraphNode, ScriptLanguage } from "./types";
 import { HelpTip } from "../components/HelpTip";
+import { ReadRegion } from "../components/ReadRegion";
 
 interface Props {
   node: GraphNode;
@@ -19,6 +21,8 @@ interface Props {
   editable: boolean;
   onUpdate: (patch: Partial<GraphNode>) => void;
   onClose: () => void;
+  /** Shown in the page, where it is placed, instead of a modal dialog (the caller is itself an overlay). */
+  inline?: boolean;
 }
 
 type ConsoleTab = "essai" | "journal" | "resultat";
@@ -28,10 +32,10 @@ const TYPE_CHECK: Record<string, (v: unknown) => boolean> = {
   array: Array.isArray, object: (v) => typeof v === "object" && v !== null && !Array.isArray(v),
 };
 
-export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpdate, onClose }: Props) {
+export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpdate, onClose, inline = false }: Props) {
   const { workspace } = useApp();
   const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, onClose);
+  useFocusTrap(ref, onClose, !inline);
   const variables = availableVariables(graph, node.id, actions);
   const [tab, setTab] = useState<ConsoleTab>("essai");
   const [section, setSection] = useState<Section>("io");
@@ -78,7 +82,7 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
   };
 
   const logs = run.exec?.attempts?.map((a) => a.logs).filter(Boolean).join("\n") ?? "";
-  const typeProblems = run.exec?.status === "succeeded" ? (node.outputs ?? []).filter((o) => !(o.name in (run.exec?.result ?? {})) || !TYPE_CHECK[o.type]?.((run.exec?.result ?? {})[o.name])).map((o) => o.name) : [];
+  const typeProblems = run.exec?.status === "succeeded" ? (node.outputs ?? []).filter((o) => !(o.name in (run.exec?.result ?? {})) || !TYPE_CHECK[o.type]?.(run.exec?.result?.[o.name])).map((o) => o.name) : [];
 
   const lang = node.language === "javascript" ? "JavaScript" : "Python";
   const status = run.state === "running" ? { tone: "warn", text: "Test en cours…" } : run.error || (run.exec && run.exec.status !== "succeeded") ? { tone: "bad", text: "✖ Dernier test en échec" } : run.exec ? { tone: "ok", text: "✔ Dernier test réussi" } : { tone: "muted", text: "Pas encore testé" };
@@ -90,8 +94,9 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
   ];
 
   return (
-    <div className="modal-backdrop">
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="sed-title" tabIndex={-1} className="script-dialog sd2"
+    <div className={inline ? "sd-inline" : "modal-backdrop"}>
+      {/*biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useAriaPropsSupportedByRole: rôle choisi à l'exécution (dialogue modal ou région intégrée) ; le raccourci Ctrl+Entrée lance l'essai depuis n'importe quel champ du dialogue */}
+      <div ref={ref} {...(inline ? { role: "region" } : { role: "dialog", "aria-modal": true })} aria-labelledby="sed-title" tabIndex={-1} className="script-dialog sd2"
         onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && editable && run.state !== "running") { e.preventDefault(); void test(); } }}>
         <header className="sd-head sd2-head">
           <span className="sd2-ico" aria-hidden="true"><NodeIcon kind="script" size={22} /></span>
@@ -130,6 +135,7 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
             </div>
             <CodeEditor ref={editor} fill value={node.script ?? ""} onChange={(v) => onUpdate({ script: v })} language={node.language ?? "python"} completions={completions} readOnly={!editable} onCursor={setCursor}
               ariaLabel={`Code du script ${node.name} (${lang})`} minHeight="200px" />
+            {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
             <div className="sd2-chips" role="group" aria-label="Insérer dans le code">
               <span className="hint">Disponibles :</span>
               {snippets.map((c) => <button type="button" key={c.label} className="tagchip" disabled={!editable} onClick={() => editor.current?.insert(c.text)} title="Insérer au curseur"><code>{c.label}</code></button>)}
@@ -138,6 +144,7 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
           <aside className="sd2-right" aria-label="Entrées, sorties et test">
             <Tabs label="Sections de l'éditeur" active={section} onChange={(id) => setSection(id as Section)} tabs={[
               { id: "io", label: "Entrées et sorties", content: (
+                // biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran
                 <div className="sd-pane sd-vars" aria-label="Variables du script">
                   <fieldset disabled={!editable} className="bare">
                     <BindingsEditor node={node} variables={variables} onUpdate={onUpdate} idPrefix="sdb" />
@@ -160,7 +167,7 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
                       <p className="help-row"><HelpTip caption="À savoir">Le test s'exécute en isolation, dans l'environnement de recette, avec ces valeurs : il n'enchaîne pas le reste du workflow.</HelpTip></p>
                     </div>
                   )}
-                  {tab === "journal" && <pre tabIndex={0} aria-label="Journal du test" role="log">{run.state === "idle" ? "Lancez un test pour voir le journal." : logs || (run.state === "running" ? "En cours…" : "(journal vide)")}</pre>}
+                  {tab === "journal" && <ReadRegion role="log" label="Journal du test">{run.state === "idle" ? "Lancez un test pour voir le journal." : logs || (run.state === "running" ? "En cours…" : "(journal vide)")}</ReadRegion>}
                   {tab === "resultat" && (
                     <div role="status" aria-live="polite">
                       {run.state === "idle" && <p>Aucun test lancé.</p>}
@@ -168,7 +175,7 @@ export function ScriptEditorDialog({ node, graph, actions, slug, editable, onUpd
                       {run.exec?.status === "succeeded" && <>
                         <p><strong>✔ Le script s'est terminé avec succès.</strong></p>
                         {typeProblems.length > 0 && <p className="field-error">Attention : sortie(s) absente(s) ou de mauvais type : {typeProblems.join(", ")}.</p>}
-                        <pre tabIndex={0}>{JSON.stringify(run.exec.result, null, 2)}</pre></>}
+                        <ReadRegion label="Résultat du test">{JSON.stringify(run.exec.result, null, 2)}</ReadRegion></>}
                       {run.exec && run.exec.status !== "succeeded" && run.exec.error && <p className="field-error"><strong>✖ {run.exec.error.message}</strong> {run.exec.error.next_step}</p>}
                     </div>
                   )}

@@ -3,16 +3,8 @@ target-version = "py312"
 extend-exclude = ["*/migrations/*"]
 [lint]
 select = ["E", "F", "I", "B", "UP", "S"]
-ignore = ["S101", "S603", "S607", "UP017", "E501"]
+ignore = ["E501"]  # lignes longues : le formateur coupe le code à 120, restent chaînes et commentaires français (justifié le 2026-11-12)
 [lint.per-file-ignores]
-"tests/*" = ["S", "B"]
-"tests/test_ai_edit.py" = ["S", "B", "F811", "F401"]
-"tests/test_ai_authoring.py" = ["S", "B", "F811", "F401"]
-"tests/test_ai_edit_job.py" = ["S", "B", "F811", "F401"]
-"tests/test_ai_service_ops.py" = ["S", "B", "F811", "F401"]
-"tests/test_ai_plan.py" = ["S", "B", "F811", "F401"]
-"tests/test_ai_dryrun.py" = ["S", "B", "F811", "F401", "E501"]
-"tests/test_ai_jobs.py" = ["S", "B", "F811", "F401", "E501"]
-"tests/test_ai_outline.py" = ["S", "B", "F811", "F401", "E501"]
-"tests/test_action_contract.py" = ["S", "B", "E501"]
-"tests/test_validation_subworkflow.py" = ["S", "B", "F811", "F401", "E501"]  # reuses the ai_ws fixture of test_ai.py
+# Tests : seules les règles S qui se déclenchent réellement sont exemptées (relevé du 2026-11-12) ; B n'est plus exempté.
+# S101 assertions ; S603/S607 sous-processus des aides de test ; S105/S106/S107 valeurs factices ; S104/S108/S310 serveurs et fichiers temporaires locaux.
+"tests/*" = ["S101", "S104", "S105", "S106", "S107", "S108", "S310", "S603", "S607"]

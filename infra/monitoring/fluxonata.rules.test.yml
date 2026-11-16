@@ -1,0 +1,84 @@
+# Tests unitaires des règles (promtool) : séries synthétiques, rien n'est scruté ni envoyé.
+rule_files:
+  - fluxonata.rules.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    name: orchestrateur absent pendant plus de 2 minutes
+    input_series:
+      - series: 'fluxonata_service_instances{kind="orchestrator"}'
+        values: "1 1 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 3m          # absent depuis 1 minute : pas encore d'alerte
+        alertname: FluxonataOrchestrateurAbsent
+        exp_alerts: []
+      - eval_time: 5m          # absent depuis plus de 2 minutes : alerte
+        alertname: FluxonataOrchestrateurAbsent
+        exp_alerts:
+          - exp_labels: { severity: critical, kind: orchestrator }
+            exp_annotations:
+              summary: "Aucun orchestrateur vivant"
+              description: "Les exécutions de workflows n'avancent plus : démarrez `run_orchestrator` (processus ou conteneur)."
+
+  - interval: 1m
+    name: un orchestrateur vivant ne déclenche rien
+    input_series:
+      - series: 'fluxonata_service_instances{kind="orchestrator"}'
+        values: "1 1 1 1 1 1"
+      - series: 'fluxonata_workers_alive'
+        values: "1 1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: FluxonataOrchestrateurAbsent
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: FluxonataAucunTravailleur
+        exp_alerts: []
+
+  - interval: 1m
+    name: file bloquée au-delà de 5 minutes d'attente pendant 5 minutes
+    input_series:
+      - series: "fluxonata_queue_oldest_age_seconds"
+        values: "0 400 400 400 400 400 400 400"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: FluxonataFileBloquee
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: FluxonataFileBloquee
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "La plus ancienne exécution en file attend depuis plus de 5 minutes"
+              description: "Capacité ou ordonnancement insuffisants (voir `ORCH_WORKER_CONCURRENCY`, agents d'exécution) ou travailleur figé."
+
+  - interval: 1m
+    name: hausse des exécutions échouées
+    input_series:
+      - series: 'fluxonata_workflow_runs{status="failed"}'
+        values: "0 0 3 6 9 12 12 12"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: FluxonataEchecsEnHausse
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: FluxonataEchecsEnHausse
+        exp_alerts:
+          - exp_labels: { severity: warning, status: failed }
+            exp_annotations:
+              summary: "Plus de 5 exécutions de workflow échouées en 15 minutes"
+              description: "Consultez Exploitation → Vue d'ensemble pour les workflows en cause."
+
+  - interval: 1m
+    name: API injoignable
+    input_series:
+      - series: 'up{job="fluxonata",instance="api:8000"}'
+        values: "1 1 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: FluxonataApiInjoignable
+        exp_alerts:
+          - exp_labels: { severity: critical, job: fluxonata, instance: "api:8000" }
+            exp_annotations:
+              summary: "L'API Fluxonata ne répond plus au scrape"
+              description: "Aucune réponse de api:8000 depuis 2 minutes (API arrêtée, jeton de métriques refusé ou réseau)."

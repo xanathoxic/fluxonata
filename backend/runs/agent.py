@@ -33,7 +33,9 @@ DECISION_SCHEMA = {
 
 
 def tool_slugs(node: dict) -> list[str]:
-    raw = node.get("tools") if isinstance(node.get("tools"), list) else []
+    raw = node.get("tools")
+    if not isinstance(raw, list):
+        raw = []
     return [s for s in dict.fromkeys(raw) if isinstance(s, str)][:10]
 
 
@@ -176,90 +178,121 @@ def _observe(state, slug, inputs, observation: str, ok: bool) -> None:
     state["pending"] = None
 
 
+_GO_ON = object()  # a phase handler's answer when the agent goes on to its next model turn
+
+
+def _park(sr, state) -> None:
+    """Saves the state and keeps waiting (a tool call is still running)."""
+    sr.agent_state = state
+    sr.save()
+
+
+def _on_approval(run, node, sr, state, tools, last):
+    ap = Approval.objects.filter(step_run=sr).first()
+    if ap is None or ap.status == Approval.Status.PENDING:
+        return None
+    p = state["pending"]
+    approved = ap.status == Approval.Status.APPROVED
+    ap.delete()
+    if not approved:
+        _observe(
+            state,
+            p["tool"],
+            p["inputs"],
+            "Appel refusé par une personne : n'insiste pas, cherche une autre voie ou conclus.",
+            False,
+        )
+        return _GO_ON
+    obs = _run_tool(run, node, sr, state, tools[p["tool"]], p["tool"], p["inputs"])
+    if obs is None:
+        _park(sr, state)
+        return None
+    _observe(state, p["tool"], p["inputs"], obs, True)
+    return _GO_ON
+
+
+def _on_tool_result(run, node, sr, state, tools, last):
+    p = state["pending"]
+    if last.status == "succeeded":
+        _observe(state, p["tool"], p["inputs"], _trim(last.result), True)
+    else:
+        _observe(state, p["tool"], p["inputs"], _trim({"erreur": (last.error or {}).get("message", "échec")}), False)
+    return _GO_ON
+
+
+def _tool_problem(tools: dict, slug, inputs: dict) -> str | None:
+    """Why the model's call cannot be made (unknown tool, inputs against the tool's schema), None when it can."""
+    tool = tools.get(slug)
+    if tool is None:
+        return f"Outil inconnu : {slug}. Outils permis : {', '.join(tools)}."
+    try:
+        jsonschema.validate(inputs, tool["av"].input_schema)
+    except jsonschema.ValidationError as exc:
+        return f"Entrées invalides pour {slug} : {exc.message[:200]}"
+    return None
+
+
+def _ask_approval(run, node, sr, state, tool: dict, slug, inputs: dict) -> None:
+    Approval.objects.create(
+        step_run=sr,
+        workspace=run.workspace,
+        requested_by=run.requested_by,
+        title=f"L'agent veut appeler « {tool['name']} »"[:200],
+        instructions=f"Entrées proposées par le modèle : {_trim(inputs)}"[:1000],
+    )
+    state["phase"], state["pending"] = "approval", {"tool": slug, "inputs": inputs}
+
+
+def _on_decision(run, node, sr, state, tools, last):
+    if last.status != "succeeded":
+        return "fail", last.error or {
+            "code": "AGENT_MODEL_FAILED",
+            "message": "Le modèle n'a pas répondu.",
+            "next_step": "Vérifiez le fournisseur IA.",
+        }
+    decision = last.result if isinstance(last.result, dict) else {}
+    if decision.get("action") == "final":
+        return _finish(state, str(decision.get("answer", "")), "done", node.get("mode", "test"))
+    slug = decision.get("tool")
+    inputs = decision.get("inputs")
+    if not isinstance(inputs, dict):
+        inputs = {}
+    problem = _tool_problem(tools, slug, inputs)
+    if problem:
+        _observe(state, str(slug), inputs, problem, False)
+        return _GO_ON
+    tool = tools[slug]
+    if node.get("approval") == "always" or (node.get("approval") == "effectful" and tool["effectful"]):
+        _ask_approval(run, node, sr, state, tool, slug, inputs)
+        _park(sr, state)
+        return None
+    state["pending"] = {"tool": slug, "inputs": inputs}
+    obs = _run_tool(run, node, sr, state, tool, str(slug), inputs)
+    if obs is None:
+        _park(sr, state)
+        return None
+    _observe(state, slug, inputs, obs, True)
+    return _GO_ON
+
+
+_PHASES = {"approval": _on_approval, "tool": _on_tool_result, "decide": _on_decision}
+
+
 def advance(run, node, sr) -> tuple | None:
     """One orchestration step. Returns None (keep waiting), ("done", output) or ("fail", error)."""
     state = sr.agent_state or {}
-    mode = node.get("mode", "test")
     tools = specs(run, node)
     last = sr.executions.order_by("-created_at").first()
     phase = state.get("phase")
     if phase in ("decide", "tool") and (last is None or last.status in ("queued", "running")):
         return None
-    if phase == "approval":
-        ap = Approval.objects.filter(step_run=sr).first()
-        if ap is None or ap.status == Approval.Status.PENDING:
-            return None
-        p = state["pending"]
-        approved = ap.status == Approval.Status.APPROVED
-        ap.delete()
-        if not approved:
-            _observe(
-                state,
-                p["tool"],
-                p["inputs"],
-                "Appel refusé par une personne : n'insiste pas, cherche une autre voie ou conclus.",
-                False,
-            )
-        else:
-            obs = _run_tool(run, node, sr, state, tools[p["tool"]], p["tool"], p["inputs"])
-            if obs is None:
-                sr.agent_state = state
-                sr.save()
-                return None
-            _observe(state, p["tool"], p["inputs"], obs, True)
-    elif phase == "tool":
-        p = state["pending"]
-        if last.status == "succeeded":
-            _observe(state, p["tool"], p["inputs"], _trim(last.result), True)
-        else:
-            _observe(
-                state, p["tool"], p["inputs"], _trim({"erreur": (last.error or {}).get("message", "échec")}), False
-            )
-    elif phase == "decide":
-        if last.status != "succeeded":
-            return "fail", last.error or {
-                "code": "AGENT_MODEL_FAILED",
-                "message": "Le modèle n'a pas répondu.",
-                "next_step": "Vérifiez le fournisseur IA.",
-            }
-        decision = last.result if isinstance(last.result, dict) else {}
-        if decision.get("action") == "final":
-            return _finish(state, str(decision.get("answer", "")), "done", mode)
-        slug, inputs = decision.get("tool"), decision.get("inputs") if isinstance(decision.get("inputs"), dict) else {}
-        tool = tools.get(slug)
-        problem = None
-        if tool is None:
-            problem = f"Outil inconnu : {slug}. Outils permis : {', '.join(tools)}."
-        else:
-            try:
-                jsonschema.validate(inputs, tool["av"].input_schema)
-            except jsonschema.ValidationError as exc:
-                problem = f"Entrées invalides pour {slug} : {exc.message[:200]}"
-        if problem:
-            _observe(state, str(slug), inputs, problem, False)
-        elif node.get("approval") == "always" or (node.get("approval") == "effectful" and tool["effectful"]):
-            Approval.objects.create(
-                step_run=sr,
-                workspace=run.workspace,
-                requested_by=run.requested_by,
-                title=f"L'agent veut appeler « {tool['name']} »"[:200],
-                instructions=f"Entrées proposées par le modèle : {_trim(inputs)}"[:1000],
-            )
-            state["phase"], state["pending"] = "approval", {"tool": slug, "inputs": inputs}
-            sr.agent_state = state
-            sr.save()
-            return None
-        else:
-            state["pending"] = {"tool": slug, "inputs": inputs}
-            obs = _run_tool(run, node, sr, state, tool, slug, inputs)
-            if obs is None:
-                sr.agent_state = state
-                sr.save()
-                return None
-            _observe(state, slug, inputs, obs, True)
+    handler = _PHASES.get(str(phase))
+    if handler:
+        outcome = handler(run, node, sr, state, tools, last)
+        if outcome is not _GO_ON:
+            return outcome
     if state["iteration"] >= state["max_turns"]:
-        return _finish(state, "", "max_steps", mode)
+        return _finish(state, "", "max_steps", node.get("mode", "test"))
     _enqueue_decision(run, node, sr, state)
-    sr.agent_state = state
-    sr.save()
+    _park(sr, state)
     return None

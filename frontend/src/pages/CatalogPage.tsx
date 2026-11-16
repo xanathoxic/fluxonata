@@ -20,6 +20,8 @@ interface Card { slug: string; name: string; description: string; folder: string
 interface Detail extends Card { input_schema: JsonSchema; has_form: boolean; form: FormDef | null; input_form: FormDefinition | null; can_run: boolean }
 
 /** « Catalogue d'automatisations » : the finished workflows this space chose to offer (not the actions they are built from). */
+const top = (c: Card) => c.folder.split("/")[0] ?? "";
+
 export function CatalogPage() {
   const { workspace, can } = useApp();
   const [q, setQ] = useState("");
@@ -37,7 +39,6 @@ export function CatalogPage() {
   const [view, setView] = useState<"cards" | "list">(() => { try { return localStorage.getItem("orch.catalog.view") === "list" ? "list" : "cards"; } catch { return "cards"; } });
   useEffect(() => { try { localStorage.setItem("orch.catalog.view", view); } catch { /* preference only */ } }, [view]);
   const all = data?.results ?? [];
-  const top = (c: Card) => c.folder.split("/")[0] ?? "";
   const cats = useMemo(() => {
     const m = new Map<string, number>();
     for (const c of all) m.set(top(c), (m.get(top(c)) ?? 0) + 1);
@@ -45,12 +46,13 @@ export function CatalogPage() {
   }, [all]);
   const shown = useMemo(() => {
     const rows = all.filter((c) => (!cat || top(c) === (cat === "\u0000" ? "" : cat)) && (!tagF || (c.tags ?? []).includes(tagF)));
+    const byName = (x: Card, y: Card) => x.name.localeCompare(y.name, "fr", { sensitivity: "base" });
     const by: Record<string, (x: Card, y: Card) => number> = {
-      name: (x, y) => x.name.localeCompare(y.name, "fr", { sensitivity: "base" }),
+      name: byName,
       recent: (x, y) => Date.parse(y.published_at) - Date.parse(x.published_at),
       simple: (x, y) => x.inputs - y.inputs || x.name.localeCompare(y.name, "fr"),
     };
-    return [...rows].sort(by[sort] ?? by.name!);
+    return [...rows].sort(by[sort] ?? byName);
   }, [all, cat, sort, tagF]);
   const paged = usePaged(shown, 12, [12, 24, 48]);
   const noFolder = "\u0000";
@@ -65,12 +67,14 @@ export function CatalogPage() {
             <select id="cat-sort" value={sort} onChange={(e) => setSort(e.target.value)}><option value="name">Nom (A → Z)</option><option value="recent">Publiées récemment</option><option value="simple">Les plus simples d'abord</option></select></div>
           <span style={{ flex: 1 }} />
           <span className="lst-count" role="status">{shown.length} automatisation(s)</span>
+          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="seg" role="group" aria-label="Affichage">
             <button type="button" aria-pressed={view === "cards"} onClick={() => setView("cards")}>Cartes</button>
             <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>Liste</button>
           </div>
         </div>
         {cats.length > 1 && (
+          // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
           <div className="cat-chips" role="group" aria-label="Catégories">
             <button type="button" className="chip-f" aria-pressed={cat === ""} onClick={() => setCat("")}>Toutes <span>{all.length}</span></button>
             {cats.map(([c, n]) => <button type="button" key={c || noFolder} className="chip-f" aria-pressed={cat === (c || noFolder)} onClick={() => setCat(c || noFolder)}>{c || "Sans dossier"} <span>{n}</span></button>)}

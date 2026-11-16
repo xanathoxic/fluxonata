@@ -87,10 +87,12 @@ def next_fire(expr: str, after: datetime, tz_name: str) -> datetime | None:
 
 
 def upcoming(expr: str, tz_name: str, count: int = 5, after: datetime | None = None) -> list[datetime]:
-    out, cur = [], after or datetime.now(UTC)
+    out: list[datetime] = []
+    cur = after or datetime.now(UTC)
     for _ in range(count):
-        cur = next_fire(expr, cur, tz_name)
-        if cur is None:
+        nxt = next_fire(expr, cur, tz_name)
+        if nxt is None:
             break
+        cur = nxt
         out.append(cur)
     return out

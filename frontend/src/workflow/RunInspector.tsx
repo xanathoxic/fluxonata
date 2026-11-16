@@ -3,6 +3,7 @@ import type { StepRun, WorkflowRun } from "../api";
 import { display } from "../components/Fields";
 import { StatusBadge } from "../components/StatusBadge";
 import { STATUS_LABEL } from "./CanvasView";
+import { ReadRegion } from "../components/ReadRegion";
 
 /** A titled Variable / Valeur table (values already masked by the server). */
 export function VariableBlock({ title, data, empty }: { title: string; data: Record<string, unknown> | null | undefined; empty: string }): ReactNode {
@@ -45,6 +46,7 @@ export function RunInspectorPanel({ run, selectedId }: { run: WorkflowRun; selec
         {step.error && <p className="field-error">{step.error.message}{step.error.next_step ? ` — ${step.error.next_step}` : ""}</p>}
         <VariableBlock title="Entrées" data={insp.nodes[selectedId]?.inputs} empty="Cette étape ne reçoit aucune entrée paramétrée." />
         <VariableBlock title="Sorties" data={step.output} empty={step.status === "succeeded" ? "Cette étape ne produit aucune sortie." : "Pas de sortie pour le moment."} />
+        {step.logs && <section className="inspector-block" aria-label="Journal de l'étape"><h4>Journal</h4><ReadRegion label={`Journal de ${step.name}`}>{step.logs}</ReadRegion></section>}
       </>
     );
   } else {

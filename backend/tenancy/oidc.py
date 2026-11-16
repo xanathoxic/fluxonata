@@ -12,16 +12,18 @@ import json
 import re
 import secrets
 import time
+from typing import cast
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from joserfc import jwt
 from joserfc.errors import JoseError
-from joserfc.jwk import KeySet
+from joserfc.jwk import KeySet, KeySetSerialization
 
 from audit.models import record
 from core import netsec
@@ -29,7 +31,15 @@ from core import netsec
 from .models import Membership, OidcIdentity, Role, Workspace
 
 User = get_user_model()
-ROLE_ORDER = [Role.ADMIN, Role.SPACE_MANAGER, Role.DESIGNER, Role.OPERATOR, Role.APPROVER, Role.VIEWER, Role.CATALOG]
+ROLE_ORDER: list[str] = [
+    Role.ADMIN,
+    Role.SPACE_MANAGER,
+    Role.DESIGNER,
+    Role.OPERATOR,
+    Role.APPROVER,
+    Role.VIEWER,
+    Role.CATALOG,
+]
 STATE_TTL = 600
 
 
@@ -128,7 +138,10 @@ def _exchange(doc: dict, code: str, verifier: str) -> dict:
 def _verify(doc: dict, id_token: str, nonce: str) -> dict:
     jwks = _get_json(doc["jwks_uri"])
     try:
-        token = jwt.decode(id_token, KeySet.import_key_set(jwks), algorithms=["RS256", "ES256", "PS256"])
+        # `jwks` vient du fournisseur (JSON non typé) ; joserfc en valide la forme à l'import.
+        token = jwt.decode(
+            id_token, KeySet.import_key_set(cast(KeySetSerialization, jwks)), algorithms=["RS256", "ES256", "PS256"]
+        )
         registry = jwt.JWTClaimsRegistry(
             leeway=60,
             iss={"essential": True, "value": settings.ORCH_OIDC_ISSUER.rstrip("/")},
@@ -144,7 +157,7 @@ def _verify(doc: dict, id_token: str, nonce: str) -> dict:
     return token.claims
 
 
-def complete(request) -> User:
+def complete(request) -> AbstractBaseUser:
     sess = request.session.pop("oidc", None)
     if not sess or time.time() - sess["at"] > STATE_TTL:
         raise OidcError("Session de connexion expirée, recommencez.")
@@ -177,7 +190,7 @@ def _username(claims: dict) -> str:
 
 
 @transaction.atomic
-def _sync_user(claims: dict) -> User:
+def _sync_user(claims: dict) -> AbstractBaseUser:
     issuer, sub = settings.ORCH_OIDC_ISSUER.rstrip("/"), str(claims["sub"])
     ident = OidcIdentity.objects.select_related("user").filter(issuer=issuer, subject=sub).first()
     if ident is None:

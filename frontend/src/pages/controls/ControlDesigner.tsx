@@ -65,6 +65,7 @@ export function ControlDesigner({ meta, cfg, row, edit, problems, onMeta, onCfg,
           {nav.map((n) => (
             <li key={n.id}>
               <button type="button" className={`cd-nav-i${current === n.id ? " on" : ""}`} aria-current={current === n.id ? "page" : undefined} onClick={() => setSection(n.id)}>
+                {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: le libellé nomme le bloc ou l'élément pour les lecteurs d'écran */}
                 <FormIcon name={n.icon} size={18} /><span className="cd-nav-t">{n.label}</span>{n.count !== undefined && <span className="cd-nav-n" aria-label={`${n.count} élément(s)`}>{n.count}</span>}
               </button>
             </li>

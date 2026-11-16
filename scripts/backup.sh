@@ -6,7 +6,7 @@ source "$(dirname "$0")/_common.sh"; load_env
 DEST="${1:-$ROOT/backups/$(date -u +%Y%m%dT%H%M%SZ)}"; [ "${1:-}" = "--with-keys" ] && DEST="$ROOT/backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$DEST" && chmod 700 "$DEST"
 DB="${ORCH_DB_NAME:-fluxonata}"; USERNAME="${ORCH_DB_USER:-fluxonata}"
-docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" fluxonata-db-1 pg_dump -U "$USERNAME" -Fc "$DB" > "$DEST/db.dump"
+docker exec -e PGPASSWORD="${ORCH_DB_PASSWORD:-}" "${ORCH_DB_CONTAINER:-fluxonata-db-1}" pg_dump -U "$USERNAME" -Fc "$DB" > "$DEST/db.dump"
 ART="${ORCH_ARTIFACTS_DIR:-$ROOT/var/artifacts}"
 if [ "${ORCH_ARTIFACTS_STORE:-fs}" = "s3" ]; then
   # Les fichiers sont dans le service S3, pas sur ce disque : archive vide (restore.sh l'attend) et rappel de les protéger côté service.

@@ -8,6 +8,7 @@ import { formatDate } from "../../i18n";
 import { errorText } from "../../lib";
 import { Kpi } from "../OpsCharts";
 import { HelpTip } from "../../components/HelpTip";
+import { ReadRegion } from "../../components/ReadRegion";
 
 interface Membership { workspace: string; name: string; role: string; archived: boolean }
 interface UserRow {
@@ -30,7 +31,7 @@ function TemporaryPassword({ secret, title, onClose }: { secret: Secret; title: 
     <Overlay variant="modal" title={title} description="Ce mot de passe provisoire ne sera plus jamais affiché : transmettez-le à la personne maintenant." onClose={onClose}
       footer={<button type="button" className="primary" onClick={onClose}>J'ai transmis le mot de passe</button>}>
       <p>Compte : <strong className="mono">{secret.username}</strong></p>
-      <pre tabIndex={0} aria-label="Mot de passe provisoire" className="mono">{secret.temporary_password}</pre>
+      <ReadRegion className="mono" label="Mot de passe provisoire">{secret.temporary_password}</ReadRegion>
       <p><button type="button" onClick={() => void copy()}>Copier le mot de passe</button> {copied && <span role="status" className="hint">Copié.</span>}</p>
       <p className="help-row"><HelpTip caption="À savoir">À sa première connexion, la personne devra choisir son propre mot de passe avant de pouvoir utiliser l'application.</HelpTip></p>
     </Overlay>

@@ -3,6 +3,8 @@ import { MAX_ITEMS, MAX_ROWS, producesOf, type ControlSpec } from "../../forms/c
 import { exampleOptions, exampleValue, fieldRows, interactions, optionSchema, valueSchema } from "../../forms/controlDocs";
 import { FormIcon, IconLabel } from "../../forms/FormIcon";
 import { Card } from "./DesignerUi";
+import { keyed } from "../../components/keyed";
+import { ReadRegion } from "../../components/ReadRegion";
 
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 const PRODUCES: Record<string, string> = { object: "un objet", array: "une liste", string: "un texte" };
@@ -13,7 +15,7 @@ function Code({ label, text }: { label: string; text: string }) {
   return (
     <div className="dc-code">
       <button type="button" className="dc-copy" onClick={copy} aria-label={`Copier : ${label}`}><IconLabel icon={copied ? "check" : "copy"}>{copied ? "Copié" : "Copier"}</IconLabel></button>
-      <pre className="ctl-json" aria-label={label} tabIndex={0}>{text}</pre>
+      <ReadRegion className="ctl-json" label={label}>{text}</ReadRegion>
     </div>
   );
 }
@@ -46,13 +48,13 @@ export function DocsPanel({ spec }: { spec: ControlSpec }) {
 
       <Card icon="design" title={spec.mode === "repeat" ? "Champs d'une ligne" : listy ? "Champs de détail d'une option" : "Champs du groupe"}>
         {rows.length === 0 ? <p className="hint">Aucun champ pour le moment.</p> : (
-          <div className="table-wrap" tabIndex={0} role="region" aria-label="Champs du contrôle">
+          <ReadRegion as="div" className="table-wrap" label="Champs du contrôle">
             <table className="adm-table dc-table">
               <caption className="sr-only">Champs du contrôle</caption>
               <thead><tr><th scope="col">Clé</th><th scope="col">Libellé</th><th scope="col">Contrôle</th><th scope="col">Valeur</th><th scope="col">Obligatoire</th><th scope="col">Précisions</th></tr></thead>
               <tbody>{rows.map((r) => <tr key={r.key}><td><code>{r.key}</code></td><td>{r.label}</td><td>{r.typeLabel}</td><td>{r.json}</td><td>{r.required ? "oui" : "non"}</td><td>{r.notes.join(" · ") || "—"}</td></tr>)}</tbody>
             </table>
-          </div>
+          </ReadRegion>
         )}
       </Card>
 
@@ -67,13 +69,13 @@ export function DocsPanel({ spec }: { spec: ControlSpec }) {
       )}
 
       <Card icon="link" title="Interactions avec le formulaire et le workflow" help="« <clé> » est la clé que le formulaire donne au champ qui porte ce contrôle (propriétés du champ).">
-        <div className="table-wrap" tabIndex={0} role="region" aria-label="Accès au contrôle et à ses champs">
+        <ReadRegion as="div" className="table-wrap" label="Accès au contrôle et à ses champs">
           <table className="adm-table dc-table">
             <caption className="sr-only">Comment accéder au contrôle et à ses champs</caption>
             <thead><tr><th scope="col">Je veux…</th><th scope="col">Où</th><th scope="col">Comment</th></tr></thead>
-            <tbody>{access.map((a, i) => <tr key={i}><td>{a.goal}</td><td>{a.where}</td><td><code>{a.syntax}</code></td></tr>)}</tbody>
+            <tbody>{keyed(access, (a) => `${a.goal}|${a.where}`).map(({ item: a, key }) => <tr key={key}><td>{a.goal}</td><td>{a.where}</td><td><code>{a.syntax}</code></td></tr>)}</tbody>
           </table>
-        </div>
+        </ReadRegion>
         <p className="hint">Le serveur revérifie la valeur à l'envoi avec les mêmes règles : une valeur forgée ou hors schéma est refusée.</p>
       </Card>
     </div>

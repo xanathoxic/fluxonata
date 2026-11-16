@@ -14,6 +14,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     },
                     {}
@@ -76,6 +79,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -93,6 +99,9 @@
                     "auth"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -180,6 +189,9 @@
                     "required": true
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -497,6 +509,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -512,6 +527,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -541,6 +559,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -558,6 +579,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -577,6 +601,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -622,6 +649,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -657,6 +687,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -675,6 +708,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -690,6 +726,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -719,6 +758,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -744,6 +786,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -773,6 +818,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -790,6 +838,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -834,6 +885,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -868,6 +922,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -918,6 +975,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -961,6 +1021,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -989,6 +1052,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1007,6 +1073,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1022,6 +1091,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1042,6 +1114,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1058,6 +1133,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1088,6 +1166,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1115,6 +1196,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1133,6 +1217,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1150,6 +1237,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1170,6 +1260,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1188,6 +1281,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1203,6 +1299,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1232,6 +1331,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1260,6 +1362,9 @@
                     "platform"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1339,6 +1444,11 @@
                 "tags": [
                     "runner"
                 ],
+                "security": [
+                    {
+                        "runnerToken": []
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "No response body"
@@ -1362,6 +1472,11 @@
                 "tags": [
                     "runner"
                 ],
+                "security": [
+                    {
+                        "runnerToken": []
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "No response body"
@@ -1374,6 +1489,11 @@
                 "operationId": "runner_jobs_request_create",
                 "tags": [
                     "runner"
+                ],
+                "security": [
+                    {
+                        "runnerToken": []
+                    }
                 ],
                 "responses": {
                     "200": {
@@ -1388,6 +1508,11 @@
                 "tags": [
                     "runner"
                 ],
+                "security": [
+                    {
+                        "runnerToken": []
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "No response body"
@@ -1398,6 +1523,11 @@
                 "operationId": "runner_me_create",
                 "tags": [
                     "runner"
+                ],
+                "security": [
+                    {
+                        "runnerToken": []
+                    }
                 ],
                 "responses": {
                     "200": {
@@ -1586,6 +1716,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1629,6 +1762,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1642,6 +1778,46 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/actions/{slug}/activate/": {
+            "post": {
+                "operationId": "workspaces_actions_activate_create",
+                "description": "Relecture humaine d'une proposition d'assistant : elle devient une action ordinaire (ADR 0025). Jamais par jeton.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -1672,6 +1848,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1708,6 +1887,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1746,6 +1928,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1781,6 +1966,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1819,6 +2007,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1855,6 +2046,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1893,6 +2087,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -1927,6 +2124,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -1972,6 +2172,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2014,6 +2217,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2049,6 +2255,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2111,6 +2320,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2147,6 +2359,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2176,6 +2391,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2202,6 +2420,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2240,6 +2461,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2277,6 +2501,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2305,6 +2532,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2335,6 +2565,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2361,6 +2594,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2399,6 +2635,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2427,6 +2666,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2457,6 +2699,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2485,6 +2730,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2510,6 +2758,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2540,6 +2791,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2569,6 +2823,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2596,6 +2853,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2650,6 +2910,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2693,6 +2956,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2729,6 +2995,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2756,6 +3025,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2810,6 +3082,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2853,6 +3128,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2886,6 +3164,49 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ai/skills/{slug}/activate/": {
+            "post": {
+                "operationId": "workspaces_ai_skills_activate_create",
+                "description": "Relecture humaine d'une proposition d'assistant (ADR 0025). Jamais par jeton.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2924,6 +3245,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -2959,6 +3283,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -2998,17 +3325,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/VersionInput"
+                                "$ref": "#/components/schemas/SkillVersionInput"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/VersionInput"
+                                "$ref": "#/components/schemas/SkillVersionInput"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/VersionInput"
+                                "$ref": "#/components/schemas/SkillVersionInput"
                             }
                         }
                     },
@@ -3016,15 +3343,18 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/VersionInput"
+                                    "$ref": "#/components/schemas/Version"
                                 }
                             }
                         },
@@ -3050,6 +3380,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3096,6 +3429,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3160,6 +3496,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3203,6 +3542,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3250,6 +3592,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3286,6 +3631,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3313,6 +3661,80 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/catalog-runs/": {
+            "get": {
+                "operationId": "workspaces_catalog_runs_retrieve",
+                "description": "Your own runs, most recent first (a plain object `{results}`, not paginated).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/catalog-runs/{id}/": {
+            "get": {
+                "operationId": "workspaces_catalog_runs_retrieve_2",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3350,12 +3772,92 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/catalog/{slug}/runs/": {
+            "post": {
+                "operationId": "workspaces_catalog_runs_create",
+                "description": "Launch the published version of a catalog item. For the « Catalogue » role the item must be granted to one of its groups\nand the development environment is refused; for the other roles the usual right to run applies.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogRunStart"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogRunStart"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogRunStart"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogRunRow"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogRunRow"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -3377,6 +3879,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3431,6 +3936,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3449,6 +3957,69 @@
             }
         },
         "/api/v1/workspaces/{workspace}/connections/{id}/": {
+            "patch": {
+                "operationId": "workspaces_connections_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedConnectionUpdate"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedConnectionUpdate"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedConnectionUpdate"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConnectionUpdate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
             "delete": {
                 "operationId": "workspaces_connections_destroy",
                 "parameters": [
@@ -3473,6 +4044,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3511,6 +4085,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3548,6 +4125,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3576,6 +4156,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3584,7 +4167,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Create"
+                                    "$ref": "#/components/schemas/ControlList"
                                 }
                             }
                         },
@@ -3611,17 +4194,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/ControlCreate"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/ControlCreate"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/ControlCreate"
                             }
                         }
                     },
@@ -3629,15 +4212,18 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Create"
+                                    "$ref": "#/components/schemas/ControlCard"
                                 }
                             }
                         },
@@ -3672,6 +4258,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3680,7 +4269,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Patch"
+                                    "$ref": "#/components/schemas/ControlDetailResponse"
                                 }
                             }
                         },
@@ -3715,22 +4304,25 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedControlPatch"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedControlPatch"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedControlPatch"
                             }
                         }
                     }
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3740,7 +4332,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Patch"
+                                    "$ref": "#/components/schemas/ControlDraft"
                                 }
                             }
                         },
@@ -3772,6 +4364,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3811,32 +4406,35 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/ControlPublish"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/ControlPublish"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/ControlPublish"
                             }
                         }
                     }
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Publish"
+                                    "$ref": "#/components/schemas/ControlPublishResponse"
                                 }
                             }
                         },
@@ -3879,6 +4477,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -3910,23 +4511,26 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/ControlCheck"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/ControlCheck"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/ControlCheck"
                             }
                         }
                     },
                     "required": true
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -3936,7 +4540,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Check"
+                                    "$ref": "#/components/schemas/ControlCheckResponse"
                                 }
                             }
                         },
@@ -3983,6 +4587,9 @@
                     "required": true
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4037,6 +4644,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4090,6 +4700,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4132,6 +4745,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4194,6 +4810,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4228,6 +4847,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4273,6 +4895,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4315,6 +4940,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4344,6 +4972,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4371,6 +5002,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4397,6 +5031,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4426,6 +5063,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4451,6 +5091,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4479,6 +5122,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4504,6 +5150,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4533,6 +5182,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4541,7 +5193,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Create"
+                                    "$ref": "#/components/schemas/FormList"
                                 }
                             }
                         },
@@ -4568,17 +5220,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/FormCreate"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/FormCreate"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Create"
+                                "$ref": "#/components/schemas/FormCreate"
                             }
                         }
                     },
@@ -4586,15 +5238,18 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Create"
+                                    "$ref": "#/components/schemas/FormCard"
                                 }
                             }
                         },
@@ -4629,6 +5284,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4637,7 +5295,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Patch"
+                                    "$ref": "#/components/schemas/FormDetailResponse"
                                 }
                             }
                         },
@@ -4672,22 +5330,25 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedFormPatch"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedFormPatch"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedPatch"
+                                "$ref": "#/components/schemas/PatchedFormPatch"
                             }
                         }
                     }
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4697,7 +5358,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Patch"
+                                    "$ref": "#/components/schemas/FormDraft"
                                 }
                             }
                         },
@@ -4729,6 +5390,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4787,6 +5451,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4832,32 +5499,35 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/FormPublish"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/FormPublish"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/FormPublish"
                             }
                         }
                     }
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Publish"
+                                    "$ref": "#/components/schemas/FormPublishResponse"
                                 }
                             }
                         },
@@ -4900,6 +5570,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -4927,6 +5600,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4959,23 +5635,25 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/FormCheck"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/FormCheck"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Check"
+                                "$ref": "#/components/schemas/FormCheck"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -4985,7 +5663,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Check"
+                                    "$ref": "#/components/schemas/FormCheckResponse"
                                 }
                             }
                         },
@@ -5011,6 +5689,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5065,6 +5746,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5108,6 +5792,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5142,6 +5829,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5175,6 +5865,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5213,6 +5906,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5248,6 +5944,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5276,6 +5975,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5302,6 +6004,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5327,6 +6032,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5356,6 +6064,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5381,6 +6092,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5418,11 +6132,210 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
                     "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/groups/": {
+            "get": {
+                "operationId": "workspaces_groups_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_groups_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Group"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Group"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Group"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/groups/{id}/": {
+            "patch": {
+                "operationId": "workspaces_groups_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedGroup"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedGroup"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedGroup"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_groups_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
                         "description": "No response body"
                     }
                 }
@@ -5446,6 +6359,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5495,6 +6411,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5515,7 +6434,7 @@
         "/api/v1/workspaces/{workspace}/mcp/": {
             "get": {
                 "operationId": "workspaces_mcp_retrieve",
-                "description": "POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session.",
+                "description": "POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session.\n\nLe protocole est ici ; les OUTILS viennent de `list_tools` / `call_tool`, que le profil de conception (`mcp_design.py`, ADR 0025) redéfinit.",
                 "parameters": [
                     {
                         "in": "path",
@@ -5530,6 +6449,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5542,7 +6464,7 @@
             },
             "post": {
                 "operationId": "workspaces_mcp_create",
-                "description": "POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session.",
+                "description": "POST: one JSON-RPC message (or a batch). GET/DELETE: no server-initiated stream, no session.\n\nLe protocole est ici ; les OUTILS viennent de `list_tools` / `call_tool`, que le profil de conception (`mcp_design.py`, ADR 0025) redéfinit.",
                 "parameters": [
                     {
                         "in": "path",
@@ -5558,11 +6480,208 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
                     "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/mcp/design/": {
+            "get": {
+                "operationId": "workspaces_mcp_design_retrieve",
+                "description": "Profil de conception : lire l'espace, préparer des brouillons et proposer des actions / skills. Jamais lancer, publier ni activer.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_mcp_design_create",
+                "description": "Profil de conception : lire l'espace, préparer des brouillons et proposer des actions / skills. Jamais lancer, publier ni activer.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/me/mcp-tokens/": {
+            "get": {
+                "operationId": "workspaces_me_mcp_tokens_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonalToken"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_me_mcp_tokens_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PersonalToken"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PersonalToken"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PersonalToken"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonalToken"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/me/mcp-tokens/{id}/": {
+            "delete": {
+                "operationId": "workspaces_me_mcp_tokens_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
                         "description": "No response body"
                     }
                 }
@@ -5585,6 +6704,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5638,6 +6760,9 @@
                     "required": true
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5701,6 +6826,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5742,6 +6870,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5769,6 +6900,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5823,6 +6957,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5866,6 +7003,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5899,6 +7039,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5937,6 +7080,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -5964,6 +7110,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -5994,6 +7143,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6020,6 +7172,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6066,6 +7221,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6118,6 +7276,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6166,6 +7327,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6202,6 +7366,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6230,6 +7397,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6255,6 +7425,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6292,6 +7465,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6320,6 +7496,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6345,6 +7524,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6373,6 +7555,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6427,6 +7612,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6470,6 +7658,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6503,6 +7694,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6540,6 +7734,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6587,6 +7784,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6630,6 +7830,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6667,6 +7870,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6695,6 +7901,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6720,6 +7929,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6749,6 +7961,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6774,6 +7989,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6811,6 +8029,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6844,6 +8065,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6881,6 +8105,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -6908,6 +8135,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -6962,6 +8192,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7005,6 +8238,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7039,6 +8275,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7067,6 +8306,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7094,6 +8336,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7148,6 +8393,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7191,6 +8439,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7224,6 +8475,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7262,6 +8516,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7289,6 +8546,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7343,6 +8603,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7378,6 +8641,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7405,6 +8671,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7459,6 +8728,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7502,6 +8774,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7539,6 +8814,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7568,6 +8846,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7595,6 +8876,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7649,6 +8933,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7692,6 +8979,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7725,6 +9015,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7772,6 +9065,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7814,6 +9110,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7876,6 +9175,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7919,6 +9221,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -7955,6 +9260,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -7993,6 +9301,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8029,6 +9340,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8094,6 +9408,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8129,6 +9446,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8158,6 +9478,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8186,6 +9509,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8223,6 +9549,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8259,6 +9588,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8305,6 +9637,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8359,6 +9694,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8401,6 +9739,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8446,6 +9787,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8482,6 +9826,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8520,6 +9867,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8557,6 +9907,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8591,6 +9944,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8629,6 +9985,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8663,6 +10022,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8708,6 +10070,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8750,6 +10115,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8785,6 +10153,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8823,6 +10194,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8859,6 +10233,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8897,6 +10274,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -8933,6 +10313,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -8971,6 +10354,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9007,6 +10393,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9042,6 +10431,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9099,6 +10491,9 @@
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9142,6 +10537,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9188,6 +10586,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9230,6 +10631,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9284,6 +10688,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9335,6 +10742,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9371,6 +10781,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9410,32 +10823,35 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/WorkflowPublish"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/WorkflowPublish"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Publish"
+                                "$ref": "#/components/schemas/WorkflowPublish"
                             }
                         }
                     }
                 },
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Publish"
+                                    "$ref": "#/components/schemas/WorkflowVersion"
                                 }
                             }
                         },
@@ -9469,6 +10885,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9508,23 +10927,26 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Start"
+                                "$ref": "#/components/schemas/WorkflowRunStart"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Start"
+                                "$ref": "#/components/schemas/WorkflowRunStart"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Start"
+                                "$ref": "#/components/schemas/WorkflowRunStart"
                             }
                         }
                     },
                     "required": true
                 },
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9534,7 +10956,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Start"
+                                    "$ref": "#/components/schemas/WorkflowRunStarted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkflowRunStarted"
                                 }
                             }
                         },
@@ -9568,6 +11000,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9606,6 +11041,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9641,6 +11079,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9696,6 +11137,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9747,6 +11191,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9784,6 +11231,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9812,6 +11262,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9842,6 +11295,9 @@
                 ],
                 "security": [
                     {
+                        "bearerToken": []
+                    },
+                    {
                         "cookieAuth": []
                     }
                 ],
@@ -9870,6 +11326,9 @@
                     "workspaces"
                 ],
                 "security": [
+                    {
+                        "bearerToken": []
+                    },
                     {
                         "cookieAuth": []
                     }
@@ -9996,10 +11455,11 @@
             "ActionStatusEnum": {
                 "enum": [
                     "active",
-                    "deprecated"
+                    "deprecated",
+                    "proposed"
                 ],
                 "type": "string",
-                "description": "* `active` - Active\n* `deprecated` - Dépréciée"
+                "description": "* `active` - Active\n* `deprecated` - Dépréciée\n* `proposed` - Proposée"
             },
             "Alert": {
                 "type": "object",
@@ -10092,6 +11552,13 @@
                         "maxLength": 200
                     },
                     "instructions": {
+                        "type": "string"
+                    },
+                    "subject": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "body": {
                         "type": "string"
                     },
                     "status": {
@@ -10306,13 +11773,88 @@
                 "type": "string",
                 "description": "* `major` - major\n* `minor` - minor\n* `patch` - patch"
             },
-            "Check": {
+            "CatalogRunProgress": {
                 "type": "object",
                 "properties": {
-                    "spec": {}
+                    "done": {
+                        "type": "integer"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
                 },
                 "required": [
-                    "spec"
+                    "done",
+                    "total"
+                ]
+            },
+            "CatalogRunRow": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "workflow": {
+                        "$ref": "#/components/schemas/CatalogRunWorkflow"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "status_label": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "finished_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "progress": {
+                        "$ref": "#/components/schemas/CatalogRunProgress"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "finished_at",
+                    "id",
+                    "progress",
+                    "status",
+                    "status_label",
+                    "workflow"
+                ]
+            },
+            "CatalogRunStart": {
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "$ref": "#/components/schemas/EnvironmentEnum"
+                    },
+                    "inputs": {}
+                },
+                "required": [
+                    "environment"
+                ]
+            },
+            "CatalogRunWorkflow": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "slug",
+                    "version"
                 ]
             },
             "ConnectionCreate": {
@@ -10365,6 +11907,12 @@
                     },
                     "vault": {
                         "$ref": "#/components/schemas/VaultRef"
+                    },
+                    "new_secret_name": {
+                        "type": "string",
+                        "description": "Nom du secret créé avec la connexion (facultatif)",
+                        "maxLength": 60,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
                     }
                 },
                 "required": [
@@ -10385,14 +11933,165 @@
                     "mysql",
                     "ldap",
                     "sftp",
+                    "ssh",
                     "imap",
                     "smtp",
                     "generic"
                 ],
                 "type": "string",
-                "description": "* `http_bearer` - Service HTTP (jeton)\n* `api_key` - Service HTTP (clé d'API)\n* `basic` - Service HTTP (identifiant + mot de passe)\n* `oauth2_client` - Service HTTP (OAuth2, identifiants client)\n* `oauth2_code` - Service HTTP (OAuth2, autorisation par une personne)\n* `aws_sigv4` - Stockage S3 / services AWS (signature SigV4)\n* `postgres` - Base PostgreSQL (lecture seule)\n* `mysql` - Base MySQL / MariaDB (lecture seule)\n* `ldap` - Annuaire LDAP / Active Directory (lecture seule)\n* `sftp` - Serveur SFTP (fichiers texte)\n* `imap` - Boîte e-mail (IMAP)\n* `smtp` - Serveur SMTP (envoi d'e-mails)\n* `generic` - Générique"
+                "description": "* `http_bearer` - Service HTTP (jeton)\n* `api_key` - Service HTTP (clé d'API)\n* `basic` - Service HTTP (identifiant + mot de passe)\n* `oauth2_client` - Service HTTP (OAuth2, identifiants client)\n* `oauth2_code` - Service HTTP (OAuth2, autorisation par une personne)\n* `aws_sigv4` - Stockage S3 / services AWS (signature SigV4)\n* `postgres` - Base PostgreSQL (lecture seule)\n* `mysql` - Base MySQL / MariaDB (lecture seule)\n* `ldap` - Annuaire LDAP / Active Directory (lecture seule)\n* `sftp` - Serveur SFTP (fichiers texte)\n* `ssh` - Serveur SSH (commandes et session)\n* `imap` - Boîte e-mail (IMAP)\n* `smtp` - Serveur SMTP (envoi d'e-mails)\n* `generic` - Générique"
             },
-            "Create": {
+            "ConnectionUpdate": {
+                "type": "object",
+                "description": "What can change on an existing connection. NOT the identifier, the type or the environment (workflows refer to the identifier; the\ntype decides what the settings mean). The secret: keep it (send nothing), choose an existing one (`secret`), or create a new one\n(`secret_value` or an external reference, optionally named by `new_secret_name`).",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "config": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "environment": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 10
+                    },
+                    "secret": {
+                        "type": "string",
+                        "description": "Nom d'un secret existant de l'espace",
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "secret_value": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 8192
+                    },
+                    "secret_provider": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SecretProviderEnum"
+                            }
+                        ],
+                        "default": "internal"
+                    },
+                    "vault": {
+                        "$ref": "#/components/schemas/VaultRef"
+                    },
+                    "new_secret_name": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    }
+                }
+            },
+            "ControlCard": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "mode": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "parts": {
+                        "type": "integer"
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ControlVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "published": {
+                        "$ref": "#/components/schemas/ControlPublished"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "draft_revision",
+                    "folder",
+                    "icon",
+                    "latest_version",
+                    "mode",
+                    "name",
+                    "owner",
+                    "parts",
+                    "slug",
+                    "tags",
+                    "updated_at"
+                ]
+            },
+            "ControlCheck": {
+                "type": "object",
+                "properties": {
+                    "spec": {}
+                },
+                "required": [
+                    "spec"
+                ]
+            },
+            "ControlCheckResponse": {
+                "type": "object",
+                "properties": {
+                    "problems": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "problems"
+                ]
+            },
+            "ControlCreate": {
                 "type": "object",
                 "properties": {
                     "slug": {
@@ -10414,6 +12113,11 @@
                         "default": "custom",
                         "pattern": "^[A-Za-z0-9_]{1,40}$"
                     },
+                    "folder": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    },
                     "tags": {
                         "type": "array",
                         "items": {
@@ -10427,6 +12131,346 @@
                 "required": [
                     "name",
                     "slug"
+                ]
+            },
+            "ControlDetailResponse": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "mode": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "parts": {
+                        "type": "integer"
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ControlVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "published": {
+                        "$ref": "#/components/schemas/ControlPublished"
+                    },
+                    "spec": {},
+                    "versions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ControlVersionLight"
+                        }
+                    },
+                    "usage": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "draft_revision",
+                    "folder",
+                    "icon",
+                    "latest_version",
+                    "mode",
+                    "name",
+                    "owner",
+                    "parts",
+                    "slug",
+                    "spec",
+                    "tags",
+                    "updated_at",
+                    "usage",
+                    "versions"
+                ]
+            },
+            "ControlDraft": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "mode": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "parts": {
+                        "type": "integer"
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ControlVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "published": {
+                        "$ref": "#/components/schemas/ControlPublished"
+                    },
+                    "spec": {}
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "draft_revision",
+                    "folder",
+                    "icon",
+                    "latest_version",
+                    "mode",
+                    "name",
+                    "owner",
+                    "parts",
+                    "slug",
+                    "spec",
+                    "tags",
+                    "updated_at"
+                ]
+            },
+            "ControlList": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ControlListItem"
+                        }
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
+            "ControlListItem": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "mode": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "parts": {
+                        "type": "integer"
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ControlVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "published": {
+                        "$ref": "#/components/schemas/ControlPublished"
+                    },
+                    "used_by": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "draft_revision",
+                    "folder",
+                    "icon",
+                    "latest_version",
+                    "mode",
+                    "name",
+                    "owner",
+                    "parts",
+                    "slug",
+                    "tags",
+                    "updated_at",
+                    "used_by"
+                ]
+            },
+            "ControlPublish": {
+                "type": "object",
+                "properties": {
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "bump": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BumpEnum"
+                            }
+                        ],
+                        "default": "minor"
+                    }
+                }
+            },
+            "ControlPublishResponse": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "digest",
+                    "version"
+                ]
+            },
+            "ControlPublished": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "spec": {}
+                },
+                "required": [
+                    "icon",
+                    "name",
+                    "spec",
+                    "version"
+                ]
+            },
+            "ControlVersionLight": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "changelog": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "changelog",
+                    "created_at",
+                    "digest",
+                    "version"
                 ]
             },
             "CreateUserIn": {
@@ -10545,12 +12589,12 @@
             },
             "EnvironmentEnum": {
                 "enum": [
-                    "dev",
                     "test",
-                    "prod"
+                    "prod",
+                    "dev"
                 ],
                 "type": "string",
-                "description": "* `dev` - dev\n* `test` - test\n* `prod` - prod"
+                "description": "* `test` - test\n* `prod` - prod\n* `dev` - dev"
             },
             "EnvironmentsEnum": {
                 "enum": [
@@ -10905,6 +12949,379 @@
                     "workflow"
                 ]
             },
+            "FormCard": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "is_template": {
+                        "type": "boolean"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FormVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "fields": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "draft_revision",
+                    "fields",
+                    "folder",
+                    "is_template",
+                    "latest_version",
+                    "name",
+                    "owner",
+                    "slug",
+                    "tags",
+                    "updated_at"
+                ]
+            },
+            "FormCheck": {
+                "type": "object",
+                "properties": {
+                    "css": {
+                        "type": "string",
+                        "maxLength": 60000
+                    },
+                    "definition": {}
+                }
+            },
+            "FormCheckResponse": {
+                "type": "object",
+                "properties": {
+                    "css": {},
+                    "definition": {}
+                }
+            },
+            "FormCreate": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "folder": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 60
+                        },
+                        "maxItems": 20
+                    },
+                    "is_template": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "definition": {}
+                },
+                "required": [
+                    "name",
+                    "slug"
+                ]
+            },
+            "FormDetailResponse": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "is_template": {
+                        "type": "boolean"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FormVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "fields": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "definition": {},
+                    "versions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FormVersionLight"
+                        }
+                    },
+                    "usage": {}
+                },
+                "required": [
+                    "created_at",
+                    "definition",
+                    "description",
+                    "draft_revision",
+                    "fields",
+                    "folder",
+                    "is_template",
+                    "latest_version",
+                    "name",
+                    "owner",
+                    "slug",
+                    "tags",
+                    "updated_at",
+                    "usage",
+                    "versions"
+                ]
+            },
+            "FormDraft": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "is_template": {
+                        "type": "boolean"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "latest_version": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FormVersionLight"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "draft_revision": {
+                        "type": "integer"
+                    },
+                    "fields": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "definition": {}
+                },
+                "required": [
+                    "created_at",
+                    "definition",
+                    "description",
+                    "draft_revision",
+                    "fields",
+                    "folder",
+                    "is_template",
+                    "latest_version",
+                    "name",
+                    "owner",
+                    "slug",
+                    "tags",
+                    "updated_at"
+                ]
+            },
+            "FormList": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FormCard"
+                        }
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
+            "FormPublish": {
+                "type": "object",
+                "properties": {
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "bump": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BumpEnum"
+                            }
+                        ],
+                        "default": "minor"
+                    }
+                }
+            },
+            "FormPublishResponse": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "digest",
+                    "version"
+                ]
+            },
+            "FormVersionLight": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "changelog": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "changelog",
+                    "created_at",
+                    "digest",
+                    "version"
+                ]
+            },
+            "Group": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "members": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 150
+                        },
+                        "maxItems": 1000
+                    },
+                    "workflows": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[-a-zA-Z0-9_]+$"
+                        },
+                        "maxItems": 1000
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
             "Login": {
                 "type": "object",
                 "properties": {
@@ -10928,7 +13345,7 @@
                         "type": "string"
                     },
                     "role": {
-                        "$ref": "#/components/schemas/Role017Enum"
+                        "$ref": "#/components/schemas/RoleC86Enum"
                     }
                 },
                 "required": [
@@ -10944,7 +13361,7 @@
                         "pattern": "^[-a-zA-Z0-9_]+$"
                     },
                     "role": {
-                        "$ref": "#/components/schemas/Role017Enum"
+                        "$ref": "#/components/schemas/RoleC86Enum"
                     }
                 },
                 "required": [
@@ -11355,7 +13772,61 @@
                     "new_password"
                 ]
             },
-            "Patch": {
+            "PatchedConnectionUpdate": {
+                "type": "object",
+                "description": "What can change on an existing connection. NOT the identifier, the type or the environment (workflows refer to the identifier; the\ntype decides what the settings mean). The secret: keep it (send nothing), choose an existing one (`secret`), or create a new one\n(`secret_value` or an external reference, optionally named by `new_secret_name`).",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "config": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "environment": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 10
+                    },
+                    "secret": {
+                        "type": "string",
+                        "description": "Nom d'un secret existant de l'espace",
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "secret_value": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 8192
+                    },
+                    "secret_provider": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SecretProviderEnum"
+                            }
+                        ],
+                        "default": "internal"
+                    },
+                    "vault": {
+                        "$ref": "#/components/schemas/VaultRef"
+                    },
+                    "new_secret_name": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    }
+                }
+            },
+            "PatchedControlPatch": {
                 "type": "object",
                 "properties": {
                     "name": {
@@ -11370,6 +13841,10 @@
                         "type": "string",
                         "pattern": "^[A-Za-z0-9_]{1,40}$"
                     },
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
                     "tags": {
                         "type": "array",
                         "items": {
@@ -11382,6 +13857,69 @@
                     "revision": {
                         "type": "integer",
                         "minimum": 1
+                    }
+                }
+            },
+            "PatchedFormPatch": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 60
+                        },
+                        "maxItems": 20
+                    },
+                    "is_template": {
+                        "type": "boolean"
+                    },
+                    "definition": {},
+                    "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
+            "PatchedGroup": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "members": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 150
+                        },
+                        "maxItems": 1000
+                    },
+                    "workflows": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[-a-zA-Z0-9_]+$"
+                        },
+                        "maxItems": 1000
                     }
                 }
             },
@@ -11392,37 +13930,27 @@
                         "type": "string"
                     },
                     "role": {
-                        "$ref": "#/components/schemas/Role017Enum"
+                        "$ref": "#/components/schemas/RoleC86Enum"
                     }
                 }
             },
-            "PatchedPatch": {
+            "PersonalToken": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "maxLength": 160
+                        "default": "Assistant",
+                        "maxLength": 80
                     },
-                    "description": {
-                        "type": "string",
-                        "maxLength": 2000
-                    },
-                    "icon": {
-                        "type": "string",
-                        "pattern": "^[A-Za-z0-9_]{1,40}$"
-                    },
-                    "tags": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "maxLength": 60
-                        },
-                        "maxItems": 20
-                    },
-                    "spec": {},
-                    "revision": {
+                    "hours": {
                         "type": "integer",
-                        "minimum": 1
+                        "maximum": 168,
+                        "minimum": 1,
+                        "default": 8
+                    },
+                    "write": {
+                        "type": "boolean",
+                        "default": false
                     }
                 }
             },
@@ -11650,24 +14178,6 @@
                 "type": "string",
                 "description": "* `local_openai` - Serveur local compatible OpenAI (llama.cpp, Ollama, vLLM)\n* `cloud_anthropic` - Cloud : API Messages d'Anthropic\n* `fake` - Faux fournisseur déterministe (tests)"
             },
-            "Publish": {
-                "type": "object",
-                "properties": {
-                    "changelog": {
-                        "type": "string",
-                        "default": "",
-                        "maxLength": 300
-                    },
-                    "bump": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/BumpEnum"
-                            }
-                        ],
-                        "default": "minor"
-                    }
-                }
-            },
             "Ref": {
                 "type": "object",
                 "properties": {
@@ -11685,17 +14195,18 @@
                     "version"
                 ]
             },
-            "Role017Enum": {
+            "RoleC86Enum": {
                 "enum": [
                     "admin",
                     "space_manager",
                     "designer",
                     "operator",
                     "approver",
-                    "viewer"
+                    "viewer",
+                    "catalog"
                 ],
                 "type": "string",
-                "description": "* `admin` - Administrateur\n* `space_manager` - Responsable d'espace\n* `designer` - Concepteur\n* `operator` - Opérateur\n* `approver` - Approbateur\n* `viewer` - Lecteur"
+                "description": "* `admin` - Administrateur\n* `space_manager` - Responsable d'espace\n* `designer` - Concepteur\n* `operator` - Opérateur\n* `approver` - Approbateur\n* `viewer` - Lecteur\n* `catalog` - Catalogue"
             },
             "Run": {
                 "type": "object",
@@ -11818,14 +14329,25 @@
                         "readOnly": true
                     },
                     "steps": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Step"
+                        },
                         "readOnly": true
                     },
                     "events": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RunEvent"
+                        },
                         "readOnly": true
                     },
                     "graph": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "inspector": {
                         "type": "object",
                         "additionalProperties": {},
                         "readOnly": true
@@ -11843,12 +14365,41 @@
                     "graph",
                     "id",
                     "inputs",
+                    "inspector",
                     "needs_decision",
                     "parent_step_id",
                     "runtime",
                     "status_label",
                     "steps",
                     "workflow"
+                ]
+            },
+            "RunEvent": {
+                "type": "object",
+                "properties": {
+                    "seq": {
+                        "type": "integer"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "node_id": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "message",
+                    "node_id",
+                    "seq",
+                    "type"
                 ]
             },
             "RunRequest": {
@@ -12080,7 +14631,7 @@
                         "maxItems": 20
                     },
                     "version": {
-                        "$ref": "#/components/schemas/VersionInput"
+                        "$ref": "#/components/schemas/SkillVersionInput"
                     },
                     "ai_generated": {
                         "type": "boolean",
@@ -12097,6 +14648,50 @@
                     "version"
                 ]
             },
+            "SkillVersionInput": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "bump": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BumpEnum"
+                            }
+                        ],
+                        "default": "minor"
+                    },
+                    "instructions": {
+                        "type": "string",
+                        "maxLength": 20000
+                    },
+                    "input_schema": {},
+                    "output_schema": {},
+                    "default_provider": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "default": "",
+                                "pattern": "^[-a-zA-Z0-9_]+$"
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    }
+                },
+                "required": [
+                    "instructions",
+                    "output_schema"
+                ]
+            },
             "SourcePreview": {
                 "type": "object",
                 "properties": {
@@ -12105,7 +14700,14 @@
                     },
                     "spec": {},
                     "config": {},
-                    "sample": {}
+                    "sample": {},
+                    "params": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "maxLength": 200
+                        }
+                    }
                 },
                 "required": [
                     "config",
@@ -12121,34 +14723,6 @@
                 ],
                 "type": "string",
                 "description": "* `options` - options\n* `prefill` - prefill"
-            },
-            "Start": {
-                "type": "object",
-                "properties": {
-                    "environment": {
-                        "$ref": "#/components/schemas/EnvironmentEnum"
-                    },
-                    "inputs": {},
-                    "version": {
-                        "type": "string"
-                    },
-                    "callback_url": {
-                        "type": "string",
-                        "format": "uri",
-                        "maxLength": 500
-                    },
-                    "until": {
-                        "type": "string",
-                        "maxLength": 64
-                    },
-                    "draft": {
-                        "type": "boolean",
-                        "default": false
-                    }
-                },
-                "required": [
-                    "environment"
-                ]
             },
             "Status0d0Enum": {
                 "enum": [
@@ -12171,6 +14745,109 @@
                 ],
                 "type": "string",
                 "description": "* `running` - En cours\n* `compensating` - Compensation en cours\n* `succeeded` - Réussie\n* `failed` - Échouée\n* `cancelled` - Annulée"
+            },
+            "Step": {
+                "type": "object",
+                "properties": {
+                    "node_id": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "node_type": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/StepStatusEnum"
+                    },
+                    "status_label": {
+                        "type": "string"
+                    },
+                    "attempt": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "output": {
+                        "nullable": true
+                    },
+                    "error": {
+                        "nullable": true
+                    },
+                    "available_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "finished_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "approval_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "child_run_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "readOnly": true
+                    },
+                    "logs": {
+                        "type": "string",
+                        "description": "Logs of the latest execution of the step (already masked by the worker), capped.",
+                        "readOnly": true
+                    },
+                    "resume_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Only people who may run the workflow see the URL that resumes a waiting step.",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "approval_id",
+                    "child_run_ids",
+                    "execution_id",
+                    "logs",
+                    "name",
+                    "node_id",
+                    "node_type",
+                    "resume_url",
+                    "started_at",
+                    "status_label"
+                ]
+            },
+            "StepStatusEnum": {
+                "enum": [
+                    "running",
+                    "retry_wait",
+                    "waiting",
+                    "uncertain",
+                    "succeeded",
+                    "failed",
+                    "skipped",
+                    "cancelled"
+                ],
+                "type": "string",
+                "description": "* `running` - En cours\n* `retry_wait` - Nouvelle tentative programmée\n* `waiting` - En attente\n* `uncertain` - Issue incertaine : décision requise\n* `succeeded` - Réussie\n* `failed` - Échouée\n* `skipped` - Ignorée\n* `cancelled` - Annulée"
             },
             "TokenCreate": {
                 "type": "object",
@@ -12250,6 +14927,51 @@
                 ],
                 "type": "string",
                 "description": "* `managed` - managed\n* `reference` - reference\n* `dynamic` - dynamic"
+            },
+            "Version": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string",
+                        "maxLength": 20
+                    },
+                    "instructions": {
+                        "type": "string"
+                    },
+                    "input_schema": {},
+                    "output_schema": {},
+                    "default_provider": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 50,
+                                "pattern": "^[-a-zA-Z0-9_]+$"
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "digest": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "instructions",
+                    "version"
+                ]
             },
             "VersionInput": {
                 "type": "object",
@@ -12574,6 +15296,123 @@
                     "updated_at"
                 ]
             },
+            "WorkflowPublish": {
+                "type": "object",
+                "properties": {
+                    "bump": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BumpEnum"
+                            }
+                        ],
+                        "default": "minor"
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    }
+                }
+            },
+            "WorkflowRunStart": {
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "$ref": "#/components/schemas/EnvironmentEnum"
+                    },
+                    "inputs": {},
+                    "version": {
+                        "type": "string"
+                    },
+                    "callback_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 500
+                    },
+                    "until": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "draft": {
+                        "type": "boolean",
+                        "default": false
+                    }
+                },
+                "required": [
+                    "environment"
+                ]
+            },
+            "WorkflowRunStarted": {
+                "type": "object",
+                "description": "Réponse réelle du démarrage : l'exécution (comme la liste) et l'adresse de son suivi. Documentation seulement.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "workflow": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "environment": {
+                        "type": "string"
+                    },
+                    "requested_by": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/Status8f3Enum"
+                    },
+                    "status_label": {
+                        "type": "string"
+                    },
+                    "inputs": {},
+                    "outputs": {
+                        "nullable": true
+                    },
+                    "error": {
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "finished_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "needs_decision": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "cancel_requested": {
+                        "type": "boolean"
+                    },
+                    "parent_step_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "url": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "environment",
+                    "id",
+                    "inputs",
+                    "needs_decision",
+                    "parent_step_id",
+                    "status_label",
+                    "url",
+                    "workflow"
+                ]
+            },
             "WorkflowVersion": {
                 "type": "object",
                 "properties": {
@@ -12619,10 +15458,20 @@
             }
         },
         "securitySchemes": {
+            "bearerToken": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Jeton d'API personnel ou de compte de service (`Authorization: Bearer orch_…`), limité à ses portées."
+            },
             "cookieAuth": {
                 "type": "apiKey",
                 "in": "cookie",
                 "name": "sessionid"
+            },
+            "runnerToken": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Jeton d'un agent d'exécution (`Authorization: Bearer orr_…`) ; ne donne accès qu'au protocole des runners."
             }
         }
     }

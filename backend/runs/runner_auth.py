@@ -5,6 +5,7 @@ import hashlib
 import secrets
 
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import BasePermission
@@ -72,3 +73,17 @@ class RunnerThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         runner = getattr(request, "auth", None)
         return self.cache_format % {"scope": self.scope, "ident": str(runner.pk) if runner else self.get_ident(request)}
+
+
+class RunnerAuthenticationScheme(OpenApiAuthenticationExtension):
+    """Décrit le jeton de runner dans le schéma OpenAPI (documentation seulement : aucun effet sur l'authentification)."""
+
+    target_class = "runs.runner_auth.RunnerAuthentication"
+    name = "runnerToken"
+
+    def get_security_definition(self, auto_schema):
+        return {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Jeton d'un agent d'exécution (`Authorization: Bearer orr_…`) ; ne donne accès qu'au protocole des runners.",
+        }

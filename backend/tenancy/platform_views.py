@@ -3,8 +3,6 @@
 Everything here requires the platform-administrator flag (`is_superuser`) and is audited. These routes are NOT under
 /workspaces/<workspace>/, so the cross-workspace isolation sweep does not cover them: tests/test_platform.py does."""
 
-from datetime import timedelta
-
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.http import Http404
@@ -15,8 +13,6 @@ from rest_framework.views import APIView
 
 from audit.models import AuditEvent, record
 from core import netsec
-from core.health import STALE
-from runs.models import ServiceInstance
 
 from .models import EgressHost, Environment, Membership, Organization, Role, Workspace
 from .permissions import require_platform_admin
@@ -129,41 +125,6 @@ class WorkspaceAdminView(_Guarded):
             created=created,
         )
         return Response(_workspace_row(ws), status=201 if created else 200)
-
-
-class WorkersView(_Guarded):
-    def get(self, request):
-        now = timezone.now()
-        rows = ServiceInstance.objects.order_by("kind", "name")
-        return Response(
-            {
-                "results": [
-                    {
-                        "kind": w.kind,
-                        "name": w.name,
-                        "hostname": w.hostname,
-                        "pid": w.pid,
-                        "started_at": w.started_at,
-                        "last_seen_at": w.last_seen_at,
-                        "alive": now - w.last_seen_at <= STALE,
-                        "info": w.info,
-                    }
-                    for w in rows
-                ]
-            }
-        )
-
-
-class WorkersPurgeView(_Guarded):
-    """Forget processes that stopped reporting (never touches a live one). Starting/stopping processes is an operations task."""
-
-    def post(self, request):
-        cutoff = timezone.now() - max(STALE, timedelta(minutes=1))
-        stale = ServiceInstance.objects.filter(last_seen_at__lt=cutoff)
-        n = stale.count()
-        stale.delete()
-        record("platform.workers_purge", actor=request.user, removed=n)
-        return Response({"removed": n})
 
 
 class PlatformAdminsView(_Guarded):

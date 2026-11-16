@@ -21,6 +21,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypedDict
 
 from .runtime_config import WORKERS_DIR, settings
 
@@ -32,8 +33,17 @@ NETWORK_POLICIES = {
     "test-service": "test-service",
 }  # "test-service" -> settings.ORCH_EGRESS_TEST_NETWORK
 
+
 # runtime -> (source file name, harness (None = shell), image setting, command inside the container)
-RUNTIMES = {
+class _Runtime(TypedDict):
+    file: str
+    harness: str | None
+    image: str
+    cmd: list[str]
+    local: list[str]
+
+
+RUNTIMES: dict[str, _Runtime] = {
     "python": {
         "file": "action.py",
         "harness": "python/harness.py",
@@ -141,7 +151,8 @@ def _parse(stdout: bytes, stderr: bytes, code: int | None, shell: bool = False) 
             )
     try:
         envelope = json.loads(lines[-1])
-        assert envelope.get("protocol") == 1
+        if envelope.get("protocol") != 1:
+            raise ValueError("protocole inattendu")
     except Exception:  # noqa: BLE001
         return RunOutcome(
             False,
@@ -203,7 +214,7 @@ class SubprocessRunner:
                 "ORCH_INPUT_FILE": str(workdir / "input.json"),
                 **(env or {}),
             }
-            proc = subprocess.Popen(  # noqa: S603
+            proc = subprocess.Popen(  # noqa: S603 - exécuteur « subprocess » réservé au développement ; commande issue de la spécification de l'action
                 [*spec["local"], str(workdir / target)],
                 cwd=workdir,
                 stdout=subprocess.PIPE,
@@ -231,7 +242,7 @@ class SubprocessRunner:
 def _watch_started(proc, name: str, started: threading.Event) -> None:
     """Set `started` once the container is running (or the docker process has ended)."""
     while not started.is_set() and proc.poll() is None:
-        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)  # noqa: S603,S607
+        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)  # noqa: S603,S607 - docker du PATH de l'orchestrateur, arguments fixes, nom de conteneur généré par la plateforme
         if r.stdout.strip() == "true":
             break
         time.sleep(0.15)
@@ -321,12 +332,12 @@ class DockerRunner:
         image = getattr(settings, spec["image"])
         cmd = build_docker_command(name, image, network, memory, workdir, env_file, spec)
         try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # noqa: S603
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # noqa: S603 - liste d'arguments de build_docker_command, sans shell
             started = threading.Event()
             threading.Thread(target=_watch_started, args=(proc, name, started), daemon=True).start()
 
             def stop():
-                subprocess.run(["docker", "stop", "-t", str(CANCEL_GRACE_SECONDS), name], capture_output=True)  # noqa: S603,S607
+                subprocess.run(["docker", "stop", "-t", str(CANCEL_GRACE_SECONDS), name], capture_output=True)  # noqa: S603,S607 - docker du PATH de l'orchestrateur, arguments fixes, nom de conteneur généré par la plateforme
 
             out, err, reason = _communicate(proc, timeout, cancel, stop, started)
             if reason == "cancelled":

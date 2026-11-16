@@ -85,10 +85,13 @@ test("administrateur d'espace : runner dédié, runners partagés désactivables
 
 test("un concepteur n'a accès à aucune gestion de runner", async ({ page }) => {
   await login(page, "alice");
+  // « demo » est l'espace de la démonstration (alice y est concevante) : membre sans le droit d'administrer → 403.
+  // Un espace inconnu ou dont elle n'est pas membre répond 404, sans révéler son existence (tenancy.permissions.get_workspace).
   const codes = await page.evaluate(async () => {
     const get = (u: string) => fetch(u, { credentials: "same-origin" }).then((r) => r.status);
-    return [await get("/api/v1/platform/runners/"), await get("/api/v1/workspaces/vitrine/runners/")];
+    return [await get("/api/v1/platform/runners/"), await get("/api/v1/workspaces/demo/runners/"), await get("/api/v1/workspaces/espace-inexistant/runners/")];
   });
   expect(codes[0]).toBeGreaterThanOrEqual(403);
   expect(codes[1]).toBe(403);
+  expect(codes[2]).toBe(404);
 });

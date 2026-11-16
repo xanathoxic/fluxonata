@@ -21,6 +21,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 
 import jsonschema
 
+from runs import ssh_node
 from runs.builtin import get_script_version
 from runs.engine import _script_output_problem, script_payload
 from workflows.expressions import ExpressionError, evaluate, resolve
@@ -85,7 +86,7 @@ def sample_inputs(schema: dict, variant: str) -> dict:
     return {k: synth(v, variant, k) for k, v in props.items()}
 
 
-def valid_inputs(schema: dict, value) -> bool:
+def valid_inputs(schema: dict | None, value) -> bool:
     try:
         jsonschema.validate(value, schema or {"type": "object"})
         return isinstance(value, dict)
@@ -154,6 +155,7 @@ def prepare(graph: dict, workspace, cache: dict | None = None) -> dict:
             for n in nodes
             if n["type"] == "foreach"
         },
+        "ssh": ssh_node.endpoints_of(workspace) if any(n["type"] == "ssh" for n in nodes) else {},
         "cache": cache if cache is not None else {},  # identical script runs (same code, same values) are done once
         "lock": threading.Lock(),
     }
@@ -180,7 +182,7 @@ def _run_script(runner, helpers: dict, node: dict, payload: dict):
     return res
 
 
-def run_scenario(  # noqa: C901
+def run_scenario(
     graph: dict,
     workspace,
     runner,
@@ -200,371 +202,417 @@ def run_scenario(  # noqa: C901
 ) -> dict:
     """Walk the graph with the engine's activation rules. `strict`: problems are errors (the nominal scenario) rather
     than warnings (edge cases, which may legitimately fail on empty data)."""
-    helpers = helpers or prepare(graph, workspace)
-    fails = {fail} if isinstance(fail, str) else set(fail or ())
-    forced = {force[0]: {force[1]: force[2]}} if isinstance(force, tuple) else dict(force or {})
-    nodes = {n["id"]: n for n in graph.get("nodes", [])}
-    incoming = {i: [e for e in graph.get("edges", []) if e["to"] == i] for i in nodes}
-    outgoing = {i: [e for e in graph.get("edges", []) if e["from"] == i] for i in nodes}
-    order = topo_order(graph.get("nodes", []), graph.get("edges", [])) or list(nodes)
-    ctx = {
-        "inputs": inputs,
-        "vars": {v["name"]: v.get("value") for v in graph.get("variables") or []},
-        "run": {"id": "essai", "started_at": "2026-01-01T00:00:00+00:00", "environment": "dev"},
-        "steps": {},
-    }
-    state: dict[str, str] = {}
-    decided: dict[str, bool] = {}
-    chosen: dict[str, str] = {}  # multi-way choices: the case taken
-    steps: list[dict] = []
-    problems: list[dict] = []
-    level = "error" if strict else "warning"
-
-    def problem(nid, code, message):
-        problems.append(
-            {
-                "node": nid,
-                "level": level,
-                "code": code,
-                "message": f"{message} (essai « {label} »)",
-                "scenario": label,
-                "mechanical": mechanical,
-            }
-        )
-
-    def record(nid, status, detail="", output=None):
-        steps.append(
-            {
-                "id": nid,
-                "name": nodes[nid].get("name") or nid,
-                "type": nodes[nid]["type"],
-                "state": status,
-                "detail": detail,
-                **({"output": output} if output is not None else {}),
-            }
-        )
-
-    def lookup_failure(nid, exc: ExpressionError) -> str:
-        skipped = [s for s in re.findall(r"steps\.(\w+)", str(exc)) if state.get(s) == "skipped"]
-        gone = (
-            f" : l'étape « {nodes[skipped[0]].get('name') or skipped[0]} » n'a pas été exécutée sur ce chemin"
-            if skipped
-            else ""
-        )
-        return f"{exc}{gone}"
-
-    outcome = {"status": "succeeded", "message": ""}
-    executed = 0
-    try:
-        for nid in order:
-            node, inc = nodes[nid], incoming[nid]
-            if time.monotonic() > deadline or executed >= max_steps:
-                outcome = {"status": "stopped", "message": "Essai interrompu (durée ou nombre d'étapes maximal)."}
-                break
-            active = []
-            for e in inc:
-                src, lab = state.get(e["from"]), e.get("label") or "next"
-                if src == "ok":
-                    if nodes[e["from"]]["type"] == "condition":
-                        ok = lab == str(decided[e["from"]]).lower()
-                    elif nodes[e["from"]]["type"] == "switch":
-                        ok = lab == chosen[e["from"]]
-                    else:
-                        ok = lab == "next"
-                elif src == "failed":
-                    ok = lab == "error"
-                else:
-                    ok = False
-                active.append(ok)
-            if inc and not any(active):
-                state[nid] = "skipped"
-                record(nid, "skipped", "Chemin non emprunté dans cet essai.")
-                continue
-            executed += 1
-            t = node["type"]
-            try:
-                if nid in fails and t in ("action", "subworkflow", "ai", "foreach"):
-                    state[nid] = "failed"  # a failure we decided: the error exit is what this scenario is about
-                    record(nid, "simulated", "Échec simulé : on suit la sortie d'erreur.")
-                    if not any(e.get("label") == "error" for e in outgoing[nid]):
-                        raise _Fatal("étape en échec")
-                elif t == "script":
-                    try:
-                        payload = script_payload(node, ctx)
-                    except ExpressionError as exc:
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"Une liaison du script « {node.get('name') or nid} » ne peut pas être lue : {lookup_failure(nid, exc)}",
-                        )
-                        raise _Fatal(f"liaison illisible : {exc}") from None
-                    try:
-                        res = _run_script(runner, helpers, node, payload)
-                    except Exception as exc:  # noqa: BLE001  (the runner itself is unavailable: not the script's fault)
-                        log.exception("essai à blanc : le lanceur d'actions est indisponible")
-                        raise _Fatal(f"__infra__:{type(exc).__name__} : {exc}"[:300]) from None
-                    if (res.error or {}).get("code") in INFRA_CODES:
-                        raise _Fatal(f"__infra__:{res.error.get('message')}")
-                    if not res.ok:
-                        why, where, at = _crash(res)
-                        if not _deliberate(node.get("script", ""), at):
-                            problem(
-                                nid,
-                                "dryrun_script_error",
-                                f"Le script « {node.get('name') or nid} » plante{where} : {why}",
-                            )
-                        state[nid] = "failed"
-                        record(nid, "failed", f"{why}{where}")
-                        if not any(e.get("label") == "error" for e in outgoing[nid]):
-                            raise _Fatal(f"script en échec : {why}")
-                        continue
-                    wrong = _script_output_problem(node, res.result)
-                    if wrong:
-                        problem(nid, "dryrun_output", f"Script « {node.get('name') or nid} » : {wrong}")
-                        state[nid] = "failed"
-                        record(nid, "failed", wrong)
-                        if not any(e.get("label") == "error" for e in outgoing[nid]):
-                            raise _Fatal(wrong)
-                        continue
-                    ctx["steps"][nid] = {"output": res.result}
-                    state[nid] = "ok"
-                    record(
-                        nid, "ok", "Exécuté dans le bac à sable.", {k: _short(v) for k, v in (res.result or {}).items()}
-                    )
-                elif t == "condition":
-                    expr = re.sub(r"\{\{\s*(.*?)\s*\}\}", r"\1", str(node.get("expr") or "")).strip()
-                    try:
-                        decided[nid] = bool(evaluate(expr, ctx))
-                    except ExpressionError as exc:
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"La décision « {node.get('name') or nid} » ne peut pas être évaluée : {lookup_failure(nid, exc)}",
-                        )
-                        state[nid] = "failed"
-                        record(nid, "failed", str(exc))
-                        raise _Fatal(f"décision illisible : {exc}") from None
-                    ctx["steps"][nid] = {"output": {"result": decided[nid]}}
-                    state[nid] = "ok"
-                    record(nid, "ok", "Oui" if decided[nid] else "Non")
-                elif t == "switch":
-                    forced_case = (pick or {}).get(nid)
-                    try:
-                        chosen[nid] = forced_case or next(
-                            (
-                                c["id"]
-                                for c in node.get("cases") or []
-                                if evaluate(
-                                    re.sub(r"\{\{\s*(.*?)\s*\}\}", r"\1", str(c.get("expr") or "")).strip(), ctx
-                                )
-                            ),
-                            "default",
-                        )
-                    except ExpressionError as exc:
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"Le choix « {node.get('name') or nid} » ne peut pas être évalué : {lookup_failure(nid, exc)}",
-                        )
-                        state[nid] = "failed"
-                        record(nid, "failed", str(exc))
-                        raise _Fatal(f"choix illisible : {exc}") from None
-                    ctx["steps"][nid] = {"output": {"result": chosen[nid]}}
-                    state[nid] = "ok"
-                    record(nid, "ok", f"Cas « {chosen[nid]} »" + (" (imposé par l'essai)" if forced_case else ""))
-                elif t == "throw":
-                    state[nid] = "failed"
-                    record(nid, "failed", str(node.get("message") or "Exception"))
-                    raise _Fatal(f"exception « {node.get('message') or nid} »")
-                elif t == "approval":
-                    if approve:
-                        ctx["steps"][nid] = {"output": {"approved": True, "decided_by": "essai", "comment": ""}}
-                        state[nid] = "ok"
-                        record(nid, "simulated", "Approbation simulée : accordée.")
-                    else:
-                        state[nid] = "failed"
-                        record(nid, "simulated", "Approbation simulée : refusée.")
-                        if not any(e.get("label") == "error" for e in outgoing[nid]):
-                            raise _Fatal("approbation refusée")
-                elif t == "foreach":
-                    try:
-                        listed = evaluate(
-                            re.sub(r"\{\{\s*(.*?)\s*\}\}", r"\1", str(node.get("items") or "")).strip(), ctx
-                        )
-                        resolve(node.get("inputs") or {}, {**ctx, "inputs": ctx["inputs"]})
-                    except ExpressionError as exc:
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"La boucle « {node.get('name') or nid} » ne peut pas lire sa liste : {lookup_failure(nid, exc)}",
-                        )
-                        state[nid] = "failed"
-                        record(nid, "failed", str(exc))
-                        raise _Fatal(f"boucle illisible : {exc}") from None
-                    if not isinstance(listed, list):
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"La boucle « {node.get('name') or nid} » doit parcourir une liste, elle reçoit {type(listed).__name__}.",
-                        )
-                        state[nid] = "failed"
-                        record(nid, "failed", "Ce n'est pas une liste.")
-                        raise _Fatal("boucle sur autre chose qu'une liste")
-                    child = helpers["loops"].get(nid, {})
-                    ctx["steps"][nid] = {"output": {"count": len(listed), "results": [dict(child) for _ in listed[:3]]}}
-                    state[nid] = "ok"
-                    record(
-                        nid,
-                        "simulated",
-                        f"Boucle simulée : {len(listed)} élément(s), {min(len(listed), 3)} résultat(s) d'exemple.",
-                    )
-                elif t in ("action", "subworkflow", "ai"):
-                    try:
-                        resolve(node.get("inputs") or {}, ctx)
-                        if t == "ai" and node.get("prompt"):
-                            resolve(node["prompt"], ctx)
-                    except ExpressionError as exc:
-                        problem(
-                            nid,
-                            "dryrun_expression",
-                            f"Une valeur de l'étape « {node.get('name') or nid} » ne peut pas être lue : {lookup_failure(nid, exc)}",
-                        )
-                        state[nid] = "failed"
-                        record(nid, "failed", str(exc))
-                        if not any(e.get("label") == "error" for e in outgoing[nid]):
-                            raise _Fatal(f"valeur illisible : {exc}") from None
-                        continue
-                    ctx["steps"][nid] = {
-                        "output": {
-                            **helpers["contracts"].get(nid, {}),
-                            **forced.get(nid, {}),
-                        }
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Simulée : sortie construite d'après son contrat.")
-                elif t == "transform":
-                    from workflows import transforms
-
-                    try:
-                        produced = transforms.apply(node, ctx)
-                        note = "Transformation exécutée sur les données d'essai."
-                    except transforms.TransformError:
-                        produced = transforms.output_fields(node)
-                        produced = {
-                            k: ([] if v.get("type") == "array" else 0 if v.get("type") == "integer" else "")
-                            for k, v in produced.items()
-                        }
-                        note = "Transformation simulée (données d'essai inexploitables : sortie vide)."
-                    ctx["steps"][nid] = {"output": produced}
-                    state[nid] = "ok"
-                    record(nid, "simulated", note)
-                elif t == "smtp":
-                    ctx["steps"][nid] = {
-                        "output": {"sent": False, "simulated": True, "recipients": 1, "message_id": None}
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "E-mail simulé : rien n'est envoyé.")
-                elif t == "sftp":
-                    ctx["steps"][nid] = {
-                        "output": {
-                            "operation": node.get("operation", "list"),
-                            "path": "/",
-                            "entries": [],
-                            "count": 0,
-                            "content": "",
-                            "simulated": True,
-                        }
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Fichier SFTP simulé : rien n'est envoyé.")
-                elif t == "ldap":
-                    ctx["steps"][nid] = {"output": {"rows": [], "count": 0, "truncated": False, "simulated": True}}
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Recherche d'annuaire simulée : rien n'est envoyé.")
-                elif t == "while":
-                    ctx["steps"][nid] = {"output": {"iterations": 1, "results": [], "last": {}, "stopped": "condition"}}
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Boucle « tant que » simulée : une seule répétition.")
-                elif t == "agent":
-                    ctx["steps"][nid] = {
-                        "output": {
-                            "answer": "réponse d'exemple",
-                            "iterations": 1,
-                            "steps": [],
-                            "stopped": "done",
-                            "simulated": True,
-                        }
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Agent simulé : le modèle n'est pas interrogé dans l'essai à blanc.")
-                elif t == "sql":
-                    ctx["steps"][nid] = {
-                        "output": {"rows": [], "count": 0, "columns": [], "truncated": False, "simulated": True}
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Requête SQL simulée : rien n'est envoyé.")
-                elif t == "http":
-                    ctx["steps"][nid] = {
-                        "output": {"status": 200, "ok": True, "headers": {}, "body": {}, "simulated": True}
-                    }
-                    state[nid] = "ok"
-                    record(nid, "simulated", "Requête HTTP simulée : rien n'est envoyé.")
-                else:  # wait, join
-                    ctx["steps"][nid] = {
-                        "output": {"resumed": True, "payload": {}} if node.get("resume") == "webhook" else {}
-                    }
-                    state[nid] = "ok"
-                    record(
-                        nid,
-                        "simulated" if t == "wait" else "ok",
-                        "Attente simulée (non attendue)." if t == "wait" else "",
-                    )
-            except _Fatal:
-                raise
-    except _Fatal as stop:
-        text = str(stop)
-        outcome = {
-            "status": "infra" if text.startswith("__infra__") else "failed",
-            "message": text.removeprefix("__infra__:"),
-        }
+    walk = _Walk(
+        graph,
+        runner,
+        helpers or prepare(graph, workspace),
+        label=label,
+        inputs=inputs,
+        approve=approve,
+        strict=strict,
+        mechanical=mechanical,
+        fail=fail,
+        force=force,
+        pick=pick,
+    )
+    outcome = walk.run(deadline, max_steps)
     if not approve and outcome["status"] == "failed" and outcome["message"] == "approbation refusée":
-        for x in [x for x in steps if x["type"] == "approval" and x["state"] == "simulated"][
-            -1:
-        ]:  # the one that ended it
-            problems.append(
-                {
-                    "node": x["id"],
-                    "level": "warning",
-                    "code": "dryrun_refusal",
-                    "scenario": label,
-                    "message": f"Si « {x['name']} » est refusée, le workflow s'arrête sans message ni notification : "
-                    "aucune sortie d'erreur n'est reliée à cette étape (ajoutez ce qui doit se passer en cas de refus) "
-                    f"(essai « {label} »).",
-                }
-            )
-    for want in expected or []:
-        out = (ctx["steps"].get(want.get("step")) or {}).get("output") or {}
-        if want.get("field") in out and not _same(out[want["field"]], want.get("value")):
+        walk.problems += _refusal_problems(walk.steps, label)
+    walk.problems += _expectation_problems(expected or [], walk.ctx, walk.nodes, label)
+    return {
+        "label": label,
+        "inputs": inputs,
+        "approve": approve,
+        "outcome": outcome,
+        "steps": walk.steps,
+        "problems": walk.problems,
+    }
+
+
+def _refusal_problems(steps: list[dict], label: str) -> list[dict]:
+    """An approval refused with no error exit ends the run silently: say so for the one that ended it."""
+    return [
+        {
+            "node": x["id"],
+            "level": "warning",
+            "code": "dryrun_refusal",
+            "scenario": label,
+            "message": f"Si « {x['name']} » est refusée, le workflow s'arrête sans message ni notification : "
+            "aucune sortie d'erreur n'est reliée à cette étape (ajoutez ce qui doit se passer en cas de refus) "
+            f"(essai « {label} »).",
+        }
+        for x in [x for x in steps if x["type"] == "approval" and x["state"] == "simulated"][-1:]
+    ]
+
+
+def _expectation_problems(expected: list, ctx: dict, nodes: dict, label: str) -> list[dict]:
+    """The results the request states, compared with what the steps produced."""
+    out = []
+    for want in expected:
+        got = (ctx["steps"].get(want.get("step")) or {}).get("output") or {}
+        if want.get("field") in got and not _same(got[want["field"]], want.get("value")):
             node = nodes.get(want["step"], {})
-            problems.append(
+            out.append(
                 {
                     "node": want["step"],
                     "level": "warning",
                     "code": "dryrun_unexpected",
                     "scenario": label,
                     "message": f"Résultat différent de l'attendu pour « {node.get('name') or want['step']} » ({want['field']}) : "
-                    f"attendu {_short(want.get('value'))}, obtenu {_short(out[want['field']])} (essai « {label} »). À vérifier : "
+                    f"attendu {_short(want.get('value'))}, obtenu {_short(got[want['field']])} (essai « {label} »). À vérifier : "
                     "l'attendu vient de la demande, l'obtenu de l'exécution du script.",
                 }
             )
+    return out
+
+
+def _sftp_output(node: dict) -> dict:
     return {
-        "label": label,
-        "inputs": inputs,
-        "approve": approve,
-        "outcome": outcome,
-        "steps": steps,
-        "problems": problems,
+        "operation": node.get("operation", "list"),
+        "path": "/",
+        "entries": [],
+        "count": 0,
+        "content": "",
+        "simulated": True,
     }
+
+
+# kinds that are only simulated: (output, message) — the output may depend on the step
+_FIXED_STEPS = {
+    "smtp": (
+        {"sent": False, "simulated": True, "recipients": 1, "message_id": None},
+        "E-mail simulé : rien n'est envoyé.",
+    ),
+    "sftp": (_sftp_output, "Fichier SFTP simulé : rien n'est envoyé."),
+    "ldap": (
+        {"rows": [], "count": 0, "truncated": False, "simulated": True},
+        "Recherche d'annuaire simulée : rien n'est envoyé.",
+    ),
+    "while": (
+        {"iterations": 1, "results": [], "last": {}, "stopped": "condition"},
+        "Boucle « tant que » simulée : une seule répétition.",
+    ),
+    "agent": (
+        {"answer": "réponse d'exemple", "iterations": 1, "steps": [], "stopped": "done", "simulated": True},
+        "Agent simulé : le modèle n'est pas interrogé dans l'essai à blanc.",
+    ),
+    "sql": (
+        {"rows": [], "count": 0, "columns": [], "truncated": False, "simulated": True},
+        "Requête SQL simulée : rien n'est envoyé.",
+    ),
+    "http": (
+        {"status": 200, "ok": True, "headers": {}, "body": {}, "simulated": True},
+        "Requête HTTP simulée : rien n'est envoyé.",
+    ),
+}
+
+
+def _placeholders(text) -> str:
+    """An expression written with or without its {{ }} braces, as the bare expression."""
+    return re.sub(r"\{\{\s*(.*?)\s*\}\}", r"\1", str(text or "")).strip()
+
+
+class _Walk:
+    """One scenario: the graph walked in order with the engine's activation rules, each step run or simulated."""
+
+    def __init__(self, graph, runner, helpers, *, label, inputs, approve, strict, mechanical, fail, force, pick):
+        self.runner, self.helpers, self.label, self.approve = runner, helpers, label, approve
+        self.mechanical, self.pick = mechanical, pick
+        self.fails = {fail} if isinstance(fail, str) else set(fail or ())
+        self.forced = {force[0]: {force[1]: force[2]}} if isinstance(force, tuple) else dict(force or {})
+        self.nodes = {n["id"]: n for n in graph.get("nodes", [])}
+        self.incoming = {i: [e for e in graph.get("edges", []) if e["to"] == i] for i in self.nodes}
+        self.outgoing = {i: [e for e in graph.get("edges", []) if e["from"] == i] for i in self.nodes}
+        self.order = topo_order(graph.get("nodes", []), graph.get("edges", [])) or list(self.nodes)
+        self.ctx: dict = {
+            "inputs": inputs,
+            "vars": {v["name"]: v.get("value") for v in graph.get("variables") or []},
+            "run": {"id": "essai", "started_at": "2026-01-01T00:00:00+00:00", "environment": "dev"},
+            "steps": {},
+        }
+        self.state: dict[str, str] = {}
+        self.decided: dict[str, bool] = {}
+        self.chosen: dict[str, str] = {}  # multi-way choices: the case taken
+        self.steps: list[dict] = []
+        self.problems: list[dict] = []
+        self.level = "error" if strict else "warning"
+
+    # ---- bookkeeping
+    def problem(self, nid, code, message):
+        self.problems.append(
+            {
+                "node": nid,
+                "level": self.level,
+                "code": code,
+                "message": f"{message} (essai « {self.label} »)",
+                "scenario": self.label,
+                "mechanical": self.mechanical,
+            }
+        )
+
+    def record(self, nid, status, detail="", output=None):
+        self.steps.append(
+            {
+                "id": nid,
+                "name": self.nodes[nid].get("name") or nid,
+                "type": self.nodes[nid]["type"],
+                "state": status,
+                "detail": detail,
+                **({"output": output} if output is not None else {}),
+            }
+        )
+
+    def lookup_failure(self, exc: ExpressionError) -> str:
+        skipped = [s for s in re.findall(r"steps\.(\w+)", str(exc)) if self.state.get(s) == "skipped"]
+        gone = (
+            f" : l'étape « {self.nodes[skipped[0]].get('name') or skipped[0]} » n'a pas été exécutée sur ce chemin"
+            if skipped
+            else ""
+        )
+        return f"{exc}{gone}"
+
+    def name(self, nid) -> str:
+        return self.nodes[nid].get("name") or nid
+
+    def done(self, nid, output, status, detail="", shown=None):
+        """The step went well: its output is readable by the next ones."""
+        self.ctx["steps"][nid] = {"output": output}
+        self.state[nid] = "ok"
+        self.record(nid, status, detail, shown)
+
+    def failed(self, nid, status, detail, output=None):
+        self.state[nid] = "failed"
+        self.record(nid, status, detail, output)
+
+    def need_error_exit(self, nid, message):
+        """A failed step with no error exit ends the whole run."""
+        if not any(e.get("label") == "error" for e in self.outgoing[nid]):
+            raise _Fatal(message)
+
+    def unreadable(self, nid, what, exc, ending):
+        """An expression of the step cannot be read: a problem, the step fails, the run ends (`ending`)."""
+        self.problem(nid, "dryrun_expression", f"{what} : {self.lookup_failure(exc)}")
+        self.failed(nid, "failed", str(exc))
+        raise _Fatal(f"{ending} : {exc}") from None
+
+    # ---- walking
+    def run(self, deadline: float, max_steps: int) -> dict:
+        executed = 0
+        try:
+            for nid in self.order:
+                if time.monotonic() > deadline or executed >= max_steps:
+                    return {"status": "stopped", "message": "Essai interrompu (durée ou nombre d'étapes maximal)."}
+                if self.incoming[nid] and not self.reached(nid):
+                    self.state[nid] = "skipped"
+                    self.record(nid, "skipped", "Chemin non emprunté dans cet essai.")
+                    continue
+                executed += 1
+                self.step(nid, self.nodes[nid])
+        except _Fatal as stop:
+            text = str(stop)
+            return {
+                "status": "infra" if text.startswith("__infra__") else "failed",
+                "message": text.removeprefix("__infra__:"),
+            }
+        return {"status": "succeeded", "message": ""}
+
+    def reached(self, nid) -> bool:
+        """At least one incoming edge is taken: from a step that went well by its own exit, or from a failed one by `error`."""
+        for e in self.incoming[nid]:
+            src, label = self.state.get(e["from"]), e.get("label") or "next"
+            kind = self.nodes[e["from"]]["type"]
+            if src == "ok":
+                if kind == "condition":
+                    taken = label == str(self.decided[e["from"]]).lower()
+                elif kind == "switch":
+                    taken = label == self.chosen[e["from"]]
+                else:
+                    taken = label == "next"
+            else:
+                taken = src == "failed" and label == "error"
+            if taken:
+                return True
+        return False
+
+    def step(self, nid, node):
+        kind = node["type"]
+        if nid in self.fails and kind in ("action", "subworkflow", "ai", "foreach"):  # (SSH handles `fails` itself)
+            self.failed(
+                nid, "simulated", "Échec simulé : on suit la sortie d'erreur."
+            )  # the scenario is about the error exit
+            self.need_error_exit(nid, "étape en échec")
+        elif kind in _FIXED_STEPS:
+            output, message = _FIXED_STEPS[kind]
+            self.done(nid, output(node) if callable(output) else output, "simulated", message)
+        else:
+            getattr(self, "step_" + _STEP_METHODS.get(kind, "other"))(nid, node)
+
+    # ---- one method per kind that does more than answer with a fixed output
+    def step_script(self, nid, node):
+        try:
+            payload = script_payload(node, self.ctx)
+        except ExpressionError as exc:
+            self.problem(
+                nid,
+                "dryrun_expression",
+                f"Une liaison du script « {self.name(nid)} » ne peut pas être lue : {self.lookup_failure(exc)}",
+            )
+            raise _Fatal(f"liaison illisible : {exc}") from None
+        try:
+            res = _run_script(self.runner, self.helpers, node, payload)
+        except Exception as exc:  # noqa: BLE001  (the runner itself is unavailable: not the script's fault)
+            log.exception("essai à blanc : le lanceur d'actions est indisponible")
+            raise _Fatal(f"__infra__:{type(exc).__name__} : {exc}"[:300]) from None
+        if (res.error or {}).get("code") in INFRA_CODES:
+            raise _Fatal(f"__infra__:{res.error.get('message')}")
+        if not res.ok:
+            why, where, at = _crash(res)
+            if not _deliberate(node.get("script", ""), at):
+                self.problem(nid, "dryrun_script_error", f"Le script « {self.name(nid)} » plante{where} : {why}")
+            self.failed(nid, "failed", f"{why}{where}")
+            self.need_error_exit(nid, f"script en échec : {why}")
+            return
+        wrong = _script_output_problem(node, res.result)
+        if wrong:
+            self.problem(nid, "dryrun_output", f"Script « {self.name(nid)} » : {wrong}")
+            self.failed(nid, "failed", wrong)
+            self.need_error_exit(nid, wrong)
+            return
+        self.done(
+            nid, res.result, "ok", "Exécuté dans le bac à sable.", {k: _short(v) for k, v in (res.result or {}).items()}
+        )
+
+    def step_condition(self, nid, node):
+        try:
+            self.decided[nid] = bool(evaluate(_placeholders(node.get("expr")), self.ctx))
+        except ExpressionError as exc:
+            self.unreadable(
+                nid, f"La décision « {self.name(nid)} » ne peut pas être évaluée", exc, "décision illisible"
+            )
+        self.done(nid, {"result": self.decided[nid]}, "ok", "Oui" if self.decided[nid] else "Non")
+
+    def step_switch(self, nid, node):
+        forced_case = (self.pick or {}).get(nid)
+        try:
+            self.chosen[nid] = forced_case or next(
+                (c["id"] for c in node.get("cases") or [] if evaluate(_placeholders(c.get("expr")), self.ctx)),
+                "default",
+            )
+        except ExpressionError as exc:
+            self.unreadable(nid, f"Le choix « {self.name(nid)} » ne peut pas être évalué", exc, "choix illisible")
+        self.done(
+            nid,
+            {"result": self.chosen[nid]},
+            "ok",
+            f"Cas « {self.chosen[nid]} »" + (" (imposé par l'essai)" if forced_case else ""),
+        )
+
+    def step_throw(self, nid, node):
+        self.failed(nid, "failed", str(node.get("message") or "Exception"))
+        raise _Fatal(f"exception « {node.get('message') or nid} »")
+
+    def step_approval(self, nid, node):
+        if self.approve:
+            self.done(
+                nid,
+                {"approved": True, "decided_by": "essai", "comment": ""},
+                "simulated",
+                "Approbation simulée : accordée.",
+            )
+            return
+        self.failed(nid, "simulated", "Approbation simulée : refusée.")
+        self.need_error_exit(nid, "approbation refusée")
+
+    def step_foreach(self, nid, node):
+        try:
+            listed = evaluate(_placeholders(node.get("items")), self.ctx)
+            resolve(node.get("inputs") or {}, {**self.ctx, "inputs": self.ctx["inputs"]})
+        except ExpressionError as exc:
+            self.unreadable(nid, f"La boucle « {self.name(nid)} » ne peut pas lire sa liste", exc, "boucle illisible")
+        if not isinstance(listed, list):
+            self.problem(
+                nid,
+                "dryrun_expression",
+                f"La boucle « {self.name(nid)} » doit parcourir une liste, elle reçoit {type(listed).__name__}.",
+            )
+            self.failed(nid, "failed", "Ce n'est pas une liste.")
+            raise _Fatal("boucle sur autre chose qu'une liste")
+        child = self.helpers["loops"].get(nid, {})
+        self.done(
+            nid,
+            {"count": len(listed), "results": [dict(child) for _ in listed[:3]]},
+            "simulated",
+            f"Boucle simulée : {len(listed)} élément(s), {min(len(listed), 3)} résultat(s) d'exemple.",
+        )
+
+    def step_call(self, nid, node):
+        """Actions, sub-workflows and AI steps: simulated from their contract, after reading their values."""
+        try:
+            resolve(node.get("inputs") or {}, self.ctx)
+            if node["type"] == "ai" and node.get("prompt"):
+                resolve(node["prompt"], self.ctx)
+        except ExpressionError as exc:
+            self.problem(
+                nid,
+                "dryrun_expression",
+                f"Une valeur de l'étape « {self.name(nid)} » ne peut pas être lue : {self.lookup_failure(exc)}",
+            )
+            self.failed(nid, "failed", str(exc))
+            self.need_error_exit(nid, f"valeur illisible : {exc}")
+            return
+        output = {**self.helpers["contracts"].get(nid, {}), **self.forced.get(nid, {})}
+        self.done(nid, output, "simulated", "Simulée : sortie construite d'après son contrat.")
+
+    def step_transform(self, nid, node):
+        from workflows import transforms
+
+        try:
+            produced = transforms.apply(node, self.ctx)
+            note = "Transformation exécutée sur les données d'essai."
+        except transforms.TransformError:
+            produced = {
+                k: ([] if v.get("type") == "array" else 0 if v.get("type") == "integer" else "")
+                for k, v in transforms.output_fields(node).items()
+            }
+            note = "Transformation simulée (données d'essai inexploitables : sortie vide)."
+        self.done(nid, produced, "simulated", note)
+
+    def step_ssh(self, nid, node):
+        out = ssh_node.dryrun_output(node, self.ctx, self.helpers["ssh"], force_failure=nid in self.fails)
+        self.ctx["steps"][nid] = {
+            "output": out
+        }  # partial results stay readable by the `error` branch, as for the real step
+        if out["status"] == "failed":
+            self.failed(nid, "simulated", "Commandes SSH simulées : échec simulé, on suit la sortie d'erreur.", out)
+            self.need_error_exit(nid, "étape en échec")
+        else:
+            self.state[nid] = "ok"
+            self.record(nid, "simulated", "Commandes SSH simulées : aucune connexion n'est ouverte.", out)
+
+    def step_other(self, nid, node):  # wait, join
+        kind = node["type"]
+        output = {"resumed": True, "payload": {}} if node.get("resume") == "webhook" else {}
+        self.done(
+            nid,
+            output,
+            "simulated" if kind == "wait" else "ok",
+            "Attente simulée (non attendue)." if kind == "wait" else "",
+        )
+
+
+_STEP_METHODS = {
+    "script": "script",
+    "condition": "condition",
+    "switch": "switch",
+    "throw": "throw",
+    "approval": "approval",
+    "foreach": "foreach",
+    "action": "call",
+    "subworkflow": "call",
+    "ai": "call",
+    "transform": "transform",
+    "ssh": "ssh",
+}
 
 
 def _same(a, b) -> bool:
@@ -608,20 +656,14 @@ def _awaited_values(graph: dict) -> list[tuple]:
     return found
 
 
-def dry_run(
-    graph: dict,
-    workspace,
-    runner,
-    samples: list[dict],
-    progress=None,
-    cache: dict | None = None,
-    max_steps: int = MAX_STEPS,
-    budget: float = TOTAL_BUDGET,
-) -> dict:
-    """Run the scenarios: each sample (label, inputs, expected) with approvals granted, plus one with approvals refused
-    when the workflow has any. Returns {scenarios, problems, coverage, ran}."""
-    deadline = time.monotonic() + budget
-    plan = [(s, True, None, None) for s in samples[:3]]
+_PlanEntry = tuple[dict, bool, "int | str | set | None", "dict | tuple | None"]
+
+
+def _scenario_plan(graph: dict, samples: list[dict]) -> list[_PlanEntry]:
+    """Every scenario to run, in order: the samples, approvals refused, each failing exit, each awaited value, each case."""
+    plan: list[tuple[dict, bool, int | str | set | None, dict | tuple | None]] = [
+        (s, True, None, None) for s in samples[:3]
+    ]
     if any(n["type"] == "approval" for n in graph.get("nodes", [])):  # each sample again, approvals refused
         plan += [
             ({**x, "label": f"{x['label']}, approbation refusée", "expected": []}, False, None, None)
@@ -632,11 +674,13 @@ def dry_run(
     failing = [
         n["id"]
         for n in graph.get("nodes", [])
-        if n["type"] in ("action", "subworkflow", "foreach", "ai")
+        if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh")
         and any(e["from"] == n["id"] and e.get("label") == "error" for e in graph.get("edges", []))
     ][:MAX_FAILURE_SCENARIOS]
     awaited = _awaited_values(graph)
-    reach_all = {}  # every value a decision waits for, applied together: the branches that hold the steps worth failing
+    reach_all: dict[
+        str, dict
+    ] = {}  # every value a decision waits for, applied together: the branches that hold the steps worth failing
     for nid, field, value, _ in awaited:
         reach_all.setdefault(nid, {}).setdefault(field, value)
     if samples:
@@ -647,7 +691,7 @@ def dry_run(
         every = [
             n["id"]
             for n in graph.get("nodes", [])
-            if n["type"] in ("action", "subworkflow", "foreach", "ai")
+            if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh")
             and any(e["from"] == n["id"] and e.get("label") == "error" for e in graph.get("edges", []))
         ]
         if len(every) >= 2:  # a chain of recoveries (retry after retry) is only walked when each link fails in turn
@@ -684,7 +728,23 @@ def dry_run(
                     for c in [*case_ids(n), "default"]
                     if any(e["from"] == n["id"] and e.get("label") == c for e in graph.get("edges", []))
                 ][:MAX_BRANCH_SCENARIOS]
-    plan = plan[:MAX_SCENARIOS]
+    return plan
+
+
+def dry_run(
+    graph: dict,
+    workspace,
+    runner,
+    samples: list[dict],
+    progress=None,
+    cache: dict | None = None,
+    max_steps: int = MAX_STEPS,
+    budget: float = TOTAL_BUDGET,
+) -> dict:
+    """Run the scenarios: each sample (label, inputs, expected) with approvals granted, plus one with approvals refused
+    when the workflow has any. Returns {scenarios, problems, coverage, ran}."""
+    deadline = time.monotonic() + budget
+    plan = _scenario_plan(graph, samples)[:MAX_SCENARIOS]
     helpers = prepare(graph, workspace, cache)  # database reads happen here, once; scenarios only use the runner
 
     def one(i):
@@ -712,16 +772,18 @@ def dry_run(
         )
 
     # The scenarios are independent: they run side by side (starting a container is slow, waiting for each in turn is not).
-    scenarios, problems = [None] * len(plan), []
+    results: dict[int, dict] = {}
+    problems: list[dict] = []
     with ThreadPoolExecutor(max_workers=min(len(plan), MAX_PARALLEL) or 1) as pool:
         futures = {pool.submit(one, i): i for i in range(len(plan))}
         done = 0
         for future in as_completed(futures):
             i = futures[future]
-            scenarios[i] = future.result()
+            results[i] = future.result()
             done += 1
             if progress:
                 progress(done - 1, len(plan), plan[i][0]["label"], done)
+    scenarios = [results[i] for i in range(len(plan))]
     for sc in scenarios:
         if sc["outcome"]["status"] == "infra":  # the sandbox is not available here: no verdict, say so
             return {

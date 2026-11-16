@@ -19,7 +19,7 @@ export function BrandIcon({ slug, name, size = 24 }: { slug?: string | null; nam
     const dark = luminance(b.hex) > 0.8; // very light brand colours would vanish on white
     return (
       <span className="brand-ico" aria-hidden="true" style={box}>
-        <svg viewBox="0 0 24 24" width={Math.round(size * 0.66)} height={Math.round(size * 0.66)} focusable="false"><path d={b.path} fill={dark ? "#1e293b" : `#${b.hex}`} /></svg>
+        <svg viewBox="0 0 24 24" width={Math.round(size * 0.66)} height={Math.round(size * 0.66)} focusable="false" aria-hidden="true"><path d={b.path} fill={dark ? "#1e293b" : `#${b.hex}`} /></svg>
       </span>
     );
   }

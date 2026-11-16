@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { check, evaluate, FUNCTION_DOCS, MAX_FORMULA, refs, valueFor } from "../calc";
 import { FormIcon } from "../FormIcon";
 import { textOf } from "../rules";
@@ -28,8 +29,11 @@ export function CalcEditor({ field, others, formula, onFormula }: Props) {
     const el = area.current;
     const from = el?.selectionStart ?? formula.length;
     const to = el?.selectionEnd ?? from;
-    onFormula(`${formula.slice(0, from)}${text}${formula.slice(to)}`.slice(0, MAX_FORMULA));
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(from + text.length, from + text.length); });
+    // the new text is shown at once, and the caret put after what was inserted before anything else can be typed (a caret restored one
+    // animation frame later could land after the characters typed in the meantime)
+    flushSync(() => onFormula(`${formula.slice(0, from)}${text}${formula.slice(to)}`.slice(0, MAX_FORMULA)));
+    el?.focus();
+    el?.setSelectionRange(from + text.length, from + text.length);
   };
   const values = Object.fromEntries(used.map((f) => [f.key, f.type === "number" ? (sample[f.key] === undefined || sample[f.key] === "" ? undefined : Number(sample[f.key])) : sample[f.key]]));
   const raw = problem ? null : evaluate(formula, values);
@@ -65,6 +69,7 @@ export function CalcEditor({ field, others, formula, onFormula }: Props) {
 
         <h3><FormIcon name="braces" size={14} /> Fonctions</h3>
         {groups.map((g) => (
+          // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
           <div key={g} className="cc-fgroup" role="group" aria-label={g}>
             <span className="cc-gname">{g}</span>
             {FUNCTION_DOCS.filter((d) => d.group === g).map((d) => <button key={d.name} type="button" className="rl-chip" title={`${d.usage} — ${d.help} Ex. ${d.example}`} onClick={() => insert(`${d.name}(`)}>{d.name}</button>)}

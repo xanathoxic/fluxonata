@@ -10,7 +10,7 @@ interface Sample { what: string; size: string }
 interface Screen { screen: string; smallText: number; smallTargets: number; textSamples: Sample[]; targetSamples: Sample[]; tabBarY?: number | null }
 const rows: Screen[] = [];
 const jumps: { group: string; positions: Record<string, number | null>; jump: number }[] = [];
-const canvas: { viewport: number; canvasWidth: number | null; ratio: number | null; inspectorWidth: number | null; paletteWidth: number | null }[] = [];
+const canvas: { viewport: number; canvasWidth: number | null; ratio: number | null; inspectorWidth: number | null; paletteWidth: number | null; palette: "ouverte" | "masquée" }[] = [];
 
 async function call(page: Page, method: string, path: string, body?: unknown) {
   return page.evaluate(async ({ method, path, body }) => {
@@ -29,7 +29,7 @@ async function measure(page: Page, screen: string, tabBar?: string): Promise<Scr
       const cs = getComputedStyle(el);
       return r.width > 1 && r.height > 1 && cs.visibility !== "hidden" && cs.display !== "none" && cs.opacity !== "0";
     };
-    const label = (el: Element) => `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.split(" ")[0] : ""} « ${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40)} »`;
+    const label = (el: Element) => `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? `.${el.className.split(" ")[0]}` : ""} « ${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40)} »`;
     const text: { what: string; size: string }[] = [];
     let smallText = 0;
     for (const el of Array.from(document.body.querySelectorAll("*"))) {
@@ -60,7 +60,7 @@ test.afterAll(() => {
   writeFileSync("test-results/ux-metrics.json", JSON.stringify({ date: new Date().toISOString(), screens: rows, tabBarJumps: jumps, canvas }, null, 2));
   console.log(`\nUX-METRICS (${rows.length} écrans)\n  textes < 12 px — pire : ${worst("smallText").join(" | ")}\n  cibles < 24 px — pire : ${worst("smallTargets").join(" | ")}`);
   for (const j of jumps) console.log(`  saut de la barre d'onglets — ${j.group} : ${j.jump} px (${JSON.stringify(j.positions)})`);
-  for (const c of canvas) console.log(`  canevas à ${c.viewport} px : ${c.canvasWidth} px (${c.ratio !== null ? Math.round(c.ratio * 100) : "?"} %) · inspecteur ${c.inspectorWidth ?? "absent"} px · palette ${c.paletteWidth ?? "absente"} px`);
+  for (const c of canvas) console.log(`  canevas à ${c.viewport} px, palette ${c.palette} : ${c.canvasWidth} px (${c.ratio !== null ? Math.round(c.ratio * 100) : "?"} %) · inspecteur ${c.inspectorWidth ?? "absent"} px · palette ${c.paletteWidth ?? "absente"} px`);
 });
 
 test("écrans clés : accueil, catalogue, workflows", async ({ page }) => {
@@ -89,9 +89,21 @@ test("les 9 onglets d'un workflow : textes, cibles, position de la barre d'ongle
   }
   const ys = Object.values(positions).filter((y): y is number => y !== null);
   jumps.push({ group: "workflow (9 onglets)", positions, jump: ys.length ? Math.max(...ys) - Math.min(...ys) : 0 });
-  expect(jumps[jumps.length - 1]?.jump, "la barre d\'onglets ne doit pas bouger d\'un onglet à l\'autre").toBe(0);
+  expect(jumps[jumps.length - 1]?.jump, "la barre d'onglets ne doit pas bouger d'un onglet à l'autre").toBe(0);
 
-  // (d) largeur du canevas avec une étape sélectionnée
+  // (d) largeur du canevas avec une étape sélectionnée — deux contrôles distincts (décision produit du 2026-11-12) :
+  //  1. disposition par défaut (palette ouverte) : aucun chevauchement, commandes accessibles, canevas ≥ 450 px à 1366 px ;
+  //  2. canevas d'abord : la personne masque la palette avec son contrôle, le canevas atteint ≥ 55 % de la largeur à 1440 px.
+  // La palette reste contrôlée par la personne (sélectionner une étape ne la replie jamais) : le seuil de 55 % s'applique donc
+  // lorsqu'elle l'a masquée. Aucun seuil n'est fixé pour la disposition par défaut à 1440 px (mesurée, enregistrée).
+  const rect = (sel: string) => page.evaluate((q) => { const e = document.querySelector(q); if (!e) return null; const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width }; }, sel);
+  const rectOf = async (sel: string) => {
+    const r = await rect(sel);
+    if (!r) throw new Error(`${sel} : élément absent`);
+    return r;
+  };
+  const side = async (sel: string) => ((await page.locator(sel).count()) ? Math.round((await rectOf(sel)).width) : null);
+  const paletteToggle = page.getByRole("button", { name: "Palette d'éléments", exact: true });
   for (const width of [1440, 1366]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/workflows/${slug}/schema`);
@@ -100,12 +112,34 @@ test("les 9 onglets d'un workflow : textes, cibles, position de la barre d'ongle
     await step.click();
     await page.locator(".node-panel").waitFor({ timeout: 5000 }).catch(() => undefined);
     await page.waitForTimeout(600);
-    const w = await page.locator(".canvas").first().evaluate((e) => e.getBoundingClientRect().width).catch(() => null);
-    const side = async (sel: string) => ((await page.locator(sel).count()) ? page.locator(sel).first().evaluate((e) => Math.round(e.getBoundingClientRect().width)) : null);
-    canvas.push({ viewport: width, canvasWidth: w === null ? null : Math.round(w), ratio: w === null ? null : w / width, inspectorWidth: await side(".node-panel"), paletteWidth: await side(".palette") });
-    // seuils du lot 4 : canevas ≥ 55 % à 1440 px, ≥ 450 px à 1366 px, avec une étape sélectionnée
-    if (width === 1440) expect((w ?? 0) / width).toBeGreaterThanOrEqual(0.55);
-    if (width === 1366) expect(w ?? 0).toBeGreaterThanOrEqual(450);
+
+    // 1. disposition par défaut
+    await expect(paletteToggle).toHaveAttribute("aria-pressed", "true");
+    const [pal, can, pan] = [await rect(".schema-palette"), await rect(".canvas"), await rect(".node-panel")];
+    expect(pal && can && pan, "palette, canevas et propriétés sont affichés").toBeTruthy();
+    if (!pal || !can || !pan) throw new Error("palette, canevas et propriétés sont affichés");
+    expect(pal.right, "la palette ne chevauche pas le canevas").toBeLessThanOrEqual(can.left + 1);
+    expect(can.right, "le canevas ne chevauche pas les propriétés").toBeLessThanOrEqual(pan.left + 1);
+    expect(pan.right, "les propriétés restent dans la fenêtre").toBeLessThanOrEqual(width + 1);
+    await expect(paletteToggle).toBeVisible();
+    await expect(paletteToggle).toBeEnabled();
+    const wDefault = can.width;
+    canvas.push({ viewport: width, canvasWidth: Math.round(wDefault), ratio: wDefault / width, inspectorWidth: await side(".node-panel"), paletteWidth: await side(".schema-palette"), palette: "ouverte" });
+    if (width === 1366) expect(wDefault, "canevas ≥ 450 px à 1366 px, palette ouverte").toBeGreaterThanOrEqual(450);
+
+    // 2. canevas d'abord : masquage explicite par la personne
+    await paletteToggle.click();
+    await expect(paletteToggle).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".schema-palette")).toHaveCount(0);
+    await page.waitForTimeout(600);
+    const wHidden = (await rectOf(".canvas")).width;
+    canvas.push({ viewport: width, canvasWidth: Math.round(wHidden), ratio: wHidden / width, inspectorWidth: await side(".node-panel"), paletteWidth: null, palette: "masquée" });
+    if (width === 1440) expect(wHidden / width, "canevas ≥ 55 % à 1440 px, palette masquée par la personne").toBeGreaterThanOrEqual(0.55);
+    if (width === 1366) expect(wHidden, "canevas ≥ 450 px à 1366 px, palette masquée").toBeGreaterThanOrEqual(450);
+    expect(wHidden, "masquer la palette agrandit le canevas").toBeGreaterThan(wDefault);
+    await paletteToggle.click(); // la même commande la rouvre
+    await expect(paletteToggle).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".schema-palette")).toHaveCount(1);
   }
 });
 
@@ -124,7 +158,7 @@ test("formulaire : 4 onglets et 4 modes de l'éditeur", async ({ page }) => {
   }
   const ys = Object.values(positions).filter((y): y is number => y !== null);
   jumps.push({ group: "formulaire (4 onglets)", positions, jump: ys.length ? Math.max(...ys) - Math.min(...ys) : 0 });
-  expect(jumps[jumps.length - 1]?.jump, "la barre d\'onglets ne doit pas bouger d\'un onglet à l\'autre").toBe(0);
+  expect(jumps[jumps.length - 1]?.jump, "la barre d'onglets ne doit pas bouger d'un onglet à l'autre").toBe(0);
   await page.goto(`/library/forms/${slug}/design`);
   for (const mode of ["Éditeur", "Apparence", "Aperçu"]) {
     await page.getByRole("tablist", { name: "Vue de l'éditeur" }).getByRole("tab", { name: mode }).click();
@@ -145,7 +179,7 @@ test("contrôle : 4 onglets (et sections de la conception)", async ({ page }) =>
   }
   const ys = Object.values(positions).filter((y): y is number => y !== null);
   jumps.push({ group: "contrôle (4 onglets)", positions, jump: ys.length ? Math.max(...ys) - Math.min(...ys) : 0 });
-  expect(jumps[jumps.length - 1]?.jump, "la barre d\'onglets ne doit pas bouger d\'un onglet à l\'autre").toBe(0);
+  expect(jumps[jumps.length - 1]?.jump, "la barre d'onglets ne doit pas bouger d'un onglet à l'autre").toBe(0);
   await page.goto(`/library/controls/${slug}/design`);
   for (const name of ["Modèle d'une option", "Champs", "Documentation"]) {
     const btn = page.getByRole("navigation", { name: "Sections du contrôle" }).getByRole("button", { name });

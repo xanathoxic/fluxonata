@@ -1,0 +1,92 @@
+{
+  "agent": {
+    "answer": "string",
+    "iterations": "integer",
+    "simulated": "boolean",
+    "steps": "array",
+    "stopped": "string"
+  },
+  "approval": {
+    "approved": "boolean",
+    "comment": "string",
+    "decided_by": "string"
+  },
+  "condition": {
+    "result": "boolean"
+  },
+  "foreach": {
+    "count": "integer",
+    "results": "array"
+  },
+  "http": {
+    "body": null,
+    "file": "object",
+    "headers": "object",
+    "ok": "boolean",
+    "simulated": "boolean",
+    "status": "integer"
+  },
+  "join": {},
+  "ldap": {
+    "count": "integer",
+    "rows": "array",
+    "simulated": "boolean",
+    "truncated": "boolean"
+  },
+  "race": {
+    "value": null,
+    "winner": "string",
+    "winner_name": "string"
+  },
+  "sftp": {
+    "content": null,
+    "count": "integer",
+    "entries": "array",
+    "file": "object",
+    "operation": "string",
+    "path": "string",
+    "simulated": "boolean"
+  },
+  "smtp": {
+    "message_id": "string",
+    "recipients": "integer",
+    "sent": "boolean",
+    "simulated": "boolean"
+  },
+  "sql": {
+    "columns": "array",
+    "count": "integer",
+    "rows": "array",
+    "simulated": "boolean",
+    "truncated": "boolean"
+  },
+  "ssh": {
+    "connected": "boolean",
+    "duration_ms": "integer",
+    "error": "object",
+    "error_type": "string",
+    "failed_count": "integer",
+    "failed_step": "string",
+    "hops": "array",
+    "results": "array",
+    "session": "string",
+    "simulated": "boolean",
+    "status": "string",
+    "truncated": "boolean",
+    "uncertain": "boolean"
+  },
+  "switch": {
+    "result": "string"
+  },
+  "wait": {},
+  "wait_resume": {
+    "payload": "object",
+    "resumed": "boolean"
+  },
+  "while": {
+    "iterations": "integer",
+    "last": "object",
+    "results": "array",
+    "stopped": "string"
+  }
+}

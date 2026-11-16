@@ -23,6 +23,7 @@ from rest_framework.exceptions import PermissionDenied
 from audit.models import AuditEvent, record
 from core.folders import clean_folder
 from core.tags import clean_tags
+from runs import ssh_node
 from tenancy.permissions import EDIT, has_perm
 
 from . import access
@@ -138,6 +139,63 @@ def _check_graph(graph) -> None:
         raise serializers.ValidationError({"graph": "Graphe trop volumineux ou invalide."})
 
 
+def _ssh_refusal(message: str):
+    return serializers.ValidationError({"graph": message})
+
+
+def _guard_ssh(ws, current: dict | None, incoming: dict) -> dict:
+    """What an assistant may do with SSH steps, checked on the SERVER at every write (never trusting an earlier list_connections):
+    - a step it was shown and sends back unchanged (or as the redacted view it read) is kept exactly as stored;
+    - a step it creates or changes must stay in TEST mode (an explicit `reel` is refused, not corrected), may only name SSH connections of
+      this workspace (target and every jump), carries no secret reference and no field the step does not define, and no masked placeholder;
+    - a stored step in real mode, or any step it removes, is not for an assistant to touch.
+    Errors name the step and the rule, never a parameter of a connection."""
+    before = ssh_node.ssh_nodes(current)
+    after = ssh_node.ssh_nodes(incoming)
+    if set(before) - set(after):
+        raise _ssh_refusal(
+            "Une étape SSH existante ne peut pas être retirée par un assistant : renvoyez-la telle que lue."
+        )
+    kept: dict[str, dict] = {}
+    for nid, n in after.items():
+        old = before.get(nid)
+        if old is not None and (n == old or n == ssh_node.redact_node(old)):
+            kept[nid] = old  # untouched: the stored step wins over the redacted view
+            continue
+        if old is not None and old.get("mode") == "reel":
+            raise _ssh_refusal(f"L'étape SSH « {nid} » est en mode réel : elle n'est pas modifiable par un assistant.")
+        if n.get("mode") not in (None, "test"):
+            raise _ssh_refusal(
+                f"Étape SSH « {nid} » : seul le mode « test » est permis dans ce parcours (mode réel refusé)."
+            )
+        if n.get("secrets") or "send_secret" in json.dumps(n):
+            raise _ssh_refusal(
+                f"Étape SSH « {nid} » : les références à des secrets ne sont pas permises dans ce parcours."
+            )
+        unknown = ssh_node.unknown_fields(n)
+        if unknown:
+            raise _ssh_refusal(f"Étape SSH « {nid} » : champ(s) inconnu(s) : {', '.join(unknown[:8])}.")
+        if ssh_node.MASKED in json.dumps(n, ensure_ascii=False):
+            raise _ssh_refusal(
+                f"Étape SSH « {nid} » : une valeur masquée (« {ssh_node.MASKED} ») ne peut pas être réécrite."
+            )
+        if ssh_node.unauthorized_connections(ws, n):
+            raise _ssh_refusal(
+                f"Étape SSH « {nid} » : une connexion (cible ou rebond) n'existe pas, n'est pas de type SSH ou n'est pas disponible dans cet espace. "
+                "Prenez des noms de connexions de type « ssh » dans list_connections."
+            )
+        kept[nid] = {**n, "mode": "test"}
+    if not kept:
+        return incoming
+    return {
+        **incoming,
+        "nodes": [
+            kept.get(x["id"], x) if isinstance(x, dict) and x.get("id") in kept else x
+            for x in incoming.get("nodes", [])
+        ],
+    }
+
+
 def create_workflow(request, ws, args):
     _need_edit(request, ws)
     ser = CreateWorkflowIn(data=args)
@@ -148,6 +206,7 @@ def create_workflow(request, ws, args):
     graph = d.get("graph")
     if graph is not None:
         _check_graph(graph)
+        graph = _guard_ssh(ws, None, graph)
     if Workflow.objects.filter(workspace=ws, slug=d["slug"]).exists():
         raise serializers.ValidationError({"slug": "Cet identifiant existe déjà dans l'espace."})
     try:
@@ -190,7 +249,7 @@ def update_workflow(request, ws, args):
         access.require(request.user, ws, wf.folder, EDIT)
         if wf.draft_revision != d["revision"]:
             raise _conflict(wf.draft_revision)
-        wf.draft_graph = d["graph"]
+        wf.draft_graph = _guard_ssh(ws, wf.draft_graph, d["graph"])
         wf.draft_revision += 1
         wf.tags = _marked(wf.tags)
         wf.save()

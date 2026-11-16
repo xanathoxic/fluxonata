@@ -6,6 +6,7 @@ const PATHS: Record<string, React.ReactElement> = {
   switch: <path d="M12 3l9 9-9 9-9-9zM12 8v8M8 12h8" />,
   transform: <path d="M4 6h16M4 12h10M4 18h6M17 14l3 4-3 4" />,
   sftp: <><path d="M4 4h10l6 6v10H4z" /><path d="M14 4v6h6M9 15h6M12 12v6" /></>,
+  ssh: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M12 15h5" /></>,
   smtp: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>,
   ldap: <><circle cx="12" cy="5" r="2.5" /><circle cx="5" cy="19" r="2.5" /><circle cx="19" cy="19" r="2.5" /><path d="M12 7.5v4M12 11.5H5V16.5M12 11.5h7v5" /></>,
   while: <path d="M4 12a8 8 0 0 1 14-5M18 3v4h-4M20 12a8 8 0 0 1-14 5M6 21v-4h4M12 9v3l2 1.5" />,

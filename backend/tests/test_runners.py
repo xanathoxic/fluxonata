@@ -640,7 +640,7 @@ def test_requests_are_throttled_per_runner(world, boss, monkeypatch):
 
 
 def test_runner_health_item_for_a_space_without_runner(world, boss):
-    from core.health import summary
+    from runs.health import summary
 
     ws = world["ws_a"]
     assert [i for i in summary(ws) if i["key"] == "runners"][0]["status"] == "ok"
@@ -689,3 +689,26 @@ def test_other_spaces_runner_listing_is_isolated(world, boss):
     assert client_for(admin_a).get(f"{WS}/runners/").json()["results"] == []
     assert client_for(admin_a).patch(f"{WS}/runners/{d['id']}/", {"paused": True}, format="json").status_code == 404
     assert other and d
+
+
+def test_logs_cut_inside_a_secret_by_the_runner_are_masked_at_their_start(world, boss):
+    """The runner keeps the last N bytes of the logs; if the cut slices a secret, the platform still masks what remains."""
+    version = secret_action(world)
+    c = agent(new_runner(boss)["token"])
+    env = Environment.objects.get(workspace=world["ws_a"], kind="test")
+    ex = services.enqueue(
+        workspace=world["ws_a"],
+        environment=env,
+        action_version=version,
+        user=world["designer"],
+        inputs={},
+        connections={"api": "api"},
+    )
+    ask(c)
+    c.post(
+        f"{R}/jobs/{ex.id}/complete/",
+        {"attempt": 1, "ok": True, "result": {"echo": "x"}, "logs": "e-very-secret-123456 puis la suite"},
+        format="json",
+    )
+    logs = Attempt.objects.get(execution=ex).logs
+    assert logs == "*** puis la suite"

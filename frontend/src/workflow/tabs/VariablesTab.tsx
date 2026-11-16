@@ -48,6 +48,7 @@ export function VariablesTab() {
             <thead><tr><th scope="col">Nom</th><th scope="col">Type</th><th scope="col">Valeur</th><th scope="col">Description</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {vars.map((v, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
                 <tr key={i}>
                   <td><label className="sr-only" htmlFor={`v-n-${i}`}>Nom de la variable {i + 1}</label><input id={`v-n-${i}`} value={v.name} pattern="[A-Za-z_][A-Za-z0-9_]*" onChange={(e) => patch(i, { name: e.target.value.replace(/[^A-Za-z0-9_]/g, "_") })} /></td>
                   <td><label className="sr-only" htmlFor={`v-t-${i}`}>Type de {v.name}</label>

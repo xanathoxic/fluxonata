@@ -1,3 +1,5 @@
+import { useState } from "react";
+import type { ReactNode } from "react";
 import { HelpTip } from "./HelpTip";
 import { Badge } from "./AdminUi";
 import { useWsQuery } from "../lib";
@@ -25,9 +27,28 @@ export function secretReady(d: SecretDraft): boolean {
 export const MODE_LABEL: Record<SecretMode, string> = { managed: "Écrit par Fluxonata dans Vault", reference: "Secret existant dans Vault", dynamic: "Identifiants dynamiques (Vault)" };
 
 /** « Where is the secret kept? » The choice shared by connections, AI providers' keys and every other secret. */
-export function SecretSource({ value, onChange, allowDynamic = false, internalLabel = "Secret (jeton, mot de passe…)", name = "secret" }: {
+export function SecretSource({ value, onChange, allowDynamic = false, internalLabel = "Secret (jeton, mot de passe…)", name = "secret", multiline = false, instructions }: {
   value: SecretDraft; onChange: (d: SecretDraft) => void; allowDynamic?: boolean; internalLabel?: string; name?: string;
+  /** several lines (a pasted private key): a text area instead of a one-line password field */
+  multiline?: boolean;
+  /** what exactly to put in the field, written above it */
+  instructions?: ReactNode;
 }) {
+  const [shown, setShown] = useState(false);
+  const valueField = (id: string, label: string, help: ReactNode) => (
+    <div className="field"><label htmlFor={id}>{label}</label>
+      {instructions && <div className="hint secret-instructions" id={`${id}-i`}>{instructions}</div>}
+      {multiline ? (
+        <>
+          <textarea id={id} rows={9} className={`mono secret-multiline${shown ? "" : " masked"}`} spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off" data-1p-ignore
+            aria-describedby={instructions ? `${id}-i` : undefined} value={value.value} onChange={(e) => set({ value: e.target.value })} />
+          <div className="field-inline"><input id={`${id}-show`} type="checkbox" checked={shown} onChange={(e) => setShown(e.target.checked)} /><label htmlFor={`${id}-show`}>Afficher la valeur saisie</label></div>
+        </>
+      ) : (
+        <input id={id} type="password" autoComplete="off" value={value.value} onChange={(e) => set({ value: e.target.value })} aria-describedby={instructions ? `${id}-i` : undefined} />
+      )}
+      <HelpTip>{help}</HelpTip></div>
+  );
   const info = useWsQuery<WorkspaceVault>("vault-info", "/vault/");
   const vault = info.data;
   const set = (patch: Partial<SecretDraft>) => onChange({ ...value, ...patch });
@@ -47,9 +68,7 @@ export function SecretSource({ value, onChange, allowDynamic = false, internalLa
       </fieldset>
 
       {!external && (
-        <div className="field"><label htmlFor={`${name}-value`}>{internalLabel}</label>
-          <input id={`${name}-value`} type="password" autoComplete="off" value={value.value} onChange={(e) => set({ value: e.target.value })} />
-          <HelpTip>Il sera chiffré puis ne pourra plus être relu, seulement remplacé.</HelpTip></div>
+        valueField(`${name}-value`, internalLabel, "Il sera chiffré puis ne pourra plus être relu, seulement remplacé.")
       )}
 
       {external && vault?.available && (
@@ -63,9 +82,7 @@ export function SecretSource({ value, onChange, allowDynamic = false, internalLa
             ))}
           </fieldset>
           {value.mode === "managed" && (
-            <div className="field"><label htmlFor={`${name}-vvalue`}>Valeur à écrire dans Vault</label>
-              <input id={`${name}-vvalue`} type="password" autoComplete="off" value={value.value} onChange={(e) => set({ value: e.target.value })} />
-              <HelpTip>Fluxonata l'écrit dans Vault, à <code>{vault.mount}/{vault.own_prefix}…</code>, puis ne la garde pas : elle ne pourra plus être relue ici, seulement remplacée.</HelpTip></div>
+            valueField(`${name}-vvalue`, "Valeur à écrire dans Vault", <>Fluxonata l'écrit dans Vault, à <code>{vault.mount}/{vault.own_prefix}…</code>, puis ne la garde pas : elle ne pourra plus être relue ici, seulement remplacée.</>)
           )}
           {value.mode !== "managed" && (
             <div className="adm-two">

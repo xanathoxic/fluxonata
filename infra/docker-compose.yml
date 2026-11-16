@@ -1,7 +1,7 @@
 # Dev services only. Credentials here are throwaway development values (no real secret).
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
     environment:
       POSTGRES_DB: fluxonata
       POSTGRES_USER: fluxonata
@@ -17,7 +17,7 @@ services:
       retries: 20
   # Local target for the demo HTTP connector. Reachable only from the internal egress network below.
   testsvc:
-    image: python:3.13-slim
+    image: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
     command: ["python", "/srv/server.py"]
     volumes:
       - ./testsvc/server.py:/srv/server.py:ro

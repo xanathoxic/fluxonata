@@ -338,7 +338,6 @@ def test_permissions_and_listing(exported, world):
 
 
 def test_import_older_version_does_not_become_latest(exported, world):
-    from tests.conftest import add_action  # noqa: F401
 
     ws_b = world["ws_b"]
     make_action(ws_b, "echo", version="2.0.0")

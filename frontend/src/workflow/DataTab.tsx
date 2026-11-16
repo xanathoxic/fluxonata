@@ -6,6 +6,7 @@ import { useApp } from "../context";
 import { useDraft } from "./DraftContext";
 import type { GraphNode } from "./types";
 import { HelpTip } from "../components/HelpTip";
+import { ReadRegion } from "../components/ReadRegion";
 
 interface Tested { ok: boolean; output: Record<string, unknown> | null; error: string | null; source: string }
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
@@ -35,7 +36,7 @@ export function DataTab({ node }: { node: GraphNode }) {
   return (
     <div>
       <h3>Donnée épinglée <HelpTip>Une sortie épinglée remplace l'étape dans les aperçus et dans les exécutions en <strong>développement</strong> (l'étape n'est alors pas exécutée) : elle permet de mettre au point la suite sans rejouer les effets. Jamais utilisée en recette ni en production.</HelpTip></h3>
-      {pin !== undefined && draftPin === null && <pre className="mono data-box" tabIndex={0} aria-label="Donnée épinglée">{pretty(pin)}</pre>}
+      {pin !== undefined && draftPin === null && <ReadRegion className="mono data-box" label="Donnée épinglée">{pretty(pin)}</ReadRegion>}
       {draftPin !== null && (
         <div className="field"><label htmlFor="pin-json">Sortie épinglée (JSON)</label>
           <textarea id="pin-json" rows={6} spellCheck={false} value={draftPin} onChange={(e) => setDraftPin(e.target.value)} />
@@ -58,7 +59,7 @@ export function DataTab({ node }: { node: GraphNode }) {
       <button type="button" onClick={() => test.mutate()} disabled={test.isPending}>Tester avec ces données</button>
       {test.error && <p role="alert" className="field-error">Erreur : {test.error.message}</p>}
       {test.data && (test.data.ok
-        ? <><p role="status">Résultat ({test.data.source}) :</p><pre className="mono data-box" tabIndex={0} aria-label="Résultat du test">{pretty(test.data.output)}</pre></>
+        ? <><p role="status">Résultat ({test.data.source}) :</p><ReadRegion className="mono data-box" label="Résultat du test">{pretty(test.data.output)}</ReadRegion></>
         : <p role="alert" className="field-error">{test.data.error}</p>)}
     </div>
   );

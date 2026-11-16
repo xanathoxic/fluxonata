@@ -7,7 +7,7 @@ from ai.providers import FakeProvider
 from audit.models import AuditEvent
 from catalog.models import Action
 from tests.conftest import client_for
-from tests.test_ai import BASE, ai_ws, cfg  # noqa: F401  (fixture ai_ws)
+from tests.test_ai import BASE, cfg
 from tests.wf_helpers import schema
 
 GOOD_ACTION = {

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoA11yViolations, goNav, login } from "./helpers";
+import { expectNoA11yViolations, goNav, login, boxOf, viewportOf } from "./helpers";
 
 // La génération d'un brouillon est une tâche suivie en direct : barre de progression + journal des phases, puis rapport
 // (dont l'essai à blanc). Les réponses de l'API sont simulées ici pour vérifier l'affichage de façon déterministe.
@@ -102,8 +102,8 @@ test("plan avant génération : valider (avec un plan modifié à la main) lance
 
   const plan = page.getByRole("dialog", { name: /Plan envisagé/ });
   await expect(plan.getByLabel("Nom du workflow")).toHaveValue("Création d'une VM");
-  const box = (await plan.boundingBox())!; // au milieu de la page, avec de la place pour lire et répondre
-  const view = page.viewportSize()!;
+  const box = (await boxOf(plan)); // au milieu de la page, avec de la place pour lire et répondre
+  const view = viewportOf(page);
   expect(box.width).toBeGreaterThan(800);
   expect(Math.abs(box.x + box.width / 2 - view.width / 2)).toBeLessThan(10);
   await expect(plan.getByLabel(/Ce que fera le workflow/)).toHaveValue(/Autoriser la création/);

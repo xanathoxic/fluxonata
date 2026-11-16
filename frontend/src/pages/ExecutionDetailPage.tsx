@@ -5,6 +5,7 @@ import { Fields } from "../components/Fields";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
+import { ReadRegion } from "../components/ReadRegion";
 
 export function ExecutionDetailPage() {
   const { id = "" } = useParams();
@@ -74,7 +75,7 @@ export function ExecutionDetailPage() {
       {logs && (
         <details>
           <summary>{t("exec.logs")}</summary>
-          <pre tabIndex={0}>{logs}</pre>
+          <ReadRegion label={t("exec.logs")}>{logs}</ReadRegion>
         </details>
       )}
     </>

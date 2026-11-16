@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import type { JsonSchema } from "../api";
 import { useWsQuery } from "../lib";
 import { useSkills } from "../pages/skills/SkillsPage";
@@ -6,6 +6,7 @@ import type { OutputField } from "./graphOps";
 import { ParamEditor } from "./ParamEditor";
 import type { GraphNode } from "./types";
 import { HelpTip } from "../components/HelpTip";
+import { ReadRegion } from "../components/ReadRegion";
 
 /** AI step: either a library skill (versioned, typed inputs, fixed answer format) or a free-form task. */
 export function AiConfig({ node, variables, editable, onUpdate }: { node: GraphNode; variables: OutputField[]; editable: boolean; onUpdate: (p: Partial<GraphNode>) => void }) {
@@ -15,9 +16,12 @@ export function AiConfig({ node, variables, editable, onUpdate }: { node: GraphN
   const sv = skill?.latest_version ?? null;
   // The answer fields feed the variable pickers of later steps: keep them in sync with the skill's answer format.
   const answer = sv ? JSON.stringify(sv.output_schema) : null;
+  // seul un changement du format de réponse du skill réécrit le schéma de sortie
+  const syncAnswerSchema = useEffectEvent((formatOfAnswer: string | null) => {
+    if (sv && formatOfAnswer !== JSON.stringify(node.output_schema)) onUpdate({ output_schema: sv.output_schema });
+  });
   useEffect(() => {
-    if (editable && sv && answer !== JSON.stringify(node.output_schema)) onUpdate({ output_schema: sv.output_schema });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the skill's answer format changes
+    if (editable) syncAnswerSchema(answer);
   }, [answer, editable]);
   const prov = useWsQuery<{ results: { name: string; cloud: boolean }[] }>("aiproviders-pick", "/ai/providers/");
   const props = Object.entries(node.output_schema?.properties ?? {});
@@ -55,7 +59,7 @@ export function AiConfig({ node, variables, editable, onUpdate }: { node: GraphN
             {schema && Object.entries(schema.properties ?? {}).map(([k, pr]) => (
               <ParamEditor key={k} name={k} schema={pr} required={schema.required?.includes(k) ?? false} value={node.inputs?.[k]} variables={variables} onChange={(v) => onUpdate({ inputs: { ...node.inputs, [k]: v } })} />
             ))}
-            <details><summary>Voir les instructions du skill</summary><pre tabIndex={0} className="wrap" aria-label="Instructions du skill">{sv.instructions}</pre></details>
+            <details><summary>Voir les instructions du skill</summary><ReadRegion className="wrap" label="Instructions du skill">{sv.instructions}</ReadRegion></details>
           </>
         )}
       </>
@@ -72,6 +76,7 @@ export function AiConfig({ node, variables, editable, onUpdate }: { node: GraphN
         <select id="ai-v" value="" onChange={(e) => e.target.value && onUpdate({ prompt: `${node.prompt ?? ""} {{ ${e.target.value} }}` })}><option value="">Insérer une variable…</option>{variables.map((v) => <option key={v.path} value={v.path}>{v.label}</option>)}</select></div>
       <fieldset><legend>Champs de la réponse attendue</legend>
         {props.map(([k, v], i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
           <div className="edge-row" key={i}>
             <label className="sr-only" htmlFor={`ao-k-${i}`}>Nom du champ {i + 1}</label><input id={`ao-k-${i}`} value={k} pattern="[a-z][a-z0-9_]*" onChange={(e) => write(props.map(([kk, vv], j) => (j === i ? [e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"), vv] : [kk, vv])))} />
             <label className="sr-only" htmlFor={`ao-t-${i}`}>Type du champ {i + 1}</label><select id={`ao-t-${i}`} value={String(v.type ?? "string")} onChange={(e) => write(props.map(([kk, vv], j) => (j === i ? [kk, { ...vv, type: e.target.value }] : [kk, vv])))}><option value="string">Texte</option><option value="integer">Entier</option><option value="number">Nombre</option><option value="boolean">Oui / Non</option></select>
