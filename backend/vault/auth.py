@@ -65,6 +65,7 @@ def _token_request(conn, form: dict) -> dict:
             body=urlencode(form).encode(),
             timeout=10,
             max_bytes=65536,
+            ssl_context=netsec.context_for(cfg),
         )
     except netsec.UnsafeURL as exc:
         raise AuthError("OAUTH_BLOCKED", f"Adresse d'authentification refusée : {exc}") from None

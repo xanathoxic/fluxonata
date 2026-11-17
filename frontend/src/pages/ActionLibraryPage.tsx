@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { DeleteDialog } from "../components/DeleteDialog";
 import type { Action } from "../api";
 import { ContractView } from "../components/ContractView";
 import { TestCasesSection } from "./library/TestCases";
@@ -33,6 +34,8 @@ export function ActionLibraryPage() {
   const [reason, setReason] = useState("");
   const [params, setParams] = useSearchParams();
   const [shown, setShown] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   if (a.isLoading) return <p role="status">Chargement…</p>;
   if (!a.data) return <p role="alert">Action introuvable.</p>;
   const list = versions.data?.results ?? [];
@@ -83,6 +86,10 @@ export function ActionLibraryPage() {
             </form>)}
           {deprecate.error && <p role="alert" className="field-error">Erreur : {errorText(deprecate.error)}</p>}
         </Section>
+        <Section title="Suppression" info="Une action n'est supprimable que si aucun workflow ne l'appelle (brouillons et versions publiées) et si elle n'a jamais été exécutée."
+          hint="Sinon la liste des workflows concernés est affichée. Déprécier l'action la retire du catalogue sans rien perdre.">
+          <div className="actions"><button type="button" className="danger" aria-haspopup="dialog" onClick={() => setDeleting(true)}>Supprimer l'action…</button></div>
+        </Section>
         {a.data.latest_version && <TestCasesSection slug={slug} schema={a.data.latest_version.input_schema} />}
       </>) }] : []),
   ];
@@ -102,6 +109,7 @@ export function ActionLibraryPage() {
         </div>) : undefined}>
       {a.data.description && <p>{a.data.description}</p>}
       <ActionTags slug={slug} tags={a.data.tags ?? []} editable={can("publish")} suggestions={[...new Set((known.data?.results ?? []).flatMap((x) => x.tags ?? []))].sort()} />
+      {deleting && <DeleteDialog kind="action" slug={slug} name={a.data.name} onClose={() => setDeleting(false)} onDeleted={() => navigate("/library/actions")} />}
       <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.id} className="tabpanel action-tabs">{tabs.find((t) => t.id === tab)?.content}</div>
     </EditorShell>
   );

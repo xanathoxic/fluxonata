@@ -135,3 +135,11 @@ def store_artifacts(execution, items):
             )
         )
     return rows
+
+
+def discard_artifacts(rows) -> None:
+    """Undoes `store_artifacts` (rows and stored bytes) — used when the attempt that produced them turns out to be stale."""
+    store = get_store()
+    for row in rows:
+        store.delete(row.storage_key)
+        row.delete()

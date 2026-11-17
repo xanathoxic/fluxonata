@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError } from "../api";
-import { Confirm } from "../components/AdminUi";
 import { EditorShell } from "../components/EditorShell";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { Menu, type MenuEntry } from "../components/Menu";
 import { Overlay } from "../components/Overlay";
 import { PageTabs } from "../components/PageTabs";
 import { StatusLine } from "../components/StatusLine";
+import { DeleteDialog } from "../components/DeleteDialog";
 import { useApp } from "../context";
 import { errorText, useWsQuery } from "../lib";
 import { DraftProvider, useDraft } from "./DraftContext";
@@ -45,7 +45,6 @@ function useHeaderParts() {
   const [validation, setValidation] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [delError, setDelError] = useState("");
   const deps = useWsQuery<Dep>(`wf-deps-${d.slug}`, `/workflows/${d.slug}/dependencies/`, { enabled: panel === "deps" });
   const usages = useWsQuery<Usage>(`wf-usages-${d.slug}`, `/workflows/${d.slug}/dependents/`, { enabled: panel === "usages" });
   const published = d.wf.latest_version !== null;
@@ -76,10 +75,6 @@ function useHeaderParts() {
     const e = issues.filter((i) => i.level === "error").length;
     setValidation(e ? `✖ ${e} problème(s) bloquant(s) : ouvrez l'onglet Schéma pour les corriger.` : `✔ Le workflow est valide${issues.length ? ` (${issues.length} avertissement(s))` : ""}.`);
   };
-  const remove = async () => {
-    try { await api(`/workspaces/${workspace.slug}/workflows/${d.slug}/delete/`, { method: "DELETE" }); navigate("/workflows"); }
-    catch (e) { setDelError(errorText(e as ApiError)); setConfirmDelete(false); }
-  };
   const status = <StatusLine published={d.wf.latest_version ? `v${d.wf.latest_version.version} publiée` : "Jamais publié"} state={d.saveState} />;
   const actions = (
     <>
@@ -93,9 +88,11 @@ function useHeaderParts() {
     <>
       {validation && <p role="status" className="notice">{validation}</p>}
       {catalogError && <p role="alert" className="field-error">Erreur : {catalogError}</p>}
-      {delError && <p role="alert" className="field-error">Erreur : {delError}</p>}
+      {(d.saveState === "invalid" || d.saveState === "error") && d.saveMessage && (
+        <p role="alert" className="field-error">{d.saveMessage} {d.saveState === "error" && <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button>}</p>
+      )}
       {d.saveState === "conflict" && (
-        <p role="alert" className="conflict">Quelqu'un d'autre a enregistré ce brouillon. <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button> <button type="button" onClick={() => void d.save(true)}>Écraser avec ma version</button></p>
+        <p role="alert" className="conflict">{d.saveMessage || "Quelqu'un d'autre a enregistré ce brouillon."} <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button> <button type="button" onClick={() => void d.save(true)}>Écraser avec ma version</button></p>
       )}
       {d.recover && (
         <p role="alert" className="conflict">Un brouillon local non enregistré a été retrouvé (déconnexion ou fermeture ?). <button type="button" onClick={d.acceptRecovery}>Le récupérer</button> <button type="button" onClick={d.discardRecovery}>L'ignorer</button></p>
@@ -107,11 +104,7 @@ function useHeaderParts() {
   const dialogs = (
     <>
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
-      {confirmDelete && (
-        <Confirm title={`Supprimer « ${d.wf.name} » ?`} confirmLabel="Supprimer" onCancel={() => setConfirmDelete(false)} onConfirm={() => void remove()}>
-          <p>Le workflow <strong>{d.wf.name}</strong> sera supprimé définitivement. L'opération est refusée s'il a déjà été exécuté ou s'il est utilisé ailleurs : dans ce cas, déclarez-le déprécié plutôt que de le supprimer.</p>
-        </Confirm>
-      )}
+      {confirmDelete && <DeleteDialog kind="workflow" slug={d.slug} name={d.wf.name} onClose={() => setConfirmDelete(false)} onDeleted={() => navigate("/workflows")} />}
       {panel === "usages" && (
         <Overlay title="Utilisations" description="Les workflows publiés qui appellent celui-ci." onClose={() => setPanel(null)} footer={<button type="button" onClick={() => setPanel(null)}>Fermer</button>}>
           {usages.data?.results.length === 0 ? <p>Aucun workflow publié n'appelle celui-ci.</p> : <ul>{usages.data?.results.map((u) => <li key={`${u.workflow}${u.workflow_version}`}><Link to={`/workflows/${u.workflow}`}>{u.workflow}</Link> v{u.workflow_version} (utilise v{u.uses_versions.join(", v")})</li>)}</ul>}

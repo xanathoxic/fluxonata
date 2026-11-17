@@ -18,7 +18,7 @@ def merged():
     return compose_config(
         FILES,
         profiles=("agent",),
-        extra_env={"ORCH_EGRESS_TEST_NETWORK": "reseau-de-test-synthetique"},
+        extra_env={"ORCH_EGRESS_TEST_NETWORK": "reseau-de-test-synthetique", "ORCH_ACCEPT_SHARED_DOCKER_AGENT": "oui"},
     )
 
 

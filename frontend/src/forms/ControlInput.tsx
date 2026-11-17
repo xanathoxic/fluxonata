@@ -116,6 +116,9 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
       const label = spec.row_label || "Ligne";
       const set = (next: Row[]) => onChange(next);
       const table = spec.display === "table";
+      // Dupliquer : une nouvelle ligne juste en dessous, avec les mêmes valeurs saisies (copie profonde : modifier l'une ne touche jamais l'autre)
+      const duplicate = (i: number) => set([...shown.slice(0, i + 1), JSON.parse(JSON.stringify(shown[i] ?? {})) as Row, ...shown.slice(i + 1)]);
+      const dupButton = (i: number) => <IconButton icon="copy" label={`Dupliquer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length >= max} onClick={() => duplicate(i)} />;
       const swap = (i: number, j: number) => { const c = [...shown]; [c[i], c[j]] = [c[j] as Row, c[i] as Row]; set(c); };
       if (table) {
         const cols = (spec.parts ?? []).filter((p) => !isBlock(p.type));
@@ -138,6 +141,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
                     <span className="ctl-tools">
                       <IconButton icon="up" label={`Monter ${label.toLowerCase()} ${i + 1}`} disabled={i === 0} onClick={() => swap(i, i - 1)} />
                       <IconButton icon="down" label={`Descendre ${label.toLowerCase()} ${i + 1}`} disabled={i === shown.length - 1} onClick={() => swap(i, i + 1)} />
+                      {dupButton(i)}
                       <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => set(shown.filter((_, k) => k !== i))} />
                     </span>
                   )}
@@ -169,6 +173,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
                   <span className="ctl-rowtools">
                     <IconButton icon="up" label={`Monter ${label.toLowerCase()} ${i + 1}`} disabled={i === 0} onClick={() => swap(i, i - 1)} />
                     <IconButton icon="down" label={`Descendre ${label.toLowerCase()} ${i + 1}`} disabled={i === shown.length - 1} onClick={() => swap(i, i + 1)} />
+                    {dupButton(i)}
                     <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => set(shown.filter((_, k) => k !== i))} />
                   </span>
                 )}

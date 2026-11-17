@@ -222,6 +222,28 @@ def _is_ip(host: str) -> bool:
         return False
 
 
+SKIP_TLS_KEY = "skip_tls_verify"  # connection setting: "1" = do not verify the server's certificate (self-signed, private authority, name mismatch)
+
+
+def skip_tls(config) -> bool:
+    """Does this connection's configuration ask to skip the server-certificate check?"""
+    return (config or {}).get(SKIP_TLS_KEY) == "1"  # the string "1" only: anything else keeps verification on
+
+
+def unverified_context() -> ssl.SSLContext:
+    """A TLS context that encrypts but accepts ANY certificate (no chain, no host name, no expiry check). Only for a connection whose
+    owner explicitly turned verification off: the address checks of `validate_url` and the pinning still apply."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def context_for(config) -> ssl.SSLContext | None:
+    """The caller-built context a connection needs, or None for the default (verifying) one."""
+    return unverified_context() if skip_tls(config) else None
+
+
 class _PinnedHTTP(http.client.HTTPConnection):
     def __init__(self, target: Target, timeout: float):
         super().__init__(target.host, target.port, timeout=timeout)

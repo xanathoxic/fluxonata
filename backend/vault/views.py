@@ -264,12 +264,12 @@ class ConnectionUpdateSerializer(serializers.Serializer):
 
 
 CONFIG_FIELDS = {
-    Connection.Kind.HTTP_BEARER: ("base_url",),
-    Connection.Kind.API_KEY: ("base_url", "in", "name", "prefix"),
-    Connection.Kind.BASIC: ("base_url", "username"),
-    Connection.Kind.OAUTH2_CLIENT: ("base_url", "token_url", "client_id", "scope"),
-    Connection.Kind.OAUTH2_CODE: ("base_url", "authorize_url", "token_url", "client_id", "scope"),
-    Connection.Kind.IMAP: ("host", "port", "username", "folder"),
+    Connection.Kind.HTTP_BEARER: ("base_url", "skip_tls_verify"),
+    Connection.Kind.API_KEY: ("base_url", "in", "name", "prefix", "skip_tls_verify"),
+    Connection.Kind.BASIC: ("base_url", "username", "skip_tls_verify"),
+    Connection.Kind.OAUTH2_CLIENT: ("base_url", "token_url", "client_id", "scope", "skip_tls_verify"),
+    Connection.Kind.OAUTH2_CODE: ("base_url", "authorize_url", "token_url", "client_id", "scope", "skip_tls_verify"),
+    Connection.Kind.IMAP: ("host", "port", "username", "folder", "skip_tls_verify"),
     Connection.Kind.POSTGRES: ("host", "port", "database", "username", "sslmode"),
     Connection.Kind.MYSQL: ("host", "port", "database", "username", "tls"),
     Connection.Kind.LDAP: ("host", "port", "bind_dn", "base_dn", "tls"),
@@ -283,10 +283,15 @@ CONFIG_FIELDS = {
         "connect_timeout_seconds",
         "auth_timeout_seconds",
     ),
-    Connection.Kind.SMTP: ("host", "port", "username", "tls", "from_address", "from_name"),
-    Connection.Kind.AWS_SIGV4: ("base_url", "access_key_id", "region", "service"),
+    Connection.Kind.SMTP: ("host", "port", "username", "tls", "from_address", "from_name", "skip_tls_verify"),
+    Connection.Kind.AWS_SIGV4: ("base_url", "access_key_id", "region", "service", "skip_tls_verify"),
 }
 URL_FIELDS = ("base_url", "token_url", "authorize_url")
+
+
+def _check_tls_flag(config) -> None:
+    if str(config.get("skip_tls_verify") or "") not in ("", "0", "1"):
+        raise serializers.ValidationError({"config": "« skip_tls_verify » : 0 ou 1."})
 
 
 def _check_config(kind, config, dynamic: bool = False):
@@ -312,6 +317,7 @@ def _check_config(kind, config, dynamic: bool = False):
                     "passphrase_secret",
                     "connect_timeout_seconds",
                     "auth_timeout_seconds",
+                    "skip_tls_verify",
                 )
                 or key == "description"
                 or (dynamic and key in ("username", "bind_dn"))
@@ -328,6 +334,7 @@ def _check_config(kind, config, dynamic: bool = False):
             registry.check_config(kind, config)  # SMTP and SSH settings are checked by the steps that use them
         except registry.ConfigRefused as exc:
             raise serializers.ValidationError({"config": exc.message}) from None
+        _check_tls_flag(config)
         if kind == Connection.Kind.API_KEY and config.get("in", "header") not in ("header", "query"):
             raise serializers.ValidationError({"config": "« in » : header ou query."})
         for key in URL_FIELDS:
@@ -442,7 +449,14 @@ class ConnectionListCreateView(APIView):
             environment=env,
             created_by=request.user,
         )
-        record("connection.create", actor=request.user, workspace=ws, target=conn, kind=conn.kind)
+        record(
+            "connection.create",
+            actor=request.user,
+            workspace=ws,
+            target=conn,
+            kind=conn.kind,
+            tls_verification_disabled=netsec.skip_tls(config),
+        )
         return Response(ConnectionSerializer(conn).data, status=201)
 
 
@@ -568,6 +582,7 @@ class ConnectionDetailView(APIView):
             target=conn,
             kind=conn.kind,
             changed=changed,  # field names only, never a value
+            tls_verification_disabled=netsec.skip_tls(config),
             secret_changed=secret_changed,
             previous_secret=previous if secret_changed else None,
             secret=conn.secret.name if conn.secret else None,
@@ -618,7 +633,9 @@ class ConnectionTestView(APIView):
         if creds.query:
             url += ("&" if "?" in url else "?") + urlencode(creds.query)
         try:
-            status, _, _ = netsec.safe_request("GET", url, headers=creds.headers, timeout=5)
+            status, _, _ = netsec.safe_request(
+                "GET", url, headers=creds.headers, timeout=5, ssl_context=netsec.context_for(conn.config)
+            )
         except netsec.UnsafeURL as exc:
             return False, f"Adresse refusée : {exc}"
         except OSError:

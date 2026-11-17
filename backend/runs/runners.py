@@ -288,6 +288,10 @@ def build_docker_command(name, image, network, memory, workdir, env_file, spec) 
             cmd += ["--security-opt", f"seccomp={settings.ORCH_SECCOMP_PROFILE}"]
     if settings.ORCH_DOCKER_RUNTIME:
         cmd += ["--runtime", settings.ORCH_DOCKER_RUNTIME]
+    if (
+        settings.ORCH_SANDBOX_LABEL
+    ):  # lets an agent find and remove the containers of a previous, crashed run (and only those)
+        cmd += ["--label", f"fluxonata.sandbox={settings.ORCH_SANDBOX_LABEL}"]
     cmd += [
         "-e",
         "PYTHONDONTWRITEBYTECODE=1",
@@ -359,6 +363,50 @@ class DockerRunner:
             shutil.rmtree(workdir, ignore_errors=True)
             if env_file:
                 shutil.rmtree(env_file.parent, ignore_errors=True)
+
+
+def unpinned_images(runtimes) -> list[str]:
+    """Images of `runtimes` that are not referenced by digest (`name@sha256:…`). A tag can be moved after the fact: in production the
+    image that runs an action must be the one that was reviewed."""
+    images = {getattr(settings, RUNTIMES[r]["image"]) for r in runtimes if r in RUNTIMES}
+    return sorted(i for i in images if "@sha256:" not in i)
+
+
+def remove_stale_sandboxes(label: str) -> int:
+    """Removes the action containers left by a previous run of THIS agent (same `fluxonata.sandbox` label) — an agent killed
+    during an action leaves its container running, with nobody left to enforce the time limit. Returns how many were removed."""
+    if not label:
+        return 0
+    listing = [
+        "docker",
+        "ps",
+        "-aq",
+        "--filter",
+        f"label=fluxonata.sandbox={label}",
+    ]  # étiquette choisie par l'exploitant
+    found = subprocess.run(listing, capture_output=True, text=True, timeout=30)  # noqa: S603 - docker du PATH, arguments fixes
+    ids = found.stdout.split() if found.returncode == 0 else []
+    if ids:
+        subprocess.run(["docker", "rm", "-f", *ids], capture_output=True, timeout=60)  # noqa: S603,S607 - identifiants rendus par docker ps
+    return len(ids)
+
+
+def remove_stale_workdirs(older_than: float | None = None) -> int:
+    """Removes per-run directories (`orch-run-*`, and `orch-env-*` which hold a secret env-file) left behind by a killed process.
+    Only those older than `older_than` seconds (default ORCH_STALE_WORK_SECONDS) so that a directory in use by a live run
+    sharing this work dir is never touched. Returns how many were removed."""
+    root = settings.ORCH_WORK_DIR
+    if not root or not Path(root).is_dir():
+        return 0
+    limit = settings.ORCH_STALE_WORK_SECONDS if older_than is None else older_than
+    removed = 0
+    for entry in Path(root).iterdir():
+        if entry.is_symlink() or not entry.is_dir() or not entry.name.startswith(("orch-run-", "orch-env-")):
+            continue
+        if time.time() - entry.stat().st_mtime >= limit:
+            shutil.rmtree(entry, ignore_errors=True)
+            removed += 1
+    return removed
 
 
 def get_runner():

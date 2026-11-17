@@ -458,6 +458,7 @@ def _send(spec: dict, url: str, headers: dict, secrets: list, signer=None) -> tu
             body=body_bytes,
             timeout=spec["timeout"],
             max_bytes=(MAX_FILE if spec.get("save_file") else limit) + 1,
+            ssl_context=netsec.unverified_context() if spec.get("_skip_tls") else None,
         )
     except netsec.UnsafeURL as exc:
         err = {"code": "HTTP_BLOCKED", "message": f"Adresse refusée : {exc}", "next_step": "Vérifiez la connexion."}
@@ -744,6 +745,8 @@ def execute_spec(
         return None, _file_error(exc)
     except HttpStepError as exc:
         return None, {"code": exc.code, "message": exc.message, "next_step": exc.next_step}
+    if netsec.skip_tls(conn.config):
+        spec = {**spec, "_skip_tls": True}  # the owner of the connection turned certificate verification off
     started = time.monotonic()
     if spec.get("pagination"):
         result, error = _paginate(spec, url, headers, creds.secrets, creds.signer)

@@ -74,7 +74,7 @@ def test_the_agent_stack_gives_the_agent_neither_a_database_nor_the_key():
     services = compose_config(
         ["docker-compose.prod.yml", "docker-compose.roles.yml", "docker-compose.agent.yml"],
         ["agent"],
-        {"ORCH_WORK_DIR": "/srv/w"},
+        {"ORCH_WORK_DIR": "/srv/w", "ORCH_ACCEPT_SHARED_DOCKER_AGENT": "oui"},
     )["services"]
     agent = services["exec-agent"]
     assert "worker-exec" not in services and "worker-ai" not in services  # ni worker qui cumule le socket ET la clé

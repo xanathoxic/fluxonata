@@ -141,6 +141,8 @@ export interface WorkflowSummary {
   folder_level?: "view" | "run" | "edit" | null; // level in a private folder (null: the folder is not private to this person)
   latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null; input_form?: import("./forms/types").FormDefinition | null } | null;
 }
+/** Une version publiée d'un workflow (liste `/workflows/<slug>/versions/`). */
+export interface WorkflowVersionInfo { version: string; created_at: string; changelog?: string; input_schema: JsonSchema }
 export interface WorkflowDetail extends WorkflowSummary {
   draft_graph: import("./workflow/types").Graph;
 }

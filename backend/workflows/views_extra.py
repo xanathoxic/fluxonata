@@ -279,33 +279,33 @@ class ScriptTestView(APIView):
 
 
 class WorkflowDeleteView(APIView):
-    """Delete a workflow, only if that cannot hurt: never run, not used by another workflow, no schedule/webhook.
-    Otherwise deprecate it instead (history, runs and audit must stay consistent)."""
+    """Supprime un workflow, seulement si aucun AUTRE workflow ne l'appelle (409 avec la liste). Son historique d'exécutions et ses déclencheurs
+    (planifications, webhooks, formulaires publics, interrogations) le protègent, sauf demande expresse : `?with_history=1` supprime aussi
+    les exécutions, `?with_triggers=1` aussi les déclencheurs (définitif ; une exécution encore en cours bloque toujours)."""
 
     def delete(self, request, workspace, slug):
-        from runs.models import WorkflowRun
-        from triggers.models import Schedule, Webhook
+        from catalog.usage import refuse_if_used
+
+        from .removal import delete_workflow
 
         ws = get_workspace(request.user, workspace, EDIT)
         wf = _wf(request.user, ws, slug, EDIT)
-        rules = access.rules(request.user, ws)
-        reasons = []
-        if WorkflowRun.objects.filter(workflow_version__workflow=wf).exists():
-            reasons.append("il a déjà été exécuté")
-        if Schedule.objects.filter(workflow=wf).exists() or Webhook.objects.filter(workflow=wf).exists():
-            reasons.append("une planification ou un webhook l'utilise")
-        from .models import WorkflowVersion
-
-        for wv in WorkflowVersion.objects.filter(workflow__workspace=ws).exclude(workflow=wf):
-            if any(n.get("workflow") == slug for n in wv.graph.get("nodes", [])):
-                reasons.append(
-                    f"{wv.workflow.slug} l'appelle" if rules.allows(wv.workflow.folder, VIEW) else "un autre l'appelle"
-                )
-                break
-        if reasons:
-            raise serializers.ValidationError(
-                {"workflow": "Suppression refusée : " + ", ".join(reasons) + ". Dépréciez-le plutôt."}
-            )
-        record("workflow.delete", actor=request.user, workspace=ws, slug=slug, name=wf.name)
-        wf.delete()
+        refuse_if_used(
+            ws, request.user, "workflow", slug, "ce workflow"
+        )  # 409 + la liste des workflows qui l'appellent
+        name = wf.name
+        removed = delete_workflow(
+            wf,
+            with_history=request.query_params.get("with_history") in ("1", "true"),
+            with_triggers=request.query_params.get("with_triggers") in ("1", "true"),
+        )
+        record(
+            "workflow.delete",
+            actor=request.user,
+            workspace=ws,
+            slug=slug,
+            name=name,
+            history_deleted=removed["history"],
+            triggers_deleted=removed["triggers"],
+        )
         return Response(status=204)

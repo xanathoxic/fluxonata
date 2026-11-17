@@ -8,7 +8,7 @@ from vault.injection import all_forms, mask_json, mask_text
 from workflows.validation import explain_validation_error
 
 from . import services
-from .artifacts import extract_artifacts, store_artifacts
+from .artifacts import discard_artifacts, extract_artifacts, store_artifacts
 from .runners import RunOutcome
 
 MIN_FRAGMENT = 4  # same floor as for whole secrets (`resolve_env` keeps only values of 4+ characters)
@@ -60,9 +60,11 @@ def finalize_attempt(execution, attempt: int, outcome: RunOutcome, to_mask: list
     if not outcome.ok:
         error = dict(outcome.error or {"code": "ERROR", "message": "Échec."})
         error.setdefault("next_step", "Consultez les journaux, corrigez les entrées puis relancez l'action.")
-    if outcome.ok and pending_artifacts:
-        store_artifacts(execution, pending_artifacts)
-    return services.complete_attempt(
+    stored = []
+    if outcome.ok and pending_artifacts and services.attempt_is_live(execution.id, attempt):
+        # a late answer (fenced-out attempt, cancelled or finished run) must not add files to a run it no longer owns
+        stored = store_artifacts(execution, pending_artifacts)
+    accepted = services.complete_attempt(
         execution.id,
         attempt,
         ok=outcome.ok,
@@ -72,3 +74,6 @@ def finalize_attempt(execution, attempt: int, outcome: RunOutcome, to_mask: list
         exit_code=outcome.exit_code,
         cancelled=outcome.cancelled,
     )
+    if not accepted and stored:  # lost the race between the check above and the recording: take the files back
+        discard_artifacts(stored)
+    return accepted

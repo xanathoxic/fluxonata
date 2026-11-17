@@ -1,0 +1,48 @@
+# AGENT AUTONOME — à installer sur une machine, une VM ou un démon rootless DISTINCTS du plan de contrôle (docs/RUNNERS.md, « Production isolée »).
+# Ce fichier se copie seul avec runner/ et workers/ (voir `agent-ctl.sh`) : il ne contient et n'a besoin d'AUCUN élément du plan de contrôle — ni .env.prod, ni identifiant
+# PostgreSQL, ni clé du coffre, ni volume de la plate-forme. L'agent reçoit seulement : l'adresse HTTPS de runner-edge, son jeton (FICHIER, jamais une ligne de commande),
+# éventuellement une autorité de certification, son répertoire de travail, sa concurrence et les images d'exécution autorisées.
+#
+# Le socket monté (AGENT_DOCKER_SOCKET) est celui du démon DE CETTE MACHINE : il vaut root sur elle, d'où une machine (ou un compte rootless) dédiée à l'agent.
+name: fluxonata-agent
+
+services:
+  agent:
+    image: ${FLUXONATA_AGENT_IMAGE:-fluxonata-runner:local}
+    build: { context: ../.., dockerfile: runner/Dockerfile }
+    restart: unless-stopped
+    user: "${AGENT_USER:-10001:10001}"
+    group_add: ["${DOCKER_GID:-0}"]   # groupe propriétaire du socket (agent-ctl.sh le détecte) ; avec Docker rootless, voir docs/RUNNERS.md
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    labels:
+      fluxonata.isolation: "dedicated-host"
+    environment:
+      ORCH_URL: "${ORCH_URL:?Adresse HTTPS de runner-edge, par exemple https://runners.exemple.org:8443}"
+      ORCH_RUNNER_TOKEN_FILE: /run/secrets/runner_token
+      ORCH_RUNNER_CONCURRENCY: ${ORCH_RUNNER_CONCURRENCY:-2}
+      ORCH_CA_FILE: ${ORCH_CA_FILE_IN_CONTAINER:-}
+      ORCH_HARDENED: "1"
+      ORCH_REQUIRE_IMAGE_DIGEST: ${ORCH_REQUIRE_IMAGE_DIGEST:-1}
+      ORCH_WORK_DIR: ${AGENT_WORK_DIR:-/var/lib/fluxonata-agent}
+      ORCH_PYTHON_IMAGE: "${ORCH_PYTHON_IMAGE:?Image Python épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
+      ORCH_NODE_IMAGE: "${ORCH_NODE_IMAGE:?Image Node épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
+      ORCH_POWERSHELL_IMAGE: "${ORCH_POWERSHELL_IMAGE:?Image PowerShell épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
+      DOCKER_HOST: ${DOCKER_HOST_IN_CONTAINER:-unix:///var/run/docker.sock}
+    volumes:
+      - ${AGENT_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${AGENT_WORK_DIR:-/var/lib/fluxonata-agent}:${AGENT_WORK_DIR:-/var/lib/fluxonata-agent}   # même chemin dans le conteneur et sur la machine : le démon le monte dans les conteneurs d'action
+    secrets: [runner_token]
+    healthcheck:
+      test: ["CMD", "python", "/opt/fluxonata/runner/agent.py", "--healthcheck"]
+      interval: 30s
+      timeout: 25s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 120s
+
+secrets:
+  runner_token:
+    file: ${AGENT_TOKEN_FILE:-./secrets/runner_token}   # droits 0400, propriétaire = AGENT_USER ; créé par `agent-ctl.sh init`

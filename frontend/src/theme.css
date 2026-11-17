@@ -899,3 +899,9 @@ input::placeholder, textarea::placeholder { color: #5b6b80; opacity: 1; }
 .md pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow: auto; }
 .md pre code { background: none; border: 0; padding: 0; }
 .md hr { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }
+
+/* Sélection multiple et fenêtres « utilisé par » / résultat d'une publication groupée */
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--border, #d0d7de); border-radius: 8px; background: var(--surface-2, rgba(127, 127, 127, 0.08)); }
+.bulk-bar [role="status"] { font-weight: 600; margin-right: auto; }
+.usage-list { margin: 8px 0; padding-left: 1.2em; }
+.usage-list li { margin: 4px 0; }

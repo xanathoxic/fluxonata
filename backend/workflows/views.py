@@ -3,9 +3,9 @@ from typing import Any, cast
 
 from django.db import transaction
 from django.http import Http404
-from drf_spectacular.utils import extend_schema, extend_schema_serializer
+from drf_spectacular.utils import extend_schema, extend_schema_serializer, inline_serializer
 from rest_framework import serializers
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -146,6 +146,8 @@ class WorkflowListCreateView(ListAPIView):
         d = ser.validated_data
         access.require(request.user, ws, d["folder"], EDIT)
         d["tags"] = clean_tags(d["tags"])
+        if d["slug"] in RESERVED_SLUGS:
+            raise serializers.ValidationError({"slug": "Cet identifiant est réservé : choisissez-en un autre."})
         if Workflow.objects.filter(workspace=ws, slug=d["slug"]).exists():
             raise serializers.ValidationError({"slug": "Cet identifiant existe déjà dans l'espace."})
         wf = Workflow.objects.create(workspace=ws, owner=request.user, **d)
@@ -186,8 +188,12 @@ class DraftView(APIView):
             wf.draft_graph = graph
             wf.draft_revision += 1
             wf.save()
-        issues = validate(graph, ws, slug)
-        return Response({"revision": wf.draft_revision, "issues": issues})
+            wf.refresh_from_db(
+                fields=["draft_graph", "draft_revision"]
+            )  # ce que la base contient réellement, pas ce que le client a envoyé
+        issues = validate(wf.draft_graph, ws, slug)
+        # `graph` : la valeur enregistrée, pour que l'éditeur confirme ce qu'il affiche avant de dire « Brouillon enregistré »
+        return Response({"revision": wf.draft_revision, "issues": issues, "graph": wf.draft_graph})
 
 
 class ValidateView(APIView):
@@ -209,6 +215,34 @@ def _next_version(latest: str | None, bump: str) -> str:
     return f"{major}.{minor}.{patch + 1}"
 
 
+def publish_workflow(user, ws, slug: str, bump: str, changelog: str) -> WorkflowVersion:
+    """Validates the draft of `slug` and publishes it as the next immutable version (one transaction). Raises Http404, a permission error or a
+    `ValidationError` carrying the `issues`."""
+    with transaction.atomic():
+        wf = Workflow.objects.select_for_update().filter(workspace=ws, slug=slug).first()
+        if wf is None:
+            raise Http404()
+        access.require(user, ws, wf.folder, PUBLISH)
+        issues = validate(wf.draft_graph, ws, slug)
+        errors = [i for i in issues if i["level"] == "error"]
+        if errors or not wf.draft_graph.get("nodes"):
+            exc = serializers.ValidationError(
+                {"issues": errors or [{"code": "empty", "message": "Le workflow est vide."}]}
+            )
+            raise exc
+        latest = wf.latest_version()
+        version = WorkflowVersion.objects.create(
+            workflow=wf,
+            version=_next_version(latest.version if latest else None, bump),
+            graph=pin_graph(wf.draft_graph, ws),
+            input_schema=wf.draft_graph.get("inputs") or {"type": "object", "properties": {}},
+            changelog=changelog,
+            created_by=user,
+        )
+        record("workflow.publish", actor=user, workspace=ws, target=wf, version=version.version)
+    return version
+
+
 class PublishView(APIView):
     serializer_class = PublishSerializer
 
@@ -217,29 +251,116 @@ class PublishView(APIView):
         ws = get_workspace(request.user, workspace, PUBLISH)
         ser = PublishSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        with transaction.atomic():
-            wf = Workflow.objects.select_for_update().filter(workspace=ws, slug=slug).first()
-            if wf is None:
-                raise Http404()
-            access.require(request.user, ws, wf.folder, PUBLISH)
-            issues = validate(wf.draft_graph, ws, slug)
-            errors = [i for i in issues if i["level"] == "error"]
-            if errors or not wf.draft_graph.get("nodes"):
-                exc = serializers.ValidationError(
-                    {"issues": errors or [{"code": "empty", "message": "Le workflow est vide."}]}
-                )
-                raise exc
-            latest = wf.latest_version()
-            version = WorkflowVersion.objects.create(
-                workflow=wf,
-                version=_next_version(latest.version if latest else None, ser.validated_data["bump"]),
-                graph=pin_graph(wf.draft_graph, ws),
-                input_schema=wf.draft_graph.get("inputs") or {"type": "object", "properties": {}},
-                changelog=ser.validated_data["changelog"],
-                created_by=request.user,
-            )
-            record("workflow.publish", actor=request.user, workspace=ws, target=wf, version=version.version)
+        version = publish_workflow(request.user, ws, slug, ser.validated_data["bump"], ser.validated_data["changelog"])
         return Response(WorkflowVersionSerializer(version).data, status=201)
+
+
+MAX_BULK_PUBLISH = 50
+RESERVED_SLUGS = {
+    "publish-many"
+}  # le premier segment d'une route fixe sous /workflows/ : un workflow de ce nom ne serait pas adressable
+
+
+class PublishManySerializer(serializers.Serializer):
+    bump = serializers.ChoiceField(choices=["patch", "minor", "major"], default="minor")
+    changelog = serializers.CharField(required=False, allow_blank=True, default="", max_length=300)
+    slugs = serializers.ListField(child=serializers.SlugField(max_length=80), min_length=1, max_length=MAX_BULK_PUBLISH)
+
+
+def _children_first(ws, slugs: list[str]) -> list[str]:
+    """The selected workflows ordered so that one that calls another selected one comes AFTER it: the parent then pins the child's new version."""
+    drafts = dict(Workflow.objects.filter(workspace=ws, slug__in=slugs).values_list("slug", "draft_graph"))
+    calls: dict[str, set[str]] = {
+        s: {
+            str(n["workflow"])
+            for n in (g or {}).get("nodes", [])
+            if isinstance(n, dict)
+            and n.get("type") in ("subworkflow", "foreach", "while")
+            and n.get("workflow") in slugs
+        }
+        for s, g in drafts.items()
+    }
+    done: list[str] = []
+
+    def visit(s: str, stack: tuple = ()):
+        if s in done or s in stack:
+            return
+        for child in sorted(calls.get(s, ())):
+            visit(child, (*stack, s))
+        done.append(s)
+
+    for s in slugs:
+        visit(s)
+    return done
+
+
+class PublishManyView(APIView):
+    """Publishes several workflows in one request, each in its own transaction: one that cannot be published (invalid, empty, not allowed) is
+    reported and never stops the others. A workflow whose draft equals its latest version is skipped (nothing to publish)."""
+
+    serializer_class = PublishManySerializer
+
+    @extend_schema(
+        request=PublishManySerializer,
+        responses={
+            200: inline_serializer(
+                "PublishManyResult",
+                {
+                    "results": serializers.ListField(child=serializers.DictField()),
+                    "published": serializers.IntegerField(),
+                    "skipped": serializers.IntegerField(),
+                    "error": serializers.IntegerField(),
+                },
+            )
+        },
+    )
+    def post(self, request, workspace):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        ser = PublishManySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        slugs = list(dict.fromkeys(d["slugs"]))
+        results = []
+        for slug in _children_first(ws, slugs):
+            wf = Workflow.objects.filter(workspace=ws, slug=slug).first()
+            if wf is not None and not access.rules(request.user, ws).allows(wf.folder, VIEW):
+                wf = None  # a workflow the person cannot see is "not found", like everywhere else
+            if wf is None:
+                results.append({"slug": slug, "status": "error", "message": "Workflow introuvable."})
+                continue
+            latest = wf.latest_version()
+            if latest is not None and wf.draft_graph.get("nodes") and pin_graph(wf.draft_graph, ws) == latest.graph:
+                results.append(
+                    {
+                        "slug": slug,
+                        "name": wf.name,
+                        "status": "skipped",
+                        "message": f"Aucune modification depuis la v{latest.version}.",
+                        "version": latest.version,
+                    }
+                )
+                continue
+            try:
+                version = publish_workflow(request.user, ws, slug, d["bump"], d["changelog"])
+            except serializers.ValidationError as exc:
+                issues = (exc.detail.get("issues") if isinstance(exc.detail, dict) else None) or []
+                first = issues[0] if issues else {}
+                message = first.get("message") if isinstance(first, dict) else None
+                results.append(
+                    {
+                        "slug": slug,
+                        "name": wf.name,
+                        "status": "error",
+                        "message": str(message or "Publication refusée."),
+                        "issues": len(issues),
+                    }
+                )
+            except PermissionDenied as exc:
+                results.append({"slug": slug, "name": wf.name, "status": "error", "message": str(exc.detail)})
+            else:
+                results.append({"slug": slug, "name": wf.name, "status": "published", "version": version.version})
+        counts = {k: sum(1 for r in results if r["status"] == k) for k in ("published", "skipped", "error")}
+        return Response({"results": results, **counts})
 
 
 class VersionListView(ListAPIView):

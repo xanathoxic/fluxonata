@@ -191,6 +191,11 @@ def heartbeat(execution_id, attempt: int) -> bool:
     return bool(updated)
 
 
+def attempt_is_live(execution_id, attempt: int) -> bool:
+    """Is `attempt` still the running attempt of this execution? (the fencing test, without recording anything)"""
+    return Execution.objects.filter(pk=execution_id, status=S.RUNNING, attempt_count=attempt).exists()
+
+
 def cancel_requested(execution_id) -> bool:
     return Execution.objects.filter(pk=execution_id, cancel_requested=True).exists()
 

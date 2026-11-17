@@ -105,6 +105,7 @@ class Agent:
         concurrency: int = 2,
         once: bool = False,
         idle_exit: float = 0.0,
+        docker: bool = False,
     ):
         self.client, self.executor, self.once, self.idle_exit = (
             client,
@@ -113,6 +114,7 @@ class Agent:
             idle_exit,
         )
         self.concurrency = concurrency
+        self.docker = docker  # the executor runs actions in containers (and so has images, containers and work files to look after)
         self.stop = threading.Event()
         self.config: dict = {}
         self.done = 0
@@ -143,8 +145,40 @@ class Agent:
         return cfg
 
     # ------------------------------------------------------------ loop
+    def preflight(self) -> int | None:
+        """Checks made once the platform has said which runtimes this runner serves. Returns an exit code to stop, None to go on."""
+        if not self.docker:
+            return None
+        os.environ["ORCH_SANDBOX_LABEL"] = str(
+            self.config.get("id", "")
+        )  # marks this agent's action containers (see runs.runners)
+        from runs.runners import remove_stale_sandboxes, remove_stale_workdirs, unpinned_images
+
+        if os.environ.get("ORCH_REQUIRE_IMAGE_DIGEST") == "1":
+            loose = unpinned_images(self.config.get("runtimes", []))
+            if loose:
+                log.error(
+                    "ORCH_REQUIRE_IMAGE_DIGEST=1 : image(s) sans empreinte (…@sha256:…) : %s. Épinglez-les (scripts/pin-images.sh). Arrêt.",
+                    ", ".join(loose),
+                )
+                return 4
+        try:
+            containers, dirs = remove_stale_sandboxes(os.environ["ORCH_SANDBOX_LABEL"]), remove_stale_workdirs()
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("nettoyage des restes d'un arrêt brutal impossible : %s", exc)
+        else:
+            if containers or dirs:
+                log.warning(
+                    "restes d'un arrêt brutal supprimés : %d conteneur(s), %d répertoire(s) de travail",
+                    containers,
+                    dirs,
+                )
+        return None
+
     def run(self) -> int:
         self.configure()
+        if (code := self.preflight()) is not None:
+            return code
         slots = [threading.Thread(target=self._slot, name=f"slot-{i}", daemon=True) for i in range(self.concurrency)]
         for t in slots:
             t.start()
@@ -326,6 +360,36 @@ def read_token(args) -> str:
     return (args.token or os.environ.get("ORCH_RUNNER_TOKEN", "")).strip()
 
 
+def healthcheck(client: Client, docker: bool) -> int:
+    """Sonde de santé (`--healthcheck`) : la plate-forme accepte le jeton et, pour l'exécuteur Docker, le démon répond. Code 0 = sain."""
+    try:
+        status, _ = client.call("GET", "/runner/me/", timeout=10)
+    except (NetworkError, Revoked) as exc:
+        print(f"KO : plate-forme {'refuse le jeton' if isinstance(exc, Revoked) else 'injoignable'}")
+        return 1
+    if status != 200:
+        print(f"KO : la plate-forme répond {status}")
+        return 1
+    if docker:
+        try:
+            ok = (
+                subprocess.run(  # noqa: S603 - exécutable résolu par shutil.which, arguments littéraux, sans shell
+                    [shutil.which("docker") or "docker", "version", "--format", "{{.Server.Version}}"],
+                    check=False,
+                    capture_output=True,
+                    timeout=10,
+                ).returncode
+                == 0
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            ok = False
+        if not ok:
+            print("KO : le démon Docker ne répond pas")
+            return 1
+    print("OK")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Agent runner Fluxonata")
     ap.add_argument(
@@ -365,6 +429,11 @@ def main(argv=None) -> int:
         default=0.0,
         help="s'arrête après N secondes sans tâche (tests)",
     )
+    ap.add_argument(
+        "--healthcheck",
+        action="store_true",
+        help="vérifie que la plate-forme accepte le jeton et que Docker répond, puis s'arrête (code 0 = sain)",
+    )
     ap.add_argument("--version", action="version", version=f"fluxonata-runner {VERSION}")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -376,6 +445,13 @@ def main(argv=None) -> int:
             "⚠ HTTP sans chiffrement vers %s : le jeton et les secrets des tâches circuleraient en clair. Utilisez HTTPS.",
             args.url,
         )
+    if os.environ.get("ORCH_AGENT_ISOLATION") == "shared-docker-daemon":
+        log.warning(
+            "⚠ cet agent partage le démon Docker du plan de contrôle : une compromission de l'agent donne accès à ses volumes et à ses conteneurs. "
+            "Mode de confiance ou démonstration ; pour isoler, installez l'agent sur une machine distincte (docs/RUNNERS.md)."
+        )
+    if args.healthcheck:
+        return healthcheck(Client(args.url, token, args.ca_file), args.executor == "docker")
     docker_runner, subprocess_runner = import_sandbox()
     if args.executor == "subprocess":
         log.warning("⚠ exécuteur « subprocess » : les actions ne sont PAS isolées (développement et tests uniquement).")
@@ -404,6 +480,7 @@ def main(argv=None) -> int:
         args.concurrency,
         args.once,
         args.idle_exit,
+        docker=args.executor == "docker",
     )
 
     def on_signal(signum, _frame):

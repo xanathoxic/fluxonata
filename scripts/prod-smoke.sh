@@ -18,6 +18,7 @@ if [ "$ROLES" = 1 ]; then
   SERVICES=(api-ui api-ingest runner-gw orchestrator worker-exec worker-aux); STOPS=(orchestrator worker-exec worker-aux api-ingest runner-gw api-ui)
   if [ "$AGENT" = 1 ]; then
     FILES+=(-f infra/docker-compose.agent.yml)
+    export ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui   # essai jetable : le profil partage le démon Docker (voir l'en-tête du fichier Compose)
     SERVICES=(api-ui api-ingest runner-gw orchestrator worker-aux); STOPS=(exec-agent orchestrator worker-aux api-ingest runner-gw api-ui)
   fi
 else

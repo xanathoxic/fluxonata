@@ -150,8 +150,14 @@ export function duplicateNode(graph: Graph, id: string): { graph: Graph; newId: 
   return { graph: { ...graph, nodes: [...graph.nodes, copy] }, newId };
 }
 
+/** Applies a patch to one step. A key patched to `undefined` is REMOVED (not kept as an invisible `undefined`), so the local graph is exactly what is serialized and saved. */
 export function updateNode(graph: Graph, id: string, patch: Partial<GraphNode>): Graph {
-  return { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) };
+  const apply = (n: GraphNode): GraphNode => {
+    const merged: Record<string, unknown> = { ...n, ...patch };
+    for (const k of Object.keys(patch)) if (merged[k] === undefined) delete merged[k];
+    return merged as unknown as GraphNode;
+  };
+  return { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? apply(n) : n)) };
 }
 
 export function moveNode(graph: Graph, id: string, x: number, y: number): Graph {

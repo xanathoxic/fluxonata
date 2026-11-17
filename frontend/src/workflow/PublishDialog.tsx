@@ -27,7 +27,10 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
   const go = async (e: FormEvent) => {
     e.preventDefault();
     setProblem("");
-    if (d.saveState !== "saved") await d.save();
+    if (d.saveState !== "saved" && !(await d.save())) { // publier un brouillon que le serveur n'a pas enregistré publierait l'ancien contenu
+      setProblem("Publication annulée : la dernière modification du brouillon n'est pas enregistrée sur le serveur (voir le message d'enregistrement).");
+      return;
+    }
     publish.mutate({ bump, changelog }, {
       onSuccess: (v) => { void d.refetchWorkflow(); toast.show(`Version ${v.version} publiée : elle est lançable.`); onClose(); },
       onError: (err: ApiError) => {

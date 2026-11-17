@@ -183,7 +183,7 @@ export function SchemaTab() {
         {selected && layout.panOpen && (
           <aside className="schema-panel" aria-label="Propriétés de l'étape">
             <NodePanel graph={graph} node={selected} actions={actions} workflows={workflows} issues={issues} editable={editable}
-              onUpdate={(p) => setGraph(updateNode(graph, selected.id, p))}
+              onUpdate={(p) => setGraph((g) => updateNode(g, selected.id, p))}
               onConnect={(to, l) => setGraph(connect(graph, selected.id, to, l))}
               onDisconnect={(to) => setGraph(disconnect(graph, selected.id, to))}
               onRelabel={(to, l) => setGraph(relabel(graph, selected.id, to, l))}

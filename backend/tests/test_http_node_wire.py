@@ -217,7 +217,7 @@ def exec_env(monkeypatch):
 
     audited, sent = [], []
     creds = SimpleNamespace(headers={"Authorization": "Bearer s"}, query={"k": "v"}, secrets=["s"], signer=None)
-    monkeypatch.setattr(http_node, "find_connection", lambda *a: SimpleNamespace(name="svc"))
+    monkeypatch.setattr(http_node, "find_connection", lambda *a: SimpleNamespace(name="svc", config={}))
     monkeypatch.setattr(auth, "credentials", lambda conn: creds)
     monkeypatch.setattr(http_node, "record", lambda *a, **k: audited.append(k))
 
@@ -245,7 +245,7 @@ def test_execute_adds_credentials_audits_and_applies_fail_if(exec_env):
 def test_execute_unknown_connection_and_vault_refusal(exec_env):
     exec_env.monkeypatch.setattr(http_node, "find_connection", lambda *a: None)
     assert http_node.execute_spec(_spec(), SimpleNamespace(pk=1), None, None)[1]["code"] == "CONNECTION_MISSING"
-    exec_env.monkeypatch.setattr(http_node, "find_connection", lambda *a: SimpleNamespace(name="svc"))
+    exec_env.monkeypatch.setattr(http_node, "find_connection", lambda *a: SimpleNamespace(name="svc", config={}))
 
     def refuse(conn):
         raise exec_env.auth.AuthError("VAULT_DOWN", "coffre indisponible")

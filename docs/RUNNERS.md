@@ -29,21 +29,13 @@ des runners « de confiance » qui forment le pool partagé par défaut.
 1. **Plate-forme → Runners → Nouveau runner** (administrateur de plate-forme), ou **Administration → Runners** (administrateur d'un
    espace : un runner **dédié à cet espace**). Choisissez nom, portée, étiquettes, langages, parallélisme.
 2. Copiez le **jeton** (`orr_…`) : il n'est affiché **qu'une fois** ; seul son hachage SHA-256 est conservé.
-3. Sur la machine (Docker requis) :
+3. Sur la machine (Docker requis), **de préférence une machine dédiée** (voir « Trois niveaux d'isolation ») :
    ```bash
-   ORCH_URL=https://fluxonata.exemple.org ORCH_RUNNER_TOKEN=orr_… python3 runner/agent.py      # directement
-   scripts/runner.sh orr_…                                                                       # depuis le dépôt (pile locale)
+   ORCH_URL=https://runners.exemple.org:8443 ORCH_RUNNER_TOKEN_FILE=/etc/fluxonata-agent/runner_token python3 runner/agent.py   # directement
+   scripts/runner.sh orr_…                                                                                           # depuis le dépôt (pile locale, développement)
    ```
-   En conteneur : `docker build -f runner/Dockerfile -t fluxonata-runner .`, puis
-   ```bash
-   sudo mkdir -p /var/lib/fluxonata-runner && sudo chown 10001 /var/lib/fluxonata-runner
-   docker run -d --name fluxonata-runner --restart unless-stopped --group-add "$(stat -c %g /var/run/docker.sock)" \
-     -e ORCH_URL=https://fluxonata.exemple.org -e ORCH_RUNNER_TOKEN=orr_… \
-     -e ORCH_WORK_DIR=/var/lib/fluxonata-runner -v /var/lib/fluxonata-runner:/var/lib/fluxonata-runner \
-     -v /var/run/docker.sock:/var/run/docker.sock fluxonata-runner
-   ```
-   (le répertoire de travail doit avoir le **même chemin** dans le conteneur et sur l'hôte : le démon Docker de l'hôte le monte
-   dans les conteneurs d'actions.)
+   Le jeton se lit dans un **fichier protégé** (`ORCH_RUNNER_TOKEN_FILE`, droits 0400) : ne le placez ni dans une ligne de commande, ni dans `docker run -e` (visibles par `ps` et `docker inspect`).
+   En conteneur, utilisez le kit autonome **`infra/agent/`** (Compose, secret de fichier, images épinglées, sonde de santé) décrit plus bas.
 4. L'écran Runners affiche « En ligne », la version de l'agent, sa plate-forme et son dernier contact.
 
 ## Portées : partagé, dédié, et espace « exclusif »
@@ -70,8 +62,57 @@ Un runner dédié à **plusieurs** espaces n'est modifiable que par la plate-for
 - Un runner ne voit **que ses tâches** (« inconnue » et « celle d'un autre » reçoivent la même réponse 404) et uniquement les secrets de la tâche qu'il exécute.
 - Limite de débit **par runner** (`ORCH_RUNNER_RATE`, 1500/min par défaut) ; tailles bornées ; messages d'erreur tronqués.
 - Tout est **audité** (`runner.create|update|rotate_token|delete`, `workspace.runner_settings`, `secret.inject`).
-- **Si un runner est compromis**, l'attaquant obtient le code et les secrets des tâches qu'il reçoit — **pas** ceux des autres espaces ni du coffre-fort. D'où les runners **dédiés** pour les espaces sensibles.
-- **Limites à connaître** : l'agent doit pouvoir lancer des conteneurs (socket Docker) : un accès au socket équivaut à root sur l'hôte, **dédiez la machine** (ou utilisez Docker rootless) ; les conteneurs d'actions partagent le noyau de l'hôte (voir « Durcissement et limites » dans [INSTALL.md](INSTALL.md), `ORCH_HARDENED`, gVisor) ; **utilisez HTTPS** : en HTTP le jeton et les secrets des tâches circulent en clair (l'agent avertit hors boucle locale).
+- **Si un runner est compromis**, l'attaquant obtient le code et les secrets des tâches qu'il reçoit — **pas** ceux des autres espaces ni du coffre-fort (ils ne lui sont jamais transmis). D'où les runners **dédiés** pour les espaces sensibles. **Cela suppose que son démon de conteneurs ne soit pas celui du plan de contrôle** : voir ci-dessous.
+- **Limites à connaître** : l'agent doit pouvoir lancer des conteneurs (socket Docker) : un accès au socket équivaut à root sur l'hôte, **dédiez la machine** (ou utilisez Docker rootless — « Trois niveaux d'isolation ») ; les conteneurs d'actions partagent le noyau de l'hôte (voir « Durcissement et limites » dans [INSTALL.md](INSTALL.md), `ORCH_HARDENED`, gVisor) ; **utilisez HTTPS** : en HTTP le jeton et les secrets des tâches circulent en clair (l'agent avertit hors boucle locale).
+
+## Trois niveaux d'isolation
+Retirer d'un conteneur les variables de base, la clé du coffre et les volumes **ne suffit pas** tant que ce conteneur peut commander le démon Docker qui héberge le plan de contrôle : un accès en écriture à `/var/run/docker.sock` permet de démarrer un conteneur qui monte les volumes de la plate-forme (clés, artefacts, base) ou le système de fichiers de l'hôte. L'invariant **I8** (`docs/ARCHITECTURE.md`) — *la compromission de l'agent ou de son démon n'atteint ni la base, ni les clés, ni les volumes, ni les conteneurs du plan de contrôle* — n'est donc vrai que si le runtime de l'agent est réellement séparé.
+
+| Niveau | Mise en place | I8 | Quand |
+|---|---|---|---|
+| **1. Démonstration / confiance forte** | agent sur le **même démon Docker** que le plan de contrôle (`infra/docker-compose.agent.yml`, profil `agent`) ; option **explicite** `ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui` exigée | **faux** | essais, démonstration, exploitant et clients tous de confiance. **Pas** pour un multi-tenant sensible |
+| **2. Production isolée** | plan de contrôle **sans aucun socket d'exécution** (`infra/docker-compose.remote-agents.yml`) + agent sur une **machine, une VM ou un démon rootless distincts** (`infra/agent/`), qui n'appelle que `runner-edge` en HTTPS | **vrai** si les conditions ci-dessous sont réunies | mode recommandé en multi-tenant |
+| **3. Client sensible** | comme le niveau 2, avec un agent (ou un groupe d'agents) **dédié au client** : runner « dédié » à ses espaces, espace sans runners partagés, réseau et stockage séparés | vrai | données ou exigences d'un client particulier |
+
+**Conditions du niveau 2 sur une seule machine** (démon rootless) : socket distinct, stockage distinct, utilisateur système distinct, aucune visibilité sur les conteneurs du plan de contrôle, aucun accès à ses volumes ni à ses répertoires de clés, de base ou d'artefacts, et **aucun partage du `/var/run/docker.sock` du plan de contrôle**. Un simple conteneur montant le socket principal n'est **pas** une isolation. Une machine ou une VM distincte reste préférable : un noyau partagé (conteneurs d'action, démon rootless) est une frontière plus faible qu'un hyperviseur.
+
+**Ce que l'isolation ne supprime pas** : un agent compromis voit les secrets **des tâches qu'il reçoit** (code, entrées, variables injectées) ; il ne voit ni le coffre complet, ni les autres espaces, ni la base. Les runners dédiés limitent l'exposition aux espaces qui lui sont confiés.
+
+## Installer un agent sur une machine distincte (niveau 2)
+Rien du plan de contrôle ne doit être copié sur la machine de l'agent : ni `.env.prod`, ni identifiants PostgreSQL, ni clé du coffre, ni volumes. L'agent reçoit **seulement** l'adresse HTTPS de `runner-edge`, son jeton (fichier), éventuellement une autorité de certification, son répertoire de travail, sa concurrence, les images d'exécution autorisées et son socket Docker local.
+
+**Côté plan de contrôle** (une fois) :
+```bash
+ORCH_RUNNER_TLS_DIR=/etc/fluxonata/runner-tls docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml \
+    -f infra/docker-compose.remote-agents.yml --env-file infra/.env.prod up -d --build
+```
+`/etc/fluxonata/runner-tls` contient `fullchain.pem` et `privkey.pem` (TLS obligatoire : le front n'écoute pas en clair). `runner-edge` ne sert que `/api/v1/runner/` (tout le reste : 404), borne les corps (4 Mo), limite le débit par adresse, n'écrit jamais l'en-tête `Authorization`, un paramètre de requête ni un corps dans ses journaux, et ne voit que `runner-gw` (réseau interne dédié : ni `api-ui`, ni `api-ingest`, ni PostgreSQL). Dans cette topologie aucun service n'a de socket Docker.
+
+**Créer le runner** : Plate-forme → Runners → *Nouveau runner* (partagé ou dédié, étiquettes, langages, parallélisme). Le jeton `orr_…` n'est affiché qu'une fois.
+
+**Sur la machine de l'agent** :
+```bash
+git clone … && cd fluxonata/infra/agent               # ou copiez seulement infra/agent/, runner/ et workers/
+cp agent.env.example agent.env                         # ORCH_URL, images ÉPINGLÉES (scripts/pin-images.sh), socket, répertoire de travail
+printf %s "orr_…" | ./agent-ctl.sh init                # jeton → secrets/runner_token (0400), lu sur l'entrée standard, jamais affiché
+./agent-ctl.sh up
+./agent-ctl.sh health                                  # plate-forme joignable, jeton accepté, démon Docker
+```
+L'agent **refuse de démarrer** si une image d'exécution n'est pas référencée par digest (`name@sha256:…`, `ORCH_REQUIRE_IMAGE_DIGEST=1` par défaut dans le kit ; code de sortie 4) et ne reçoit aucune option Docker arbitraire : les conteneurs d'action sont non privilégiés, sans capacité, sans réseau (ou le réseau de test), système de fichiers en lecture seule.
+
+| Opération | Commande |
+|---|---|
+| **Rotation du jeton** | rotation dans l'interface (l'ancien jeton cesse **aussitôt** d'attribuer des tâches), puis `printf %s "orr_…" \| ./agent-ctl.sh rotate` |
+| **Mise à jour** | `./agent-ctl.sh update` (reconstruit l'image, recrée l'agent ; la plate-forme peut exiger une version minimale : `ORCH_MIN_AGENT_VERSION`, l'agent trop ancien s'arrête avec le code 3) |
+| **Révocation** | supprimer le runner dans l'interface (effet immédiat) ; `./agent-ctl.sh revoke` retire le jeton de la machine |
+| **Santé** | `./agent-ctl.sh health` ; sonde Compose `agent.py --healthcheck` ; écran Runners |
+| **Nettoyage** | `./agent-ctl.sh clean` (conteneurs d'action étiquetés `fluxonata.sandbox`, répertoires `orch-run-*` et `orch-env-*`) ; au démarrage, l'agent supprime lui-même les restes d'un arrêt brutal (conteneurs de **son** étiquette, répertoires de travail de plus d'une heure) |
+
+### Docker rootless (même machine ou machine dédiée)
+Un démon rootless d'un **compte système dédié** a son propre socket (`/run/user/<uid>/docker.sock`), son propre stockage et ne voit rien du démon principal. Compte dédié, `loginctl enable-linger`, `dockerd-rootless-setuptool.sh install`, puis soit `infra/agent/fluxonata-agent.service` (agent sans conteneur, jeton transmis par `LoadCredential`), soit le kit Compose avec `AGENT_DOCKER_SOCKET=/run/user/<uid>/docker.sock` et `AGENT_USER=<uid>:<gid>`. Particularités d'un démon rootless : pas de port privilégié, limites mémoire/CPU/processus dépendantes de la délégation cgroup v2 de l'hôte. **Cette procédure n'a pas été exécutée ici** (Docker rootless non installé sur la machine de développement) : seuls ses fichiers de configuration sont vérifiés par les tests.
+
+## Différences entre un worker intégré et un agent
+Le contrat de l'étape **Script Python** ne change pas : mêmes entrées JSON (dictionnaire, liste, `null`), mêmes sorties structurées, `print` et `stderr` reportés au journal (le résultat est l'enveloppe, jamais la sortie standard), exception → erreur `ACTION_ERROR` avec trace, délai → `TIMEOUT`, annulation → `CANCELLED`, secrets injectés en variables d'environnement, dépendances = **celles de l'image** (pas de `pip install` à l'exécution : un module absent donne une `ModuleNotFoundError` dans le journal). Différences autorisées : latence de prise de tâche (long-poll, heartbeat) ; image fournie par la configuration **de l'agent** (`ORCH_PYTHON_IMAGE`) — gardez la même sur worker et agent ; **artefacts** : ils voyagent dans le résultat JSON (au plus 10 fichiers, résultat limité à 1 Mo avant stockage), donc les mêmes limites sur les deux ; **entrées** : JSON uniquement, il n'y a pas d'artefact d'entrée pour un script. Un transfert d'artefacts hors résultat n'est pas implémenté : aucun besoin mesuré.
 
 ## Exploitation
 - **Mise à l'échelle** : ajoutez des runners (ou augmentez le parallélisme) ; la plate-forme garde son équité entre espaces et son plafond par espace.

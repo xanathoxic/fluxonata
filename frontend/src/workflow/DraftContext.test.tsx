@@ -72,9 +72,13 @@ describe("brouillon : enregistrement automatique face à un serveur lent", () =>
     await screen.findByRole("button", { name: "ajouter" });
     await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "ajouter" }));
     // l'écriture part après 1,2 s, la réponse arrive 5 s plus tard : pendant ce temps le client ne doit rien renvoyer
-    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    });
     expect(server.puts).toBe(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
     expect(server.maxInflight, "une seule écriture à la fois").toBe(1);
     expect(server.conflicts, "aucun conflit avec soi-même").toBe(0);
     expect(screen.getByLabelText("état")).toHaveTextContent("saved");
@@ -86,9 +90,21 @@ describe("brouillon : enregistrement automatique face à un serveur lent", () =>
     const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await screen.findByRole("button", { name: "ajouter" });
     await u.click(screen.getByRole("button", { name: "ajouter" }));
-    await act(async () => { await vi.advanceTimersByTimeAsync(1300); }); // 1re écriture en vol
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    }); // 1re écriture en vol
     await u.click(screen.getByRole("button", { name: "ajouter" })); // 2e modification pendant l'écriture
-    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    // L'écriture suivante est maintenant programmée à la fin de la précédente (et non pendant son vol) : on avance le temps par étapes,
+    // car React ne rend qu'à la sortie de chaque `act`.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3500);
+    }); // fin de la 1re écriture
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    }); // départ de la 2e
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    }); // fin de la 2e
     expect(server.conflicts).toBe(0);
     expect(server.maxInflight).toBe(1);
     expect(server.revision).toBe(3); // deux écritures acceptées, dans l'ordre

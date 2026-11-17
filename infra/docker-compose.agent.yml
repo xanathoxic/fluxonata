@@ -1,11 +1,19 @@
-# Topologie « PAR AGENTS » (ADR 0023, AR3.2) — À UTILISER EN PLUS des deux autres fichiers :
+# Topologie « AGENT SUR LE MÊME DÉMON DOCKER » (ADR 0023) — MODE DE CONFIANCE / DÉMONSTRATION. À UTILISER EN PLUS des deux autres fichiers :
 #
-#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod --profile agent up -d --build
+#   ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod --profile agent up -d --build
 #   puis, UNE fois : scripts/agent-register.sh     (enregistre le runner : seule l'empreinte du jeton de infra/.env.agent est écrite en base)
 #   Le jeton de l'agent est dans infra/.env.agent (créé par scripts/prod-init.sh), chargé par `exec-agent` SEUL : aucun autre service ne le reçoit.
 #
+# ⚠ CE MODE N'EST PAS UNE ISOLATION. `exec-agent` monte /var/run/docker.sock, le socket du MÊME démon Docker que PostgreSQL, l'API, le coffre (volume `keys`), les
+#   artefacts et `runner-gw`. Qui contrôle l'agent (ou ce démon) peut démarrer un conteneur qui monte ces volumes ou le système de fichiers de l'hôte : le socket vaut root
+#   sur l'hôte. Ce profil ne fait que retirer de l'agent la base, la clé et le volume des artefacts (l'invariant I1 « aucun service ne cumule socket et clé » y est vrai) ;
+#   l'invariant I8 « la compromission de l'agent ou de son démon n'atteint ni la base, ni les clés, ni les volumes, ni les conteneurs du plan de contrôle » y est FAUX.
+#   Pour I8 : agent sur une machine, une VM ou un démon rootless distincts → infra/docker-compose.remote-agents.yml (plan de contrôle sans socket) + infra/agent/ (agent autonome).
+#   Usage raisonnable : essais, démonstration, ou exploitant et clients tous de confiance. À éviter pour un multi-tenant sensible.
+#   L'option explicite ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui est EXIGÉE : sans elle, Compose refuse de démarrer ce service.
+#
 # `worker-exec` (qui cumulait socket Docker + clé du coffre + accès base) disparaît : le service `exec-agent` détient le socket Docker mais N'A NI base NI clé ; il ne parle qu'à
-# `runner-gw` (protocole HTTP des runners, ADR 0013). L'invariant I1 de docs/ARCHITECTURE.md devient vrai dans cette topologie.
+# `runner-gw` (protocole HTTP des runners, ADR 0013).
 name: fluxonata-prod
 
 services:
@@ -22,15 +30,19 @@ services:
     restart: unless-stopped
     user: "0:0"   # accès au socket Docker de l'hôte ; les conteneurs d'action, eux, tournent sans privilège (65534, sans capacités, réseau coupé)
     security_opt: ["no-new-privileges:true"]
+    labels:
+      fluxonata.isolation: "shared-docker-daemon"   # lisible par l'exploitant (docker inspect) : cet agent partage le démon du plan de contrôle
     env_file: .env.agent   # ORCH_RUNNER_TOKEN, et rien d'autre : ce fichier n'est lu que par ce service (créé par scripts/prod-init.sh ; manquant, Compose refuse de démarrer)
     environment:
       ORCH_URL: http://runner-gw:8000
       ORCH_RUNNER_CONCURRENCY: "2"
-      ORCH_WORK_DIR: ${ORCH_WORK_DIR:?}
+      ORCH_WORK_DIR: "${ORCH_WORK_DIR:?}"
       ORCH_EGRESS_TEST_NETWORK: ${ORCH_EGRESS_TEST_NETWORK:-fluxonata-prod-egress}   # politique réseau « test-service » : le MÊME réseau que la pile (sans cela l'agent visait « fluxonata-egress-test », celui du développement)
+      ORCH_AGENT_ISOLATION: "shared-docker-daemon"
+      ORCH_ACCEPT_SHARED_DOCKER_AGENT: "${ORCH_ACCEPT_SHARED_DOCKER_AGENT:?Ce profil partage le démon Docker du plan de contrôle : il n'isole PAS l'agent (voir l'en-tête de ce fichier). Définissez ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui pour l'accepter en connaissance de cause, ou utilisez docker-compose.remote-agents.yml avec un agent sur un hôte distinct.}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}
+      - "${ORCH_WORK_DIR:?}:${ORCH_WORK_DIR}"
     networks: [edge]   # réseau partagé avec api-ui, api-ingest, web et runner-gw (aucun filtrage entre eux : seul le jeton limite ce que l'agent obtient, et seul l'agent le détient) ; aucune base, aucune sortie réseau
     depends_on:
       runner-gw: { condition: service_healthy }

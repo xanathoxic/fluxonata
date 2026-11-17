@@ -395,13 +395,17 @@ def resolve_skill_version(workspace, slug, wanted=None):
     return skill, version
 
 
+LATEST = "latest"  # valeur de `version` d'une étape qui appelle un workflow : « toujours la dernière publiée », résolue À CHAQUE EXÉCUTION (jamais figée)
+
+
 def resolve_workflow_version(workspace, slug, wanted=None):
+    """La version publiée `wanted` de `slug` ; la plus récente si `wanted` est vide ou « latest »."""
     from .models import Workflow
 
     wf = Workflow.objects.filter(workspace=workspace, slug=slug).first()
     if wf is None:
         return None, None
-    version = wf.versions.filter(version=wanted).first() if wanted else wf.latest_version()
+    version = wf.versions.filter(version=wanted).first() if wanted and wanted != LATEST else wf.latest_version()
     return wf, version
 
 
@@ -1746,7 +1750,9 @@ def _validate_subworkflow(n, workspace, current_slug, issues, out_types=None, de
     if slug == current_slug:
         issues.append(issue(nid, "recursion", "Un workflow ne peut pas s'appeler lui-même."))
     if version is None:
-        issues.append(issue(nid, "version_unavailable", f"Aucune version publiée de {slug}."))
+        wanted = n.get("version")
+        what = f"La version {wanted} de {slug} n'existe pas." if wanted else f"Aucune version publiée de {slug}."
+        issues.append(issue(nid, "version_unavailable", what))
     if n["type"] == "foreach" and n.get("interval_seconds") is not None:
         iv = n["interval_seconds"]
         if not isinstance(iv, int) or not 0 <= iv <= 3600:
@@ -1786,6 +1792,8 @@ def pin_graph(graph: dict, workspace) -> dict:
                 _, cv = resolve_action_version(workspace, comp["action"], comp.get("version"))
                 comp["version"] = cv.version
         elif n["type"] in ("subworkflow", "foreach", "while"):
+            if n.get("version") == LATEST:
+                continue  # suivre la dernière version : rien n'est figé, l'exécution la résout à chaque lancement
             _, v = resolve_workflow_version(workspace, n["workflow"], n.get("version"))
             n["version"] = v.version
         elif n["type"] == "ai" and n.get("skill"):

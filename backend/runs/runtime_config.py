@@ -14,6 +14,9 @@ _DEFAULTS = {
     "ORCH_SECCOMP_PROFILE": "",
     "ORCH_DOCKER_RUNTIME": "",
     "ORCH_RUNNER": "docker",
+    "ORCH_SANDBOX_LABEL": "",
+    "ORCH_REQUIRE_IMAGE_DIGEST": False,
+    "ORCH_STALE_WORK_SECONDS": 3600,
     "ORCH_PYTHON_IMAGE": "python:3.13-slim",
     "ORCH_NODE_IMAGE": "node:22-slim",
     "ORCH_POWERSHELL_IMAGE": "mcr.microsoft.com/powershell:lts-debian-12",
@@ -28,7 +31,7 @@ class _Settings:
         try:
             from django.conf import settings as dj
 
-            if dj.configured:
+            if dj.configured and hasattr(dj, name):
                 return getattr(dj, name)
         except ImportError:  # no Django in the runner image
             pass

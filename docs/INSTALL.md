@@ -236,9 +236,19 @@ docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.ym
 ```
 `api-ui` (interface), `api-ingest` (webhooks, formulaires publics ; **aucune sortie réseau**), `runner-gw` (runners distants), `worker-exec` (actions, seul avec `worker-ai` à détenir le socket Docker), `worker-aux` (étapes de connexion, interrogation, alertes, Git). nginx route par préfixe ; l'arrêt d'un rôle n'indisponibilise que sa surface. Les réseaux `data` et `edge` sont internes : un service qui doit appeler l'extérieur doit être aussi sur `egress` (voir le fichier). `scripts/prod-smoke.sh --roles` rejoue l'installation vierge sur cette topologie. **Ne pas mélanger** les deux topologies sur un même projet sans `down` : les noms de services diffèrent.
 
-## Topologie par agents (AR3.2, ADR 0023)
+## Topologie par agents distants — production isolée (ADR 0023, mise à jour du 2026-11-16)
+Mode **recommandé en multi-tenant** : le plan de contrôle n'a **aucun socket Docker** et n'exécute aucune action ; les agents tournent sur une machine, une VM ou un démon rootless **distincts** et n'appellent que `runner-edge` (HTTPS, protocole des runners seulement).
+```
+ORCH_RUNNER_TLS_DIR=/etc/fluxonata/runner-tls docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.remote-agents.yml --env-file infra/.env.prod up -d --build
+```
+Création du runner, installation de l'agent (`infra/agent/`), rotation, mise à jour, révocation, santé, nettoyage et Docker rootless : **[docs/RUNNERS.md](RUNNERS.md)** (« Trois niveaux d'isolation », « Installer un agent sur une machine distincte »). `worker-ai` (essai à blanc de l'assistant) n'est pas disponible dans ce mode ; les étapes IA des workflows sont prises par `worker-aux`.
+
+## Topologie par agents sur le même démon — démonstration / confiance (AR3.2, ADR 0023)
+> ⚠ **Ce mode n'isole pas l'agent.** `exec-agent` monte le socket du démon qui héberge PostgreSQL, l'API, les clés et les artefacts : qui le contrôle peut monter ces volumes (le socket vaut root). Il retire seulement de l'agent la base, la clé et les artefacts. À réserver aux essais et aux exploitations de confiance ; **Compose refuse de le démarrer sans `ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui`**.
+
 Pour que le service qui détient le socket Docker n'ait **ni la base ni la clé du coffre** : ajoutez `-f infra/docker-compose.agent.yml` aux deux fichiers de la topologie par rôles. Le jeton de l'agent vit dans **`infra/.env.agent`** (droits 600, jamais versionné), un fichier **distinct** de `infra/.env.prod` : seul `exec-agent` le charge ; la plateforme n'en garde que l'empreinte. `scripts/prod-init.sh` le crée (voir la transition ci-dessous pour une installation existante). Une fois la pile démarrée :
 ```
+export ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui   # accord explicite : le démon Docker est partagé avec le plan de contrôle
 C="docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml -f infra/docker-compose.agent.yml --env-file infra/.env.prod"
 scripts/agent-register.sh                    # enregistre le runner (empreinte seulement ; le jeton n'est jamais affiché)
 $C --profile agent up -d --build exec-agent

@@ -3,12 +3,13 @@
 # un réseau interne et des services JETABLES. Ne touche ni à la pile de développement, ni à sa base, ni aux comptes de démonstration,
 # ni aux modifications non validées de l'arbre de travail. Les images PostgreSQL et Python sont celles épinglées par infra/docker-compose.yml.
 # ÉTAT : chemin nominal EXÉCUTÉ le 2026-11-13 sur le commit 49283ea (ci.sh complet, E2E + axe compris : code de sortie 0, 0 conteneur restant) ; l'E2E exige les bibliothèques système de Chromium (`npx playwright install-deps chromium`).
-# Usage : scripts/verification-isolee.sh [--commit REF] [--skip-e2e] [--plan] [--force]
+# Usage : scripts/verification-isolee.sh [--commit REF] [--skip-e2e] [--only-e2e FICHIER_DE_TEST] [--plan] [--force]
+#   --only-e2e : au lieu de ci.sh, ne rejoue QUE ce(s) scénario(s) Playwright (ex. e2e/subworkflow-version.spec.ts) sur la pile jetable.
 #   --plan : affiche les étapes et les seuils, ne crée rien.   --force : outrepasse le refus ressources (à éviter).
 source "$(dirname "$0")/_common.sh"; cd "$ROOT"
-REF=HEAD; SKIP=(); PLAN=0; FORCE=0
+REF=HEAD; SKIP=(); PLAN=0; FORCE=0; ONLY=()
 while [ $# -gt 0 ]; do case "$1" in
-  --commit) REF="${2:?--commit exige une référence}"; shift;; --skip-e2e) SKIP=(--skip-e2e);; --plan) PLAN=1;; --force) FORCE=1;;
+  --commit) REF="${2:?--commit exige une référence}"; shift;; --skip-e2e) SKIP=(--skip-e2e);; --only-e2e) ONLY+=("${2:?--only-e2e exige un fichier de test}"); shift;; --plan) PLAN=1;; --force) FORCE=1;;
   *) echo "option inconnue : $1" >&2; exit 2;; esac; shift; done
 SHA="$(git rev-parse --verify "$REF^{commit}")" || exit 2
 img() { sed -n "s/^ *image: *\\(${1}[^ ]*\\)$/\\1/p" infra/docker-compose.yml | head -1; }
@@ -92,6 +93,12 @@ start worker "$TREE/backend" "$PY" manage.py run_worker
 start web "$TREE/frontend" npm run dev -- --host 127.0.0.1 --port "$WEB"
 for _ in $(seq 1 60); do curl -s -o /dev/null "http://127.0.0.1:$API/api/v1/health/ready/" && curl -s -o /dev/null "http://127.0.0.1:$WEB/" && break; sleep 2; done
 LIBS="$ROOT/.run/libs/root/usr/lib/x86_64-linux-gnu"; [ -d "$LIBS" ] && export LD_LIBRARY_PATH="$LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [ "${#ONLY[@]}" -gt 0 ]; then
+  say "début E2E ciblé : ${ONLY[*]}"
+  ( cd "$TREE" && scripts/e2e.sh "${ONLY[@]}" ) 2>&1 | tee "$OUT/e2e-cible.log"; rc=${PIPESTATUS[0]}
+  say "fin : code de sortie de l'E2E ciblé = $rc ; journaux : $OUT"
+  exit "$rc"
+fi
 say "début ci.sh ${SKIP[*]:-}"
 ( cd "$TREE" && scripts/ci.sh "${SKIP[@]}" ) 2>&1 | tee "$OUT/ci.log"; rc=${PIPESTATUS[0]}
 say "fin : code de sortie de ci.sh = $rc ; journaux : $OUT"

@@ -47,6 +47,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/favorites/", x.FavoritesView.as_view()),
     path("workspaces/<slug:workspace>/favorites/<str:kind>/<slug:slug>/", x.FavoriteDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflows/", views.WorkflowListCreateView.as_view()),
+    path("workspaces/<slug:workspace>/workflows/publish-many/", views.PublishManyView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/", views.WorkflowDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/draft/", views.DraftView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/contract/", views.ContractView.as_view()),

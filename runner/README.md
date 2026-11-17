@@ -20,10 +20,12 @@ ORCH_URL=https://fluxonata.exemple.org ORCH_RUNNER_TOKEN=orr_… python3 runner/
 | `ORCH_RUNNER_CONCURRENCY` | tâches en parallèle (bornées par le réglage du runner côté plate-forme) |
 | `ORCH_RUNNER_EXECUTOR` | `docker` (défaut) ou `subprocess` (**sans isolation**, développement) |
 | `ORCH_CA_FILE` | autorité de certification pour un HTTPS interne |
+| `ORCH_REQUIRE_IMAGE_DIGEST` | `1` : l'agent refuse de démarrer si une image d'exécution n'est pas épinglée par digest (code 4) |
+| `--healthcheck` | sonde : plate-forme joignable, jeton accepté, démon Docker (code 0 = sain) |
 | `ORCH_HARDENED`, `ORCH_PYTHON_IMAGE`, `ORCH_NODE_IMAGE`, `ORCH_WORK_DIR`… | mêmes réglages du bac à sable que les workers de la plate-forme |
 
-Codes de sortie : `0` arrêt normal, `1` Docker inaccessible, `2` jeton refusé (runner supprimé ou jeton changé), `3` plate-forme injoignable au démarrage.
+Codes de sortie : `0` arrêt normal, `1` Docker inaccessible, `2` jeton refusé (runner supprimé ou jeton changé), `3` plate-forme injoignable au démarrage ou agent trop ancien, `4` image d'exécution non épinglée alors que le digest est exigé.
 Arrêt : `SIGTERM`/Ctrl+C laisse finir les tâches en cours (une seconde fois : arrêt immédiat ; la plate-forme reprend la tâche à l'expiration du bail).
 
-En conteneur : `docker build -f runner/Dockerfile -t fluxonata-runner .` puis voir `docs/RUNNERS.md` (socket Docker, répertoire de travail partagé).
+En conteneur : kit autonome `infra/agent/` (Compose, jeton en fichier, images épinglées par digest, sonde `--healthcheck`) ; installation sur une machine distincte et niveaux d'isolation : `docs/RUNNERS.md`. **Un agent qui monte le socket du démon du plan de contrôle n'est pas isolé.**
 Documentation complète : [docs/RUNNERS.md](../docs/RUNNERS.md).

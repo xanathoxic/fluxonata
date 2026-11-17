@@ -1901,6 +1901,46 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/actions/{slug}/delete/": {
+            "delete": {
+                "operationId": "workspaces_actions_delete_destroy",
+                "description": "Supprime une action, seulement si aucun workflow ne l'appelle (409 avec la liste, sinon). Une action déjà exécutée n'est supprimée qu'avec\n`?with_history=1` : l'historique de ses exécutions est alors supprimé aussi, définitivement (jamais en silence).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/actions/{slug}/dependents/": {
             "get": {
                 "operationId": "workspaces_actions_dependents_retrieve",
@@ -2225,6 +2265,46 @@
                 ],
                 "responses": {
                     "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/actions/{slug}/usage/": {
+            "get": {
+                "operationId": "workspaces_actions_usage_retrieve",
+                "description": "Les workflows qui appellent cette action (brouillons et versions publiées) ; sert à décider si elle peut être supprimée.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
                         "description": "No response body"
                     }
                 }
@@ -10290,7 +10370,7 @@
         "/api/v1/workspaces/{workspace}/workflows/{slug}/delete/": {
             "delete": {
                 "operationId": "workspaces_workflows_delete_destroy",
-                "description": "Delete a workflow, only if that cannot hurt: never run, not used by another workflow, no schedule/webhook.\nOtherwise deprecate it instead (history, runs and audit must stay consistent).",
+                "description": "Supprime un workflow, seulement si aucun AUTRE workflow ne l'appelle (409 avec la liste). Son historique d'exécutions et ses déclencheurs\n(planifications, webhooks, formulaires publics, interrogations) le protègent, sauf demande expresse : `?with_history=1` supprime aussi\nles exécutions, `?with_triggers=1` aussi les déclencheurs (définitif ; une exécution encore en cours bloque toujours).",
                 "parameters": [
                     {
                         "in": "path",
@@ -11054,6 +11134,45 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/usage/": {
+            "get": {
+                "operationId": "workspaces_workflows_usage_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/workflows/{slug}/validate/": {
             "post": {
                 "operationId": "workspaces_workflows_validate_create",
@@ -11336,6 +11455,65 @@
                 "responses": {
                     "200": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/workflows/publish-many/": {
+            "post": {
+                "operationId": "workspaces_workflows_publish_many_create",
+                "description": "Publishes several workflows in one request, each in its own transaction: one that cannot be published (invalid, empty, not allowed) is\nreported and never stops the others. A workflow whose draft equals its latest version is skipped (nothing to publish).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PublishMany"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PublishMany"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PublishMany"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PublishManyResult"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -14177,6 +14355,64 @@
                 ],
                 "type": "string",
                 "description": "* `local_openai` - Serveur local compatible OpenAI (llama.cpp, Ollama, vLLM)\n* `cloud_anthropic` - Cloud : API Messages d'Anthropic\n* `fake` - Faux fournisseur déterministe (tests)"
+            },
+            "PublishMany": {
+                "type": "object",
+                "properties": {
+                    "bump": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BumpEnum"
+                            }
+                        ],
+                        "default": "minor"
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "slugs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "pattern": "^[-a-zA-Z0-9_]+$"
+                        },
+                        "maxItems": 50,
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "slugs"
+                ]
+            },
+            "PublishManyResult": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "published": {
+                        "type": "integer"
+                    },
+                    "skipped": {
+                        "type": "integer"
+                    },
+                    "error": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "error",
+                    "published",
+                    "results",
+                    "skipped"
+                ]
             },
             "Ref": {
                 "type": "object",

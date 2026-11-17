@@ -1,3 +1,4 @@
+import { DeleteDialog } from "../components/DeleteDialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -30,6 +31,7 @@ function ActionsTab() {
   const [search, setSearch] = useState("");
   const [tagF, setTagF] = useState("");
   const [moving, setMoving] = useState<Action | null>(null);
+  const [deleting, setDeleting] = useState<Action | null>(null);
   const move = useMutation<unknown, ApiError, { slug: string; folder: string }>({
     mutationFn: (i) => api(`/workspaces/${workspace.slug}/actions/${i.slug}/meta/`, { method: "PATCH", json: { folder: i.folder } }),
     onSuccess: () => { setMoving(null); void qc.invalidateQueries({ queryKey: ["actions-lib"] }); void qc.invalidateQueries({ queryKey: ["actions"] }); },
@@ -64,7 +66,7 @@ function ActionsTab() {
                 <tr key={a.slug}><td><Link className="lst-title" to={`/library/actions/${a.slug}`}>{a.name}</Link></td><td>{a.folder ? <span className="tag">{a.folder}</span> : "—"}</td><td>{(a.tags?.length ?? 0) > 0 ? <TagList tags={a.tags} onPick={setTagF} active={tagF} /> : "—"}</td><td>{a.domain || "—"}</td><td>{a.latest_version ? <Badge tone="info">v{a.latest_version.version}</Badge> : "—"}</td>
                   <td>{a.contract_complete === false ? <Badge tone="warn">⚠ Incomplet</Badge> : a.contract_complete ? <Badge tone="ok">✔ Complet</Badge> : "—"}</td>
                   <td>{a.status === "deprecated" ? <Badge tone="warn">{`⚠ Dépréciée${a.deprecation_reason ? ` : ${a.deprecation_reason}` : ""}`}</Badge> : <Badge tone="ok">✔ Active</Badge>}</td>
-                  {can("publish") && <td><button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(a); }} aria-label={`Déplacer l'action ${a.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button></td>}</tr>
+                  {can("publish") && <td><button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(a); }} aria-label={`Déplacer l'action ${a.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button> <button type="button" className="icon-btn" onClick={() => setDeleting(a)} aria-label={`Supprimer l'action ${a.name}`} title="Supprimer"><RowIcon name="trash" /></button></td>}</tr>
               ))}
               {shown.length === 0 && <EmptyRow cols={8}>{q.isLoading ? "Chargement…" : "Aucune action ici."}</EmptyRow>}
             </tbody>
@@ -74,6 +76,7 @@ function ActionsTab() {
       </section>
       {assisting && <Overlay wide title="Générer une action avec l'IA" description="L'assistant propose le code et le contrat ; rien n'est enregistré avant votre relecture." onClose={() => setAssisting(false)}><ActionAssistant onClose={() => setAssisting(false)} onUse={(p) => { setAssisting(false); setDraft(p); setCreating(true); }} /></Overlay>}
       {creating && <Overlay wide title={draft ? "Nouvelle action proposée par l'IA" : "Nouvelle action"} description="Code, contrat d'entrées et de sorties : la version 1.0.0 est publiée et immuable." onClose={() => setCreating(false)}><NewActionForm folder={folder} initial={draft} onDone={() => setCreating(false)} /></Overlay>}
+      {deleting && <DeleteDialog kind="action" slug={deleting.slug} name={deleting.name} onClose={() => setDeleting(null)} onDeleted={() => setDeleting(null)} />}
       {moving && <MoveFolderOverlay title={`Déplacer « ${moving.name} »`} current={moving.folder} folders={[...folders, ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate({ slug: moving.slug, folder: f })} onClose={() => setMoving(null)} />}
     </div>
     </>

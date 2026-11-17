@@ -2,6 +2,22 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.6.0 — 2026-11-17
+
+**Fluxonata 0.6.0 : agents d'exécution isolables, version du workflow appelé, publication et suppression en lot, certificat de connexion optionnel, duplication de lignes**
+
+- **Agents d'exécution : plus de fausse promesse d'isolation.** Un agent qui partage le démon Docker du plan de contrôle n'est plus présenté comme isolé : l'invariant « la compromission de l'agent n'atteint pas le plan de contrôle » est ajouté, trois niveaux (démonstration, production isolée, client sensible) sont documentés, et ce mode exige désormais un accord explicite.
+- **Production isolée des agents.** Nouvelle topologie : plan de contrôle sans aucun socket Docker, front HTTPS dédié aux agents (il ne sert que le protocole des runners), et kit d'agent autonome (`infra/agent/` : jeton en fichier, images épinglées par empreinte, sonde de santé, rotation, mise à jour, révocation, nettoyage, unité systemd, Docker rootless). L'essai sur une machine distincte n'a pas été réalisé.
+- **Agent** : peut refuser de démarrer sans images épinglées par empreinte, étiquette ses conteneurs et nettoie les restes d'un arrêt brutal, sonde `--healthcheck`.
+- **Correction** : le résultat tardif d'un agent n'ajoute plus de fichiers à une exécution déjà reprise ou terminée.
+- **Scripts Python** : même résultat sur le worker intégré et sur un agent distant (dix cas vérifiés).
+- **Éditeur de workflow** : le sélecteur de version du workflow appelé (étapes Workflow, Boucle sur liste, Boucle conditionnelle) affiche la valeur réellement enregistrée, avec la nouvelle option « Toujours la dernière version publiée » (non figée à la publication). « Brouillon enregistré » n'apparaît qu'une fois la valeur confirmée par le serveur ; un refus ou un conflit est expliqué ; la publication est annulée si le brouillon n'est pas enregistré. Aucune étape existante n'est modifiée.
+- **Connexions** : option « Ne pas vérifier le certificat du serveur » (HTTP, OAuth, AWS, SMTP, IMAP), désactivée par défaut, avec avertissement, badge et audit.
+- **Contrôles à lignes répétées** : bouton « Dupliquer » sur chaque ligne (mêmes valeurs saisies, sous-contrôle compris).
+- **Workflows** : sélection de plusieurs workflows et publication groupée, avec le résultat de chacun.
+- **Suppression d'actions et de workflows** : refusée tant qu'un autre workflow les appelle (une fenêtre liste lesquels) ; l'historique d'exécutions et les déclencheurs peuvent être supprimés avec eux, chacun sur accord exprès (nom à saisir pour l'historique).
+- Guide utilisateur et documentation des runners mis à jour.
+
 ## v0.5.0 — 2026-11-16
 
 **Fluxonata 0.5.0 : nœud « Commandes SSH » (exécution directe, rebonds, session interactive, hôte choisi dans l'étape), onglets Entrées et Sorties des étapes, aperçu du workflow appelé, connexions modifiables, fenêtre d'approbation à onglets avec objet et corps en Markdown, pages chargées à la demande, durcissement (masquage des journaux, typage, accessibilité, images et actions épinglées) et couverture de tests**

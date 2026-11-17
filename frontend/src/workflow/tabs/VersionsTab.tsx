@@ -35,7 +35,10 @@ export function VersionsTab() {
 
   const doPublish = async () => {
     setMsg(null);
-    if (d.saveState !== "saved") await d.save();
+    if (d.saveState !== "saved" && !(await d.save())) {
+      setMsg("Publication annulée : la dernière modification du brouillon n'est pas enregistrée sur le serveur (voir le message d'enregistrement).");
+      return;
+    }
     publish.mutate({ bump, changelog }, {
       onSuccess: (v) => { setMsg(`Version ${v.version} publiée. Elle est désormais lançable.`); setChangelog(""); void d.refetchWorkflow(); },
       onError: (e: ApiError) => { const list = (e.details as { issues?: Issue[] } | null)?.issues; if (list) d.setServerIssues(list); setMsg(list ? "Publication impossible : corrigez les problèmes listés dans l'onglet Schéma." : e.message); },

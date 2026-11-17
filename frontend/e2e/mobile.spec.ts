@@ -32,7 +32,8 @@ test("workflows : arbre de dossiers replié, liste d'abord ; tableaux en cartes"
   const table = page.getByRole("table").first();
   await expect(table).toBeVisible();
   await expect(table.locator("td").first()).toHaveCSS("display", "block"); // carte
-  await expect(table.locator("tbody tr").first().locator("td[data-label]").nth(1)).toHaveAttribute("data-label", /.+/);
+  // la colonne de sélection (publication groupée) et le favori précèdent le nom : on vérifie la cellule du nom elle-même, pas sa position
+  await expect(table.locator("tbody tr").first().locator('td[data-label="Nom"]')).toHaveCount(1);
   await fold.click();
   await expect(page.getByRole("navigation", { name: "Dossiers de workflows" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

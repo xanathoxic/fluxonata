@@ -1,0 +1,28 @@
+# Unité systemd de l'agent SANS conteneur (python3 + Docker rootless d'un compte système dédié). Voir docs/RUNNERS.md, « Docker rootless ».
+# Installation : sudo useradd --system --create-home --shell /usr/sbin/nologin fluxonata-agent ; sudo loginctl enable-linger fluxonata-agent
+#   puis, en tant que ce compte : dockerd-rootless-setuptool.sh install ; copier runner/ et workers/ (et backend/runs/{__init__,runners,runtime_config}.py) dans /opt/fluxonata
+#   jeton : sudo install -m 0400 -o root -g root /dev/stdin /etc/fluxonata-agent/runner_token   (lu par systemd, transmis au service dans $CREDENTIALS_DIRECTORY)
+[Unit]
+Description=Agent d'exécution Fluxonata
+After=network-online.target user@%U.service
+Wants=network-online.target
+
+[Service]
+User=fluxonata-agent
+EnvironmentFile=/etc/fluxonata-agent/agent.env
+Environment=DOCKER_HOST=unix:///run/user/%U/docker.sock
+Environment=ORCH_BACKEND_DIR=/opt/fluxonata/backend ORCH_WORKERS_DIR=/opt/fluxonata/workers
+Environment=ORCH_RUNNER_TOKEN_FILE=%d/runner_token
+LoadCredential=runner_token:/etc/fluxonata-agent/runner_token
+ExecStart=/usr/bin/python3 /opt/fluxonata/runner/agent.py
+Restart=on-failure
+RestartPreventExitStatus=2 4
+TimeoutStopSec=130
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/fluxonata-agent
+
+[Install]
+WantedBy=multi-user.target

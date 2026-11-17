@@ -48,7 +48,7 @@ def connect(config: dict, password: str, ssl_context: ssl.SSLContext | None = No
     except netsec.UnsafeURL as exc:
         raise MailError(f"Serveur refusé : {exc}") from None
     try:
-        conn = _PinnedIMAP(target, TIMEOUT, ssl_context)
+        conn = _PinnedIMAP(target, TIMEOUT, ssl_context or netsec.context_for(config))
         conn.login(config.get("username", ""), password)
     except imaplib.IMAP4.error:
         raise MailError("Connexion refusée par le serveur (identifiant ou mot de passe).") from None

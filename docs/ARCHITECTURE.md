@@ -42,7 +42,9 @@ Deux topologies de production existent : **compacte** (un `api`, un `worker` ; `
 | `db`, `pgbouncer`, `migrate` | data (interne) | non (`migrate` sans volumes) | non | non | tiers / runtime | non |
 | `web` | front, edge | non | non | non | nginx | — |
 
-**Topologie par agents** (`docker-compose.agent.yml`, en plus des deux fichiers) : `worker-exec` et `worker-ai` sont remplacés par `exec-agent` — socket Docker **oui**, clé **non**, volume des artefacts **non**, variables de base **non**, réseau `edge` seul (parle uniquement à `runner-gw`). C'est le seul mode où I1 est vrai.
+**Topologie « agent sur le même démon »** (`docker-compose.agent.yml`, en plus des deux fichiers ; **mode de confiance / démonstration**, option `ORCH_ACCEPT_SHARED_DOCKER_AGENT=oui` exigée) : `worker-exec` et `worker-ai` sont remplacés par `exec-agent` — socket Docker **oui** (celui du démon qui héberge tout le plan de contrôle), clé **non**, volume des artefacts **non**, variables de base **non**, réseau `edge` (partagé avec `api-ui`, `api-ingest`, `web`, `runner-gw`). I1 y est vrai ; **I8 y est faux** : qui contrôle l'agent contrôle le démon, donc peut monter les volumes `keys`, `artifacts` et `db`.
+
+**Topologie « agents distants »** (`docker-compose.remote-agents.yml`, en plus des deux fichiers ; **production isolée**) : aucun service du plan de contrôle n'a de socket Docker (testé sur la configuration fusionnée) ; `worker-exec`, `worker-ai` et tout agent local sont absents ; `runner-edge` (nginx, TLS obligatoire, ne sert que `/api/v1/runner/`) est le seul point d'entrée des agents et ne voit que `runner-gw` (réseau `gw`, interne). Les agents s'installent ailleurs (`infra/agent/`, `docs/RUNNERS.md`).
 
 Isolation mesurée : `api-ingest` gelé et inondé de 40 webhooks → `GET /actions/` p95 21 ms, 0 erreur.
 
@@ -87,7 +89,8 @@ Chaque ligne : ce que le code fait → conséquence pour les rôles → tâche.
 
 | # | Invariant | Vrai aujourd'hui ? |
 |---|---|---|
-| I1 | Aucun rôle ne détient à la fois `docker.sock` **et** la clé du coffre (hors `worker-ai` tant que C-2 dure) | **non** en topologie compacte et par rôles (le worker) ; **oui en topologie PAR AGENTS** (`docker-compose.agent.yml`, ADR 0023 : `exec-agent` sans clé ni base, mesuré en conteneur) |
+| I1 | Aucun rôle ne détient à la fois `docker.sock` **et** la clé du coffre (hors `worker-ai` tant que C-2 dure) | **non** en topologie compacte et par rôles (le worker) ; **oui** avec l'agent sur le même démon (`docker-compose.agent.yml`, ADR 0023 : `exec-agent` sans clé ni base, mesuré en conteneur) **— mais cette garantie de configuration ne protège pas des attaquants qui contrôlent le démon (voir I8)** ; **oui** en agents distants |
+| I8 | La compromission de l'agent ou de son démon de conteneurs ne permet pas d'atteindre la base, les clés, les volumes ni les conteneurs du plan de contrôle | **non** si l'agent partage le démon du plan de contrôle (`docker-compose.agent.yml`, topologies compacte et par rôles) — le socket vaut root sur l'hôte ; **oui, côté plan de contrôle, en agents distants** (aucun socket d'exécution : `tests/test_remote_agents.py`) **sous réserve que l'agent tourne sur une machine, une VM ou un démon rootless réellement distincts** : **la preuve sur un démon Docker distinct n'a pas été produite, et une machine distincte n'a pas été essayée** : seule la configuration livrée est vérifiée par les tests |
 | I2 | `docker.sock` n'est monté que dans `worker-exec` (et `worker-ai` tant que C-2) | oui (seul le `worker`) ; **testé** |
 | I3 | `api-ingest` n'a aucun accès réseau sortant | **oui dans la topologie par rôles — mesuré** (réseaux internes seulement) ; sans objet en compacte |
 | I4 | `orchestrator` n'a ni clé ni réseau sortant | **oui** (AR4.2 : `tests/test_orchestrator_without_key.py`, `tests/test_privilege_matrix.py`, `prod-smoke.sh` — un vrai workflow avancé par un orchestrateur sans `/keys` ; réseau `data` seul en topologie par rôles) |

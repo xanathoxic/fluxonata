@@ -180,7 +180,7 @@ def execute_spec(spec: dict, workspace, environment_id, audit_target) -> tuple[d
     started = time.monotonic()
     server: smtplib.SMTP | None = None
     try:
-        context = tls_context()
+        context = netsec.context_for(cfg) or tls_context()
         if tls == "ssl":
             server = _PinnedSMTPSSL(target, spec["timeout"], context)
         else:

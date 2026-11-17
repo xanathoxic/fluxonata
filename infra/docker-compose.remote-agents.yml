@@ -1,0 +1,50 @@
+# Topologie « AGENTS DISTANTS » (ADR 0023, mise à jour du 2026-11-16) — PRODUCTION ISOLÉE. À UTILISER EN PLUS des deux autres fichiers :
+#
+#   ORCH_RUNNER_TLS_DIR=/etc/fluxonata/runner-tls docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.roles.yml \
+#       -f infra/docker-compose.remote-agents.yml --env-file infra/.env.prod up -d --build
+#
+# Le plan de contrôle (API, runner-gw, orchestrateur, worker-aux, PostgreSQL, coffre) n'exécute AUCUNE action et ne détient AUCUN socket Docker :
+# `worker-exec` et `worker-ai` sont désactivés, et il n'y a pas d'`exec-agent`. Les actions sont exécutées par des agents installés AILLEURS (une machine, une VM ou un
+# démon rootless dédiés : infra/agent/, docs/RUNNERS.md) qui n'appellent que `runner-edge`, un front HTTPS qui ne sert que /api/v1/runner/ (infra/nginx.runner-edge.conf).
+# Créez les runners dans l'interface (Plate-forme → Runners, ou Administration → Runners pour un runner dédié à un espace) : le jeton n'est affiché qu'une fois.
+#
+# Ce que ce fichier garantit : aucun service du plan de contrôle n'a de socket d'exécution (testé sur la configuration fusionnée). Ce qu'il ne garantit pas : l'isolation
+# de l'agent lui-même — voir « Trois niveaux » dans docs/RUNNERS.md. `worker-ai` (essai à blanc de l'assistant) n'est pas disponible dans ce mode.
+name: fluxonata-prod
+
+services:
+  worker-exec: { profiles: ["disabled-by-remote-agents"] }
+  worker-ai: { profiles: ["disabled-by-remote-agents"] }
+
+  worker-aux:   # prend aussi les étapes IA des workflows (dans son process, jamais en conteneur) ; aucun socket
+    environment: { ORCH_AUX_RUNS_AI_STEPS: "1" }
+
+  runner-gw:
+    networks: [edge, data, egress, gw]   # + `gw` : le réseau qu'il ne partage qu'avec runner-edge
+
+  runner-edge:
+    image: fluxonata-runner-edge:local
+    build: { context: .., dockerfile: infra/Dockerfile.runner-edge }
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/var/cache/nginx", "/var/run", "/tmp"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]   # nginx abandonne root pour ses processus de travail
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - "${ORCH_RUNNER_TLS_DIR:?Répertoire contenant fullchain.pem et privkey.pem (TLS est obligatoire pour les agents distants)}:/etc/nginx/tls:ro"
+    ports:
+      - "${ORCH_RUNNER_EDGE_BIND:-0.0.0.0}:${ORCH_RUNNER_EDGE_PORT:-8443}:8443"
+    networks: [runner_front, gw]   # ni edge, ni data : il ne voit que runner-gw
+    depends_on:
+      runner-gw: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "--no-check-certificate", "https://127.0.0.1:8443/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 30s
+
+networks:
+  runner_front: {}            # le réseau publié vers les agents (le port du front HTTPS)
+  gw: { internal: true }      # runner-edge ↔ runner-gw uniquement
