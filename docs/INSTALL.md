@@ -197,6 +197,21 @@ Si vous avez modifié des fichiers suivis (par exemple `infra/docker-compose.pro
 - Le **coffre externe** (HashiCorp Vault) est désactivé tant qu'il n'est pas configuré (Plate-forme → Coffre externe). Pour un Vault du réseau interne, ajoutez son adresse à `ORCH_EGRESS_ALLOWLIST` dans `infra/.env.prod`.
 - Les boutons « Générer avec l'IA » (workflows, actions, skills) n'apparaissent que si l'assistant IA est activé (Administration → Assistant IA).
 
+### 7.4 Raccourcis `make`
+Un `Makefile` à la racine regroupe ces opérations (`make help` les liste). Les commandes `prod-*` se lancent **sur le serveur**, dans le dossier du dépôt, et visent la topologie compacte ; `TOPO=roles` choisit la topologie par rôles et `EXTRA="-f infra/docker-compose.agent.yml"` ajoute un fichier Compose.
+
+| Commande | Effet |
+|---|---|
+| `make dev-up` · `dev-down` · `dev-restart` · `dev-doctor` · `dev-smoke` | pile de développement (la base est conservée) ; `dev-reset-db CONFIRM=oui` supprime aussi la base |
+| `make prod-init` · `prod-up` · `prod-down` · `prod-restart` · `prod-ps` · `prod-logs [SERVICE=api]` | production : secrets, démarrage (avec reconstruction), arrêt (volumes conservés), état, journaux |
+| `make prod-bootstrap CONFIRM=oui` | **première installation seulement** |
+| `make prod-backup` | sauvegarde de la base, des clés et des artefacts dans `backups/<date>/` (à copier hors du serveur) |
+| `make prod-update` | **mise à jour** : refuse si des fichiers suivis sont modifiés, sauvegarde, `git pull --ff-only`, reconstruction, puis `prod-verify` |
+| `make prod-verify` | services, migrations appliquées, page d'accueil (`URL=` si votre proxy diffère) |
+| `make prod-rollback BACKUP=backups/<date> CONFIRM=oui` | retour arrière : **remplace la base** par la sauvegarde et revient au commit noté dedans |
+
+`make -n prod-update` affiche ce qui serait lancé sans rien exécuter. Si `git pull` ne peut pas avancer sans fusion (historique divergent), la mise à jour s'arrête avant toute reconstruction : voir §7.3.
+
 ## 8. Durcissement et limites
 - Un conteneur partage le noyau de l'hôte : une faille du noyau ou de Docker permettrait une évasion. Pour du code hostile en multi-tenant, utilisez un runtime à noyau isolé
   (gVisor, Kata, micro-VM : `ORCH_DOCKER_RUNTIME`) ou des hôtes dédiés par équipe. `ORCH_HARDENED=1` active un profil renforcé (seccomp, capacités retirées).

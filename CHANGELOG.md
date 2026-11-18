@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-11-18
+
+**Makefile d'exploitation : démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière**
+
+- Makefile d'exploitation : démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière (développement et production), documenté dans INSTALL.md
+
 ## v0.8.0 — 2026-11-18
 
 **Fluxonata 0.8.0 : les assistants MCP rangent et renomment workflows, formulaires, contrôles, actions et skills dans des dossiers**
