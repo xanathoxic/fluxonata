@@ -7963,6 +7963,38 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/runner-choices/": {
+            "get": {
+                "operationId": "workspaces_runner_choices_retrieve",
+                "description": "Les runners qu'un workflow de cet espace peut se voir imposer (ouverts à l'espace), pour le sélecteur des réglages d'un workflow. Droit de modifier\nsuffit : ni jeton, ni adresse, ni détail d'administration.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/runner-settings/": {
             "get": {
                 "operationId": "workspaces_runner_settings_retrieve",
@@ -14497,6 +14529,13 @@
                         "type": "integer",
                         "nullable": true,
                         "readOnly": true
+                    },
+                    "runner": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "description": "Le runner imposé à cette exécution (réglage du workflow, ou hérité de son parent), figé au lancement ; None : choix habituel.",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -14506,6 +14545,7 @@
                     "inputs",
                     "needs_decision",
                     "parent_step_id",
+                    "runner",
                     "status_label",
                     "workflow"
                 ]
@@ -14564,6 +14604,13 @@
                         "nullable": true,
                         "readOnly": true
                     },
+                    "runner": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "description": "Le runner imposé à cette exécution (réglage du workflow, ou hérité de son parent), figé au lancement ; None : choix habituel.",
+                        "readOnly": true
+                    },
                     "steps": {
                         "type": "array",
                         "items": {
@@ -14604,6 +14651,7 @@
                     "inspector",
                     "needs_decision",
                     "parent_step_id",
+                    "runner",
                     "runtime",
                     "status_label",
                     "steps",
@@ -15412,6 +15460,19 @@
                     "mcp_exposed": {
                         "type": "boolean"
                     },
+                    "runner": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "runner_name": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "runner_force_children": {
+                        "type": "boolean"
+                    },
                     "latest_version": {
                         "type": "object",
                         "additionalProperties": {},
@@ -15430,6 +15491,8 @@
                     "latest_version",
                     "name",
                     "owner",
+                    "runner",
+                    "runner_name",
                     "slug",
                     "updated_at"
                 ]
@@ -15509,6 +15572,19 @@
                     "mcp_exposed": {
                         "type": "boolean"
                     },
+                    "runner": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "runner_name": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "runner_force_children": {
+                        "type": "boolean"
+                    },
                     "latest_version": {
                         "type": "object",
                         "additionalProperties": {},
@@ -15528,6 +15604,8 @@
                     "latest_version",
                     "name",
                     "owner",
+                    "runner",
+                    "runner_name",
                     "slug",
                     "updated_at"
                 ]
@@ -15633,6 +15711,13 @@
                         "nullable": true,
                         "readOnly": true
                     },
+                    "runner": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "description": "Le runner imposé à cette exécution (réglage du workflow, ou hérité de son parent), figé au lancement ; None : choix habituel.",
+                        "readOnly": true
+                    },
                     "url": {
                         "type": "string"
                     }
@@ -15644,6 +15729,7 @@
                     "inputs",
                     "needs_decision",
                     "parent_step_id",
+                    "runner",
                     "status_label",
                     "url",
                     "workflow"

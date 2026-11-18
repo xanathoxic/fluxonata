@@ -2,11 +2,22 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoA11yViolations, login, boxOf } from "./helpers";
 
 async function call(page: Page, method: string, path: string, body?: unknown) {
-  return page.evaluate(async ({ method, path, body }) => {
-    const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
-    const r = await fetch(`/api/v1/workspaces/demo${path}`, { method, headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: body ? JSON.stringify(body) : undefined });
-    return { status: r.status, data: await r.json().catch(() => ({})) };
-  }, { method, path, body });
+  return page.evaluate(
+    async ({ method, path, body }) => {
+      const csrf =
+        document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("csrftoken="))
+          ?.split("=")[1] ?? "";
+      const r = await fetch(`/api/v1/workspaces/demo${path}`, {
+        method,
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, data: await r.json().catch(() => ({})) };
+    },
+    { method, path, body },
+  );
 }
 const section = (page: Page, name: string) => page.getByRole("navigation", { name: "Sections du contrôle" }).getByRole("button", { name }).click();
 const part = (key: string, label: string, extra: Record<string, unknown> = {}) => ({ key, label, type: "text", ...extra });
@@ -94,7 +105,12 @@ test("contrôle à lignes répétées : calcul par ligne, total du formulaire et
   await login(page);
   const id = Date.now().toString().slice(-6);
   const spec = {
-    version: 1, mode: "repeat", min: 1, max: 5, row_label: "Article", add_label: "Ajouter un article",
+    version: 1,
+    mode: "repeat",
+    min: 1,
+    max: 5,
+    row_label: "Article",
+    add_label: "Ajouter un article",
     parts: [
       part("produit", "Produit", { required: true, layout: { row: 1, col: 1, span: 6 } }),
       part("qte", "Quantité", { type: "number", required: true, min: 1, layout: { row: 1, col: 7, span: 3 } }),
@@ -105,11 +121,32 @@ test("contrôle à lignes répétées : calcul par ligne, total du formulaire et
   expect((await call(page, "POST", "/control-library/", { slug: `lignes-${id}`, name: `Lignes ${id}`, spec })).status).toBe(201);
   expect((await call(page, "POST", `/control-library/lignes-${id}/publish/`, {})).status).toBe(201);
   const control = (await call(page, "GET", "/control-library/?published=1")).data.results.find((c: { slug: string }) => c.slug === `lignes-${id}`);
-  const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [
-    { key: "lignes", label: "Lignes de commande", type: "custom", layout: { row: 1, col: 1, span: 12 }, control: { ref: control.slug, version: control.published.version, name: control.published.name, icon: control.published.icon, spec: control.published.spec } },
-    { key: "somme", label: "Somme", type: "number", compute: 'sum_col({lignes}, "total")', layout: { row: 2, col: 1, span: 6 } },
-    { key: "nb", label: "Nombre d'articles", type: "number", compute: "count({lignes})", layout: { row: 2, col: 7, span: 6 } },
-  ] }] };
+  const def = {
+    version: 1,
+    sections: [
+      {
+        id: "s1",
+        title: "T",
+        fields: [
+          {
+            key: "lignes",
+            label: "Lignes de commande",
+            type: "custom",
+            layout: { row: 1, col: 1, span: 12 },
+            control: {
+              ref: control.slug,
+              version: control.published.version,
+              name: control.published.name,
+              icon: control.published.icon,
+              spec: control.published.spec,
+            },
+          },
+          { key: "somme", label: "Somme", type: "number", compute: 'sum_col({lignes}, "total")', layout: { row: 2, col: 1, span: 6 } },
+          { key: "nb", label: "Nombre d'articles", type: "number", compute: "count({lignes})", layout: { row: 2, col: 7, span: 6 } },
+        ],
+      },
+    ],
+  };
   const slug = `cmd-${id}`;
   expect((await call(page, "POST", "/form-library/", { slug, name: `Commande ${id}`, definition: def })).status).toBe(201);
   await page.goto(`/library/forms/${slug}`);
@@ -178,9 +215,19 @@ test("liste de choix : toutes les options reprennent le même modèle de champs 
   // tableau : colonne déroulante par ligne, total sous la colonne numérique
   const slug = `tab-${id}`;
   const spec = {
-    version: 1, mode: "repeat", display: "table", totals: ["qte"], row_label: "Article",
+    version: 1,
+    mode: "repeat",
+    display: "table",
+    totals: ["qte"],
+    row_label: "Article",
     parts: [
-      part("produit", "Produit", { type: "select", options: [{ value: "a", label: "Alpha" }, { value: "b", label: "Bravo" }] }),
+      part("produit", "Produit", {
+        type: "select",
+        options: [
+          { value: "a", label: "Alpha" },
+          { value: "b", label: "Bravo" },
+        ],
+      }),
       part("qte", "Quantité", { type: "number" }),
     ],
   };
@@ -204,16 +251,26 @@ test("menu déroulant à choix multiples : recherche, groupes, options grisées"
   const id = Date.now().toString().slice(-6);
   const slug = `marques-${id}`;
   const spec = {
-    version: 1, mode: "items", display: "dropdown", placeholder: "Entrez ici.",
+    version: 1,
+    mode: "items",
+    display: "dropdown",
+    placeholder: "Entrez ici.",
     items: [
-      { value: "saab", label: "Saab" }, { value: "opel", label: "Opel" }, { value: "mercedes", label: "Mercedes", disabled: true },
-      { value: "chrysler", label: "Chrysler", group: "US Brands" }, { value: "ford", label: "Ford", group: "US Brands" },
+      { value: "saab", label: "Saab" },
+      { value: "opel", label: "Opel" },
+      { value: "mercedes", label: "Mercedes", disabled: true },
+      { value: "chrysler", label: "Chrysler", group: "US Brands" },
+      { value: "ford", label: "Ford", group: "US Brands" },
     ],
   };
   expect((await call(page, "POST", "/control-library/", { slug, name: `Marques ${id}`, spec })).status).toBe(201);
   await page.goto(`/library/controls/${slug}/preview`);
   const prev = page.getByRole("region", { name: "Aperçu du contrôle" });
-  await prev.getByRole("combobox", { name: /Marques/ }).or(prev.getByPlaceholder("Entrez ici.")).first().click();
+  await prev
+    .getByRole("combobox", { name: /Marques/ })
+    .or(prev.getByPlaceholder("Entrez ici."))
+    .first()
+    .click();
   const pop = prev.getByRole("group", { name: "Options" });
   await expect(pop.getByText("US Brands", { exact: true })).toBeVisible();
   await expect(pop.getByRole("checkbox", { name: "Mercedes" })).toBeDisabled();
@@ -264,7 +321,9 @@ test("designer d'options : groupes parent → enfants, ajout en masse, options g
   await expect(prev.getByRole("checkbox", { name: "Mercedes" })).toBeDisabled();
 });
 
-test("contrôle à options fournies par le formulaire : essayé avec des options d'exemple, puis la lecture du service est celle du champ du formulaire", async ({ page }) => {
+test("contrôle à options fournies par le formulaire : essayé avec des options d'exemple, puis la lecture du service est celle du champ du formulaire", async ({
+  page,
+}) => {
   await login(page);
   const id = Date.now().toString().slice(-6);
   await page.goto("/library/controls");
@@ -283,7 +342,11 @@ test("contrôle à options fournies par le formulaire : essayé avec des options
   await expectNoA11yViolations(page);
   await page.getByRole("tablist", { name: "Contrôle" }).getByRole("tab", { name: "Aperçu" }).click();
   const prev = page.getByRole("region", { name: "Aperçu du contrôle" });
-  const options = [{ value: "saab", label: "Saab" }, { value: "ford", label: "Ford", group: "US Brands" }, { value: "plymouth", label: "Plymouth", group: "US Brands", disabled: true }];
+  const options = [
+    { value: "saab", label: "Saab" },
+    { value: "ford", label: "Ford", group: "US Brands" },
+    { value: "plymouth", label: "Plymouth", group: "US Brands", disabled: true },
+  ];
   await prev.getByLabel(/Options d'exemple fournies par un formulaire/).fill(JSON.stringify(options));
   await prev.getByRole("combobox").click();
   const pop = prev.getByRole("group", { name: "Options" });
@@ -325,8 +388,10 @@ test("contrôle à options fournies par le formulaire : essayé avec des options
   // sans dépendre d'un chevauchement vertical : un décalage plus grand que la zone ne les fait pas échapper au contrôle.
   const rest = ["value_path", "label_path", "group_path", "disabled_path"];
   const alignment = async () => {
-    const box = async (k: string) => (await boxOf(svc.locator(`#fp-options-${k}`)));
-    const columns = await svc.locator(".sv-card[aria-label='Dans la réponse'] .sv-grid").evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
+    const box = async (k: string) => await boxOf(svc.locator(`#fp-options-${k}`));
+    const columns = await svc
+      .locator(".sv-card[aria-label='Dans la réponse'] .sv-grid")
+      .evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
     const list = await box("items_path");
     const boxes = await Promise.all(rest.map(async (k) => ({ k, b: await box(k) })));
     const problems: string[] = [];
@@ -336,7 +401,8 @@ test("contrôle à options fournies par le formulaire : essayé avec des options
       for (const [j, second] of boxes.entries()) {
         if (j <= i) continue;
         const sameRow = Math.floor(i / columns) === Math.floor(j / columns);
-        if (sameRow && Math.abs(first.b.y - second.b.y) >= 1) problems.push(`${first.k} et ${second.k} devraient partager une rangée (écart ${Math.round(Math.abs(first.b.y - second.b.y))} px)`);
+        if (sameRow && Math.abs(first.b.y - second.b.y) >= 1)
+          problems.push(`${first.k} et ${second.k} devraient partager une rangée (écart ${Math.round(Math.abs(first.b.y - second.b.y))} px)`);
         if (!sameRow && second.b.y <= first.b.y) problems.push(`${second.k} devrait être sur une rangée sous ${first.k}`);
       }
     }
@@ -344,11 +410,25 @@ test("contrôle à options fournies par le formulaire : essayé avec des options
   };
   expect(await alignment(), "zones de saisie alignées selon la disposition attendue").toEqual([]);
   // contrôle négatif : un décalage de 80 px (plus que la hauteur d'une zone, donc sans chevauchement vertical) doit être détecté
-  await svc.locator("#fp-options-label_path").evaluate((e) => { (e as HTMLElement).style.position = "relative"; (e as HTMLElement).style.top = "80px"; });
+  await svc.locator("#fp-options-label_path").evaluate((e) => {
+    (e as HTMLElement).style.position = "relative";
+    (e as HTMLElement).style.top = "80px";
+  });
   expect((await alignment()).length, "un décalage supérieur à la hauteur de la zone est détecté").toBeGreaterThan(0);
-  await svc.locator("#fp-options-label_path").evaluate((e) => { (e as HTMLElement).style.position = ""; (e as HTMLElement).style.top = ""; });
+  await svc.locator("#fp-options-label_path").evaluate((e) => {
+    (e as HTMLElement).style.position = "";
+    (e as HTMLElement).style.top = "";
+  });
   expect(await alignment(), "l'alignement est rétabli").toEqual([]);
-  const reply = { data: { rows: [{ id: "saab", name: "Saab" }, { id: "ford", name: "Ford", region: "US Brands" }] }, selection: ["ford"] };
+  const reply = {
+    data: {
+      rows: [
+        { id: "saab", name: "Saab" },
+        { id: "ford", name: "Ford", region: "US Brands" },
+      ],
+    },
+    selection: ["ford"],
+  };
   await svc.locator("#try-options").fill(JSON.stringify(reply));
   await svc.getByRole("button", { name: "Lire cette réponse" }).click();
   await expect(svc.getByRole("list", { name: "Options lues" })).toContainText("US Brands › Ford");
@@ -426,7 +506,11 @@ test("éditeur de tableau : colonnes, liste déroulante par cellule, total, form
   await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 }); // enregistrement automatique
   const saved = await call(page, "GET", `/control-library/${name.toLowerCase().replace(/ /g, "-")}/`);
   expect(saved.data.spec.display).toBe("table");
-  expect(saved.data.spec.parts.map((p: { label: string; type: string }) => `${p.label}:${p.type}`)).toEqual(["Produit:select", "Quantité:number", "Prix:number"]);
+  expect(saved.data.spec.parts.map((p: { label: string; type: string }) => `${p.label}:${p.type}`)).toEqual([
+    "Produit:select",
+    "Quantité:number",
+    "Prix:number",
+  ]);
   expect(saved.data.spec.parts[2].required).toBe(true);
   expect(saved.data.spec.totals).toHaveLength(1);
 
@@ -444,7 +528,16 @@ test("onglet Test : options et valeur envoyées en JSON, enfants remplis, refus 
   await page.goto(`/library/controls/${slug}/test`);
   const t = page.getByRole("region", { name: "Test du contrôle" });
 
-  await t.getByLabel("Options (JSON)").fill(JSON.stringify([{ value: "ford", label: "Ford", group: "US Brands" }, { value: "ford", label: "Doublon" }, { label: "Sans valeur" }, { value: "saab", label: "Saab" }]));
+  await t
+    .getByLabel("Options (JSON)")
+    .fill(
+      JSON.stringify([
+        { value: "ford", label: "Ford", group: "US Brands" },
+        { value: "ford", label: "Doublon" },
+        { label: "Sans valeur" },
+        { value: "saab", label: "Saab" },
+      ]),
+    );
   await t.getByRole("button", { name: "Envoyer les options" }).click();
   await expect(t.getByText("2 option(s) retenue(s), 2 ignorée(s)")).toBeVisible();
 
@@ -472,10 +565,12 @@ test("onglet Test : l'option choisie pré-remplit ses champs enfants (nom, prén
   expect((await call(page, "POST", "/control-library/", { slug, name: `Personne ${id}`, spec })).status).toBe(201);
   await page.goto(`/library/controls/${slug}/test`);
   const t = page.getByRole("region", { name: "Test du contrôle" });
-  await t.getByLabel("Options (JSON)").fill(JSON.stringify([
-    { value: "option-1", nom: "Exemple", prenom: "Exemple" },
-    { value: "option-2", nom: "Exemple2", prenom: "Exemple2" },
-  ]));
+  await t.getByLabel("Options (JSON)").fill(
+    JSON.stringify([
+      { value: "option-1", nom: "Exemple", prenom: "Exemple" },
+      { value: "option-2", nom: "Exemple2", prenom: "Exemple2" },
+    ]),
+  );
   await t.getByRole("button", { name: "Envoyer les options" }).click();
   await expect(t.getByText("2 option(s) retenue(s) (dont 2 avec des valeurs pour les champs enfants)")).toBeVisible();
 
@@ -494,7 +589,15 @@ test("onglet Test : un contrôle sans champ enfant ni options reçues l'explique
   await login(page);
   const id = Date.now().toString().slice(-6);
   const slug = `vide-${id}`;
-  expect((await call(page, "POST", "/control-library/", { slug, name: `Vide ${id}`, spec: { version: 1, mode: "choice", items: [{ value: "option-1", label: "Option 1" }], parts: [] } })).status).toBe(201);
+  expect(
+    (
+      await call(page, "POST", "/control-library/", {
+        slug,
+        name: `Vide ${id}`,
+        spec: { version: 1, mode: "choice", items: [{ value: "option-1", label: "Option 1" }], parts: [] },
+      })
+    ).status,
+  ).toBe(201);
   await page.goto(`/library/controls/${slug}/test`);
   const t = page.getByRole("region", { name: "Test du contrôle" });
   await expect(t.getByText("n'a aucun champ enfant")).toBeVisible();
@@ -507,11 +610,23 @@ test("menu déroulant à choix multiples : un clic sur le texte d'une option la 
   await login(page);
   const id = Date.now().toString().slice(-6);
   const slug = `menu-${id}`;
-  const spec = { version: 1, mode: "items", dynamic: true, display: "dropdown", items: [{ value: "x", label: "X" }], parts: [part("nom", "Nom"), part("prenom", "Prénom")] };
+  const spec = {
+    version: 1,
+    mode: "items",
+    dynamic: true,
+    display: "dropdown",
+    items: [{ value: "x", label: "X" }],
+    parts: [part("nom", "Nom"), part("prenom", "Prénom")],
+  };
   expect((await call(page, "POST", "/control-library/", { slug, name: `Menu ${id}`, spec })).status).toBe(201);
   await page.goto(`/library/controls/${slug}/test`);
   const t = page.getByRole("region", { name: "Test du contrôle" });
-  await t.getByLabel("Options (JSON)").fill(JSON.stringify([{ value: "option-1", nom: "Exemple", prenom: "Exemple" }, { value: "option-2", nom: "Exemple2", prenom: "Exemple2" }]));
+  await t.getByLabel("Options (JSON)").fill(
+    JSON.stringify([
+      { value: "option-1", nom: "Exemple", prenom: "Exemple" },
+      { value: "option-2", nom: "Exemple2", prenom: "Exemple2" },
+    ]),
+  );
   await t.getByRole("button", { name: "Envoyer les options" }).click();
   await t.getByRole("combobox").click();
   await t.locator(".opk label").filter({ hasText: "option-2" }).click(); // sur le texte, pas sur la case
@@ -525,7 +640,15 @@ test("section Documentation : schéma, exemple, champs et interactions, mis à j
   await login(page);
   const id = Date.now().toString().slice(-6);
   const slug = `doc-${id}`;
-  expect((await call(page, "POST", "/control-library/", { slug, name: `Doc ${id}`, spec: { version: 1, mode: "repeat", parts: [part("produit", "Produit", { required: true }), part("qte", "Quantité", { type: "number" })] } })).status).toBe(201);
+  expect(
+    (
+      await call(page, "POST", "/control-library/", {
+        slug,
+        name: `Doc ${id}`,
+        spec: { version: 1, mode: "repeat", parts: [part("produit", "Produit", { required: true }), part("qte", "Quantité", { type: "number" })] },
+      })
+    ).status,
+  ).toBe(201);
   await page.goto(`/library/controls/${slug}/design`);
   await section(page, "Documentation");
   const main = page.locator(".cd-main");
@@ -552,7 +675,9 @@ test("documentation en volet latéral : visible pendant la conception sur grand 
   await page.setViewportSize({ width: 1600, height: 900 });
   const id = Date.now().toString().slice(-6);
   const slug = `volet-${id}`;
-  expect((await call(page, "POST", "/control-library/", { slug, name: `Volet ${id}`, spec: { version: 1, mode: "group", parts: [part("nom", "Nom")] } })).status).toBe(201);
+  expect(
+    (await call(page, "POST", "/control-library/", { slug, name: `Volet ${id}`, spec: { version: 1, mode: "group", parts: [part("nom", "Nom")] } })).status,
+  ).toBe(201);
   await page.goto(`/library/controls/${slug}/design`);
   const side = page.getByRole("complementary", { name: "Documentation en direct" });
   await expect(side).toBeVisible();
@@ -585,7 +710,12 @@ test("lignes en tableau : les champs d'une ligne restent côte à côte, en colo
   await login(page);
   const id = Date.now().toString().slice(-6);
   const slug = `colonnes-${id}`;
-  const spec = { version: 1, mode: "repeat", display: "table", parts: [part("produit", "Produit"), part("qte", "Quantité", { type: "number" }), part("prix", "Prix", { type: "number" })] };
+  const spec = {
+    version: 1,
+    mode: "repeat",
+    display: "table",
+    parts: [part("produit", "Produit"), part("qte", "Quantité", { type: "number" }), part("prix", "Prix", { type: "number" })],
+  };
   expect((await call(page, "POST", "/control-library/", { slug, name: `Colonnes ${id}`, spec })).status).toBe(201);
   for (const width of [1280, 760]) {
     await page.setViewportSize({ width, height: 900 });
@@ -620,10 +750,17 @@ test("contrôles : arborescence de dossiers comme les formulaires — créer dan
   await page.getByLabel("Dossier").fill(dossier);
   await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
   await page.goto("/library/controls");
-  await page.getByRole("navigation", { name: "Dossiers de contrôles" }).getByRole("button", { name: new RegExp(dossier) }).click();
+  await page
+    .getByRole("navigation", { name: "Dossiers de contrôles" })
+    .getByRole("button", { name: new RegExp(dossier) })
+    .click();
   await expect(page.getByRole("link", { name: new RegExp(`Rangé ${id}`) }).first()).toBeVisible();
   await page.getByRole("button", { name: `Déplacer Rangé ${id} dans un dossier` }).click();
   await page.getByRole("dialog").getByLabel("Dossier").fill(`${dossier}/Sous`);
   await page.getByRole("dialog").getByRole("button", { name: "Déplacer", exact: true }).click();
+  // un dossier n'affiche que ses propres éléments : déplacé dans « Sous », le contrôle quitte la liste du dossier parent…
+  await expect(page.getByRole("link", { name: new RegExp(`Rangé ${id}`) })).toHaveCount(0);
+  // … et se retrouve dans « Tous », avec son nouveau dossier
+  await tree.getByRole("button", { name: /^Tous/ }).click();
   await expect(page.getByText(`${dossier}/Sous`).first()).toBeVisible();
 });

@@ -5,7 +5,10 @@ const uniq = () => `${Date.now()}`.slice(-7);
 const tools = (page: Page) => page.getByRole("toolbar", { name: "Gérer les dossiers" });
 
 async function newFolder(page: Page, tree: string, name: string) {
-  await page.getByRole("navigation", { name: tree }).getByRole("button", { name: /^Nouveau dossier/ }).click();
+  await page
+    .getByRole("navigation", { name: tree })
+    .getByRole("button", { name: /^Nouveau dossier/ })
+    .click();
   const dlg = page.getByRole("dialog", { name: "Nouveau dossier" });
   await dlg.getByLabel("Nom du dossier").fill(name);
   await dlg.getByRole("button", { name: "Créer", exact: true }).click();
@@ -52,7 +55,7 @@ test("workflows : créer des dossiers vides, y ranger un workflow, renommer, ref
   await dlg.getByLabel("Chemin du dossier").fill(`Pôle ${id}/Equipe`);
   await dlg.getByRole("button", { name: "Enregistrer" }).click();
   await expect(nav.getByRole("button", { name: new RegExp(`^Equipe ${id}`) })).toHaveCount(0); // la liste des workflows est relue : plus aucune trace de l'ancien chemin
-  await expect(nav.getByRole("button", { name: /^Equipe \(1\)/ }).first()).toBeVisible();
+  await expect(nav.getByRole("button", { name: /^Equipe \(0\)/ }).first()).toBeVisible(); // le dossier parent n'a plus d'élément à lui : le workflow est dans le sous-dossier
   await nav.getByRole("button", { name: new RegExp(`^Sous${id} \\(1\\)`) }).click();
   await expect(page.getByRole("row", { name: new RegExp(`Rangé ${id}`) })).toContainText(`Pôle ${id}/Equipe/Sous${id}`);
   await expect(nav.getByRole("button", { name: new RegExp(`^Equipe ${id}`) })).toHaveCount(0);
@@ -63,7 +66,11 @@ test("workflows : créer des dossiers vides, y ranger un workflow, renommer, ref
     return (r.results as { slug: string; name: string }[]).find((w) => w.name === name)?.slug;
   }, `Rangé ${id}`);
   await page.evaluate(async (s) => {
-    const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
+    const csrf =
+      document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("csrftoken="))
+        ?.split("=")[1] ?? "";
     await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "DELETE", headers: { "X-CSRFToken": csrf } });
   }, slug);
   await page.reload();
@@ -74,8 +81,21 @@ test("workflows : créer des dossiers vides, y ranger un workflow, renommer, ref
 });
 
 for (const t of [
-  { name: "actions", tree: "Dossiers d'actions", go: async (p: Page) => { await goNav(p, "Bibliothèques"); } },
-  { name: "skills IA", tree: "Dossiers de skills", go: async (p: Page) => { await goNav(p, "Bibliothèques"); await p.getByRole("list", { name: "Bibliothèques" }).getByRole("link", { name: "Skills IA", exact: true }).click(); } },
+  {
+    name: "actions",
+    tree: "Dossiers d'actions",
+    go: async (p: Page) => {
+      await goNav(p, "Bibliothèques");
+    },
+  },
+  {
+    name: "skills IA",
+    tree: "Dossiers de skills",
+    go: async (p: Page) => {
+      await goNav(p, "Bibliothèques");
+      await p.getByRole("list", { name: "Bibliothèques" }).getByRole("link", { name: "Skills IA", exact: true }).click();
+    },
+  },
 ]) {
   test(`${t.name} : créer, sélectionner, renommer et supprimer un dossier vide ; lecture seule sans les droits`, async ({ page, browser }) => {
     const id = uniq();

@@ -138,6 +138,10 @@ export interface WorkflowSummary {
   error_workflow?: string;
   success_workflow?: string;
   mcp_exposed?: boolean;
+  /** Runner imposé aux actions et scripts de ce workflow (null : choix automatique) ; `runner_force_children` : aussi à ses sous-workflows. */
+  runner?: string | null;
+  runner_name?: string | null;
+  runner_force_children?: boolean;
   folder_level?: "view" | "run" | "edit" | null; // level in a private folder (null: the folder is not private to this person)
   latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null; input_form?: import("./forms/types").FormDefinition | null } | null;
 }
@@ -188,6 +192,8 @@ export interface WorkflowRun {
   finished_at: string | null;
   needs_decision: boolean;
   cancel_requested: boolean;
+  /** Runner imposé à cette exécution (réglage du workflow ou hérité du parent), figé au lancement ; null : choix automatique. */
+  runner?: { name: string; inherited: boolean } | null;
   steps?: StepRun[];
   events?: RunEvent[];
   graph?: { nodes: { id: string; name: string; type: string; ui: { x: number; y: number } | null }[]; edges: { from: string; to: string; label?: string; ui?: { cx?: number; points?: { x: number; y: number }[] } }[]; notes?: { id: string; text: string; ui: { x: number; y: number } }[]; layout?: { start?: { x: number; y: number }; end?: { x: number; y: number } } | null };

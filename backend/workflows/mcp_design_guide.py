@@ -3,7 +3,7 @@
 Constaté avec Claude Code réel : sans ce guide, l'assistant devine ces formats d'après les messages d'erreur du serveur. Les exemples ci-dessous
 sont VALIDÉS par les vrais contrôles dans `tests/test_mcp_design_guide.py` (ils ne peuvent pas dériver) ; les listes de types viennent du code."""
 
-from triggers import formengine
+from triggers import formcss, formengine
 
 from .expressions import FUNCS, SPECIAL
 from .validation import NODE_TYPES
@@ -346,6 +346,174 @@ TRIGGER_INPUTS_EXAMPLES = {
         "properties": {"perimetre": {"type": "string", "title": "Périmètre"}},
     },
 }
+# --- contrôles personnalisés (topic `controles`) : chaque exemple est vérifié par un test contre les contrôles du serveur ---------------------------
+CONTROL_GROUP = {
+    "version": 1,
+    "mode": "group",
+    "parts": [
+        {"key": "rue", "label": "Rue", "type": "text", "required": True, "layout": {"row": 1, "col": 1, "span": 8}},
+        {"key": "code_postal", "label": "Code postal", "type": "text", "layout": {"row": 1, "col": 9, "span": 4}},
+        {"key": "ville", "label": "Ville", "type": "text", "layout": {"row": 2, "col": 1, "span": 12}},
+    ],
+}
+CONTROL_EXAMPLES = {
+    "group": CONTROL_GROUP,
+    "repeat": {
+        "version": 1,
+        "mode": "repeat",
+        "row_label": "Article",
+        "add_label": "Ajouter un article",
+        "min": 1,
+        "max": 20,
+        "parts": [
+            {
+                "key": "produit",
+                "label": "Produit",
+                "type": "text",
+                "required": True,
+                "layout": {"row": 1, "col": 1, "span": 6},
+            },
+            {
+                "key": "qte",
+                "label": "Quantité",
+                "type": "number",
+                "required": True,
+                "min": 1,
+                "layout": {"row": 1, "col": 7, "span": 3},
+            },
+            {"key": "prix", "label": "Prix", "type": "number", "layout": {"row": 1, "col": 10, "span": 3}},
+            {
+                "key": "total",
+                "label": "Total ligne",
+                "type": "number",
+                "compute": "{qte} * {prix}",
+                "layout": {"row": 2, "col": 1, "span": 12},
+            },
+        ],
+    },
+    "repeat_table": {
+        "version": 1,
+        "mode": "repeat",
+        "display": "table",
+        "row_label": "Ligne",
+        "parts": [
+            {"key": "produit", "label": "Produit", "type": "text"},
+            {"key": "qte", "label": "Quantité", "type": "number"},
+            {"key": "prix", "label": "Prix", "type": "number"},
+        ],
+        "totals": ["qte"],
+    },
+    "items": {
+        "version": 1,
+        "mode": "items",
+        "min": 1,
+        "items": [
+            {
+                "value": "ecran",
+                "label": "Écran",
+                "parts": [
+                    {"key": "qte", "label": "Quantité", "type": "number", "layout": {"row": 1, "col": 1, "span": 12}}
+                ],
+            },
+            {"value": "clavier", "label": "Clavier"},
+        ],
+    },
+    "choice": {
+        "version": 1,
+        "mode": "choice",
+        "display": "radio",
+        "items": [
+            {"value": "oui", "label": "Oui"},
+            {
+                "value": "non",
+                "label": "Non",
+                "parts": [
+                    {
+                        "key": "motif",
+                        "label": "Motif du refus",
+                        "type": "text",
+                        "layout": {"row": 1, "col": 1, "span": 12},
+                    }
+                ],
+            },
+        ],
+    },
+    "nested": {
+        "version": 1,
+        "mode": "repeat",
+        "row_label": "Invité",
+        "parts": [
+            {"key": "nom", "label": "Nom", "type": "text", "layout": {"row": 1, "col": 1, "span": 12}},
+            {
+                "key": "adresse",
+                "label": "Adresse",
+                "type": "custom",
+                "layout": {"row": 2, "col": 1, "span": 12},
+                "control": {
+                    "ref": "adresse",
+                    "version": "1.0.0",
+                    "name": "Adresse",
+                    "icon": "mapPin",
+                    "spec": CONTROL_GROUP,
+                },
+            },
+        ],
+    },
+}
+_RAW_CSS = '.fb-field { margin-bottom: 8px; }\n[data-key="total"] { font-weight: 700; }'
+FORM_FULL_EXAMPLE = {
+    "version": 1,
+    "style": {
+        "accent": "#2563eb",
+        "density": "comfortable",
+        "labels": "top",
+        "radius": "medium",
+        "width": "medium",
+        "sections": "card",
+        "button": "right",
+    },
+    "css": formcss.normalize(_RAW_CSS)[
+        0
+    ],  # le serveur enregistre le CSS sous sa forme normalisée : create_form / update_form le font pour vous
+    "sections": [
+        {
+            "id": "s1",
+            "title": "Commande",
+            "fields": [
+                {
+                    "key": "client",
+                    "type": "text",
+                    "label": "Client",
+                    "required": True,
+                    "layout": {"row": 1, "col": 1, "span": 12},
+                },
+                {
+                    "key": "adresse",
+                    "type": "custom",
+                    "label": "Adresse de livraison",
+                    "layout": {"row": 2, "col": 1, "span": 12},
+                    "control": {
+                        "ref": "adresse",
+                        "version": "1.0.0",
+                        "name": "Adresse",
+                        "icon": "mapPin",
+                        "spec": CONTROL_GROUP,
+                    },
+                },
+                {"key": "quantite", "type": "number", "label": "Quantité", "layout": {"row": 3, "col": 1, "span": 6}},
+                {"key": "prix", "type": "number", "label": "Prix unitaire", "layout": {"row": 3, "col": 7, "span": 6}},
+                {
+                    "key": "total",
+                    "type": "number",
+                    "label": "Total",
+                    "compute": "{quantite} * {prix}",
+                    "layout": {"row": 4, "col": 1, "span": 12},
+                },
+            ],
+        }
+    ],
+}
+
 FORM_RULES_EXAMPLE = {
     "version": 1,
     "sections": [
@@ -525,6 +693,31 @@ def guide(topic: str, workspace=None) -> dict:
             "CONDITIONS : sur un champ, `rules:[{when: <condition>, then:[{do:show|hide|require|optional|readonly|editable|…}], else:[…], name?}]` ; une condition est {field, op, value} avec op parmi equals, not_equals, "
             "contains, starts_with, ends_with, gt, gte, lt, lte, is_empty, not_empty, is_true, is_false, in_list{values}, ou {op:all|any, items:[…]} pour combiner (voir `examples.form_rules`). "
             "Un champ masqué par une règle ne doit pas correspondre à une entrée OBLIGATOIRE du workflow : déclarez-la facultative. `readonly` (lecture seule) est un effet de PRÉSENTATION que le serveur ne fait pas respecter : pour imposer une valeur, utilisez `fill` ou un champ calculé."
+            "TOUT CE QU'UN FORMULAIRE SAIT FAIRE passe par `create_form` / `update_form` (définition complète, révision exigée) — voir `examples.form_full` : "
+            "GRILLE : `layout` {row, col, span (1-12), height? (1-8)} sur chaque champ, sur 12 colonnes ; sans `layout`, un champ prend une ligne à lui sous les autres. "
+            'VALEURS CALCULÉES : `compute` (champ text, textarea, number, date ou email) avec une formule qui lit les autres champs par `{clé}` — `{quantite} * {prix}` — et des fonctions (if, and, or, not, round, floor, ceil, abs, min, max, sum, avg, count…) ; `sum_col({lignes}, "total")` totalise une colonne d\'un contrôle à lignes répétées. '
+            'CONTRÔLE PERSONNALISÉ : champ {key, type:"custom", label, control:{ref, version, name, icon, spec}} ; préférez add_control_to_form qui recopie le bon `spec` (publié ou brouillon) et revalide tout ; réglages propres au champ : `required`, `help`, `rules`, `source` (si le contrôle est `dynamic`), `prefill`, `options` (si `items_editable`). '
+            "STYLE : `style` {accent: #rrggbb assez foncé pour du texte blanc (contraste 4,5), density: compact|normal|comfortable, labels: top|left, radius: none|small|medium|large, width: narrow|medium|wide|full, sections: card|plain|line, button: left|center|right|full}. "
+            "CSS : `css` (texte) ne règle que la MISE EN FORME à l'intérieur du formulaire (`.fb-field`, `.fb-heading`, `[data-key=\"clé\"]`, `&` pour la racine) ; sont refusés `url()`, `@import`, `@font-face`, `position: fixed/absolute`, `z-index`, `!important`, `<`, l'antislash et toute propriété hors mise en forme ; "
+            "le serveur le réécrit sous forme normalisée (commentaires retirés) et renvoie la ligne en faute si une règle est refusée. "
+            "VÉRIFIER SANS ÉCRIRE : validate_form {definition, workflow?, map?} (avec `workflow` : lien avec les entrées de son brouillon). Les listes dynamiques sont décrites par le topic `listes`, les conditions par `form_rules`, les contrôles par le topic `controles`."
+        ),
+        "controles": (
+            "CONTRÔLES PERSONNALISÉS (bibliothèque réutilisable dans tous les formulaires). Outils : list_controls / get_control (lire AVANT de créer), create_control {slug, name, spec} (BROUILLON), "
+            "update_control {slug, revision, spec} (révision lue juste avant), validate_control {spec} (sans rien écrire : problèmes du brouillon ET de la publication), add_control_to_form {form, revision, control, field?}. "
+            "Vous ne publiez jamais : une personne publie le contrôle (Bibliothèques → Contrôles). Un contrôle ajouté à un formulaire AVANT publication y est copié en version « 0.0.0 » (copie du brouillon, avertissement renvoyé) : le formulaire reste autonome. "
+            "Un `spec` = {version:1, mode, …}. QUATRE TYPES (`mode`, fixé à la création : on ne le change pas ensuite) — voir `examples.controls` : "
+            "`group` : `parts` (sous-champs) réunis en un seul champ ; la valeur est un OBJET (adresse, personne, période…). "
+            "`repeat` : les mêmes `parts` répétés ; la valeur est une LISTE d'objets (lignes de commande, invités…) ; `min`, `max` (50 au plus), `row_label`, `add_label`, `display` (`cards` ou `table` : une colonne par sous-champ) et, en tableau, `totals` (clés de colonnes numériques à totaliser). "
+            "`items` : cases à cocher parmi `items` [{value, label, parts?, group?, disabled?}] ; chaque case cochée ouvre ses `parts` de détail ; `min`, `max`, `display` (`list`, `dropdown` ou `dual` : liste double, avec `available_label` / `chosen_label`) ; `items_editable: true` laisse le FORMULAIRE fixer les choix. "
+            "`choice` : un seul choix parmi `items`, avec `display` `select`, `radio` ou `dropdown` ; chaque option peut ouvrir ses `parts` de détail ; la valeur est le `value` choisi, ou {value, …détails} s'il y a des détails. "
+            "SOUS-CHAMPS (`parts`, 30 au plus) : champs ordinaires {key, label, type, required?, layout?, rules?, compute?, min?, max?, options?…} de type text, textarea, number, email, date, select, radio, checkbox, checkbox_list ou `custom` (un AUTRE contrôle imbriqué, 3 niveaux au plus : "
+            '{key, type:"custom", control:{ref, version, name, icon, spec}} — `ref`/`version` d\'un contrôle de list_controls, `spec` recopié) ; blocs de mise en page heading, paragraph, divider. Pas de liste dynamique ni de tableau dans un sous-champ. Dans `items` et `choice`, la clé `value` est réservée. '
+            "Les sous-champs se placent sur la grille de 12 colonnes (`layout` {row, col, span, height?}), ont leurs règles (`rules`) et leurs valeurs calculées (`compute`), exactement comme les champs d'un formulaire. "
+            "UN CONTRÔLE N'APPELLE JAMAIS UN SERVICE (il sert à plusieurs formulaires) : `dynamic: true` signifie que ses options sont fournies par le FORMULAIRE qui l'utilise, dont le champ porte alors `source` (liste dynamique, topic `listes`) ; "
+            "le champ du formulaire peut aussi porter `prefill` {connection, path, value_path?, params?} pour pré-remplir tout le contrôle depuis un service. "
+            "MÉTHODE : list_controls → get_control si l'un convient → sinon create_control → validate_control jusqu'à zéro problème → add_control_to_form (réglages du champ dans `field` : label, required, layout, rules, source, prefill…) → validate_form {definition, workflow?}. "
+            "Dites dans votre réponse quels contrôles vous avez créés, lesquels restent à PUBLIER par une personne et pourquoi vous n'avez pas réutilisé un contrôle existant."
         ),
         "action": (
             "ACTION (proposition). {slug, name, description (30 caractères au moins : ce que fait l'action), version:{runtime, source, input_schema, output_schema, side_effects, "
@@ -550,6 +743,8 @@ def guide(topic: str, workspace=None) -> dict:
             "trigger_inputs": TRIGGER_INPUTS_EXAMPLES,
             "form_source": FORM_SOURCE_EXAMPLE,
             "form": FORM_EXAMPLE,
+            "form_full": FORM_FULL_EXAMPLE,
+            "controls": CONTROL_EXAMPLES,
             "form_rules": FORM_RULES_EXAMPLE,
             "action": ACTION_EXAMPLE,
             "skill": SKILL_EXAMPLE,

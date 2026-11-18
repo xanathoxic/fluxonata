@@ -18,38 +18,24 @@ from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
 
 from audit.models import AuditEvent, record
 from core.folders import clean_folder
-from core.tags import clean_tags
 from runs import ssh_node
-from tenancy.permissions import EDIT, has_perm
+from tenancy.permissions import EDIT
 
 from . import access
-from .mcp_design import SLUG, _ok, _spec
+from .mcp_design_common import ASSISTANT_TAG as ASSISTANT_TAG  # noqa: PLC0414 - réexporté : lu ici par les tests
+from .mcp_design_common import SLUG, _conflict, _marked, _need_edit, _ok, _spec, _touched
 from .mcp_design_hints import design_hints
 from .models import Workflow
 from .validation import validate
 
-ASSISTANT_TAG = "assistant-externe"
 MAX_GRAPH_BYTES = 512 * 1024
 
 
 class Throttled(Exception):
     pass
-
-
-def _marked(tags) -> list[str]:
-    """Les étiquettes normalisées + la marque « produit par un assistant externe » (filtrable dans l'interface)."""
-    out = clean_tags(tags or [])
-    return out if ASSISTANT_TAG in out else [*out, ASSISTANT_TAG][:20]
-
-
-def _touched(request, ws, tool: str, target, **data):
-    record(
-        "mcp.design.write", actor=request.user, workspace=ws, target=target, tool=tool, external_assistant=True, **data
-    )
 
 
 def check_budget(request, ws) -> None:
@@ -65,11 +51,6 @@ def check_budget(request, ws) -> None:
     ).count()
     if used > limit:  # l'appel en cours est déjà compté
         raise Throttled(f"Limite atteinte : {limit} écritures par heure. Réessayez plus tard.")
-
-
-def _need_edit(request, ws) -> None:
-    if not has_perm(request.user, ws, EDIT):
-        raise PermissionDenied("Droit de modifier requis (portée « edit » du jeton).")
 
 
 # --- sérialiseurs d'entrée ---------------------------------------------------------------------------------------------------
@@ -120,17 +101,6 @@ class AttachFormIn(serializers.Serializer):
 class ValidateIn(serializers.Serializer):
     slug = serializers.SlugField(max_length=50, required=False)
     graph = serializers.JSONField(required=False)
-
-
-def _conflict(current: int):
-    from .views import Conflict
-
-    return Conflict(
-        {
-            "message": "Le brouillon a été modifié ailleurs. Relisez-le (get_*) puis recommencez.",
-            "current_revision": current,
-        }
-    )
 
 
 # --- workflows -------------------------------------------------------------------------------------------------------------
@@ -685,4 +655,7 @@ WRITE_TOOLS["get_dry_run"] = (
     _dry_get,
 )
 # `validate_workflow` et `get_dry_run` ne modifient rien : ils n'entrent pas dans le quota d'écritures
-WRITE_NAMES = set(WRITE_TOOLS) - {"validate_workflow", "get_dry_run"}
+from . import mcp_design_controls as _controls  # noqa: E402 - après les définitions dont il se sert
+
+WRITE_TOOLS.update(_controls.write_tools(_w, OBJ, TXT, TAGS, REV))
+WRITE_NAMES = set(WRITE_TOOLS) - {"validate_workflow", "get_dry_run", "validate_control", "validate_form"}

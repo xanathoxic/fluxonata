@@ -676,7 +676,7 @@ def _dedupe(issues: list) -> list:
     return out
 
 
-def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:
+def _validate_graph_core(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:
     issues: list[dict] = []
     if _graph_shape_issues(graph, issues):
         return issues
@@ -1773,6 +1773,41 @@ def _validate_subworkflow(n, workspace, current_slug, issues, out_types=None, de
             schema.get("properties", {}).pop(item, None)
             schema["required"] = [r for r in schema.get("required", []) if r != item]
         _validate_params(nid, schema, n.get("inputs") or {}, slug, issues, out_types, declared_inputs or {})
+
+
+def _runner_issues(graph: dict, workspace, slug: str | None) -> list[dict]:
+    """Avertissements (jamais bloquants) : le runner imposé à ce workflow ne pourra pas exécuter telle étape. À l'exécution l'étape échouerait avec le même motif."""
+    from runs import runner_pin
+
+    from .models import Workflow
+
+    if (
+        workspace is None
+        or not slug
+        or not any(isinstance(n, dict) and n.get("type") == "action" for n in graph.get("nodes") or [])
+    ):
+        return []  # rien à comparer (analyse pure, sans espace) : aucun accès à la base
+    wf = Workflow.objects.filter(workspace=workspace, slug=slug).select_related("runner").first()
+    if wf is None or wf.runner is None:
+        return []
+    out = []
+    for n in graph.get("nodes") or []:
+        if not (isinstance(n, dict) and n.get("type") == "action" and n.get("action")):
+            continue
+        _, version = resolve_action_version(workspace, n["action"], n.get("version"))
+        if version is None:
+            continue
+        problem = runner_pin.refusal(wf.runner, wf.runner.name, workspace, version)
+        if problem is not None:
+            out.append(issue(n.get("id"), "runner_incompatible", problem.message, level="warning"))
+    return out
+
+
+def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:
+    issues = _validate_graph_core(graph, workspace, current_workflow_slug)
+    if isinstance(graph, dict) and not any(i["level"] == "error" for i in issues):
+        issues += _runner_issues(graph, workspace, current_workflow_slug)
+    return issues
 
 
 validate = validate_graph

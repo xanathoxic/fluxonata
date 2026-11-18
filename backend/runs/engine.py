@@ -37,7 +37,19 @@ from workflows import transforms
 from workflows.expressions import ExpressionError, coerce_inputs, evaluate, resolve
 from workflows.validation import explain_validation_error, topo_order
 
-from . import agent, alerts, http_node, ldap_node, proposed, services, sftp_node, smtp_node, sql_node, ssh_node
+from . import (
+    agent,
+    alerts,
+    http_node,
+    ldap_node,
+    proposed,
+    runner_pin,
+    services,
+    sftp_node,
+    smtp_node,
+    sql_node,
+    ssh_node,
+)
 from .models import Approval, CallbackDelivery, Execution, RunEvent, StepRun, WorkflowRun
 
 R, S = WorkflowRun.Status, StepRun.Status
@@ -185,6 +197,7 @@ def start_run(
                 )
                 if av is not None:
                     pins[agent.pin_key(n["id"], slug)] = {"action_version_id": av.id, "source_digest": av.source_digest}
+    runner_info = runner_pin.resolve_for_start(workflow_version.workflow, parent_step.run if parent_step else None)
     definition = {
         "graph": graph,
         "workflow": {
@@ -198,6 +211,9 @@ def start_run(
         "runtime": _runtime_info(),
         "governance": governance_decision,
         "depth": depth,
+        **(
+            {runner_pin.RUNNER_KEY: runner_info} if runner_info else {}
+        ),  # runner imposé, résolu une fois pour toutes au lancement
     }
     run = WorkflowRun.objects.create(
         workspace=workspace,
@@ -786,6 +802,21 @@ class _StepError(Exception):
         return {"code": self.code, "message": self.message, "next_step": self.next_step}
 
 
+def _compensation_error(exc) -> dict:
+    """Erreur d'une compensation qui n'a pas pu partir : entrées invalides, ou runner imposé qui ne peut pas l'exécuter (son code et son message)."""
+    return {"code": getattr(exc, "code", "COMPENSATION_INPUT"), "message": getattr(exc, "message", str(exc))[:200]}
+
+
+def _pinned_runner(run, action_version):
+    """Le runner imposé à cette exécution (None : choix habituel) ; l'étape échoue clairement s'il ne pourra jamais l'exécuter."""
+    try:
+        return runner_pin.for_dispatch(run, action_version)
+    except runner_pin.PinRefused as exc:
+        raise _StepError(
+            exc.code, exc.message, "Changez ou retirez le runner imposé dans les réglages du workflow."
+        ) from None
+
+
 def _dispatch_action(run, node, sr, ctx):
     pin = run.definition["actions"][node["id"]]
     av = ActionVersion.objects.select_related("action").get(pk=pin["action_version_id"])
@@ -796,6 +827,7 @@ def _dispatch_action(run, node, sr, ctx):
         raise _StepError(
             "INPUT_INVALID", f"Entrées invalides pour {av.action.name} — {explain_validation_error(exc)}"
         ) from None
+    pinned = _pinned_runner(run, av)
     sr.attempt += 1
     sr.status = S.RUNNING
     sr.save()
@@ -808,6 +840,7 @@ def _dispatch_action(run, node, sr, ctx):
         step_run=sr,
         priority=run.priority,
         connections=node.get("connections") or {},
+        pinned_runner=pinned,
     )
 
 
@@ -854,6 +887,8 @@ def script_payload(node, ctx) -> dict:
 def _dispatch_script(run, node, sr, ctx):
     from .builtin import get_script_version
 
+    version = get_script_version(run.workspace, node["language"])
+    pinned = _pinned_runner(run, version)
     sr.attempt += 1
     sr.status = S.RUNNING
     sr.save()
@@ -861,12 +896,13 @@ def _dispatch_script(run, node, sr, ctx):
     services.enqueue(
         workspace=run.workspace,
         environment=run.environment,
-        action_version=get_script_version(run.workspace, node["language"]),
+        action_version=version,
         user=run.requested_by,
         inputs=script_payload(node, ctx),
         step_run=sr,
         priority=run.priority,
         limits=limits,
+        pinned_runner=pinned,
     )
 
 
@@ -1526,10 +1562,11 @@ def _advance_compensation(run, nodes, steps):
                 inputs=inputs,
                 step_run=csr,
                 priority=run.priority,
+                pinned_runner=runner_pin.for_dispatch(run, av),
             )
             add_event(run, "compensation_started", f"Compensation de « {target.node_id} » lancée.", csr.node_id)
-        except (ExpressionError, jsonschema.ValidationError) as exc:
-            _finish(run, csr, S.FAILED, error={"code": "COMPENSATION_INPUT", "message": str(exc)[:200]})
+        except (ExpressionError, jsonschema.ValidationError, runner_pin.PinRefused) as exc:
+            _finish(run, csr, S.FAILED, error=_compensation_error(exc))
         return
     summary = [{"step": k[5:], "status": v.status} for k, v in comp_steps.items()]
     run.status, run.finished_at = R.FAILED, timezone.now()

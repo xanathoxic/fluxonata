@@ -20,44 +20,23 @@ from tenancy.permissions import has_perm
 
 from . import access
 from .mcp import McpServerView
+from .mcp_design_common import (
+    LIMIT,
+    QUERY,
+    SLUG,
+    _clip,
+    _err,
+    _limit,
+    _match,
+    _ok,
+    _spec,
+    _text,
+)
+from .mcp_design_common import MAX_LIMIT as MAX_LIMIT  # noqa: PLC0414 - réexporté : les tests et mcp_design_write le lisent ici
 from .models import Workflow
 
 DESIGN_SCOPES = {"view", "edit"}  # jamais « run » ni « publish » (ADR 0025)
-DEFAULT_LIMIT, MAX_LIMIT = 25, 50
 MAX_SOURCE = 20_000  # caractères de code renvoyés pour une action
-SLUG = {"type": "string", "description": "Identifiant (slug) de la ressource."}
-
-
-def _ok(data) -> dict:
-    return {
-        "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
-        "structuredContent": data,
-        "isError": False,
-    }
-
-
-def _err(message: str) -> dict:
-    return {"isError": True, "content": [{"type": "text", "text": message}]}
-
-
-def _limit(args) -> int:
-    try:
-        return max(1, min(MAX_LIMIT, int(args.get("limit", DEFAULT_LIMIT))))
-    except (TypeError, ValueError):
-        return DEFAULT_LIMIT
-
-
-def _text(args, key="query") -> str:
-    v = args.get(key, "")
-    return v.strip().lower()[:100] if isinstance(v, str) else ""
-
-
-def _match(q: str, *parts) -> bool:
-    return not q or q in " ".join(str(p or "") for p in parts).lower()
-
-
-def _clip(text: str, limit: int) -> tuple[str, bool]:
-    return (text, False) if len(text) <= limit else (text[:limit], True)
 
 
 # --- actions ---------------------------------------------------------------------------------------------------------------
@@ -402,26 +381,6 @@ def list_integrations(request, ws, args):
     return _ok({"count": len(rows), "results": rows[: _limit(args)]})
 
 
-def _spec(name, title, description, props=None, required=None):
-    return {
-        "name": name,
-        "title": title,
-        "description": description,
-        "inputSchema": {"type": "object", "properties": props or {}, **({"required": required} if required else {})},
-        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-    }
-
-
-QUERY = {"query": {"type": "string", "description": "Texte recherché (nom, identifiant, description, étiquettes)."}}
-LIMIT = {
-    "limit": {
-        "type": "integer",
-        "minimum": 1,
-        "maximum": MAX_LIMIT,
-        "description": f"Nombre maximum de résultats (défaut {DEFAULT_LIMIT}).",
-    }
-}
-
 TOOLS = {
     "search_actions": (
         _spec(
@@ -507,7 +466,7 @@ TOOLS = {
             {
                 "topic": {
                     "type": "string",
-                    "enum": ["all", "method", "essai", "decision", "workflow", "form", "action", "skill"],
+                    "enum": ["all", "method", "essai", "decision", "workflow", "form", "controles", "action", "skill"],
                     "description": "Rubrique (défaut : all).",
                 }
             },
@@ -706,3 +665,13 @@ class McpDesignView(McpServerView):
             return self._fail(
                 request, ws, name, _err("Refusé : " + json.dumps(exc.detail, ensure_ascii=False, default=str)[:600])
             )
+
+
+def _register_controls() -> None:
+    """Les outils de lecture des contrôles personnalisés rejoignent la table (le module les décrit avec les aides ci-dessus)."""
+    from . import mcp_design_controls
+
+    TOOLS.update(mcp_design_controls.read_tools())
+
+
+_register_controls()

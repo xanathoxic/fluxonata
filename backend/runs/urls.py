@@ -19,6 +19,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/runners/<uuid:pk>/", ra.WorkspaceRunnerDetailView.as_view()),
     path("workspaces/<slug:workspace>/runners/<uuid:pk>/rotate-token/", ra.WorkspaceRunnerRotateView.as_view()),
     path("workspaces/<slug:workspace>/runner-settings/", ra.WorkspaceRunnerSettingsView.as_view()),
+    path("workspaces/<slug:workspace>/runner-choices/", ra.WorkspaceRunnerChoicesView.as_view()),
     path("runner/me/", runner_api.RunnerMeView.as_view()),
     path("runner/jobs/request/", runner_api.JobRequestView.as_view()),
     path("runner/jobs/<uuid:pk>/heartbeat/", runner_api.JobHeartbeatView.as_view()),

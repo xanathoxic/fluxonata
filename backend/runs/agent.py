@@ -14,7 +14,7 @@ import jsonschema
 
 from catalog.models import ActionVersion
 
-from . import services
+from . import runner_pin, services
 from .models import Approval, StepRun
 
 MAX_TURNS = 10
@@ -157,6 +157,12 @@ def _run_tool(run, node, sr, state, tool: dict, slug: str, inputs: dict) -> str 
     """Start the tool: returns an observation right away when it is simulated, None when an execution was queued."""
     if node.get("mode") != "reel":
         return _trim(sample_output(tool["av"].output_schema))
+    try:
+        pinned = runner_pin.for_dispatch(
+            run, tool["av"]
+        )  # même règle que pour une étape : le runner imposé, ou un refus clair
+    except runner_pin.PinRefused as exc:
+        return _trim(f"Outil indisponible : {exc.message}")
     services.enqueue(
         workspace=run.workspace,
         environment=run.environment,
@@ -166,6 +172,7 @@ def _run_tool(run, node, sr, state, tool: dict, slug: str, inputs: dict) -> str 
         step_run=sr,
         priority=run.priority,
         connections=node.get("connections") or {},
+        pinned_runner=pinned,
     )
     sr.attempt += 1
     state["phase"] = "tool"

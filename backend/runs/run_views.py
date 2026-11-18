@@ -104,6 +104,7 @@ class RunSerializer(serializers.ModelSerializer):
     requested_by = serializers.CharField(source="requested_by.username", default=None)
     status_label = serializers.CharField(source="get_status_display")
     needs_decision = serializers.SerializerMethodField()
+    runner = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowRun
@@ -122,7 +123,13 @@ class RunSerializer(serializers.ModelSerializer):
             "needs_decision",
             "cancel_requested",
             "parent_step_id",
+            "runner",
         ]
+
+    def get_runner(self, obj) -> dict | None:
+        """Le runner imposé à cette exécution (réglage du workflow, ou hérité de son parent), figé au lancement ; None : choix habituel."""
+        info = (obj.definition or {}).get("runner")
+        return {"name": info["name"], "inherited": bool(info.get("inherited"))} if info else None
 
     def get_workflow(self, obj) -> dict:
         w = obj.definition["workflow"]

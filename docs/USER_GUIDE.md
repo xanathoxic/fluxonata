@@ -206,6 +206,8 @@ Réservée aux **administrateurs de la plate-forme** (menu « Plate-forme ») : 
 ![Runners](img/30-runners.png)
 Plate-forme → Runners (ou Administration → Runners pour un runner dédié à votre espace) : « Nouveau runner » donne un jeton (affiché une fois) et les commandes pour démarrer l'agent sur une machine ou en conteneur. Un runner dédié n'exécute que les actions de son espace ; décochez « Autoriser les runners partagés » pour réserver l'exécution à vos runners. Le détail d'une exécution indique le runner qui l'a exécutée. Voir `docs/RUNNERS.md`.
 
+**Choisir le runner d'un workflow.** Dans *Résumé → Exécution*, le **runner imposé** réserve les actions et scripts du workflow à un runner précis (dédié à l'espace, ou partagé) ; sans choix, le runner est sélectionné automatiquement. La case **« Imposer ce runner aux sous-workflows »** étend ce choix aux sous-workflows, y compris à ceux qui ont leur propre runner. Si le runner est hors ligne, les actions l'attendent (la Santé de l'espace l'explique) ; s'il ne peut pas exécuter une étape, l'étape échoue avec un message clair. Détails : `docs/RUNNERS.md`.
+
 ## 11 ter. Utilisateurs et mot de passe
 ![Utilisateurs](img/29-utilisateurs.png)
 Plate-forme → Utilisateurs : créer un compte, le placer dans un ou plusieurs espaces avec un rôle par espace, réinitialiser un mot de passe, désactiver ou réactiver. Un mot de passe provisoire est affiché une seule fois ; la personne le remplace à sa première connexion. Chacun change son mot de passe dans **Mon compte** (clic sur son nom, en haut à droite). Voir `docs/ADMIN.md`.

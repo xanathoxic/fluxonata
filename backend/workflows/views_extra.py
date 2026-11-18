@@ -1,5 +1,6 @@
 """Workflow management: metadata, favorites, dependencies, per-workflow audit, script task test."""
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -21,6 +22,31 @@ from .validation import MAX_SCRIPT, _validate_script, issue
 
 def _wf(user, ws, slug, perm=VIEW) -> Workflow:
     return access.workflow_or_404(user, ws, slug, perm)
+
+
+def _chosen_runner(ws, value):
+    """Le runner imposé choisi dans les réglages : vide = aucun ; sinon il doit exister ET être ouvert à cet espace (dédié à cet espace, ou partagé et
+    runners partagés autorisés) : on n'impose jamais un runner qu'une autre équipe réserve."""
+    from runs.models import Runner
+    from runs.runner_pin import _allowed_in
+
+    if value in (None, ""):
+        return None
+    try:
+        runner = Runner.objects.filter(pk=str(value)).first()
+    except (ValueError, TypeError, DjangoValidationError):  # pas un identifiant de runner
+        runner = None
+    if runner is None or not _allowed_in(runner, ws):
+        raise serializers.ValidationError({"runner": "Runner introuvable ou non ouvert à cet espace."})
+    return runner
+
+
+def _set_runner(wf, ws, d) -> None:
+    """Réglages de runner d'un workflow : le runner imposé et l'extension à ses sous-workflows."""
+    if "runner" in d:
+        wf.runner = _chosen_runner(ws, d["runner"])
+    if "runner_force_children" in d:
+        wf.runner_force_children = bool(d["runner_force_children"])
 
 
 class WorkflowMetaView(APIView):
@@ -45,6 +71,7 @@ class WorkflowMetaView(APIView):
             wf.tags = clean_tags(d["tags"])
         if "mcp_exposed" in d:
             wf.mcp_exposed = bool(d["mcp_exposed"])
+        _set_runner(wf, ws, d)
         for field, label in (("error_workflow", "d'erreur"), ("success_workflow", "de succès")):
             if field in d:
                 target = str(d[field] or "").strip()
@@ -63,8 +90,20 @@ class WorkflowMetaView(APIView):
             workspace=ws,
             target=wf,
             fields=sorted(
-                set(d) & {"name", "description", "folder", "tags", "error_workflow", "success_workflow", "mcp_exposed"}
+                set(d)
+                & {
+                    "name",
+                    "description",
+                    "folder",
+                    "tags",
+                    "error_workflow",
+                    "success_workflow",
+                    "mcp_exposed",
+                    "runner",
+                    "runner_force_children",
+                }
             ),
+            runner=wf.runner.name if wf.runner_id else None,
         )
         return Response(
             {
@@ -76,6 +115,9 @@ class WorkflowMetaView(APIView):
                 "error_workflow": wf.error_workflow,
                 "success_workflow": wf.success_workflow,
                 "mcp_exposed": wf.mcp_exposed,
+                "runner": str(wf.runner_id) if wf.runner_id else None,
+                "runner_name": wf.runner.name if wf.runner_id else None,
+                "runner_force_children": wf.runner_force_children,
             }
         )
 

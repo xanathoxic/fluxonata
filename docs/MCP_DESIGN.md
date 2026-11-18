@@ -37,12 +37,18 @@ Une demande en langage courant, sans invite, suffit donc aussi ; les invites don
 | `search_actions`, `get_action`, `list_skills`, `get_skill`, `list_forms`, `get_form`, `list_workflows`, `get_workflow`, `list_connections`, `list_integrations` (catalogue statique : services, opérations, paramètres), `list_triggers` (planifications, webhooks, interrogations, formulaires publics : type, workflow, état ; jamais d'adresse, de jeton ni de valeur) | lecture ; une connexion ne sort que par son nom, son libellé et son type |
 | `create_workflow`, `update_workflow` | brouillon d'un workflow (révision obligatoire) ; renvoie les problèmes à corriger |
 | `create_form`, `update_form`, `attach_form` | brouillon d'un formulaire ; rattachement au brouillon d'un workflow (référence si publié, copie sinon) |
+| `list_controls`, `get_control` | contrôles personnalisés de la bibliothèque (publiés ou brouillons) : lire AVANT d'en créer |
+| `create_control`, `update_control` | brouillon d'un contrôle de **n'importe quel type** (groupe, lignes répétées, liste de choix, choix unique), révision obligatoire ; le type ne change plus ensuite |
+| `add_control_to_form` | ajoute un contrôle de la bibliothèque à une section d'un formulaire (copie de sa dernière version publiée ; **non publié : copie du brouillon en version `0.0.0`**, avec un avertissement) ; le formulaire est revalidé en entier |
+| `validate_control`, `validate_form` | vérification **sans rien écrire** : un contrôle (comme brouillon et pour la publication), un formulaire (champs, règles, listes dynamiques, contrôles, style, CSS) et, avec `workflow`, son lien avec les entrées du brouillon |
 | `propose_action`, `propose_skill` | **proposition** : inutilisable tant qu'une personne ne l'a pas relue et activée |
 | `validate_workflow` | analyse statique, sans rien écrire |
 | `start_dry_run`, `get_dry_run` | **essai à blanc** d'un brouillon : ses scripts et ses décisions s'exécutent dans le bac à sable isolé (actions, IA, approbations simulées d'après leur contrat) ; jeux d'essai fournis par l'assistant (`inputs`, `expected`, `mocks`) ; asynchrone, exécuté par le worker |
 | `start_action_test` | **test du code** d'une action proposée dans le même bac à sable (réseau coupé, aucun secret, limites plafonnées, 5 cas) ; l'action reste « proposée » |
 
-Aucun outil pour publier, promouvoir, lancer, activer, approuver, supprimer, ni pour les connexions et secrets : il n'existe pas.
+**Formulaires : accès complet.** `create_form` / `update_form` portent toute la définition de l'éditeur : champs, grille de 12 colonnes, règles, valeurs calculées, listes dynamiques (`source`), contrôles personnalisés, `style` et `css` (le serveur normalise le CSS et refuse `url()`, `@import`, `position: fixed`, `!important`… avec la ligne en faute). Format et exemples validés : `get_authoring_guide` (rubriques `form`, `listes`, `controles`).
+
+Aucun outil pour publier (formulaires et contrôles compris), promouvoir, lancer, activer, approuver, supprimer, ni pour les connexions et secrets : il n'existe pas. Un contrôle créé par l'assistant reste un brouillon `assistant-externe` : une personne le publie (Bibliothèques → Contrôles) pour qu'il soit proposé dans l'éditeur de formulaires.
 Tout ce qui est écrit porte l'étiquette `assistant-externe`. Quota : 60 écritures par heure et par personne (`ORCH_MCP_DESIGN_WRITES_PER_HOUR`).
 
 ## 3 bis. Le bac à sable : pourquoi l'assistant ne devine plus l'exécution

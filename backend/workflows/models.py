@@ -43,6 +43,11 @@ class Workflow(models.Model):
     success_workflow = models.SlugField(blank=True, default="")
     # offered as a tool to MCP clients (assistants, agents) through the workspace's MCP endpoint
     mcp_exposed = models.BooleanField(default=False)
+    # Runner imposé pour les actions et scripts de ce workflow (None = choix habituel parmi les runners compatibles). Figé dans chaque exécution
+    # au lancement (`WorkflowRun.definition["runner"]`) ; si le runner disparaît, la valeur revient à None (jamais de reprise silencieuse d'un run en cours).
+    runner = models.ForeignKey("runs.Runner", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # Avec un runner : ses sous-workflows (étapes Workflow, boucles) s'exécutent AUSSI sur ce runner, même si un autre leur est assigné.
+    runner_force_children = models.BooleanField(default=False)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["workspace", "slug"], name="uniq_workflow_slug")]

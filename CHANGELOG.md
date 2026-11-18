@@ -2,6 +2,16 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.7.0 — 2026-11-18
+
+**Fluxonata 0.7.0 : runner imposé par workflow, contrôles personnalisés et formulaires pour les assistants MCP, dossiers qui n'affichent que leurs propres éléments**
+
+- **Runner imposé par workflow.** Un workflow peut se voir imposer un runner précis (*Résumé → Exécution*) : ses actions et scripts ne s'exécutent que sur lui, jamais sur un worker intégré ni sur un autre runner. Une case étend ce choix aux sous-workflows (étape Workflow, boucles), y compris à ceux qui ont leur propre runner. Le runner est figé au lancement et affiché sur l'exécution ; hors ligne ou en pause, l'action l'attend (la Santé de l'espace l'explique) ; s'il ne peut pas exécuter l'étape ou s'il est supprimé, l'étape échoue avec un message clair, sans bascule silencieuse. Un avertissement apparaît à l'édition si une étape est incompatible.
+- **Assistants MCP : contrôles personnalisés et formulaires.** De nouveaux outils créent et modifient des brouillons de contrôles de tous les types (groupe, lignes répétées, liste de choix, choix unique), les vérifient sans rien écrire, les ajoutent à un formulaire, et vérifient un formulaire (avec ou sans son workflow). Le guide d'écriture couvre désormais la grille, les valeurs calculées, les listes dynamiques, le style et le CSS. Aucun outil ne publie ni ne supprime : un contrôle créé par un assistant reste un brouillon qu'une personne publie.
+- **Dossiers.** Choisir un dossier (actions, workflows, formulaires, contrôles, skills) n'affiche plus que ses propres éléments, sans ceux de ses sous-dossiers ; le nombre à côté de chaque dossier est celui de ses propres éléments.
+- Corrections de la vérification : un test d'analyse pure n'interroge plus la base, et plusieurs scénarios de test sont alignés sur les dossiers.
+- **Mise à jour :** deux migrations additives s'appliquent (`runs` 0018, `workflows` 0015) ; aucune donnée existante n'est modifiée. Redémarrez l'API (et les workers) pour charger les nouvelles routes.
+
 ## v0.6.0 — 2026-11-17
 
 **Fluxonata 0.6.0 : agents d'exécution isolables, version du workflow appelé, publication et suppression en lot, certificat de connexion optionnel, duplication de lignes**

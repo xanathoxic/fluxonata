@@ -60,7 +60,8 @@ function Branch({ node, current, onPick, counts, locked, fold }: { node: Node; c
   );
 }
 
-export const inFolder = (itemFolder: string, current: string) => !current || itemFolder === current || itemFolder.startsWith(`${current}/`);
+/** Les éléments d'un dossier : ceux de CE dossier seulement, pas ceux de ses sous-dossiers (qui s'ouvrent en les choisissant). « Tous » (chemin vide) montre tout. */
+export const inFolder = (itemFolder: string, current: string) => !current || itemFolder === current;
 
 export type FolderKind = "workflow" | "action" | "ai_skill" | "form" | "control";
 const parentOf = (p: string) => p.split("/").slice(0, -1).join("/");
@@ -122,7 +123,7 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
   const tree = useMemo(() => buildTree(paths), [paths]);
   const counts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const f of folders) { const parts = f ? f.split("/") : []; parts.forEach((_, i) => { const p = parts.slice(0, i + 1).join("/"); m.set(p, (m.get(p) ?? 0) + 1); }); }
+    for (const f of folders) if (f) m.set(f, (m.get(f) ?? 0) + 1); // le nombre d'éléments de CE dossier : exactement ce que la liste affiche quand on le choisit
     return m;
   }, [folders]);
   const { workspace } = useApp();

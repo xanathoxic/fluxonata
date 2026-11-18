@@ -66,6 +66,44 @@ def _runners_item(workspace, now) -> dict:
     return _item("runners", "Runners", "ok", where)
 
 
+def _pinned_item(workspace, now) -> dict | None:
+    """Les exécutions EN FILE imposées à un runner précis (réglage de workflow) : pourquoi elles attendent (jamais reprises par un autre)."""
+    waiting = Execution.objects.filter(workspace=workspace, status="queued", pinned=True).select_related(
+        "pinned_runner"
+    )
+    if not waiting.exists():
+        return None
+    window = timedelta(seconds=settings.ORCH_RUNNER_ONLINE_SECONDS)
+    reasons: dict[str, int] = {}
+    for ex in waiting:
+        r = ex.pinned_runner
+        if r is None:
+            why = "runner supprimé"
+        elif r.paused:
+            why = f"runner « {r.name} » en pause"
+        elif r.last_contact_at is None or r.last_contact_at < now - window:
+            why = f"runner « {r.name} » hors ligne"
+        else:
+            why = f"runner « {r.name} » en ligne (en attente d'une place libre)"
+        reasons[why] = reasons.get(why, 0) + 1
+    detail = " ; ".join(f"{n} attend : {why}" for why, n in sorted(reasons.items()))
+    blocked = any("en ligne" not in why for why in reasons)
+    return _item(
+        "pinned_runners",
+        "Runners imposés",
+        "warn" if blocked else "ok",
+        f"{sum(reasons.values())} action(s) imposée(s) à un runner précis en attente — {detail}.",
+        "Relancez ou rétablissez le runner, ou changez le runner imposé dans les réglages du workflow : aucun autre runner ne prendra ces actions."
+        if blocked
+        else "",
+    )
+
+
+def _runners_items(workspace, now) -> list[dict]:
+    pinned = _pinned_item(workspace, now)
+    return [_runners_item(workspace, now), *([pinned] if pinned is not None else [])]
+
+
 def summary(workspace=None) -> list[dict]:
     now = timezone.now()
     items = []
@@ -177,7 +215,7 @@ def summary(workspace=None) -> list[dict]:
             )
         )
     if workspace is not None:
-        items.append(_runners_item(workspace, now))
+        items += _runners_items(workspace, now)
     failed_cb = CallbackDelivery.objects.filter(status="failed").count()
     pending_cb = CallbackDelivery.objects.filter(status="pending", attempts__gt=0).count()
     if failed_cb or pending_cb:

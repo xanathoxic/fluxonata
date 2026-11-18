@@ -14,8 +14,6 @@
   "e2e/catalog-role.spec.ts",
   "e2e/catalog.spec.ts",
   "e2e/executions-tools.spec.ts",
-  "e2e/folders.spec.ts",
-  "e2e/form-controls.spec.ts",
   "e2e/form-layout.spec.ts",
   "e2e/form-library.spec.ts",
   "e2e/form-rules.spec.ts",

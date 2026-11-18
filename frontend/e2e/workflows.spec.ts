@@ -162,9 +162,10 @@ test("favoris et dossiers : étoile, accueil, arbre de dossiers", async ({ page 
   await login(page);
   await goNav(page, "Workflows");
   await page.getByRole("button", { name: /Démo/ }).first().click();
-  await expect(page.getByRole("link", { name: "Redémarrer des VM", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Analyse avec validation", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Redémarrer des VM", exact: true })).toHaveCount(0); // rangé dans un sous-dossier : « Démo » n'affiche que ses propres éléments
   await page.getByRole("button", { name: /Infrastructure/ }).click();
+  await expect(page.getByRole("link", { name: "Redémarrer des VM", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Analyse avec validation", exact: true })).toHaveCount(0);
   const row = page.getByRole("row", { name: /Redémarrer des VM/ });
   await expect(row.getByRole("button", { name: /favoris/ })).toBeVisible();

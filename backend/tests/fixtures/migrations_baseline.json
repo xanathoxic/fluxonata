@@ -42,6 +42,7 @@
   "runs/0015_run_files",
   "runs/0016_run_next_check_at",
   "runs/0017_approval_subject_body",
+  "runs/0018_runner_pin",
   "tenancy/0001_initial",
   "tenancy/0002_policyversion_promotion_serviceaccount_apitoken_and_more",
   "tenancy/0003_oidcidentity",
@@ -93,6 +94,7 @@
   "workflows/0011_folder_sharing",
   "workflows/0012_git_sync",
   "workflows/0013_workflow_tags",
-  "workflows/0014_catalog_role_groups"
+  "workflows/0014_catalog_role_groups",
+  "workflows/0015_runner_pin"
  ]
 }

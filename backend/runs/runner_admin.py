@@ -16,8 +16,9 @@ from rest_framework.views import APIView
 from audit.models import record
 from catalog.library import TAG_RE
 from tenancy.models import Workspace
-from tenancy.permissions import ADMINISTER, get_workspace, require_platform_admin
+from tenancy.permissions import ADMINISTER, EDIT, get_workspace, require_platform_admin
 
+from . import services
 from .models import Runner
 from .runner_auth import new_token
 from .runners import RUNTIMES
@@ -208,7 +209,8 @@ class PlatformRunnerDetailView(_Guarded):
 
     def delete(self, request, pk):
         r = _runner_or_404(pk)
-        record("runner.delete", actor=request.user, name=r.name)
+        failed = services.fail_pinned(r)  # les exécutions en file qui lui étaient imposées échouent clairement
+        record("runner.delete", actor=request.user, name=r.name, pinned_failed=failed)
         r.delete()
         return Response(status=204)
 
@@ -274,7 +276,8 @@ class WorkspaceRunnerDetailView(APIView):
 
     def delete(self, request, workspace, pk):
         ws, r = _managed_or_error(request, workspace, pk)
-        record("runner.delete", actor=request.user, workspace=ws, name=r.name)
+        failed = services.fail_pinned(r)
+        record("runner.delete", actor=request.user, workspace=ws, name=r.name, pinned_failed=failed)
         r.delete()
         return Response(status=204)
 
@@ -300,3 +303,34 @@ class WorkspaceRunnerSettingsView(APIView):
             ws.save(update_fields=["use_shared_runners"])
             record("workspace.runner_settings", actor=request.user, workspace=ws, use_shared_runners=value)
         return Response({"use_shared_runners": ws.use_shared_runners})
+
+
+class WorkspaceRunnerChoicesView(APIView):
+    """Les runners qu'un workflow de cet espace peut se voir imposer (ouverts à l'espace), pour le sélecteur des réglages d'un workflow. Droit de modifier
+    suffit : ni jeton, ni adresse, ni détail d'administration."""
+
+    def get(self, request, workspace):
+        ws = get_workspace(request.user, workspace, EDIT)
+        rows = [r for r in Runner.objects.all() if _allowed(r, ws)]
+        return Response(
+            {
+                "results": [
+                    {
+                        "id": str(r.id),
+                        "name": r.name,
+                        "description": r.description,
+                        "scope": r.scope,
+                        "tags": r.tags,
+                        "runtimes": r.runtimes,
+                        "status": runner_row(r)["status"],
+                    }
+                    for r in rows
+                ]
+            }
+        )
+
+
+def _allowed(r: Runner, ws) -> bool:
+    from .runner_pin import _allowed_in
+
+    return _allowed_in(r, ws)

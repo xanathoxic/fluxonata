@@ -51,6 +51,17 @@ Pour **réserver** l'exécution d'un espace à vos runners (isolation, conformit
 dédiés ; **sans runner dédié en ligne, elles attendent** — la Santé de l'espace l'affiche en erreur.
 Un runner dédié à **plusieurs** espaces n'est modifiable que par la plate-forme (les administrateurs d'espace le voient en lecture seule).
 
+## Imposer un runner à un workflow (et à ses sous-workflows)
+Un espace peut déclarer **autant de runners dédiés que nécessaire** (Administration → Runners), en plus des runners partagés. Par défaut, une action ou un script part sur **n'importe quel runner compatible** (langage, étiquettes, espace). Pour qu'un workflow s'exécute sur **un runner précis** : *Workflow → Résumé → Exécution → Runner imposé*.
+- **Exclusif.** Les actions et scripts du workflow ne sont pris que par ce runner : ni un worker intégré, ni un autre runner, même partagé et compatible.
+- **Figé au lancement.** Le runner effectif est résolu au démarrage de l'exécution et noté dans celle-ci (page de l'exécution : « Runner imposé »). Changer le réglage ensuite n'affecte pas les exécutions déjà lancées.
+- **Hors ligne ou en pause : on attend.** L'étape reste en file ; la Santé de l'espace (« Runners imposés ») dit pour chaque groupe d'actions pourquoi elles attendent (runner hors ligne, en pause, supprimé). Aucun autre runner ne les reprend.
+- **Impossible : l'étape échoue clairement.** Si le runner imposé ne pourra jamais exécuter l'étape (langage non pris en charge `RUNNER_INCOMPATIBLE`, étiquette requise absente, runner non ouvert à l'espace ou supprimé `RUNNER_UNAVAILABLE`), l'étape échoue avec un message qui nomme le runner et la raison, au lieu de basculer ailleurs. À la suppression d'un runner, ses exécutions **en file** échouent de la même façon (`RUNNER_DELETED`) ; le réglage du workflow revient à « aucun runner imposé ».
+- **Avertissement à l'édition.** Si le runner imposé ne peut pas exécuter une étape du brouillon, la validation le signale (avertissement `runner_incompatible`, non bloquant).
+- **Sous-workflows.** Chaque sous-workflow (étape Workflow, boucle sur liste, boucle conditionnelle) utilise **son propre** runner imposé, sinon le choix automatique. La case **« Imposer ce runner aux sous-workflows »** change cela : les sous-workflows, et leurs propres sous-workflows, s'exécutent alors **sur le runner du parent, même si un autre leur est assigné**.
+- **Ce qui n'est pas concerné.** Les étapes IA, HTTP, SQL, LDAP, SMTP, SFTP et SSH s'exécutent sur la plateforme (elles ont besoin des secrets de connexion) : aucun runner ne les prend.
+- **Droits et audit.** Il faut le droit de modifier le workflow ; le runner doit être ouvert à l'espace (dédié à cet espace, ou partagé si les runners partagés sont autorisés). Le changement est inscrit à l'audit (`workflow.update`, runner).
+
 ## Étiquettes et langages
 - Un runner déclare des **étiquettes** (`linux`, `gpu`…) et les **langages** qu'il peut exécuter (python, node, typescript, shell, powershell).
 - Une version d'action peut exiger des étiquettes (`required_tags`, à la création de la version) : elle ne part que sur un runner qui les porte toutes.

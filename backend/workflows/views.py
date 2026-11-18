@@ -50,6 +50,8 @@ class WorkflowSerializer(serializers.ModelSerializer):
     latest_version = serializers.SerializerMethodField()
     folder_level = serializers.SerializerMethodField()
     owner: serializers.SlugRelatedField = serializers.SlugRelatedField(slug_field="username", read_only=True)
+    runner = serializers.SerializerMethodField()
+    runner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Workflow
@@ -68,9 +70,18 @@ class WorkflowSerializer(serializers.ModelSerializer):
             "error_workflow",
             "success_workflow",
             "mcp_exposed",
+            "runner",
+            "runner_name",
+            "runner_force_children",
             "latest_version",
             "folder_level",
         ]
+
+    def get_runner(self, obj) -> str | None:
+        return str(obj.runner_id) if obj.runner_id else None
+
+    def get_runner_name(self, obj) -> str | None:
+        return obj.runner.name if obj.runner_id else None
 
     def get_folder_level(self, obj) -> str | None:
         """The person's level in a PRIVATE folder (view, run, edit); null when the folder is not private to them."""

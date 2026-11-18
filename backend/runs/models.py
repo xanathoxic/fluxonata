@@ -70,6 +70,10 @@ class Execution(models.Model):
     lease_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     worker_id = models.CharField(max_length=80, blank=True)
     runner = models.ForeignKey("Runner", null=True, blank=True, on_delete=models.SET_NULL, related_name="executions")
+    # Runner imposé par le workflow (ou hérité de son parent) : seul CE runner peut prendre l'exécution, ni un worker intégré, ni un autre runner.
+    # `pinned` reste vrai si le runner est supprimé : l'exécution n'est alors jamais reprise par un autre (elle échoue, voir `services.fail_pinned`).
+    pinned_runner = models.ForeignKey("Runner", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    pinned = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)

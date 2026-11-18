@@ -23,7 +23,11 @@ from .models import Attempt, Execution, ExecutionEvent
 
 S = Execution.Status
 ALLOWED: dict[str, set[str]] = {
-    S.QUEUED: {S.RUNNING, S.CANCELLED},
+    S.QUEUED: {
+        S.RUNNING,
+        S.CANCELLED,
+        S.FAILED,
+    },  # FAILED : une exécution en file qui ne pourra jamais partir (runner imposé supprimé)
     S.RUNNING: {S.QUEUED, S.SUCCEEDED, S.FAILED, S.CANCELLED},
     S.SUCCEEDED: set(),
     S.FAILED: set(),
@@ -56,6 +60,7 @@ def enqueue(
     idempotency_key=None,
     connections=None,
     limits=None,
+    pinned_runner=None,
 ):
     proposed.refuse_proposed_version(action_version)  # ADR 0025 : dernier barrage, toute exécution passe ici
     execution = Execution.objects.create(
@@ -69,6 +74,8 @@ def enqueue(
         connections=connections or {},
         limits=limits,
         idempotency_key=idempotency_key or None,
+        pinned_runner=pinned_runner,
+        pinned=pinned_runner is not None,  # imposé : jamais pris par un autre que lui
     )
     add_event(execution, "queued", "Demande enregistrée, en attente d'un worker.")
     return execution
@@ -123,7 +130,7 @@ def claim_next(worker_id: str, runner=None, runtimes=None):
         status=S.QUEUED
     )  # sans verrou : on choisit d'abord les candidats, on ne verrouille que ceux-là (FOR UPDATE interdit avec une fonction de fenêtre)
     if runner is None:
-        qs, tags = qs.filter(workspace__use_shared_runners=True), set(settings.ORCH_WORKER_TAGS)
+        qs, tags = qs.filter(workspace__use_shared_runners=True, pinned=False), set(settings.ORCH_WORKER_TAGS)
         if runtimes is not None:
             qs = qs.filter(action_version__runtime__in=runtimes)
     else:
@@ -135,6 +142,9 @@ def claim_next(worker_id: str, runner=None, runtimes=None):
             else Q(workspace__use_shared_runners=True)
         )
         qs = qs.filter(scope, action_version__runtime__in=runner.runtimes).exclude(action_version__runtime="ai")
+        qs = qs.filter(
+            Q(pinned=False) | Q(pinned_runner=runner)
+        )  # une exécution imposée à un runner n'est pour aucun autre
         tags = set(runner.tags)
     running = dict(
         Execution.objects.filter(status=S.RUNNING)
@@ -181,6 +191,26 @@ def claim_next(worker_id: str, runner=None, runtimes=None):
         execution, "attempt_started", f"Tentative {execution.attempt_count} démarrée.", attempt=execution.attempt_count
     )
     return execution, execution.attempt_count
+
+
+@transaction.atomic
+def fail_pinned(runner) -> int:
+    """Le runner va être supprimé : les exécutions EN FILE qui lui étaient imposées échouent clairement (RUNNER_DELETED) au lieu d'attendre indéfiniment
+    ou, pire, d'être reprises par un autre runner. Les exécutions en cours suivent la reprise habituelle (bail expiré)."""
+    now = timezone.now()
+    waiting = list(Execution.objects.select_for_update().filter(pinned_runner=runner, status=S.QUEUED))
+    for ex in waiting:
+        _transition(ex, S.FAILED)
+        ex.error = {
+            "code": "RUNNER_DELETED",
+            "message": f"Le runner « {runner.name} » imposé à ce workflow a été supprimé.",
+            "next_step": "Choisissez un autre runner dans les réglages du workflow, puis relancez.",
+        }
+        ex.finished_at = now
+        ex.save()
+        add_event(ex, "failed", ex.error["message"], code="RUNNER_DELETED")
+        _wake_run_of(ex)
+    return len(waiting)
 
 
 def heartbeat(execution_id, attempt: int) -> bool:

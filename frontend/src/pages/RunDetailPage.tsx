@@ -82,7 +82,7 @@ export function RunDetailPage() {
     <>
       <nav aria-label={t("breadcrumb")} className="breadcrumb"><Link to="/executions">{t("nav.executions")}</Link> / <span aria-current="page">{run.workflow.name}</span></nav>
       <h1>{run.workflow.name} <small>v{run.workflow.version}</small></h1>
-      <p>{t("exec.status")} : <StatusBadge status={run.status} label={run.cancel_requested && active ? "Annulation en cours" : run.status_label} /> · Environnement : {t(`env.${run.environment}` as never)}</p>
+      <p>{t("exec.status")} : <StatusBadge status={run.status} label={run.cancel_requested && active ? "Annulation en cours" : run.status_label} /> · Environnement : {t(`env.${run.environment}` as never)}{run.runner && <> · Runner imposé : <strong>{run.runner.name}</strong>{run.runner.inherited ? " (hérité du workflow parent)" : ""}</>}</p>
       <div role="status" aria-live="polite">{active && <p>{t("exec.inProgress")}</p>}{run.status === "succeeded" && <p>{t("exec.succeeded")}</p>}{run.status === "failed" && <p>{t("exec.failed")}</p>}{run.status === "cancelled" && <p>L'exécution a été annulée.</p>}</div>
       {active && can("run") && !run.cancel_requested && (
         confirmCancel ? (

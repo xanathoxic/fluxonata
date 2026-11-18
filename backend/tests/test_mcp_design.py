@@ -33,9 +33,16 @@ WRITE_TOOLS_ALL = {
     "start_dry_run",
     "get_dry_run",
     "start_action_test",
+    "create_control",
+    "update_control",
+    "validate_control",
+    "validate_form",
+    "add_control_to_form",
 }
 RUN_URL = "/api/v1/workspaces/team-a/mcp/"
 READ_TOOLS = {
+    "list_controls",
+    "get_control",
     "search_actions",
     "get_action",
     "list_skills",
@@ -101,7 +108,10 @@ def test_handshake_and_the_tool_list(ws, world):
     tools = rpc(c, "tools/list").json()["result"]["tools"]
     assert {t["name"] for t in tools} == READ_TOOLS | WRITE_TOOLS_ALL == set(all_tools())
     by = {t["name"]: t for t in tools}
-    assert all(by[n]["annotations"]["readOnlyHint"] is True for n in READ_TOOLS | {"validate_workflow", "get_dry_run"})
+    assert all(
+        by[n]["annotations"]["readOnlyHint"] is True
+        for n in READ_TOOLS | {"validate_workflow", "get_dry_run", "validate_control", "validate_form"}
+    )
     assert all(t["annotations"]["destructiveHint"] is False and t["inputSchema"]["type"] == "object" for t in tools)
     # aucun outil pour publier, lancer, activer, approuver, supprimer ou toucher aux connexions et secrets
     forbidden = (
@@ -212,6 +222,8 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("list_integrations", {}),
         ("list_triggers", {}),
         ("get_authoring_guide", {}),
+        ("list_controls", {}),
+        ("get_control", {"slug": "absent"}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié
     for name, args in calls:
