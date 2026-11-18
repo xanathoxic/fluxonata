@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FormIcon, type FormIconName } from "../FormIcon";
+import { BoxModel } from "./BoxModel";
 import { Choices, Color, GradientField, Length, Row, Shadows, Sides } from "./controls";
 import { getDecl, type Rule } from "./model";
 import { FONT_STACKS, formatBorder, parseBorder, type Border } from "./values";
@@ -112,8 +113,9 @@ function Spacing({ rule, set }: Props) {
   const g = (p: string) => getDecl(rule, p);
   return (
     <>
-      <Row label="Intérieur" set={!!g("padding")} onReset={() => set("padding", "")}><Sides label="Marge intérieure" value={g("padding")} onChange={(v) => set("padding", v)} /></Row>
-      <Row label="Extérieur" set={!!g("margin")} onReset={() => set("margin", "")}><Sides label="Marge extérieure" value={g("margin")} onChange={(v) => set("margin", v)} /></Row>
+      <Row label="Marges" set={!!g("margin") || !!g("padding")} onReset={() => { set("margin", ""); set("padding", ""); }} wide>
+        <BoxModel margin={g("margin")} padding={g("padding")} onMargin={(v) => set("margin", v)} onPadding={(v) => set("padding", v)} />
+      </Row>
       <Row label="Entre éléments" set={!!g("gap")} onReset={() => set("gap", "")}><Length label="Espace entre éléments" value={g("gap")} onChange={(v) => set("gap", v)} units={["px", "rem", "em"]} min={0} max={80} slider /></Row>
     </>
   );

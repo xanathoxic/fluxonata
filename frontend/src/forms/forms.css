@@ -620,3 +620,25 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .fb-side-row { display: flex; align-items: center; gap: 10px; }
 .fb-side-row input[type="range"] { flex: 1 1 auto; }
 .fb-side-row output { min-width: 3.2rem; text-align: right; font-weight: 600; }
+
+/* Marge et padding : deux boîtes imbriquées */
+.cs-boxmodel { width: 100%; }
+.cs-box { display: grid; gap: 4px; border: 1px dashed var(--border-strong, #94a3b8); border-radius: 8px; padding: 6px; }
+.cs-box-outer { background: color-mix(in srgb, #f59e0b 12%, transparent); }
+.cs-box-inner { background: color-mix(in srgb, #22c55e 14%, transparent); border-style: solid; }
+.cs-boxbar { display: flex; align-items: center; gap: 4px; }
+.cs-boxname { flex: 1 1 auto; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cs-boxbar select { min-height: 26px; padding: 0 4px; }
+.cs-boxgrid { display: grid; grid-template-columns: 3.4rem minmax(5rem, 1fr) 3.4rem; grid-template-areas: ". top ." "left center right" ". bottom ."; gap: 4px; align-items: center; justify-items: center; }
+.cs-b-top { grid-area: top; } .cs-b-right { grid-area: right; } .cs-b-bottom { grid-area: bottom; } .cs-b-left { grid-area: left; } .cs-bcenter { grid-area: center; width: 100%; }
+.cs-bside { width: 3.4rem; min-height: 28px; padding: 2px 4px; text-align: center; }
+.cs-elt { display: block; text-align: center; padding: 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted); }
+
+/* Cible libre : viser le parent, l'enfant, ou n'importe quel niveau du chemin */
+.cs-levels { display: grid; gap: 6px; }
+.cs-crumbs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cs-crumb { padding: 2px 8px; min-height: 26px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: var(--fs-xs); cursor: pointer; }
+.cs-crumb + .cs-crumb::before { content: "›"; margin-right: 6px; color: var(--muted); }
+.cs-crumb.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.cs-levelbtns { display: inline-flex; gap: 6px; }
+.cs-levelbtns button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 10px; }

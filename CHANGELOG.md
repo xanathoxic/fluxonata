@@ -2,6 +2,14 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.10.0 — 2026-11-18
+
+**Fluxonata 0.10.0 : marge et padding dans le concepteur CSS, cible libre sur le parent d'un élément**
+
+- Concepteur CSS : marge et padding dans un éditeur en deux boîtes imbriquées (côtés liés ou un par un, unités, marge négative, centrage auto)
+- Cible libre : viser le parent d'un élément (boutons Parent et Enfant, fil d'Ariane cliquable pour choisir n'importe quel niveau)
+- Documentation : marge et padding, viser le parent dans la cible libre
+
 ## v0.9.0 — 2026-11-18
 
 **Fluxonata 0.9.0 : formulaires plus puissants (type d'affichage, marges, lignes repliables) et concepteur CSS guidé**

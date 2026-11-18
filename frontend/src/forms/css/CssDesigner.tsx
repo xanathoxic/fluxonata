@@ -8,7 +8,7 @@ import { Pop } from "../StyleEditor";
 import { isBlock, type FormDefinition } from "../types";
 import { Inspector } from "./Inspector";
 import { PickPanel } from "./PickPanel";
-import { candidatesFor, describeElement, snapTarget, type Candidate } from "./pick";
+import { ancestorsOf, candidatesFor, describeElement, kindName, snapTarget, type Candidate } from "./pick";
 import { parse, ruleKey, serialize, setDecl, setMany, type Rule } from "./model";
 import { CUSTOM, PARTS, SCREENS, STATES, defaultTarget, describe as describeTarget, ruleOf, selectorsFor, targetFromElement, targetOf, type Scope, type Target } from "./targets";
 import { THEMES, applyTheme } from "./themes";
@@ -45,6 +45,9 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
   // « cible libre » : l'élément survolé (entouré dans l'aperçu), puis ce qu'on peut viser à partir du dernier clic
   const [hover, setHover] = useState("");
   const [cands, setCands] = useState<Candidate[]>([]);
+  // l'élément cliqué et ses parents (du plus proche au plus lointain), et le niveau visé dans cette liste
+  const [chain, setChain] = useState<Element[]>([]);
+  const [lvl, setLvl] = useState(0);
   const lit = useRef<HTMLElement | null>(null);
   const unlight = () => { if (lit.current) { lit.current.style.outline = ""; lit.current.style.outlineOffset = ""; lit.current = null; } };
   useEffect(() => () => { const el = lit.current; if (el) { el.style.outline = ""; el.style.outlineOffset = ""; } }, []);
@@ -106,6 +109,16 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
     lit.current = el as HTMLElement;
     setHover(describeElement(el, root));
   };
+  /** vise cet élément (le niveau `i` de la liste) : propose ce qu'on peut en viser et écrit le premier choix */
+  const aim = (el: Element, i: number) => {
+    const root = zone.current?.querySelector(".fb-form");
+    if (!root || !el.isConnected) { setChain([]); setCands([]); return; }
+    const list = candidatesFor(el, root);
+    setLvl(i);
+    setCands(list);
+    if (list[0]) setTarget((t) => ({ ...t, custom: (list[0] as Candidate).selector }));
+  };
+  const onLevel = (outerFirst: number) => { const i = chain.length - 1 - outerFirst; const el = chain[i]; if (el) aim(el, i); };
   const onPick = (e: React.MouseEvent) => {
     if (!pick) return;
     const root = zone.current?.querySelector(".fb-form");
@@ -116,9 +129,8 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
     if (free) {
       const el = snapTarget(e.target as Element, root);
       if (!el) return;
-      const list = candidatesFor(el, root);
-      setCands(list);
-      if (list[0]) setTarget((t) => ({ ...t, custom: (list[0] as Candidate).selector }));
+      setChain(ancestorsOf(el, root));
+      aim(el, 0);
       return;
     }
     const hit = targetFromElement(e.target as Element, root);
@@ -255,7 +267,7 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
         </section>
         <section className="cs-side" aria-label="Réglages de la règle">
           <p className="cs-now" title="La règle en cours de modification"><FormIcon name="design" size={14} /> {describeTarget(at) || "Choisissez un élément"}</p>
-          {free && <PickPanel hover={hover} candidates={cands} selector={target.custom ?? ""} onChoose={(s) => setTarget((t) => ({ ...t, custom: s }))} onSelector={(s) => { setCands([]); setTarget((t) => ({ ...t, custom: s })); }} disabled={!edit} />}
+          {free && <PickPanel hover={hover} candidates={cands} levels={[...chain].reverse().map((n) => ({ label: kindName(n), title: zone.current?.querySelector(".fb-form") ? describeElement(n, zone.current.querySelector(".fb-form") as Element) : kindName(n) }))} level={chain.length - 1 - lvl} onLevel={onLevel} selector={target.custom ?? ""} onChoose={(s) => setTarget((t) => ({ ...t, custom: s }))} onSelector={(s) => { setCands([]); setChain([]); setTarget((t) => ({ ...t, custom: s })); }} disabled={!edit} />}
           {usable ? <Inspector rule={rule} set={set} setMany={many} active={panel} onActive={setPanel} disabled={!edit} /> : <p className="hint">Cliquez sur un élément de l'aperçu pour le cibler.</p>}
         </section>
       </div>

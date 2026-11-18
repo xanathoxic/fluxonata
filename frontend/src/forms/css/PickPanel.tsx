@@ -8,6 +8,11 @@ interface Props {
   candidates: Candidate[];
   /** le sélecteur actuel de la règle */
   selector: string;
+  /** les niveaux de l'élément choisi, du plus extérieur au plus intérieur (vide : rien n'est encore choisi) */
+  levels?: { label: string; title: string }[];
+  /** le niveau actuellement visé */
+  level?: number;
+  onLevel?: (i: number) => void;
   onChoose: (selector: string) => void;
   onSelector: (selector: string) => void;
   disabled?: boolean;
@@ -17,7 +22,7 @@ const plural = (n: number) => `${n} élément${n > 1 ? "s" : ""}`;
 
 /** La « cible libre » sans écrire de chemin : survoler l'aperçu nomme l'élément, cliquer propose ce qu'on peut viser (avec le nombre
  * d'éléments concernés) ; le chemin écrit reste visible et modifiable dans « Avancé ». */
-export function PickPanel({ hover, candidates, selector, onChoose, onSelector, disabled }: Props) {
+export function PickPanel({ hover, candidates, selector, levels = [], level = 0, onLevel, onChoose, onSelector, disabled }: Props) {
   return (
     <div className="cs-pickp">
       <p className="cs-pickhint">
@@ -32,6 +37,39 @@ export function PickPanel({ hover, candidates, selector, onChoose, onSelector, d
           <span className="hint">Rien sous la souris</span>
         )}
       </p>
+      {levels.length > 0 && (
+        <div className="cs-levels">
+          <nav className="cs-crumbs" aria-label="Niveaux de l'élément visé">
+            {levels.map((l, i) => (
+              <button
+                // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ; la position EST le niveau
+                key={`${i}-${l.label}`}
+                type="button"
+                className={`cs-crumb${i === level ? " on" : ""}`}
+                aria-current={i === level ? "true" : undefined}
+                title={l.title}
+                disabled={disabled}
+                onClick={() => onLevel?.(i)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </nav>
+          <span className="cs-levelbtns">
+            <button type="button" disabled={disabled || level <= 0} onClick={() => onLevel?.(level - 1)} title="Viser l'élément qui contient celui-ci">
+              <FormIcon name="up" size={14} /> Parent
+            </button>
+            <button
+              type="button"
+              disabled={disabled || level >= levels.length - 1}
+              onClick={() => onLevel?.(level + 1)}
+              title="Redescendre vers l'élément cliqué"
+            >
+              <FormIcon name="down" size={14} /> Enfant
+            </button>
+          </span>
+        </div>
+      )}
       {candidates.length > 0 && (
         <div role="radiogroup" aria-label="Que voulez-vous viser ?" className="cs-cands">
           <p className="cs-mh">Que voulez-vous viser ?</p>

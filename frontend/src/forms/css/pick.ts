@@ -113,10 +113,22 @@ const fieldLabel = (el: Element, root: Element): string => {
   );
 };
 
+/** Ce que l'élément est (« libellé », « ligne »…), sans dire où. */
+export function kindName(el: Element): string {
+  const known = classOf(el);
+  return known ? known[1] : (TAG_NAMES[el.tagName.toLowerCase()] ?? "élément");
+}
+
+/** L'élément et tous ses parents qui se laissent viser, du plus proche au plus lointain (le formulaire entier n'en fait pas partie). */
+export function ancestorsOf(el: Element, root: Element): Element[] {
+  const out: Element[] = [];
+  for (let n = snapTarget(el, root); n; n = snapTarget(n.parentElement, root)) out.push(n);
+  return out;
+}
+
 /** « Libellé · champ « Ville » » : ce que l'élément est, et dans quel champ. */
 export function describeElement(el: Element, root: Element): string {
-  const known = classOf(el);
-  const name = known ? known[1] : (TAG_NAMES[el.tagName.toLowerCase()] ?? "élément");
+  const name = kindName(el);
   const f = fieldLabel(el, root);
   return `${name[0]?.toUpperCase()}${name.slice(1)}${f ? ` · champ « ${f} »` : ""}`;
 }

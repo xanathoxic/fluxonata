@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { PickPanel } from "./PickPanel";
-import { candidatesFor, describeElement, snapTarget } from "./pick";
+import { ancestorsOf, candidatesFor, describeElement, kindName, snapTarget } from "./pick";
 import { selectorsFor } from "./targets";
 
 const HTML = `<form class="fb-form"><fieldset class="fb-section"><legend>Infos</legend>
@@ -61,6 +61,38 @@ describe("Cible libre : viser sans écrire de chemin", () => {
   });
 });
 
+describe("Viser le parent", () => {
+  it("liste l'élément et ses parents qui se laissent viser, du plus proche au plus lointain, sans le formulaire", () => {
+    const { d, root } = dom();
+    const chain = ancestorsOf(q(d, "[data-key=nom] label"), root);
+    expect(chain.map(kindName)).toEqual(["libellé", "champ (libellé + saisie)", "case du champ", "section"]);
+    expect(chain[0]).toBe(q(d, "[data-key=nom] label"));
+    expect(chain).not.toContain(root);
+  });
+  it("une icône donne le bouton, puis ses parents jusqu'au contrôle", () => {
+    const { d, root } = dom();
+    expect(ancestorsOf(q(d, "svg path"), root).map(kindName).slice(0, 4)).toEqual([
+      "bouton replier / déplier",
+      "en-tête d'une ligne",
+      "ligne",
+      "contrôle personnalisé",
+    ]);
+  });
+  it("viser un parent donne ses propres choix, avec leur nombre", () => {
+    const { d, root } = dom();
+    const [label, field, cell] = ancestorsOf(q(d, "[data-key=nom] label"), root) as [Element, Element, Element];
+    expect(candidatesFor(label, root).find((c) => c.id === "one")?.selector).toBe('[data-key="nom"] > .fb-field > label');
+    expect(candidatesFor(field, root).find((c) => c.id === "one")?.selector).toBe('[data-key="nom"] > .fb-field');
+    const parent = candidatesFor(cell, root);
+    expect(parent.map((c) => c.selector)).toEqual(['[data-key="nom"]']); // la case du champ
+    expect(parent[0]?.count).toBe(1);
+  });
+  it("le parent d'un élément de premier niveau s'arrête à la section", () => {
+    const { d, root } = dom();
+    expect(ancestorsOf(q(d, ".fb-actions button"), root).map(kindName)).toEqual(["bouton", "zone des boutons", "section"]);
+  });
+});
+
 describe("PickPanel", () => {
   const cands = [
     { id: "one", label: "Cet élément précis", selector: "a", count: 1 },
@@ -84,5 +116,43 @@ describe("PickPanel", () => {
     await userEvent.click(screen.getByText(/Chemin de la cible/));
     await userEvent.type(screen.getByLabelText("Chemin de la cible"), "p");
     expect(onSelector).toHaveBeenCalledWith("p");
+  });
+});
+
+describe("PickPanel : niveaux", () => {
+  const levels = [
+    { label: "case du champ", title: "a" },
+    { label: "champ", title: "b" },
+    { label: "libellé", title: "c" },
+  ];
+  it("montre le chemin, le niveau visé ; Parent et Enfant changent de niveau", async () => {
+    const onLevel = vi.fn();
+    render(
+      <PickPanel hover="" candidates={[]} selector="" levels={levels} level={2} onLevel={onLevel} onChoose={() => undefined} onSelector={() => undefined} />,
+    );
+    expect(screen.getByRole("button", { name: "libellé" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: /Enfant/ })).toBeDisabled(); // déjà l'élément cliqué
+    await userEvent.click(screen.getByRole("button", { name: /Parent/ }));
+    expect(onLevel).toHaveBeenCalledWith(1);
+    await userEvent.click(screen.getByRole("button", { name: "case du champ" }));
+    expect(onLevel).toHaveBeenLastCalledWith(0);
+  });
+  it("tout en haut : plus de parent ; sans niveaux (rien cliqué) : pas de ligne de niveaux", () => {
+    const { rerender } = render(
+      <PickPanel
+        hover=""
+        candidates={[]}
+        selector=""
+        levels={levels}
+        level={0}
+        onLevel={() => undefined}
+        onChoose={() => undefined}
+        onSelector={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Parent/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Enfant/ })).toBeEnabled();
+    rerender(<PickPanel hover="" candidates={[]} selector="" onChoose={() => undefined} onSelector={() => undefined} />);
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 });
