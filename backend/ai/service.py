@@ -30,7 +30,7 @@ from workflows.validation import (
     MAX_FOREACH,
     RESERVED,
     RESERVED_LABELS,
-    VAR_TYPES,
+    VARIABLE_TYPES,
     case_ids,
     failed_reads,
     validate_graph,
@@ -1800,14 +1800,22 @@ def _merge_variables(raw, original: list, removed=None) -> list:
     gone = _removed(removed)
     out = [dict(v) for v in original if isinstance(v, dict) and v.get("name") not in gone]
     by_name = {v.get("name"): v for v in out}
-    py = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    py = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+        "json": object,
+    }
     for v in (raw if isinstance(raw, list) else [])[:MAX_VARIABLES]:
         name = v.get("name") if isinstance(v, dict) else None
         if not isinstance(name, str) or not IDENT.match(name) or name in RESERVED or name in gone:
             continue
         kind = by_name[name].get("type", "string") if name in by_name else v.get("type")
         value = v.get("value")
-        if kind not in VAR_TYPES or (value is not None and not _typed(value, py[kind])):
+        if kind not in VARIABLE_TYPES or (value is not None and not _typed(value, py[kind])):
             continue
         if name in by_name:
             by_name[name]["value"] = value

@@ -17,6 +17,7 @@ import { schemaToFields } from "./fields";
 import { HelpTip } from "../../components/HelpTip";
 import { TagInput, TagList } from "../../components/Tags";
 import { ReadRegion } from "../../components/ReadRegion";
+import { RenameOverlay } from "../../components/RenameOverlay";
 
 const TYPE: Record<string, string> = { string: "Texte", integer: "Entier", number: "Nombre", boolean: "Oui / non" };
 
@@ -42,6 +43,7 @@ export function SkillDetailPage() {
   const [draftTags, setDraftTags] = useState<string[] | null>(null);
   const saveTags = useMutation<unknown, ApiError, string[]>({ mutationFn: (tags) => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/`, { method: "PATCH", json: { tags } }), onSuccess: () => { setDraftTags(null); void qc.invalidateQueries({ queryKey: ["ai-skill"] }); void qc.invalidateQueries({ queryKey: ["ai-skills"] }); } });
   const [moving, setMoving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const activate = useMutation<unknown, ApiError, void>({ mutationFn: () => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/activate/`, { method: "POST", json: {} }), onSuccess: () => { void qc.invalidateQueries(); } });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["ai-skill"] }); void qc.invalidateQueries({ queryKey: ["ai-skills"] }); };
   const move = useMutation<unknown, ApiError, string>({ mutationFn: (folder) => api(`/workspaces/${workspace.slug}/ai/skills/${slug}/`, { method: "PATCH", json: { folder } }), onSuccess: () => { setMoving(false); refresh(); } });
@@ -56,6 +58,7 @@ export function SkillDetailPage() {
       actions={can("publish") && <>
         <button type="button" className="primary" onClick={() => setNewVersion(true)}>Nouvelle version</button>
         <Menu label="Plus" ariaLabel="Plus d'actions" align="end" entries={[
+          { label: "Renommer", onSelect: () => setRenaming(true) },
           { label: "Déplacer", onSelect: () => setMoving(true) },
           { label: s.status === "deprecated" ? "Réactiver" : "Déprécier", onSelect: () => deprecate.mutate(s.status === "deprecated") },
         ]} />
@@ -101,6 +104,7 @@ export function SkillDetailPage() {
           <tbody>{s.versions?.map((x, i) => <tr key={x.version}><td>{x.version}{i === 0 ? " (dernière)" : ""}</td><td>{formatDate(x.created_at)}</td><td>{x.changelog || "—"}</td><td className="mono">{x.digest.slice(7, 19)}…</td></tr>)}</tbody></table></div>
       </section>
       {newVersion && <SkillForm skill={s} onClose={() => setNewVersion(false)} />}
+      {renaming && <RenameOverlay kind="skill" slug={slug} name={s.name} onClose={() => setRenaming(false)} />}
       {moving && <MoveFolderOverlay title={`Déplacer « ${s.name} »`} current={s.folder} folders={[...(all.data?.results ?? []).map((x) => x.folder), ...created]} busy={move.isPending} error={move.error?.message} onSave={(f) => move.mutate(f)} onClose={() => setMoving(false)} />}
     </EditorShell>
   );

@@ -7,6 +7,7 @@ const PATHS = {
   folder: <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v5M9.5 12.5H14.5" />,
   pause: <path d="M8 5v14M16 5v14" />,
   key: <><circle cx="8" cy="15" r="3.5" /><path d="M10.5 12.5L19 4M15 8l3 3M17 6l2 2" /></>,
+  rename: <><path d="M3 7h9M3 12h5" /><path d="M12 20l1-4 7-7 3 3-7 7zM18 11l3 3" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   copy: <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>,
   close: <path d="M6 6l12 12M18 6L6 18" />,

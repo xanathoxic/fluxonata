@@ -23,6 +23,7 @@ import { TestTab } from "./TestTab";
 import { Switch } from "./DesignerUi";
 import { ControlDesigner, type Cfg, type Meta } from "./ControlDesigner";
 import { keyed } from "../../components/keyed";
+import { RenameOverlay } from "../../components/RenameOverlay";
 
 const split = (spec: ControlSpec): { cfg: Cfg; row: FormDefinition } => { const { parts, ...cfg } = spec; return { cfg, row: rowDefinition(parts) }; };
 const join = (cfg: Cfg, row: FormDefinition): ControlSpec => ({ ...cfg, parts: (row.sections[0]?.fields ?? []) as FormField[] });
@@ -52,7 +53,7 @@ function ControlEditor({ slug }: { slug: string }) {
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [row, setRow] = useState<FormDefinition | null>(null);
   const [baseline, setBaseline] = useState<{ value: Content; revision: number } | null>(null);
-  const [dialog, setDialog] = useState<null | "publish" | "delete">(null);
+  const [dialog, setDialog] = useState<null | "publish" | "delete" | "rename">(null);
   const [problems, setProblems] = useState<string[] | null>(null);
 
   const load = (d: ControlFull) => {
@@ -104,7 +105,7 @@ function ControlEditor({ slug }: { slug: string }) {
       actions={edit && (
         <>
           {can("publish") && <button type="button" className="primary" onClick={() => setDialog("publish")} aria-haspopup="dialog"><IconLabel icon="send">Publier</IconLabel></button>}
-          <Menu label="Plus" ariaLabel="Plus d'actions" align="end" entries={[{ label: "Supprimer", danger: true, onSelect: () => setDialog("delete") }]} />
+          <Menu label="Plus" ariaLabel="Plus d'actions" align="end" entries={[{ label: "Renommer", onSelect: () => setDialog("rename") }, { label: "Supprimer", danger: true, onSelect: () => setDialog("delete") }]} />
         </>
       )}
       tabs={<PageTabs label="Contrôle" active={active} onChange={(t) => navigate(`/library/controls/${slug}/${t}`)} tabs={[
@@ -130,6 +131,7 @@ function ControlEditor({ slug }: { slug: string }) {
         {active === "usage" && <Usage control={d} />}
       </div>
       {dialog === "publish" && <Publish control={d} dirty={auto.dirty} problems={bad} saveFirst={async () => { if (!(await auto.flush())) throw new Error("Le brouillon n'a pas pu être enregistré : corrigez-le ou résolvez le conflit avant de publier."); }} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
+      {dialog === "rename" && <RenameOverlay kind="control" slug={slug} name={meta.name} onClose={() => setDialog(null)} onDone={(n) => { setMeta((m) => (m ? { ...m, name: n } : m)); setBaseline((b) => (b ? { ...b, value: { ...b.value, meta: { ...b.value.meta, name: n } } } : b)); }} />}
       {dialog === "delete" && (
         <Confirm title={`Supprimer « ${d.name} » ?`} confirmLabel="Supprimer" onConfirm={() => { void api(`/workspaces/${workspace.slug}/control-library/${slug}/`, { method: "DELETE" }).then(() => { refresh(); navigate("/library/controls"); }); }} onCancel={() => setDialog(null)}>
           Les formulaires qui l'utilisent gardent leur copie de la version employée ; il ne sera plus proposé dans la palette.

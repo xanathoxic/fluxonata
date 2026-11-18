@@ -14,6 +14,7 @@ import { SkillForm } from "./SkillForm";
 import { Overlay } from "../../components/Overlay";
 import { TagFilter, TagList } from "../../components/Tags";
 import { ProposalsPanel } from "../../components/ProposalsPanel";
+import { RenameButton } from "../../components/RenameOverlay";
 
 export function useSkills() {
   const { workspace } = useApp();
@@ -75,6 +76,7 @@ export function SkillsPage() {
                     <td>{s.status === "deprecated" ? <Badge tone="warn">{`⚠ Déprécié${s.deprecation_reason ? ` : ${s.deprecation_reason}` : ""}`}</Badge> : <Badge tone="ok">✔ Actif</Badge>}</td>
                     <td className="row-actions">
                       <Link className="icon-btn" to={`/library/skills/${s.slug}`} aria-label={`Voir le skill ${s.name}`} title="Voir"><RowIcon name="eye" /></Link>
+                      <RenameButton kind="skill" slug={s.slug} name={s.name} />
                       {can("publish") && <button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(s); }} aria-label={`Déplacer le skill ${s.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button>}
                     </td>
                   </tr>

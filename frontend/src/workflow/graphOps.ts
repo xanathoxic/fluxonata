@@ -83,13 +83,23 @@ export function placeNewNodes(graph: Graph): Graph {
   return { ...graph, nodes, ...(graph.notes ? { notes } : {}) };
 }
 
-/** Adds a node; when `afterId` is given it is connected from that node with the proper label. */
+/** Adds a node; when `afterId` is given it is connected from that node with the proper label.
+ *  Inserted in a line: a step that has exactly ONE outgoing link (and is not a decision or a choice, where the branch must be picked)
+ *  hands that link over to the new node, which takes its place between the two (A → B becomes A → new → B). */
 export function addNode(graph: Graph, node: GraphNode, afterId?: string): Graph {
   const withUi = { ...node, ui: node.ui ?? placeNext(graph, afterId) };
   const next: Graph = { ...graph, nodes: [...graph.nodes, withUi] };
   if (afterId) {
     const src = graph.nodes.find((n) => n.id === afterId);
-    if (src) return connect(next, afterId, withUi.id, defaultLabel(next, src));
+    if (!src) return next;
+    const out = graph.edges.filter((e) => e.from === afterId);
+    const onlyOne = out.length === 1 && src.type !== "condition" && src.type !== "switch" ? out[0] : undefined;
+    if (onlyOne && onlyOne.to !== withUi.id) {
+      const rest = { ...next, edges: next.edges.filter((e) => e !== onlyOne) };
+      const linked = connect(rest, afterId, withUi.id, defaultLabel(rest, src));
+      return connect(linked, withUi.id, onlyOne.to, defaultLabel(linked, withUi));
+    }
+    return connect(next, afterId, withUi.id, defaultLabel(next, src));
   }
   return next;
 }
@@ -138,8 +148,16 @@ export function moveEndpoint(graph: Graph, which: "start" | "end", x: number, y:
   return { ...graph, layout: { ...graph.layout, [which]: { x: Math.round(x), y: Math.round(y) } } };
 }
 
+/** Removes a node and its links. A node with exactly ONE outgoing link is a passage: each step that led to it is linked to its successor,
+ *  keeping the label of the link it had (A → X → B becomes A → B, a decision branch stays the same branch). With several outgoing links
+ *  nothing can be guessed: the links are simply dropped. */
 export function removeNode(graph: Graph, id: string): Graph {
-  return { ...graph, nodes: graph.nodes.filter((n) => n.id !== id), edges: graph.edges.filter((e) => e.from !== id && e.to !== id) };
+  const incoming = graph.edges.filter((e) => e.to === id && e.from !== id);
+  const outgoing = graph.edges.filter((e) => e.from === id && e.to !== id);
+  let next: Graph = { ...graph, nodes: graph.nodes.filter((n) => n.id !== id), edges: graph.edges.filter((e) => e.from !== id && e.to !== id) };
+  const target = outgoing.length === 1 ? outgoing[0] : undefined;
+  if (target) for (const e of incoming) next = connect(next, e.from, target.to, e.label ?? "next");
+  return next;
 }
 
 export function duplicateNode(graph: Graph, id: string): { graph: Graph; newId: string } | null {
@@ -327,7 +345,8 @@ export function nodeOutputFields(n: GraphNode, actions: Action[]): OutputField[]
 function baseFields(graph: Graph): OutputField[] {
   const inputs = Object.entries(graph.inputs.properties ?? {}).map(([k, p]) => ({ path: `inputs.${k}`, label: `Entrée « ${p.title ?? k} »`, type: p.type }));
   const vars = (graph.variables ?? []).map((v) => ({ path: `vars.${v.name}`, label: `Variable « ${v.name} »`, type: v.type as string }));
-  return [...inputs, ...vars];
+  const all: OutputField[] = inputs.length ? [{ path: "inputs", label: "Toutes les entrées du workflow", type: "object" }] : [];
+  return [...all, ...inputs, ...vars];
 }
 
 /** Variables a node may reference: workflow inputs/variables + outputs of the steps upstream of it. */

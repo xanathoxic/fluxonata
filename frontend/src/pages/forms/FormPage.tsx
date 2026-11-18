@@ -22,6 +22,7 @@ import { formDiff } from "../../forms/formDiff";
 import { slugify, type FormCard, type FormFull } from "../../forms/library";
 import { HTTP_KINDS, type FormDefinition } from "../../forms/types";
 import "../../forms/forms.css";
+import { RenameOverlay } from "../../components/RenameOverlay";
 
 const TABS = ["design", "summary", "versions", "usage"] as const;
 type TabId = (typeof TABS)[number];
@@ -42,7 +43,7 @@ function FormEditor({ slug }: { slug: string }) {
   const detail = useQuery({ queryKey: key, queryFn: () => api<FormFull>(`/workspaces/${workspace.slug}/form-library/${slug}/`) });
   const [def, setDef] = useState<FormDefinition | null>(null);
   const [baseline, setBaseline] = useState<{ value: FormDefinition; revision: number } | null>(null);
-  const [dialog, setDialog] = useState<null | "publish" | "copy" | "template" | "delete">(null);
+  const [dialog, setDialog] = useState<null | "publish" | "copy" | "template" | "delete" | "rename">(null);
   const [modelWf, setModelWf] = useState("");
   const wfs = useQuery({ queryKey: ["workflows", workspace.slug], queryFn: () => apiAll<WorkflowSummary>(`/workspaces/${workspace.slug}/workflows/`) });
   const conns = useWsQuery<{ results: { name: string; kind: string }[] }>("connections", "/connections/");
@@ -89,6 +90,7 @@ function FormEditor({ slug }: { slug: string }) {
         <>
           {!d.is_template && can("publish") && <button type="button" className="primary" onClick={() => setDialog("publish")} aria-haspopup="dialog"><IconLabel icon="send">Publier</IconLabel></button>}
           <Menu label="Plus" ariaLabel="Plus d'actions" align="end" entries={[
+            { label: "Renommer", onSelect: () => setDialog("rename") },
             { label: "Dupliquer", onSelect: () => setDialog("copy") },
             ...(!d.is_template ? [{ label: "Enregistrer comme modèle", onSelect: () => setDialog("template") }] : []),
             { kind: "separator" as const },
@@ -107,12 +109,13 @@ function FormEditor({ slug }: { slug: string }) {
       </>}>
       <div id="fp-panel" role="tabpanel" aria-label={active} className="tabpanel">
         {active === "design" && <DefinitionEditor def={def} onChange={change} edit={edit} schema={schema} connections={connections} toolbarExtra={refs} />}
-        {active === "summary" && <Summary form={d} edit={edit} onSaved={refresh} def={def} onDef={change} />}
+        {active === "summary" && <Summary key={d.name} form={d} edit={edit} onSaved={refresh} def={def} onDef={change} />}
         {active === "versions" && <Versions form={d} edit={edit} />}
         {active === "usage" && <Usage form={d} />}
       </div>
       {dialog === "publish" && <Publish form={d} dirty={auto.dirty} def={def} saveFirst={async () => { if (!(await auto.flush())) throw new Error("Le brouillon n'a pas pu être enregistré : corrigez-le ou résolvez le conflit avant de publier."); }} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
       {(dialog === "copy" || dialog === "template") && <Copy form={d} asTemplate={dialog === "template"} onClose={() => setDialog(null)} onDone={(s) => { setDialog(null); refresh(); navigate(`/library/forms/${s}`); }} />}
+      {dialog === "rename" && <RenameOverlay kind="form" slug={slug} name={d.name} onClose={() => setDialog(null)} />}
       {dialog === "delete" && <Delete form={d} onClose={() => setDialog(null)} onDone={() => { refresh(); navigate("/library/forms"); }} />}
     </EditorShell>
   );

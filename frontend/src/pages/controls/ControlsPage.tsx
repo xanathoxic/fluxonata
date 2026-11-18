@@ -16,6 +16,7 @@ import { controlIcon, emptySpec, MODES, type ControlCard, type ControlMode } fro
 import { FormIcon, IconLabel, type FormIconName } from "../../forms/FormIcon";
 import { slugify } from "../../forms/library";
 import { useRadioGroup } from "../../components/useRadioGroup";
+import { RenameButton } from "../../components/RenameOverlay";
 
 /** « Contrôles » : the library of custom controls (a group of fields, repeated lines, boxes with details…), published in versions
  * and then offered in the palette of the form editor. */
@@ -77,6 +78,7 @@ export function ControlsPage() {
                     <td>{formatDate(c.updated_at)}</td>
                     <td className="row-actions">
                       <Link className="icon-btn" to={`/library/controls/${c.slug}`} aria-label={`${can("edit") ? "Modifier" : "Consulter"} ${c.name}`} title={can("edit") ? "Modifier" : "Consulter"}><FormIcon name={can("edit") ? "edit" : "eye"} /></Link>
+                      <RenameButton kind="control" slug={c.slug} name={c.name} />
                       {can("edit") && <button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(c); }} aria-label={`Déplacer ${c.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button>}
                       {can("edit") && <button type="button" className="icon-btn danger-icon" onClick={() => setToDelete(c)} aria-label={`Supprimer ${c.name}`} title="Supprimer"><FormIcon name="trash" /></button>}
                     </td>

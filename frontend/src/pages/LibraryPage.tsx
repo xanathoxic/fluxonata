@@ -18,6 +18,7 @@ import { PackagesTab } from "./library/PackagesTab";
 import { HelpTip } from "../components/HelpTip";
 import { TagFilter, TagList } from "../components/Tags";
 import { ProposalsPanel } from "../components/ProposalsPanel";
+import { RenameButton } from "../components/RenameOverlay";
 
 function ActionsTab() {
   const { can, workspace } = useApp();
@@ -66,7 +67,7 @@ function ActionsTab() {
                 <tr key={a.slug}><td><Link className="lst-title" to={`/library/actions/${a.slug}`}>{a.name}</Link></td><td>{a.folder ? <span className="tag">{a.folder}</span> : "—"}</td><td>{(a.tags?.length ?? 0) > 0 ? <TagList tags={a.tags} onPick={setTagF} active={tagF} /> : "—"}</td><td>{a.domain || "—"}</td><td>{a.latest_version ? <Badge tone="info">v{a.latest_version.version}</Badge> : "—"}</td>
                   <td>{a.contract_complete === false ? <Badge tone="warn">⚠ Incomplet</Badge> : a.contract_complete ? <Badge tone="ok">✔ Complet</Badge> : "—"}</td>
                   <td>{a.status === "deprecated" ? <Badge tone="warn">{`⚠ Dépréciée${a.deprecation_reason ? ` : ${a.deprecation_reason}` : ""}`}</Badge> : <Badge tone="ok">✔ Active</Badge>}</td>
-                  {can("publish") && <td><button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(a); }} aria-label={`Déplacer l'action ${a.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button> <button type="button" className="icon-btn" onClick={() => setDeleting(a)} aria-label={`Supprimer l'action ${a.name}`} title="Supprimer"><RowIcon name="trash" /></button></td>}</tr>
+                  {can("publish") && <td><RenameButton kind="action" slug={a.slug} name={a.name} /> <button type="button" className="icon-btn" onClick={() => { move.reset(); setMoving(a); }} aria-label={`Déplacer l'action ${a.name} dans un dossier`} title="Déplacer"><RowIcon name="folder" /></button> <button type="button" className="icon-btn" onClick={() => setDeleting(a)} aria-label={`Supprimer l'action ${a.name}`} title="Supprimer"><RowIcon name="trash" /></button></td>}</tr>
               ))}
               {shown.length === 0 && <EmptyRow cols={8}>{q.isLoading ? "Chargement…" : "Aucune action ici."}</EmptyRow>}
             </tbody>

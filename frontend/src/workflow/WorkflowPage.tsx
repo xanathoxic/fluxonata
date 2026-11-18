@@ -21,6 +21,7 @@ import { SchemaTab } from "./tabs/SchemaTab";
 import { SummaryTab } from "./tabs/SummaryTab";
 import { VariablesTab } from "./tabs/VariablesTab";
 import { VersionsTab } from "./tabs/VersionsTab";
+import { RenameOverlay } from "../components/RenameOverlay";
 
 const TABS = [
   { id: "summary", label: "Informations", el: <SummaryTab /> },
@@ -44,6 +45,7 @@ function useHeaderParts() {
   const [panel, setPanel] = useState<"usages" | "deps" | null>(null);
   const [validation, setValidation] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const deps = useWsQuery<Dep>(`wf-deps-${d.slug}`, `/workflows/${d.slug}/dependencies/`, { enabled: panel === "deps" });
   const usages = useWsQuery<Usage>(`wf-usages-${d.slug}`, `/workflows/${d.slug}/dependents/`, { enabled: panel === "usages" });
@@ -67,7 +69,7 @@ function useHeaderParts() {
     { label: "Toutes les exécutions", onSelect: () => navigate(`/workflows/${d.slug}/runs`) },
     { label: "Rechercher les utilisations", hint: "Workflows qui appellent celui-ci", onSelect: () => setPanel("usages") },
     { label: "Rechercher les dépendances", hint: "Actions, connexions, fournisseurs d'IA", onSelect: () => setPanel("deps") },
-    ...(can("edit") && d.editable ? [{ kind: "separator" } as MenuEntry, { label: "Supprimer", danger: true, onSelect: () => setConfirmDelete(true) }] : []),
+    ...(can("edit") && d.editable ? [{ kind: "separator" } as MenuEntry, { label: "Renommer", hint: "Change le nom affiché, pas l'identifiant", onSelect: () => setRenaming(true) }, { label: "Supprimer", danger: true, onSelect: () => setConfirmDelete(true) }] : []),
   ];
   const validate = async () => {
     setValidation("Validation en cours…");
@@ -104,6 +106,7 @@ function useHeaderParts() {
   const dialogs = (
     <>
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
+      {renaming && <RenameOverlay kind="workflow" slug={d.slug} name={d.wf.name} onClose={() => setRenaming(false)} />}
       {confirmDelete && <DeleteDialog kind="workflow" slug={d.slug} name={d.wf.name} onClose={() => setConfirmDelete(false)} onDeleted={() => navigate("/workflows")} />}
       {panel === "usages" && (
         <Overlay title="Utilisations" description="Les workflows publiés qui appellent celui-ci." onClose={() => setPanel(null)} footer={<button type="button" onClick={() => setPanel(null)}>Fermer</button>}>

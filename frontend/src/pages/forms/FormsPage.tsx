@@ -15,6 +15,7 @@ import { fieldsFromInputs } from "../../forms/DefinitionEditor";
 import { FormIcon, IconLabel } from "../../forms/FormIcon";
 import { slugify, type BuiltinTemplate, type FormCard } from "../../forms/library";
 import { emptyDefinition, type FormDefinition } from "../../forms/types";
+import { RenameButton } from "../../components/RenameOverlay";
 
 type Source = "blank" | "template" | "workflow";
 
@@ -60,6 +61,7 @@ export function FormsPage() {
               <td>{formatDate(f.updated_at)}</td>
               <td className="row-actions">
                 <Link className="icon-btn" to={`/library/forms/${f.slug}`} aria-label={`${can("edit") ? "Modifier" : "Consulter"} ${f.name}`} title={can("edit") ? "Modifier" : "Consulter"}><FormIcon name={can("edit") ? "edit" : "eye"} /></Link>
+                <RenameButton kind="form" slug={f.slug} name={f.name} />
                 {can("edit") && <button type="button" className="icon-btn neutral-icon" onClick={() => dup.mutate({ from: f })} aria-label={`Dupliquer ${f.name}`} title={f.is_template ? "Créer un formulaire à partir de ce modèle" : "Dupliquer"}><FormIcon name={f.is_template ? "wand" : "copy"} /></button>}
                 {can("edit") && <button type="button" className="icon-btn danger-icon" onClick={() => setToDelete(f)} aria-label={`Supprimer ${f.name}`} title="Supprimer"><FormIcon name="trash" /></button>}
               </td>

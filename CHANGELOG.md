@@ -2,6 +2,16 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.11.0 — 2026-11-18
+
+**Fluxonata 0.11.0 : formulaires rattachés par référence, {{ inputs }}, variables JSON, insertion et suppression d'étapes, renommer**
+
+- MCP : un formulaire rattaché à un workflow l'est toujours par référence à la bibliothèque
+- Expressions : {{ inputs }} seul donne tout l'objet des entrées du workflow
+- Variables du workflow : type « json » avec zone de saisie JSON mise en forme
+- Éditeur de workflow : un élément ajouté s'intercale, un élément supprimé referme la ligne
+- Renommer un workflow, une action, un skill, un formulaire ou un contrôle
+
 ## v0.10.0 — 2026-11-18
 
 **Fluxonata 0.10.0 : marge et padding dans le concepteur CSS, cible libre sur le parent d'un élément**

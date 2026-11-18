@@ -65,6 +65,9 @@ JS_RESERVED = {
     "false",
 }
 VAR_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
+VARIABLE_TYPES = VAR_TYPES | {
+    "json"
+}  # une variable du workflow peut aussi porter n'importe quel JSON (jamais une entrée ni une sortie de script)
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,40}$")
 MAX_FOREACH = 100
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -1129,7 +1132,9 @@ _SYNTAX_HINT = (
 def _check_simple_root(root, path, nid, declared_inputs, declared_vars, issues) -> None:
     """References to inputs, vars and run."""
     shown = ".".join(map(str, path))
-    if root == "inputs" and (len(path) < 2 or path[1] not in declared_inputs):
+    if root == "inputs" and len(path) == 1:
+        return  # « {{ inputs }} » : tout l'objet des entrées du workflow
+    if root == "inputs" and path[1] not in declared_inputs:
         issues.append(issue(nid, "unknown_input", f"Entrée inconnue : {shown}."))
     elif root == "run" and (len(path) != 2 or path[1] not in ("id", "started_at", "environment")):
         issues.append(issue(nid, "bad_reference", "run : id, started_at ou environment."))
@@ -1340,6 +1345,8 @@ def _check_type(nid, key, target_schema, src, declared_inputs, out_types, issues
     if path[0] == "steps" and len(path) == 4 and path[2] == "output":
         fields = out_types.get(path[1])
         src_type = (fields or {}).get(path[3], {}).get("type")
+    elif path[0] == "inputs" and len(path) == 1:
+        src_type = "object"
     elif path[0] == "inputs" and len(path) == 2:
         src_type = (declared_inputs.get(path[1]) or {}).get("type")
     if not _compatible(src_type, target_schema.get("type")):
@@ -1370,6 +1377,7 @@ def _validate_variables(variables) -> list[dict]:
         "boolean": bool,
         "array": list,
         "object": dict,
+        "json": object,  # n'importe quelle valeur JSON : objet, liste, texte, nombre, booléen
     }
     for v in variables:
         name = v.get("name") if isinstance(v, dict) else None
@@ -1386,7 +1394,7 @@ def _validate_variables(variables) -> list[dict]:
             out.append(issue(None, "duplicate_variable", f"Variable en double : {name}."))
         seen.add(name)
         t = v.get("type", "string")
-        if t not in VAR_TYPES:
+        if t not in VARIABLE_TYPES:
             out.append(issue(None, "bad_variable_type", f"Type inconnu pour la variable {name} : {t}."))
         elif v.get("value") is not None and not (
             isinstance(v["value"], py[t]) and not (t in ("integer", "number") and isinstance(v["value"], bool))
@@ -1458,6 +1466,17 @@ def _validate_input_form(definition, inputs, workspace) -> list[dict]:
             ]
         try:
             definition = formservice.resolve(workspace, definition["ref"])[1].definition
+        except (
+            formservice.FormNotPublishedError
+        ) as exc:  # la publication du workflow l'exigera : à publier avant, pas une erreur de conception
+            return [
+                issue(
+                    None,
+                    "input_form_unpublished",
+                    f"Formulaire d'entrée : {exc} Publiez-le avant de publier le workflow.",
+                    level="warning",
+                )
+            ]
         except formservice.FormRefError as exc:
             return [issue(None, "bad_input_form", f"Formulaire d'entrée : {exc}")]
     problems = formengine.check_definition(definition) or formengine.check_against_inputs(

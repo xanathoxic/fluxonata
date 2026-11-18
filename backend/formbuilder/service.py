@@ -16,6 +16,10 @@ class FormRefError(ValueError):
     """A reference to a form (or a version of it) that does not exist or cannot be used."""
 
 
+class FormNotPublishedError(FormRefError):
+    """The form exists but has no published version yet: publishing it is enough to make the reference valid."""
+
+
 def digest(definition: dict) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(definition, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
@@ -74,12 +78,10 @@ def resolve(workspace, ref) -> tuple[Form, FormVersion]:
         raise FormRefError(f"« {form.name} » est un modèle : copiez-le en formulaire pour le rattacher.")
     wanted = ref.get("version")
     version = form.versions.filter(version=wanted).first() if wanted else form.latest_version()
+    if version is None and not wanted:
+        raise FormNotPublishedError(f"Le formulaire « {form.name} » n'a pas de version publiée.")
     if version is None:
-        raise FormRefError(
-            f"Le formulaire « {form.name} » n'a pas de version publiée."
-            if not wanted
-            else f"Version {wanted} du formulaire « {form.name} » introuvable."
-        )
+        raise FormRefError(f"Version {wanted} du formulaire « {form.name} » introuvable.")
     return form, version
 
 

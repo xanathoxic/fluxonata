@@ -309,8 +309,8 @@ def update_form(request, ws, args):
 
 
 def attach_form(request, ws, args):
-    """Rattache un formulaire au brouillon d'un workflow. Publié : référence à sa dernière version. Non publié (par ex. créé par l'assistant) :
-    copie de son brouillon, intégrée au workflow (« formulaire d'entrée » propre), sans lien avec la bibliothèque."""
+    """Rattache un formulaire au brouillon d'un workflow. Toujours une référence à la bibliothèque : à sa dernière version publiée, ou, si le formulaire n'est pas encore publié
+    (par ex. créé par l'assistant), au formulaire lui-même (avertissement jusqu'à sa publication par une personne)."""
     from formbuilder.models import Form
     from triggers import formengine
 
@@ -338,12 +338,13 @@ def attach_form(request, ws, args):
         if wf.draft_revision != d["revision"]:
             raise _conflict(wf.draft_revision)
         latest = form.latest_version()
-        if latest is not None:
-            input_form = {"ref": {"form": form.slug, "version": latest.version}}
-            mode = f"référence à la version {latest.version}"
-        else:
-            input_form = json.loads(json.dumps(form.draft_definition))  # copie : le formulaire n'est pas publié
-            mode = "copie du brouillon (formulaire non publié ; publiez-le pour le rattacher par référence)"
+        # toujours une RÉFÉRENCE à la bibliothèque (jamais une copie « ancien format ») : sans version publiée, elle suit la dernière version à venir
+        input_form = {"ref": {"form": form.slug, "version": latest.version if latest else None}}
+        mode = (
+            f"référence à la version {latest.version}"
+            if latest
+            else "référence au formulaire (non publié : une personne doit le publier avant de publier le workflow)"
+        )
         if mapping:
             input_form["map"] = mapping
         wf.draft_graph = {**wf.draft_graph, "input_form": input_form}

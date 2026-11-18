@@ -16,6 +16,7 @@ import { DeleteDialog } from "../components/DeleteDialog";
 import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { TagFilter, TagInput, TagList } from "../components/Tags";
+import { RenameButton } from "../components/RenameOverlay";
 
 const slugify = (s: string) =>
   s
@@ -313,6 +314,7 @@ export function WorkflowsPage() {
                       >
                         <RowIcon name={can("edit") ? "edit" : "view"} />
                       </Link>{" "}
+                      <RenameButton kind="workflow" slug={w.slug} name={w.name} />{" "}
                       {w.latest_version && can("run") && (
                         <Link className="icon-btn icon-btn-primary" to={`/workflows/${w.slug}/run`} aria-label={`Lancer ${w.name}`} title="Lancer">
                           <RowIcon name="play" />

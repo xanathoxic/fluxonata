@@ -222,14 +222,15 @@ def test_create_and_update_a_form_draft(ws, world):
     assert Form.objects.get(slug="demande").name == "Demande d'accès"
 
 
-def test_attach_an_unpublished_form_copies_it_and_a_published_one_is_referenced(ws, world):
+def test_attach_always_references_the_library_form_even_unpublished(ws, world):
     c = client_for(world["designer"])
     g = {**GRAPH, "inputs": schema(["nom"], nom={"type": "string"})}
     call(c, "create_workflow", {"slug": "w", "name": "W", "graph": g})
     call(c, "create_form", {"slug": "demande", "name": "Demande", "definition": FORM_DEF})
     _, out = call(c, "attach_form", {"workflow": "w", "revision": 2, "form": "demande"})
-    assert "copie" in out["attached"] and out["issues"] == []
-    assert Workflow.objects.get(slug="w").draft_graph["input_form"]["sections"][0]["fields"][0]["key"] == "nom"
+    assert "non publié" in out["attached"]
+    assert [(i["code"], i["level"]) for i in out["issues"]] == [("input_form_unpublished", "warning")]
+    assert Workflow.objects.get(slug="w").draft_graph["input_form"] == {"ref": {"form": "demande", "version": None}}
     # publié (par une personne) : le rattachement devient une référence à la version exacte
     form = Form.objects.get(slug="demande")
     FormVersion.objects.create(form=form, version="1.0.0", definition=form.draft_definition, digest="sha256:x")

@@ -14,6 +14,7 @@ import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { TagInput, TagList } from "../components/Tags";
+import { RenameOverlay } from "../components/RenameOverlay";
 
 interface Ver { version: string; created_at: string; license: string; side_effects: string; idempotent: boolean; network_policy: string; source: string; source_digest: string; changelog: string; runtime: string }
 interface Cmp { changed_fields: string[]; source_diff: string; breaking: boolean }
@@ -35,6 +36,7 @@ export function ActionLibraryPage() {
   const [params, setParams] = useSearchParams();
   const [shown, setShown] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const navigate = useNavigate();
   if (a.isLoading) return <p role="status">Chargement…</p>;
   if (!a.data) return <p role="alert">Action introuvable.</p>;
@@ -99,7 +101,7 @@ export function ActionLibraryPage() {
   return (
     <EditorShell backTo="/library" backLabel="Retour aux bibliothèques" title={a.data.name} titleHint={a.data.description || undefined} fill={false}
       status={<StatusLine published={lv ? `v${lv.version} publiée` : "Jamais publiée"} extra={deprecated ? "Dépréciée" : isProposal ? "Proposition à relire" : undefined} />}
-      actions={!deprecated && !isProposal && <Link className="button primary" to={`/library/actions/${slug}/run`}>Lancer un essai</Link>}
+      actions={<>{can("publish") && <button type="button" onClick={() => setRenaming(true)} aria-haspopup="dialog">Renommer</button>}{!deprecated && !isProposal && <Link className="button primary" to={`/library/actions/${slug}/run`}>Lancer un essai</Link>}</>}
       tabs={<PageTabs label="Sections de l'action" active={tab} onChange={setTab} tabs={tabs.map((t) => ({ id: t.id, label: t.label }))} />}
       notices={deprecated ? <p role="note" className="notice">⚠ Action dépréciée : {a.data.deprecation_reason || "aucun motif indiqué"}.</p> : isProposal ? (
         <div role="note" className="notice">
@@ -109,6 +111,7 @@ export function ActionLibraryPage() {
         </div>) : undefined}>
       {a.data.description && <p>{a.data.description}</p>}
       <ActionTags slug={slug} tags={a.data.tags ?? []} editable={can("publish")} suggestions={[...new Set((known.data?.results ?? []).flatMap((x) => x.tags ?? []))].sort()} />
+      {renaming && <RenameOverlay kind="action" slug={slug} name={a.data.name} onClose={() => setRenaming(false)} />}
       {deleting && <DeleteDialog kind="action" slug={slug} name={a.data.name} onClose={() => setDeleting(false)} onDeleted={() => navigate("/library/actions")} />}
       <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.id} className="tabpanel action-tabs">{tabs.find((t) => t.id === tab)?.content}</div>
     </EditorShell>

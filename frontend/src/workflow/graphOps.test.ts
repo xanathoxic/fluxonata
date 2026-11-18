@@ -1,4 +1,4 @@
-import type { GraphNode } from "./types";
+import type { Graph, GraphNode } from "./types";
 
 /** Valeur attendue présente : échoue avec un message clair plutôt que par une erreur de type à l'exécution. */
 function must<T>(v: T | null | undefined): T {
@@ -50,10 +50,10 @@ describe("graph operations", () => {
     expect(clientValidate(cyclic, [echo]).some((i) => i.code === "cycle")).toBe(true);
   });
 
-  it("removes a node with its edges and duplicates without edges", () => {
+  it("removes a node (its neighbours are linked together) and duplicates without edges", () => {
     const g = removeNode(chain(), "echo_2");
     expect(g.nodes).toHaveLength(2);
-    expect(g.edges).toHaveLength(0);
+    expect(g.edges).toEqual([{ from: "echo", to: "condition" }]); // le milieu d'une ligne : ses voisins sont reliés entre eux
     const dup = duplicateNode(chain(), "echo");
     expect(dup?.graph.nodes).toHaveLength(4);
     expect(dup?.graph.edges).toHaveLength(2);
@@ -310,5 +310,77 @@ describe("output variables of every step type", () => {
     const at = (n: GraphNode) => availableVariables({ ...emptyGraph(), nodes: [n, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "w", to: "y", label: "next" }] }, "y", [echo]).filter((v) => v.path.startsWith("steps.w.")).length;
     expect(at(base)).toBe(0);
     expect(at({ ...base, resume: "webhook" })).toBe(2);
+  });
+});
+
+describe("insertion d'un élément dans une ligne", () => {
+  const pairs = (g: Graph) => g.edges.map((e) => `${e.from}>${e.to}${e.label && e.label !== "next" ? `:${e.label}` : ""}`).sort();
+
+  it("s'intercale entre l'étape choisie et sa suivante au lieu de créer une branche vers Fin", () => {
+    let g = emptyGraph();
+    g = addNode(g, defaultNode(g, "action", echo));
+    g = addNode(g, defaultNode(g, "action", echo), "echo");
+    expect(pairs(g)).toEqual(["echo>echo_2"]);
+    g = addNode(g, defaultNode(g, "wait"), "echo");
+    expect(pairs(g)).toEqual(["echo>wait", "wait>echo_2"]);
+  });
+
+  it("n'insère pas après une décision (la branche est à choisir), ni quand l'étape a plusieurs sorties", () => {
+    let g = emptyGraph();
+    g = addNode(g, defaultNode(g, "condition"));
+    g = addNode(g, defaultNode(g, "action", echo), "condition");
+    expect(pairs(g)).toEqual(["condition>echo:true"]);
+    g = addNode(g, defaultNode(g, "wait"), "condition");
+    expect(pairs(g)).toEqual(["condition>echo:true", "condition>wait:false"]);
+    let f = emptyGraph();
+    f = addNode(f, defaultNode(f, "action", echo));
+    f = addNode(f, defaultNode(f, "wait"), "echo");
+    f = connect(f, "echo", "wait_2");
+    f = { ...f, nodes: [...f.nodes, { ...defaultNode(f, "wait"), id: "wait_2" }] };
+    const before = pairs(f);
+    f = addNode(f, defaultNode(f, "wait"), "echo");
+    expect(pairs(f)).toEqual([...before, "echo>wait_3"].sort());
+  });
+
+  it("une étape sans suite reçoit simplement le nouvel élément, et un élément posé sans étape choisie ne crée aucun lien", () => {
+    let g = emptyGraph();
+    g = addNode(g, defaultNode(g, "action", echo));
+    g = addNode(g, defaultNode(g, "wait"), "echo");
+    expect(pairs(g)).toEqual(["echo>wait"]);
+    g = addNode(g, defaultNode(g, "wait"));
+    expect(pairs(g)).toEqual(["echo>wait"]);
+  });
+});
+
+describe("suppression d'un élément dans une ligne", () => {
+  const pairs = (g: Graph) => g.edges.map((e) => `${e.from}>${e.to}${e.label && e.label !== "next" ? `:${e.label}` : ""}`).sort();
+  const line = () => {
+    let g = emptyGraph();
+    g = addNode(g, defaultNode(g, "action", echo));
+    g = addNode(g, defaultNode(g, "action", echo), "echo");
+    g = addNode(g, defaultNode(g, "wait"), "echo_2");
+    return g;
+  };
+
+  it("relie l'élément qui précède à celui qui suit (A → X → B devient A → B)", () => {
+    expect(pairs(line())).toEqual(["echo>echo_2", "echo_2>wait"]);
+    expect(pairs(removeNode(line(), "echo_2"))).toEqual(["echo>wait"]);
+  });
+
+  it("garde la branche d'une décision, et supprimer un bout de ligne ne crée aucun lien", () => {
+    let g = emptyGraph();
+    g = addNode(g, defaultNode(g, "condition"));
+    g = addNode(g, defaultNode(g, "action", echo), "condition");
+    g = addNode(g, defaultNode(g, "wait"), "echo");
+    expect(pairs(removeNode(g, "echo"))).toEqual(["condition>wait:true"]);
+    expect(pairs(removeNode(line(), "wait"))).toEqual(["echo>echo_2"]);
+    expect(pairs(removeNode(line(), "echo"))).toEqual(["echo_2>wait"]);
+  });
+
+  it("ne devine rien quand l'élément supprimé a plusieurs sorties", () => {
+    let g = line();
+    g = { ...g, nodes: [...g.nodes, { ...defaultNode(g, "wait"), id: "autre" }] };
+    g = connect(g, "echo_2", "autre");
+    expect(pairs(removeNode(g, "echo_2"))).toEqual([]);
   });
 });

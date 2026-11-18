@@ -132,7 +132,9 @@ export interface GraphEdge {
   ui?: { cx?: number; points?: { x: number; y: number }[] };
 }
 
-export interface Variable { name: string; type: VarType; value: unknown; description?: string; env_values?: Partial<Record<"dev" | "test" | "prod", unknown>> }
+/** Une variable du workflow peut aussi porter n'importe quel JSON ; jamais une entrée ni une sortie de script. */
+export type VariableType = VarType | "json";
+export interface Variable { name: string; type: VariableType; value: unknown; description?: string; env_values?: Partial<Record<"dev" | "test" | "prod", unknown>> }
 export interface FormStep { title: string; description?: string; fields: string[] }
 export interface FormDef { steps: FormStep[] }
 export interface Note { id: string; text: string; ui: { x: number; y: number } }

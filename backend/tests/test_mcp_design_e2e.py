@@ -337,7 +337,10 @@ def test_complex_workflow_and_form_built_through_mcp_only_then_activated_publish
     attached = call(
         assistant, "attach_form", {"workflow": "depense", "revision": created["revision"], "form": "depense"}
     )
-    assert attached["issues"] and {i["code"] for i in attached["issues"]} == {"proposed_action"}, attached["issues"]
+    assert {i["code"] for i in attached["issues"]} == {"proposed_action", "input_form_unpublished"}, attached["issues"]
+    assert (
+        "sections" not in Workflow.objects.get(slug="depense").draft_graph["input_form"]
+    )  # référence, pas « ancien format »
 
     # 3. rien d'exécutable ni de publiable à ce stade, quoi que fasse l'assistant
     with pytest.raises(Exception):  # noqa: B017, PT011  (refus du serveur)

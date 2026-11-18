@@ -907,3 +907,8 @@ input::placeholder, textarea::placeholder { color: #5b6b80; opacity: 1; }
 .bulk-bar [role="status"] { font-weight: 600; margin-right: auto; }
 .usage-list { margin: 8px 0; padding-left: 1.2em; }
 .usage-list li { margin: 4px 0; }
+
+/* Variable de type JSON : zone large, à chasse fixe, avec sa barre de mise en forme */
+.var-json { display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; resize: vertical; tab-size: 2; }
+td:has(> .var-json) { min-width: 14rem; vertical-align: top; }
+.var-json-bar { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; margin-top: .6rem; padding-bottom: .25rem; }
