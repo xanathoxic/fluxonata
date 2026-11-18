@@ -2,9 +2,9 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
-## 2026-11-18
+## v0.8.1 — 2026-11-18
 
-**Makefile d'exploitation : démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière**
+**Fluxonata 0.8.1 : Makefile d'exploitation (démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière)**
 
 - Makefile d'exploitation : démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière (développement et production), documenté dans INSTALL.md
 
