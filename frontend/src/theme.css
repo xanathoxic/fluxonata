@@ -506,6 +506,8 @@ a.user-chip:hover, a.user-chip.active { background: var(--hover, rgba(0, 0, 0, .
 .sum-page .kpis { margin-bottom: 14px; }
 .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin: 0 0 14px; align-items: start; }
 .sum-grid .adm-card { margin: 0; } .sum-grid .adm-card-h h2 { font-size: var(--fs-md); }
+.sum-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.sum-grid .field, .sum-grid .tag-input { max-width: none; } .sum-grid .field input, .sum-grid .field textarea, .sum-grid .field select { width: 100%; max-width: none; box-sizing: border-box; }
 .wf-content:not(.tab-schema) { background: transparent; border: 0; box-shadow: none; padding: 0; }
 .wf-content:not(.tab-schema) > section > h2:first-child:not(.sr-only) { margin: 0 0 12px; font-size: var(--fs-lg); }
 .wf-content .adm-card h2 { margin-top: 0; }
@@ -548,7 +550,7 @@ a.user-chip:hover, a.user-chip.active { background: var(--hover, rgba(0, 0, 0, .
 /* Aide en bulle : un « ? » qui ouvre le texte au clic */
 .field { position: relative; }
 .help { display: inline-block; vertical-align: middle; margin-left: 6px; }
-.field > .help { position: absolute; top: 0; right: 0; margin: 0; }
+.field > .help { position: absolute; top: -6px; right: 0; margin: 0; }
 .help-btn { width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--accent); font-size: var(--fs-xs); font-weight: 800; line-height: 1; cursor: pointer; display: inline-grid; place-items: center; }
 .help-btn:hover, .help-btn[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .help-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }

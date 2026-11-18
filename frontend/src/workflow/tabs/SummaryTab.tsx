@@ -83,6 +83,7 @@ export function SummaryTab() {
               <div className="field">
 <HelpTip>Les dossiers organisent l'arbre des workflows (séparez les niveaux par « / »).</HelpTip><label htmlFor="sum-folder">Dossier</label><input id="sum-folder" value={folder} placeholder="ex. Réseau/DNS" onChange={(e) => setFolder(e.target.value)} /></div>
             </Section>
+            <div className="sum-col">
             <Section title="Enchaînements" hint="Des workflows lancés automatiquement selon le résultat.">
               <div className="field">
 <HelpTip>Lancé automatiquement quand une exécution de ce workflow échoue, avec en entrées (si elles sont déclarées) : workflow, workflow_name, run_id, environment, step, code, message. Il doit avoir une version publiée.</HelpTip><label htmlFor="sum-err">Workflow d'erreur</label>
@@ -100,6 +101,7 @@ export function SummaryTab() {
             <Section title="Exécution" hint="Où s'exécutent les actions et les scripts de ce workflow.">
               <RunnerSettings value={runner} onChange={(v) => { setRunner(v); if (!v) setForceChildren(false); }} force={forceChildren} onForce={setForceChildren} choices={runners.data?.results ?? []} current={d.wf.runner_name ?? null} />
             </Section>
+            </div>
             <Section title="Intégration" hint="Rendre ce workflow appelable par un assistant.">
               <div className="adm-rule"><input id="sum-mcp" className="adm-switch" type="checkbox" checked={mcp} onChange={(e) => setMcp(e.target.checked)} /><div><label htmlFor="sum-mcp">Exposer comme outil MCP</label><HelpTip>Un assistant ou un agent compatible MCP peut alors appeler ce workflow (dernière version publiée, environnement de recette) avec un jeton de service : adresse <code>{window.location.origin}/api/v1/workspaces/{workspace.slug}/mcp/</code>. L'appel suit les mêmes droits, politiques et audit qu'un lancement.</HelpTip></div></div>
             </Section>

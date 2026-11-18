@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.7.1 — 2026-11-18
+
+**Fluxonata 0.7.1 : onglet Informations du workflow plus compact, aide en bulle mieux placée**
+
+- Onglet Informations du workflow : Exécution sous Enchaînements (plus compact) et champs sur toute la largeur de leur carte
+- Aide en bulle : le « ? » est remonté pour ne plus déborder sur le champ
+
 ## v0.7.0 — 2026-11-18
 
 **Fluxonata 0.7.0 : runner imposé par workflow, contrôles personnalisés et formulaires pour les assistants MCP, dossiers qui n'affichent que leurs propres éléments**
