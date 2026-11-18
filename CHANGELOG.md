@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.7.2 — 2026-11-18
+
+**Fluxonata 0.7.2 : un contrôle personnalisé ne peut plus s'utiliser lui-même (éditeur, serveur et assistants MCP)**
+
+- Assistants MCP : le guide de conception dit qu'un contrôle ne peut pas s'utiliser lui-même ; guide utilisateur à jour
+
 ## v0.7.1 — 2026-11-18
 
 **Fluxonata 0.7.1 : onglet Informations du workflow plus compact, aide en bulle mieux placée**

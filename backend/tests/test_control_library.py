@@ -203,3 +203,27 @@ def test_list_reports_how_many_forms_use_each_control(world):
             publish=False,
         )
     assert {r["slug"]: r["used_by"] for r in c.get(URL).data["results"]} == {"adresse": 2, "libre": 0}
+
+
+def _selfish(ref):
+    """Une description dont un sous-champ est un contrôle personnalisé de référence `ref` (une copie, comme dans un formulaire)."""
+    inner = {"key": "x", "label": "X", "type": "custom", "control": {"ref": ref, "version": "1.0.0", "spec": ADDRESS}}
+    return {"version": 1, "mode": "group", "parts": [inner]}
+
+
+def test_a_control_cannot_use_itself_in_its_sub_fields(world):
+    c = client_for(world["designer"])
+    assert create(c, "adresse").status_code == 201
+    own = _selfish("adresse")
+    r = c.patch(f"{URL}adresse/", {"spec": own, "revision": 1}, format="json")
+    assert r.status_code == 400 and "lui-même" in str(r.data)
+    assert create(c, "boucle", _selfish("boucle")).status_code == 400  # ni à la création
+    nested = {
+        "version": 1,
+        "mode": "group",
+        "parts": [_selfish("adresse")["parts"][0] | {"control": {"ref": "autre", "version": "1.0.0", "spec": own}}],
+    }
+    assert c.patch(f"{URL}adresse/", {"spec": nested, "revision": 1}, format="json").status_code == 400  # ni plus bas
+    # non-déclenchement : un AUTRE contrôle reste utilisable comme sous-champ
+    ok = c.patch(f"{URL}adresse/", {"spec": _selfish("autre"), "revision": 1}, format="json")
+    assert ok.status_code == 200

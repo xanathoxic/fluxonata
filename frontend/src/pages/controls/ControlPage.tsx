@@ -118,7 +118,7 @@ function ControlEditor({ slug }: { slug: string }) {
         {bad > 0 && <ul className="fb-problems" aria-label="Problèmes du contrôle">{keyed((problems ?? []).slice(0, 4), (p) => p).map(({ item: p, key }) => <li key={key}>{p}</li>)}{bad > 4 && <li>… et {bad - 4} autre(s)</li>}</ul>}
       </>}>
       <div role="tabpanel" aria-label={active} className="tabpanel">
-        {active === "design" && <ControlDesigner meta={meta} cfg={cfg} row={row} edit={edit} problems={problems} onMeta={change(setMeta)} onCfg={change(setCfg)} onRow={change(setRow)} />}
+        {active === "design" && <ControlDesigner slug={slug} meta={meta} cfg={cfg} row={row} edit={edit} problems={problems} onMeta={change(setMeta)} onCfg={change(setCfg)} onRow={change(setRow)} />}
         {active === "preview" && (
           <>
             <Preview name={meta.name} slug={slug} spec={spec} />

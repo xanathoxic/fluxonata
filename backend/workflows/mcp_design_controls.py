@@ -143,10 +143,10 @@ class AddControlIn(serializers.Serializer):
     field = serializers.JSONField(required=False)
 
 
-def _check_spec(value, *, draft: bool = True):
+def _check_spec(value, *, draft: bool = True, slug: str | None = None):
     from formbuilder.control_views import _check_spec as check
 
-    return check(value, draft=draft)
+    return check(value, draft=draft, slug=slug)
 
 
 # --- écriture : contrôles -----------------------------------------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ def create_control(request, ws, args):
     ser = CreateControlIn(data=args)
     ser.is_valid(raise_exception=True)
     d = ser.validated_data
-    spec = _check_spec(d["spec"]) if "spec" in d else empty_spec()
+    spec = _check_spec(d["spec"], slug=d["slug"]) if "spec" in d else empty_spec()
     folder = clean_folder(d["folder"])
     access.require(request.user, ws, folder, EDIT)
     try:
@@ -202,7 +202,7 @@ def update_control(request, ws, args):
         if d["revision"] != control.draft_revision:
             raise _conflict(control.draft_revision)
         if "spec" in d:
-            spec = _check_spec(d["spec"])
+            spec = _check_spec(d["spec"], slug=control.slug)
             kept = (control.draft_spec or {}).get("mode")
             if kept and spec.get("mode") != kept:
                 raise serializers.ValidationError(

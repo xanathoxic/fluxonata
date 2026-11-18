@@ -24,9 +24,11 @@ MAX_SPEC = 256 * 1024
 BUMPS = ("major", "minor", "patch")
 
 
-def _check_spec(value, *, draft: bool = True):
+def _check_spec(value, *, draft: bool = True, slug: str | None = None):
     if len(str(value)) > MAX_SPEC:
         raise serializers.ValidationError({"spec": "Description trop volumineuse."})
+    if slug and slug in formcontrols.refs_in(value):
+        raise serializers.ValidationError({"spec": "Un contrôle ne peut pas s'utiliser lui-même dans ses sous-champs."})
     problems = formcontrols.check_spec(value, draft=draft)
     if problems:
         raise serializers.ValidationError({"spec": problems})
@@ -190,7 +192,7 @@ class ControlListCreateView(APIView):
         ser = CreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
-        spec = _check_spec(d["spec"]) if "spec" in d else empty_spec()
+        spec = _check_spec(d["spec"], slug=d["slug"]) if "spec" in d else empty_spec()
         folder = clean_folder(d["folder"])
         access.require(request.user, ws, folder, EDIT)
         try:
@@ -256,7 +258,7 @@ class ControlDetailView(APIView):
                             "current_revision": control.draft_revision,
                         }
                     )
-                spec = _check_spec(d["spec"])
+                spec = _check_spec(d["spec"], slug=control.slug)
                 kept = (control.draft_spec or {}).get("mode")
                 if kept and spec.get("mode") != kept:
                     raise serializers.ValidationError(
@@ -300,7 +302,7 @@ class ControlPublishView(APIView):
         ser.is_valid(raise_exception=True)
         with transaction.atomic():
             control = Control.objects.select_for_update().get(pk=control.pk)
-            _check_spec(control.draft_spec, draft=False)  # a draft may be empty, a version may not
+            _check_spec(control.draft_spec, draft=False, slug=control.slug)  # a draft may be empty, a version may not
             latest = control.latest_version()
             version = ControlVersion.objects.create(
                 control=control,

@@ -289,6 +289,25 @@ def _check_spec_parts(spec: dict, mode: str, path: str, draft: bool) -> dict[str
     return out
 
 
+def refs_in(spec, limit: int = MAX_DEPTH + 2) -> set[str]:
+    """Références des contrôles personnalisés utilisés (à tous les niveaux) dans les sous-champs de cette description."""
+    if not isinstance(spec, dict) or limit <= 0:
+        return set()
+    subs = list(spec.get("parts", [])) if isinstance(spec.get("parts"), list) else []
+    if isinstance(spec.get("items"), list):
+        subs += [
+            p for o in spec["items"] if isinstance(o, dict) and isinstance(o.get("parts"), list) for p in o["parts"]
+        ]
+    out: set[str] = set()
+    for p in subs:
+        c = p.get("control") if isinstance(p, dict) else None
+        if isinstance(c, dict):
+            if isinstance(c.get("ref"), str):
+                out.add(c["ref"])
+            out |= refs_in(c.get("spec"), limit - 1)
+    return out
+
+
 def check_spec(spec, path: str = "spec", *, draft: bool = False) -> dict[str, str]:
     """Structure of a control spec; {path: message}. A draft may still be empty (no sub-field yet): publishing is stricter."""
     if not isinstance(spec, dict) or set(spec) - SPEC_KEYS:

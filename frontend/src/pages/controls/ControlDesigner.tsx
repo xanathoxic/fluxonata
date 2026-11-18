@@ -24,13 +24,13 @@ const useWide = (): boolean => {
 const savedSide = (): boolean => { try { return window.localStorage.getItem(SIDE_KEY) !== "0"; } catch { return true; } };
 
 interface Props {
-  meta: Meta; cfg: Cfg; row: FormDefinition; edit: boolean; problems: string[] | null;
+  slug?: string; meta: Meta; cfg: Cfg; row: FormDefinition; edit: boolean; problems: string[] | null;
   onMeta: (m: Meta) => void; onCfg: (c: Cfg) => void; onRow: (d: FormDefinition) => void;
 }
 
 /** The design of a control, one subject at a time: a short list of sections on the left, the selected one on the right with room to work
  * (the options as a tree, the sub-fields with the whole form editor). */
-export function ControlDesigner({ meta, cfg, row, edit, problems, onMeta, onCfg, onRow }: Props) {
+export function ControlDesigner({ slug, meta, cfg, row, edit, problems, onMeta, onCfg, onRow }: Props) {
   const parts = (row.sections[0]?.fields ?? []) as FormField[];
   const listy = cfg.mode === "items" || cfg.mode === "choice";
   const [section, setSection] = useState<Section>("general");
@@ -169,7 +169,7 @@ export function ControlDesigner({ meta, cfg, row, edit, problems, onMeta, onCfg,
               subtitle={listy ? "On dessine une seule fois l'option et ses enfants : toutes les options de la liste en sont la répétition, avec leurs propres valeurs." : "Les champs réunis par ce contrôle, avec leurs conditions, règles et calculs."}>
               {listy && <p className="cd-root" role="note"><FormIcon name={cfg.mode === "items" ? "boxes" : "list2"} size={18} /> <strong>Une option</strong> (libellé et valeur) <span className="cd-root-a">ouvre ces champs enfants :</span></p>}
               {table && <p><button type="button" onClick={() => setAdvanced(false)}><IconLabel icon="datagrid">Retour à l'éditeur de colonnes</IconLabel></button></p>}
-              <div className={`cd-editor${listy ? " cd-children" : ""}`}><DefinitionEditor control def={row} onChange={onRow} edit={edit} schema={undefined} connections={[]} /></div>
+              <div className={`cd-editor${listy ? " cd-children" : ""}`}><DefinitionEditor control selfSlug={slug} def={row} onChange={onRow} edit={edit} schema={undefined} connections={[]} /></div>
             </Panel>
           )}
         </fieldset>

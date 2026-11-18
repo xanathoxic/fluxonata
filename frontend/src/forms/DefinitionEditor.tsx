@@ -61,6 +61,8 @@ interface Props {
   toolbarExtra?: React.ReactNode;
   /** designing the sub-fields of a custom control: one section, no workflow, no style (published controls may be nested) */
   control?: boolean;
+  /** the control being designed: it is never offered in its own palette (a control cannot use itself) */
+  selfSlug?: string;
 }
 
 const BLOCK_DEFAULTS: Record<string, Partial<FormField>> = {
@@ -73,7 +75,7 @@ const HISTORY = 100;
 /** The form designer: a toolbar (undo, redo, add, views, validity), a palette, sections laid out on a 12-column grid, the
  * properties of a field, the style, the author's CSS and a live preview. It is shared by the form page and the workflow's
  * input-form tab; the caller keeps the definition and decides when it is saved. */
-export function DefinitionEditor({ def, onChange, edit, schema, connections, lookup, toolbarExtra, control }: Props) {
+export function DefinitionEditor({ def, onChange, edit, schema, connections, lookup, toolbarExtra, control, selfSlug }: Props) {
   const { workspace } = useApp();
   const controls = useQuery({ queryKey: ["control-library-published", workspace.slug], queryFn: () => api<{ results: ControlCard[] }>(`/workspaces/${workspace.slug}/control-library/?published=1`) });
   const inputs = useMemo(() => inputsOf(schema), [schema]);
@@ -217,10 +219,10 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
           <ul className="fb-plist">{rows(g).map((t) => <li key={t.type}><button type="button" className={`fb-prow ${g}`} title={t.hint} onClick={() => addField(t.type)}><FormIcon name={fieldIcon(t.type)} /><span>{t.label}</span></button></li>)}</ul>
         </div>
       ))}
-      {(controls.data?.results ?? []).filter((c) => !q || `${c.name} ${c.description}`.toLowerCase().includes(q)).length > 0 && (
+      {(controls.data?.results ?? []).filter((c) => c.slug !== selfSlug).filter((c) => !q || `${c.name} ${c.description}`.toLowerCase().includes(q)).length > 0 && (
         <div>
           <h3 className="fb-ph">Contrôles personnalisés</h3>
-          <ul className="fb-plist">{(controls.data?.results ?? []).filter((c) => !q || `${c.name} ${c.description}`.toLowerCase().includes(q)).map((c) => <li key={c.slug}><button type="button" className="fb-prow custom" title={c.description || c.name} onClick={() => addControl(c)}><FormIcon name={controlIcon(c.published?.icon ?? c.icon)} /><span>{c.published?.name ?? c.name}</span></button></li>)}</ul>
+          <ul className="fb-plist">{(controls.data?.results ?? []).filter((c) => c.slug !== selfSlug).filter((c) => !q || `${c.name} ${c.description}`.toLowerCase().includes(q)).map((c) => <li key={c.slug}><button type="button" className="fb-prow custom" title={c.description || c.name} onClick={() => addControl(c)}><FormIcon name={controlIcon(c.published?.icon ?? c.icon)} /><span>{c.published?.name ?? c.name}</span></button></li>)}</ul>
         </div>
       )}
       {!q && inputs.length > 0 && (
