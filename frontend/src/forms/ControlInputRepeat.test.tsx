@@ -101,3 +101,79 @@ describe("Lignes répétées : dupliquer une ligne", () => {
     expect(latest).toEqual([{}, {}]);
   });
 });
+
+describe("Lignes répétées : replier et déplier", () => {
+  const two = [
+    { nom: "Ada", adresse: { rue: "1 rue A", ville: "Paris" } },
+    { nom: "Bob", adresse: { rue: "2 rue B", ville: "Lyon" } },
+  ];
+  it("replier une ligne la cache et la résume ; la valeur reste entière", async () => {
+    render(<Host f={field()} initial={two} />);
+    await userEvent.click(screen.getByRole("button", { name: "Replier invité 1" }));
+    const first = rows()[0] as HTMLElement;
+    expect(within(first).getByRole("button", { name: "Déplier invité 1" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(first).getByText("Ada")).toBeVisible(); // le résumé
+    expect(within(first).getByLabelText("Nom")).not.toBeVisible(); // le contenu est caché (mais reste monté : la saisie est conservée)
+    expect(latest).toEqual(two); // rien n'est perdu
+    await userEvent.click(screen.getByRole("button", { name: "Déplier invité 1" }));
+    expect(within(rows()[0] as HTMLElement).getByLabelText("Nom")).toHaveValue("Ada");
+  });
+  it("tout replier, tout déplier ; l'autre ligne n'est pas touchée par une seule", async () => {
+    render(<Host f={field()} initial={two} />);
+    await userEvent.click(screen.getByRole("button", { name: "Replier invité 2" }));
+    expect(within(rows()[0] as HTMLElement).getByLabelText("Nom")).toHaveValue("Ada");
+    expect(within(rows()[1] as HTMLElement).getByLabelText("Nom")).not.toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Tout replier" }));
+    expect(screen.getByRole("button", { name: "Tout replier" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Tout déplier" }));
+    expect(screen.getAllByLabelText("Nom")).toHaveLength(2);
+  });
+  it("l'état replié suit la ligne quand on la déplace, la copie reste dépliée, supprimer décale", async () => {
+    render(<Host f={field()} initial={two} />);
+    await userEvent.click(screen.getByRole("button", { name: "Replier invité 1" })); // Ada repliée
+    await userEvent.click(screen.getByRole("button", { name: "Descendre invité 1" }));
+    expect(within(rows()[1] as HTMLElement).getByText("Ada")).toBeVisible(); // Ada est maintenant la ligne 2, toujours repliée
+    expect(within(rows()[0] as HTMLElement).getByLabelText("Nom")).toHaveValue("Bob");
+    await userEvent.click(screen.getByRole("button", { name: "Dupliquer invité 2" }));
+    expect(within(rows()[2] as HTMLElement).getByLabelText("Nom")).toHaveValue("Ada"); // la copie est dépliée
+    await userEvent.click(screen.getByRole("button", { name: "Supprimer invité 1" })); // Bob parti : Ada repliée devient la 1re
+    expect(within(rows()[0] as HTMLElement).getByLabelText("Nom")).not.toBeVisible();
+    expect(within(rows()[1] as HTMLElement).getByLabelText("Nom")).toHaveValue("Ada");
+  });
+  it("une seule ligne : pas de boutons « tout »", () => {
+    render(<Host f={field()} initial={[two[0]]} />);
+    expect(screen.queryByRole("button", { name: "Tout replier" })).toBeNull();
+  });
+});
+
+describe("Liste de choix : replier les détails d'une option", () => {
+  const items = (): FormField =>
+    ({
+      key: "svc",
+      type: "custom",
+      label: "Services",
+      control: {
+        ref: "svc",
+        spec: {
+          version: 1,
+          mode: "items",
+          items: [
+            { value: "a", label: "Alpha" },
+            { value: "b", label: "Beta" },
+          ],
+          parts: [{ key: "note", label: "Note", type: "text" }],
+        },
+      },
+    }) as unknown as FormField;
+  it("replier cache les détails d'une option cochée sans décocher ni perdre la saisie", async () => {
+    render(<Host f={items()} initial={[{ value: "a", note: "x" }]} />);
+    expect(screen.getByLabelText("Note")).toHaveValue("x");
+    await userEvent.click(screen.getByRole("button", { name: "Replier les détails de Alpha" }));
+    expect(screen.getByLabelText("Note")).not.toBeVisible();
+    expect(screen.getByLabelText("Alpha")).toBeChecked();
+    expect(latest).toEqual([{ value: "a", note: "x" }]);
+    await userEvent.click(screen.getByRole("button", { name: "Déplier les détails de Alpha" }));
+    expect(screen.getByLabelText("Note")).toHaveValue("x");
+    expect(screen.queryByRole("button", { name: /détails de Beta/ })).toBeNull(); // pas cochée : rien à replier
+  });
+});

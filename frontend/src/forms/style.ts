@@ -24,12 +24,15 @@ export function styleProps(style: FormStyle | undefined): { className: string; s
     vars["--accent-fg"] = "#ffffff";
     vars["--accent-soft"] = `color-mix(in srgb, ${s.accent} 14%, transparent)`;
   }
+  const side = s.display === "modern" && typeof s.side === "number" && Number.isInteger(s.side) && s.side >= 0 && s.side <= 40 ? s.side : null;
+  if (side !== null) vars["--fb-side"] = `${side}%`;
   if (s.radius) vars["--fb-radius"] = RADII[s.radius] ?? RADII.medium;
-  const w = s.width ? WIDTHS[s.width] : undefined;
+  // « page » takes all the room and « modern » is one column with its own width (both set in the stylesheet): the width choice only applies to the standard look
+  const w = s.width && (s.display ?? "standard") === "standard" ? WIDTHS[s.width] : undefined;
   if (w) vars.maxWidth = `${w}px`;
   const { maxWidth, ...cssVars } = vars;
   return {
-    className: ["fb-form", `fb-d-${s.density ?? "normal"}`, `fb-l-${s.labels ?? "top"}`, `fb-s-${s.sections ?? "card"}`, `fb-b-${s.button ?? "left"}`].join(" "),
+    className: ["fb-form", `fb-v-${s.display ?? "standard"}${side !== null ? " fb-side-set" : ""}`, `fb-d-${s.density ?? "normal"}`, `fb-l-${s.labels ?? "top"}`, `fb-s-${s.sections ?? "card"}`, `fb-b-${s.button ?? "left"}`].join(" "),
     style: { ...(cssVars as CSSProperties), ...(maxWidth ? { maxWidth } : {}) },
   };
 }

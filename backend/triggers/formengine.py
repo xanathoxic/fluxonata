@@ -413,6 +413,7 @@ def _check_layout(fields: list, where: str) -> dict[str, str]:
 
 
 STYLE_ENUMS = {
+    "display": {"standard", "page", "modern"},
     "density": {"compact", "normal", "comfortable"},
     "labels": {"top", "left"},
     "radius": {"none", "small", "medium", "large"},
@@ -420,6 +421,7 @@ STYLE_ENUMS = {
     "sections": {"card", "plain", "line"},
     "button": {"left", "center", "right", "full"},
 }
+MAX_SIDE = 40  # marge de chaque côté, en % de la largeur disponible (mode moderne)
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 MIN_CONTRAST = 4.5
 
@@ -450,12 +452,15 @@ def _check_css(css) -> dict[str, str]:
 
 def _check_style(style) -> dict[str, str]:
     """How the form looks. Closed set of choices and one validated colour: nothing here can inject CSS."""
-    if not isinstance(style, dict) or set(style) - (set(STYLE_ENUMS) | {"accent"}):
+    if not isinstance(style, dict) or set(style) - (set(STYLE_ENUMS) | {"accent", "side"}):
         return {"style": "Style invalide."}
     out: dict[str, str] = {}
     for key, allowed in STYLE_ENUMS.items():
-        if key in style and style[key] not in allowed:
+        if key in style and not (isinstance(style[key], str) and style[key] in allowed):
             out[f"style.{key}"] = f"Valeur inconnue (parmi : {', '.join(sorted(allowed))})."
+    side = style.get("side")
+    if "side" in style and not (isinstance(side, int) and not isinstance(side, bool) and 0 <= side <= MAX_SIDE):
+        out["style.side"] = f"Marge latérale : un entier de 0 à {MAX_SIDE} (en % de la largeur)."
     accent = style.get("accent")
     if accent is not None:
         if not isinstance(accent, str) or not HEX_RE.match(accent):

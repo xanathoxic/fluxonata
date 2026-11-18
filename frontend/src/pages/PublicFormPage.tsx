@@ -11,7 +11,12 @@ import type { FormDefinition } from "../forms/types";
 import { WIDTHS } from "../forms/style";
 
 /** The page is at least as wide as the form it carries (a « full » form uses the room there is, up to a comfortable limit). */
-const pageWidth = (w: keyof typeof WIDTHS | undefined) => (w === "full" ? 1400 : Math.max(720, (w && WIDTHS[w]) || 720));
+const pageWidth = (style: FormDefinition["style"]) => {
+  if (style?.display === "page") return "none"; // pleine page : toute la largeur disponible
+  if (style?.display === "modern") return typeof style.side === "number" ? "none" : 760; // marges réglées : la largeur vient d'elles
+  const w = style?.width;
+  return w === "full" ? 1400 : Math.max(720, (w && WIDTHS[w]) || 720);
+};
 
 interface Def { title: string; description: string; submit_label: string; schema?: JsonSchema; form?: FormDef | null; definition?: FormDefinition }
 interface LookupAnswer { state: "pending" | "done" | "failed"; options?: { value: string; label?: string }[]; value?: unknown; message?: string }
@@ -53,7 +58,7 @@ export function PublicFormPage({ kind = "forms" }: { kind?: "forms" | "resume-fo
     onError: (e) => setErrors(e.status === 400 && e.details ? Object.fromEntries(Object.entries(e.details).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])) : { _: e.message }),
   });
   return (
-    <main id="main" className="public-form" style={{ maxWidth: pageWidth(def.data?.definition?.style?.width), margin: "32px auto", padding: "0 16px" }}>
+    <main id="main" className="public-form" style={{ maxWidth: pageWidth(def.data?.definition?.style), margin: "32px auto", padding: "0 16px" }}>
       {def.isLoading && <p role="status">Chargement…</p>}
       {def.isError && <><h1>Formulaire introuvable</h1><p>Ce formulaire n'existe pas, a déjà reçu une réponse ou n'est plus disponible.</p></>}
       {def.data && (send.data ? (

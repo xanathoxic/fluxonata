@@ -73,6 +73,25 @@ describe("style", () => {
     expect(styleProps({ accent: "red; background:url(x)" }).style).not.toHaveProperty("--accent");
     expect(styleProps({ width: "narrow", density: "compact", labels: "left" })).toMatchObject({ className: expect.stringContaining("fb-l-left"), style: { maxWidth: "480px" } });
   });
+  it("les marges latérales du mode moderne : une variable bornée, jamais ailleurs", () => {
+    const p = styleProps({ display: "modern", side: 12 });
+    expect(p.className).toContain("fb-side-set");
+    expect(p.style).toMatchObject({ "--fb-side": "12%" });
+    expect(styleProps({ display: "modern", side: 0 }).style).toMatchObject({ "--fb-side": "0%" }); // 0 est un vrai choix : pleine largeur
+    expect(styleProps({ display: "modern" }).className).not.toContain("fb-side-set"); // pas réglé : colonne habituelle
+    for (const side of [-1, 41, 2.5]) expect(styleProps({ display: "modern", side }).style).not.toHaveProperty("--fb-side");
+    expect(styleProps({ display: "page", side: 12 }).style).not.toHaveProperty("--fb-side"); // seulement en moderne
+    expect(styleProps({ side: 12 }).className).not.toContain("fb-side-set");
+  });
+  it("le type d'affichage : standard par défaut, pleine page et moderne gèrent eux-mêmes leur largeur", () => {
+    expect(styleProps(undefined).className).toContain("fb-v-standard");
+    expect(styleProps({ width: "narrow" }).style).toMatchObject({ maxWidth: "480px" });
+    for (const display of ["page", "modern"] as const) {
+      const p = styleProps({ display, width: "narrow" });
+      expect(p.className).toContain(`fb-v-${display}`);
+      expect(p.style).not.toHaveProperty("maxWidth"); // le choix de largeur ne s'applique qu'à l'affichage standard
+    }
+  });
 });
 
 const area = (key: string, row?: number, col = 1, span = 12, height?: number): FormField => ({ key, label: key, type: "textarea", ...(row ? { layout: { row, col, span, ...(height ? { height } : {}) } } : {}) });

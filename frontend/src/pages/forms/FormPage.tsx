@@ -15,6 +15,7 @@ import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText, useWsQuery } from "../../lib";
 import { DefinitionEditor } from "../../forms/DefinitionEditor";
+import { DisplayPicker, SideMargin } from "../../forms/DisplayPicker";
 import { DefinitionForm } from "../../forms/DefinitionForm";
 import { FormIcon, IconLabel } from "../../forms/FormIcon";
 import { formDiff } from "../../forms/formDiff";
@@ -106,7 +107,7 @@ function FormEditor({ slug }: { slug: string }) {
       </>}>
       <div id="fp-panel" role="tabpanel" aria-label={active} className="tabpanel">
         {active === "design" && <DefinitionEditor def={def} onChange={change} edit={edit} schema={schema} connections={connections} toolbarExtra={refs} />}
-        {active === "summary" && <Summary form={d} edit={edit} onSaved={refresh} />}
+        {active === "summary" && <Summary form={d} edit={edit} onSaved={refresh} def={def} onDef={change} />}
         {active === "versions" && <Versions form={d} edit={edit} />}
         {active === "usage" && <Usage form={d} />}
       </div>
@@ -117,7 +118,7 @@ function FormEditor({ slug }: { slug: string }) {
   );
 }
 
-function Summary({ form, edit, onSaved }: { form: FormFull; edit: boolean; onSaved: () => void }) {
+function Summary({ form, edit, onSaved, def, onDef }: { form: FormFull; edit: boolean; onSaved: () => void; def: FormDefinition; onDef: (d: FormDefinition) => void }) {
   const { workspace } = useApp();
   const [name, setName] = useState(form.name);
   const [description, setDescription] = useState(form.description);
@@ -132,6 +133,11 @@ function Summary({ form, edit, onSaved }: { form: FormFull; edit: boolean; onSav
           <div className="field"><label htmlFor="fs-desc">Description</label><textarea id="fs-desc" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
           <div className="field"><label htmlFor="fs-folder">Dossier</label><input id="fs-folder" value={folder} onChange={(e) => setFolder(e.target.value)} /></div>
           <TagInput value={tags} onChange={setTags} suggestions={[]} />
+          <div className="field"><span className="label">Type d'affichage</span>
+            <DisplayPicker value={def.style?.display} disabled={!edit} onChange={(display) => onDef({ ...def, style: { ...def.style, display } })} />
+            {def.style?.display === "modern" && <SideMargin value={def.style.side} disabled={!edit} onChange={(side) => onDef({ ...def, style: { ...def.style, side } })} />}
+            <p className="hint">S'applique à l'aperçu, au lancement du workflow et au formulaire public ; il s'enregistre tout seul avec le brouillon.</p>
+          </div>
           <p className="hint">Identifiant : <code>{form.slug}</code> · créé le {formatDate(form.created_at)}{form.owner ? ` par ${form.owner}` : ""} · {form.fields} champ(s)</p>
           {edit && <p><button type="submit" className="primary" disabled={patch.isPending}><IconLabel icon="save">Enregistrer</IconLabel></button></p>}
           {patch.error && <p role="alert" className="field-error">Erreur : {errorText(patch.error)}</p>}

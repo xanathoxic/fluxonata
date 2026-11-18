@@ -43,6 +43,7 @@ LAYOUT = {
     "justify-self",
     "justify-items",
     "align-content",
+    "order",
 }
 BOX = {
     "margin",

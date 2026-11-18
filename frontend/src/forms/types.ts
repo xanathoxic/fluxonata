@@ -13,6 +13,10 @@ export interface FormStyle {
   density?: "compact" | "normal" | "comfortable";
   labels?: "top" | "left";
   radius?: "none" | "small" | "medium" | "large";
+  /** how the whole form is laid out: the usual card (standard), the whole page (page) or one modern column (modern) */
+  display?: "standard" | "page" | "modern";
+  /** modern only: the margin on each side (left and right linked), 0 to 40 % of the room there is; absent = the default column */
+  side?: number;
   width?: "narrow" | "medium" | "wide" | "full";
   sections?: "card" | "plain" | "line";
   button?: "left" | "center" | "right" | "full";

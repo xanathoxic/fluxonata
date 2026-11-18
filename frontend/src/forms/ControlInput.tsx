@@ -10,6 +10,10 @@ import { validateDefinition } from "./logic";
 import { waitingFor } from "./serviceParams";
 import { isBlock, type DataSource, type FormField } from "./types";
 
+/** Une ligne repliée en quelques mots : les premières valeurs saisies, dans l'ordre des sous-champs. */
+const summaryOf = (parts: FormField[], row: Record<string, unknown>): string =>
+  parts.filter((p) => !isBlock(p.type)).map((p) => row[p.key]).filter((v) => (typeof v === "string" && v.trim() !== "") || typeof v === "number").slice(0, 3).join(" · ") || "(vide)";
+
 type Row = Record<string, unknown>;
 const opt = (o: ControlItem) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label || o.value}</option>;
 /** consecutive options sharing a group, in order ("" = no group) */
@@ -77,6 +81,9 @@ function usePrefill(key: string, cfg: ControlPrefill | undefined, values: Row, l
 export function ControlInput({ field, id, value, values = {}, lookup, allow = { options: true, prefill: true }, error, disabled, onChange: setValue }: Props) {
   const spec = field.control?.spec;
   const touched = useRef(false);
+  // lignes repliées (état d'affichage seulement : il n'entre jamais dans la valeur) ; options cochées dont les détails sont repliés
+  const [folded, setFolded] = useState<boolean[]>([]);
+  const [foldedItems, setFoldedItems] = useState<Record<string, boolean>>({});
   const onChange = (v: unknown) => { touched.current = true; setValue(v); };
   const service = useServiceItems(field.key, field.source, values, lookup, allow.options);
   const prefill = usePrefill(field.key, field.prefill, values, lookup, allow.prefill, value, setValue, touched);
@@ -117,9 +124,13 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
       const set = (next: Row[]) => onChange(next);
       const table = spec.display === "table";
       // Dupliquer : une nouvelle ligne juste en dessous, avec les mêmes valeurs saisies (copie profonde : modifier l'une ne touche jamais l'autre)
-      const duplicate = (i: number) => set([...shown.slice(0, i + 1), JSON.parse(JSON.stringify(shown[i] ?? {})) as Row, ...shown.slice(i + 1)]);
+      const duplicate = (i: number) => { set([...shown.slice(0, i + 1), JSON.parse(JSON.stringify(shown[i] ?? {})) as Row, ...shown.slice(i + 1)]); setFolded((f) => { const x = flags(f); x.splice(i + 1, 0, false); return x; }); };
       const dupButton = (i: number) => <IconButton icon="copy" label={`Dupliquer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length >= max} onClick={() => duplicate(i)} />;
-      const swap = (i: number, j: number) => { const c = [...shown]; [c[i], c[j]] = [c[j] as Row, c[i] as Row]; set(c); };
+      const flags = (f: boolean[]) => shown.map((_, k) => f[k] === true);
+      const swap = (i: number, j: number) => { const c = [...shown]; [c[i], c[j]] = [c[j] as Row, c[i] as Row]; set(c); setFolded((f) => { const x = flags(f); [x[i], x[j]] = [x[j] as boolean, x[i] as boolean]; return x; }); };
+      const toggleRow = (i: number) => setFolded((f) => { const x = flags(f); x[i] = !x[i]; return x; });
+      const foldAll = (on: boolean) => setFolded(shown.map(() => on));
+      const removeRow = (i: number) => { set(shown.filter((_, k) => k !== i)); setFolded((f) => flags(f).filter((_, k) => k !== i)); };
       if (table) {
         const cols = (spec.parts ?? []).filter((p) => !isBlock(p.type));
         const grid = { gridTemplateColumns: `repeat(${cols.length}, minmax(9rem, 1fr))` };
@@ -142,7 +153,7 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
                       <IconButton icon="up" label={`Monter ${label.toLowerCase()} ${i + 1}`} disabled={i === 0} onClick={() => swap(i, i - 1)} />
                       <IconButton icon="down" label={`Descendre ${label.toLowerCase()} ${i + 1}`} disabled={i === shown.length - 1} onClick={() => swap(i, i + 1)} />
                       {dupButton(i)}
-                      <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => set(shown.filter((_, k) => k !== i))} />
+                      <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => removeRow(i)} />
                     </span>
                   )}
                 </div>
@@ -160,25 +171,34 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
           </div>
         );
       }
+      const rowParts = spec.parts ?? [];
       return (
         // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
         <div className="ctl ctl-repeat" role="group" aria-labelledby={`${id}-l`}>
+          {shown.length >= 2 && (
+            <div className="ctl-foldbar">
+              <IconButton icon="foldAll" label="Tout replier" onClick={() => foldAll(true)} disabled={shown.every((_, k) => folded[k] === true)} />
+              <IconButton icon="unfoldAll" label="Tout déplier" onClick={() => foldAll(false)} disabled={shown.every((_, k) => folded[k] !== true)} />
+            </div>
+          )}
           {shown.map((r, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
             // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
-            <div key={i} className="ctl-row" role="group" aria-label={`${label} ${i + 1}`}>
+            <div key={i} className={`ctl-row${folded[i] ? " folded" : ""}`} role="group" aria-label={`${label} ${i + 1}`}>
               <div className="ctl-rowhead">
+                <button type="button" className="ctl-fold fb-ibtn" aria-expanded={!folded[i]} aria-controls={`${id}-body${i}`} aria-label={`${folded[i] ? "Déplier" : "Replier"} ${label.toLowerCase()} ${i + 1}`} title={folded[i] ? "Déplier" : "Replier"} onClick={() => toggleRow(i)}><FormIcon name="chevron" /></button>
                 <strong>{label} {i + 1}</strong>
+                {folded[i] && <span className="ctl-sum">{summaryOf(rowParts, r)}{error && Object.keys(validateDefinition(rowDefinition(rowParts), r)).length > 0 && <span className="ctl-sumerr" title="Cette ligne contient une erreur : dépliez-la"><FormIcon name="warn" size={14} /></span>}</span>}
                 {!disabled && (
                   <span className="ctl-rowtools">
                     <IconButton icon="up" label={`Monter ${label.toLowerCase()} ${i + 1}`} disabled={i === 0} onClick={() => swap(i, i - 1)} />
                     <IconButton icon="down" label={`Descendre ${label.toLowerCase()} ${i + 1}`} disabled={i === shown.length - 1} onClick={() => swap(i, i + 1)} />
                     {dupButton(i)}
-                    <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => set(shown.filter((_, k) => k !== i))} />
+                    <IconButton icon="trash" danger label={`Supprimer ${label.toLowerCase()} ${i + 1}`} disabled={shown.length <= floor} onClick={() => removeRow(i)} />
                   </span>
                 )}
               </div>
-              {form(r, (next) => set(shown.map((x, k) => (k === i ? next : x))), `r${i}`)}
+              <div id={`${id}-body${i}`} className="ctl-body" hidden={folded[i] === true}>{form(r, (next) => set(shown.map((x, k) => (k === i ? next : x))), `r${i}`)}</div>
             </div>
           ))}
           {!disabled && <button type="button" onClick={() => set([...shown, {}])} disabled={shown.length >= max}><IconLabel icon="plus">{spec.add_label || "Ajouter une ligne"}</IconLabel></button>}
@@ -249,13 +269,18 @@ export function ControlInput({ field, id, value, values = {}, lookup, allow = { 
           if (dropdown && !(picked.has(o.value) && details && detailsOf(spec, o).some((p) => !isBlock(p.type)))) return null;
           const on = picked.has(o.value);
           const row = picked.get(o.value) ?? {};
+          const open = on && details && detailsOf(spec, o).some((p) => !isBlock(p.type));
+          const closed = foldedItems[o.value] === true;
           return (
-            <div key={o.value} className={`ctl-item${on ? " on" : ""}`}>
+            <div key={o.value} className={`ctl-item${on ? " on" : ""}${open && closed ? " folded" : ""}`}>
               {!dropdown && o.group && o.group !== items[i - 1]?.group && <p className="opk-group">{o.group}</p>}
+              <div className="ctl-ihead">
               <label className="fb-choice">
                 <input type="checkbox" id={!dropdown && i === 0 ? id : undefined} disabled={disabled || o.disabled || (!on && picked.size >= max)} checked={on} onChange={(e) => { const n = new Map(picked); if (e.target.checked) n.set(o.value, seed(o.value)); else n.delete(o.value); emit(n); }} /> {o.label || o.value}
               </label>
-              {on && details && detailsOf(spec, o).some((p) => !isBlock(p.type)) && <div className="ctl-details">{formOf(detailsOf(spec, o), row, (next) => { const n = new Map(picked); n.set(o.value, next); emit(n); }, `i${i}`)}</div>}
+              {open && <button type="button" className="ctl-fold fb-ibtn" aria-expanded={!closed} aria-controls={`${id}-d${i}`} aria-label={`${closed ? "Déplier" : "Replier"} les détails de ${o.label || o.value}`} title={closed ? "Déplier les détails" : "Replier les détails"} onClick={() => setFoldedItems((f) => ({ ...f, [o.value]: !closed }))}><FormIcon name="chevron" /></button>}
+              </div>
+              {open && <div id={`${id}-d${i}`} className="ctl-details" hidden={closed}>{formOf(detailsOf(spec, o), row, (next) => { const n = new Map(picked); n.set(o.value, next); emit(n); }, `i${i}`)}</div>}
             </div>
           );
         })}

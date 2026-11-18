@@ -100,8 +100,15 @@ def test_style_is_a_closed_set_of_choices_and_one_readable_colour():
         "width": "wide",
         "sections": "line",
         "button": "full",
+        "display": "modern",
     }
     assert formengine.check_definition(with_style(good)) == {}
+    for side in (0, 12, 40):
+        assert formengine.check_definition(with_style({"display": "modern", "side": side})) == {}
+    for bad in (-1, 41, 5.5, "10", True, None, [5]):
+        assert formengine.check_definition(with_style({"side": bad})), bad
+    for display in ("standard", "page", "modern"):
+        assert formengine.check_definition(with_style({"display": display})) == {}
     assert formengine.check_definition(with_style({})) == {}
     for name, style in {
         "clé inconnue": {"css": "x"},
@@ -112,6 +119,8 @@ def test_style_is_a_closed_set_of_choices_and_one_readable_colour():
         "densité inconnue": {"density": "huge"},
         "libellés inconnus": {"labels": "bottom"},
         "largeur inconnue": {"width": "100%"},
+        "affichage inconnu": {"display": "fullscreen"},
+        "affichage non texte": {"display": ["page"]},
         "style non objet": "dark",
     }.items():
         assert formengine.check_definition(with_style(style)), name

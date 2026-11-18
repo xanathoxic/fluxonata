@@ -551,3 +551,72 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
   .fb-dual { grid-template-columns: 1fr; }
   .fb-dual-actions { flex-direction: row; justify-content: center; }
 }
+
+/* Lignes et détails repliables des contrôles personnalisés */
+.ctl-rowhead { justify-content: flex-start; }
+.ctl-rowhead .ctl-rowtools { margin-left: auto; }
+.ctl-fold { flex: 0 0 auto; }
+.ctl-fold svg { transition: transform .15s ease; }
+.ctl-row.folded .ctl-fold svg, .ctl-item.folded .ctl-fold svg { transform: rotate(-90deg); }
+.ctl-row.folded .ctl-rowhead { margin-bottom: 0; }
+.ctl-sum { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); }
+.ctl-sumerr { margin-left: 6px; color: var(--danger, #b91c1c); vertical-align: middle; }
+.ctl-foldbar { display: flex; justify-content: flex-end; gap: 2px; }
+.ctl-ihead { display: flex; align-items: center; gap: 6px; }
+.ctl-ihead .fb-choice { flex: 1 1 auto; min-width: 0; }
+.ctl-body[hidden], .ctl-details[hidden] { display: none; }
+.cs-sub { padding-left: 16px; }
+
+/* Cible libre : survoler l'aperçu, cliquer, choisir ce qu'on vise */
+.cs-pickp { display: grid; gap: 8px; padding: 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.cs-pickhint { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: var(--fs-sm); }
+.cs-hover { margin: 0; min-height: 1.6em; display: flex; gap: 6px; align-items: center; font-size: var(--fs-sm); font-weight: 600; color: #1d4ed8; }
+.cs-cands { display: grid; gap: 4px; }
+.cs-cand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; text-align: left; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; }
+.cs-cand small { color: var(--muted); }
+.cs-cand.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.cs-manual summary { cursor: pointer; font-size: var(--fs-sm); color: var(--muted); }
+.cs-manual .cs-text { width: 100%; margin-top: 6px; }
+
+/* ---- Affichage du formulaire : standard (la carte habituelle), pleine page, moderne ---- */
+/* Pleine page : le formulaire prend toute la place disponible */
+.fb-v-page { max-width: none; width: 100%; --fb-pad: 20px; }
+.fb-v-page .fb-section { border-radius: 0; }
+.fb-v-page.fb-s-card .fb-section { border-left: 0; border-right: 0; }
+.public-form:has(.fb-v-page) { padding-inline: 8px !important; }
+/* Moderne : une colonne, champs arrondis et aérés, cartes douces, focus net (dans l'esprit des formulaires Bootstrap récents) */
+.fb-v-modern { --fb-radius: 8px; --fb-gap: 20px; max-width: 720px; margin-inline: auto; }
+.fb-v-modern .fb-cell, .fb-v-modern .fb-tall { grid-column: 1 / -1; grid-row: auto; }
+.fb-v-modern.fb-l-left .fb-field { display: block; }
+.fb-v-modern.fb-l-left .fb-field > label, .fb-v-modern.fb-l-left .fb-field > .fb-label { padding-top: 0; }
+.fb-v-modern .fb-section { background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 12px rgba(15, 23, 42, .04); padding: 24px 28px; }
+.fb-v-modern.fb-s-plain .fb-section, .fb-v-modern.fb-s-line .fb-section { box-shadow: none; }
+.fb-v-modern .fb-section > legend { font-size: 1.125rem; font-weight: 600; padding: 0 6px; }
+.fb-v-modern .fb-field > label, .fb-v-modern .fb-field > .fb-label { display: block; margin-bottom: 6px; font-size: .875rem; font-weight: 600; color: var(--fg); }
+.fb-v-modern input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), .fb-v-modern select, .fb-v-modern textarea { width: 100%; padding: 10px 14px; font-size: 1rem; line-height: 1.5; border: 1px solid #ced4da; background: var(--surface); transition: border-color .15s ease, box-shadow .15s ease; box-sizing: border-box; }
+.fb-v-modern input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus, .fb-v-modern select:focus, .fb-v-modern textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+.fb-v-modern .fb-field.has-error input, .fb-v-modern .fb-field.has-error select, .fb-v-modern .fb-field.has-error textarea { border-color: #dc3545; }
+.fb-v-modern .hint { font-size: .8125rem; color: var(--muted); margin-top: 4px; }
+.fb-v-modern .field-error { font-size: .8125rem; color: #b02a37; }
+.fb-v-modern .fb-choice { padding: 4px 0; }
+.fb-v-modern .fb-actions button { padding: 10px 20px; font-size: 1rem; font-weight: 600; }
+.fb-v-modern .fb-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg, #fff); }
+
+/* Choix du type d'affichage (onglet Informations d'un formulaire) */
+.fb-displays { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.fb-display { display: grid; gap: 8px; align-content: start; text-align: left; padding: 12px; border: 2px solid var(--border); border-radius: 12px; background: var(--surface); cursor: pointer; }
+.fb-display small { color: var(--muted); line-height: 1.4; }
+.fb-display.on { border-color: var(--accent); background: var(--accent-soft); }
+.fb-dname { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.fb-dthumb { display: grid; gap: 4px; height: 64px; padding: 6px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
+.fb-dthumb i { display: block; border-radius: 3px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.fb-dthumb-standard { grid-template-columns: .6fr 1fr 1fr .6fr; } .fb-dthumb-standard i:nth-child(1) { grid-column: 2 / 4; }
+.fb-dthumb-standard i:nth-child(2) { grid-column: 2; } .fb-dthumb-standard i:nth-child(3) { grid-column: 3; }
+.fb-dthumb-page { grid-template-columns: 1fr 1fr 1fr; } .fb-dthumb-page i:nth-child(1) { grid-column: 1 / -1; }
+.fb-dthumb-modern { grid-template-columns: .5fr 1fr .5fr; } .fb-dthumb-modern i { grid-column: 2; border-radius: 6px; }
+/* Moderne avec marges latérales choisies : la colonne occupe la largeur moins les marges (gauche et droite liées) */
+.fb-v-modern.fb-side-set { max-width: none; margin-inline: var(--fb-side); }
+.fb-side { display: grid; gap: 6px; margin-top: 12px; max-width: 460px; }
+.fb-side-row { display: flex; align-items: center; gap: 10px; }
+.fb-side-row input[type="range"] { flex: 1 1 auto; }
+.fb-side-row output { min-width: 3.2rem; text-align: right; font-weight: 600; }

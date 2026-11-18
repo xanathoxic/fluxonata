@@ -2,6 +2,15 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.9.0 — 2026-11-18
+
+**Fluxonata 0.9.0 : formulaires plus puissants (type d'affichage, marges, lignes repliables) et concepteur CSS guidé**
+
+- Contrôles personnalisés : replier et déplier les lignes répétées (avec résumé et « Tout replier / Tout déplier ») et les détails des options cochées d'une liste de choix
+- Concepteur CSS : style à l'intérieur d'un contrôle ou d'un seul sous-champ (le libellé d'un champ ne déborde plus sur ses enfants), parties des contrôles, déplacement et ordre, et « cible libre » guidée (survoler, cliquer, choisir) à la place du chemin à écrire
+- Formulaires : type d'affichage (standard, pleine page, moderne) avec marges latérales réglables en mode moderne ; un style invalide donné en liste est refusé proprement au lieu d'une erreur 500
+- Documentation : replier les listes, concepteur CSS (portée, cible libre, déplacement), type d'affichage et marges ; guide des assistants MCP à jour
+
 ## v0.8.1 — 2026-11-18
 
 **Fluxonata 0.8.1 : Makefile d'exploitation (démarrer, arrêter, sauvegarder, mettre à jour et revenir en arrière)**

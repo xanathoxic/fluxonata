@@ -182,3 +182,21 @@ def test_check_endpoint_gives_feedback_without_storing(world):
         client_for(world["outsider"]).post(f"{BASE}/form-library/check/", {"css": "x"}, format="json").status_code
         == 404
     )
+
+
+def test_placement_and_control_inner_selectors_are_accepted():
+    """Déplacer un texte (décalage horizontal et vertical, ordre) et viser l'intérieur d'un contrôle personnalisé, ou un seul de ses sous-champs."""
+    src = """
+[data-key="adresse"] .ctl label { transform: translateX(12px) translateY(-4px); }
+[data-key="adresse"] .ctl [data-key="ville"] input { order: -1; }
+[data-key="lignes"] .ctl-row:nth-child(2n) .ctl-rowhead { order: 2; background: #eef }
+[data-key="lignes"] .ctl-fold { transform: rotate(180deg) }
+"""
+    css, problems = formcss.normalize(src)
+    assert problems == [] and "translateX(12px) translateY(-4px)" in css and "order: -1" in css
+    assert '& [data-key="adresse"] .ctl [data-key="ville"] input {' in css
+    assert formcss.normalize(css) == (css, [])  # idempotent
+    # limites : toujours visuel seulement
+    assert formcss.normalize("label { position: fixed }")[1]
+    assert formcss.normalize("label { order: url(x) }")[1]
+    assert formcss.normalize("label { transform: translateX(1px) }")[1] == []

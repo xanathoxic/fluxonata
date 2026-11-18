@@ -100,6 +100,9 @@ const PATHS = {
   // actions
   up: <path d="M12 19V5M6 11l6-6 6 6" />,
   down: <path d="M12 5v14M6 13l6 6 6-6" />,
+  chevron: <path d="M6 9l6 6 6-6" />,
+  foldAll: <path d="M7 13l5-5 5 5M7 19l5-5 5 5" />,
+  unfoldAll: <path d="M7 5l5 5 5-5M7 11l5 5 5-5" />,
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
   plus: <path d="M12 5v14M5 12h14" />,
   save: <><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h7V4M8 20v-6h8v6" /></>,

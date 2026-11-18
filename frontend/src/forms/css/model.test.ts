@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDecl, parse, ruleKey, serialize, setDecl, setMany } from "./model";
-import { CUSTOM, defaultTarget, describe as describeRule, ruleOf, selectorsFor, targetOf, type Target } from "./targets";
+import { CUSTOM, defaultTarget, describe as describeRule, ruleOf, selectorsFor, targetFromElement, targetOf, type Target } from "./targets";
 import { formatBox, formatColor, formatShadows, parseBorder, parseBox, parseColor, parseGradient, parseShadows } from "./values";
 
 // the text the server writes for this stylesheet (triggers/formcss.py)
@@ -92,7 +92,7 @@ describe("targets", () => {
       expect(selectorsFor(t).every((s) => s.startsWith("&"))).toBe(true);
     }
     expect(selectorsFor({ scope: { kind: "key", key: "nom" }, part: "cell", state: "normal", screen: "all" })).toEqual(['& [data-key="nom"]']);
-    expect(selectorsFor({ scope: { kind: "key", key: "nom" }, part: "label", state: "normal", screen: "all" })).toEqual(['& [data-key="nom"] .fb-field > label', '& [data-key="nom"] .fb-field > .fb-label']);
+    expect(selectorsFor({ scope: { kind: "key", key: "nom" }, part: "label", state: "normal", screen: "all" })).toEqual(['& [data-key="nom"] > .fb-field > label', '& [data-key="nom"] > .fb-field > .fb-label']); // le libellé du champ LUI-MÊME, pas ceux des champs imbriqués
   });
   it("keeps hand-written selectors as custom targets", () => {
     const t = targetOf({ selectors: ["& .fb-actions > button + button"], media: null });
@@ -101,7 +101,7 @@ describe("targets", () => {
     expect(describeRule({ selectors: ["& .fb-actions > button + button"], media: null })).toContain("button + button");
   });
   it("describes a rule in words", () => {
-    expect(describeRule({ selectors: ['& [data-key="nom"] .fb-field > label', '& [data-key="nom"] .fb-field > .fb-label'], media: "(max-width: 600px)" })).toBe("Libellés · champ nom · Mobile (jusqu'à 600 px)");
+    expect(describeRule({ selectors: ['& [data-key="nom"] > .fb-field > label', '& [data-key="nom"] > .fb-field > .fb-label'], media: "(max-width: 600px)" })).toBe("Libellés · champ nom · Mobile (jusqu'à 600 px)");
   });
 });
 
@@ -132,5 +132,73 @@ describe("values", () => {
     expect(parseGradient("linear-gradient(135deg, #fff, #eef)")).toEqual({ angle: 135, from: "#fff", to: "#eef" });
     expect(parseGradient("red")).toBeNull();
     expect(parseBorder("2px dashed #1d4ed8")).toEqual({ w: "2px", s: "dashed", c: "#1d4ed8" });
+  });
+});
+
+describe("Portée « dans un contrôle »", () => {
+  const T = (scope: Target["scope"], part: string, state = "normal"): Target => ({ scope, part, state, screen: "all" });
+  it("vise l'intérieur d'un contrôle, ou un seul de ses sous-champs, sans toucher à son propre libellé", () => {
+    expect(selectorsFor(T({ kind: "in", key: "adr" }, "label"))).toEqual(['& [data-key="adr"] .ctl .fb-field > label', '& [data-key="adr"] .ctl .fb-field > .fb-label']);
+    expect(selectorsFor(T({ kind: "in", key: "adr", sub: "ville" }, "input", "focus"))[0]).toBe('& [data-key="adr"] .ctl [data-key="ville"] input[type="text"]:focus');
+    expect(selectorsFor(T({ kind: "in", key: "adr", sub: "ville" }, "cell"))).toEqual(['& [data-key="adr"] .ctl [data-key="ville"]']);
+    expect(selectorsFor(T({ kind: "in", key: "adr" }, "cell"))).toEqual(['& [data-key="adr"] .ctl .fb-cell']);
+    expect(selectorsFor(T({ kind: "key", key: "lignes" }, "ctlRowHead"))).toEqual(['& [data-key="lignes"] .ctl-rowhead']);
+    expect(selectorsFor(T({ kind: "all" }, "fold"))).toEqual([".ctl-fold"].map((s) => `& ${s}`));
+  });
+  it("une règle écrite relit sa cible, et la décrit", () => {
+    for (const t of [T({ kind: "in", key: "adr" }, "label"), T({ kind: "in", key: "adr", sub: "ville" }, "input", "hover"), T({ kind: "in", key: "adr", sub: "ville" }, "cell"), T({ kind: "key", key: "adr" }, "ctl")]) {
+      const back = targetOf(ruleOf(t));
+      expect(back.part).toBe(t.part);
+      expect(back.scope).toEqual(t.scope);
+    }
+    expect(describeRule(ruleOf(T({ kind: "in", key: "adr", sub: "ville" }, "label")))).toBe("Libellés · dans adr › ville");
+  });
+  it("les cibles d'avant (champ, type, tout) se relisent comme avant", () => {
+    expect(targetOf(ruleOf(T({ kind: "key", key: "nom" }, "label"))).scope).toEqual({ kind: "key", key: "nom" });
+    expect(targetOf(ruleOf(T({ kind: "type", type: "text" }, "input"))).scope).toEqual({ kind: "type", type: "text" });
+    expect(targetOf(ruleOf(T({ kind: "all" }, "label"))).scope).toEqual({ kind: "all" });
+  });
+});
+
+describe("Cliquer dans l'aperçu : l'élément le plus proche", () => {
+  const html = `<form class="fb-form"><div class="fb-cell" data-key="adr" data-type="custom"><div class="fb-field"><label>Adresse</label>
+    <div class="ctl"><div class="ctl-row"><div class="ctl-rowhead"><button class="ctl-fold">v</button></div>
+    <div class="fb-cell" data-key="ville" data-type="text"><div class="fb-field"><label>Ville</label><input type="text"/></div></div></div></div></div></div></form>`;
+  const dom = () => { const d = document.createElement("div"); d.innerHTML = html; return d; };
+  it("le libellé d'un sous-champ est un libellé, et le contrôle qui le contient est reconnu", () => {
+    const d = dom();
+    const root = d.querySelector(".fb-form") as Element;
+    const hit = targetFromElement(d.querySelector(".ctl-row label") as Element, root);
+    expect(hit).toMatchObject({ part: "label", key: "ville", type: "text", control: "adr" });
+    expect(targetFromElement(d.querySelector(".ctl-fold") as Element, root)?.part).toBe("fold");
+    expect(targetFromElement(d.querySelector(".ctl-rowhead") as Element, root)?.part).toBe("ctlRowHead");
+    expect(targetFromElement(d.querySelector(".ctl-row") as Element, root)?.part).toBe("ctlRow");
+    expect(targetFromElement(d.querySelector(".ctl") as Element, root)?.part).toBe("ctl");
+  });
+  it("un champ ordinaire n'a pas de contrôle autour de lui", () => {
+    const d = dom();
+    const root = d.querySelector(".fb-form") as Element;
+    expect(targetFromElement(d.querySelector("label") as Element, root)).toMatchObject({ part: "label", key: "adr", control: undefined });
+  });
+});
+
+describe("Un champ, un type ou un sous-champ : ce qui lui appartient, pas ses enfants", () => {
+  const T = (scope: Target["scope"], part: string): Target => ({ scope, part, state: "normal", screen: "all" });
+  it("le libellé, l'aide, l'erreur et l'astérisque d'un champ ne débordent pas sur les champs imbriqués", () => {
+    expect(selectorsFor(T({ kind: "key", key: "adr" }, "help"))).toEqual(['& [data-key="adr"] > .fb-field > .hint']);
+    expect(selectorsFor(T({ kind: "key", key: "adr" }, "error"))).toEqual(['& [data-key="adr"] > .fb-field > .field-error']);
+    expect(selectorsFor(T({ kind: "type", type: "custom" }, "label"))[0]).toBe('& [data-type="custom"] > .fb-field > label');
+    expect(selectorsFor(T({ kind: "in", key: "adr", sub: "ville" }, "label"))[0]).toBe('& [data-key="adr"] .ctl [data-key="ville"] > .fb-field > label');
+    expect(selectorsFor(T({ kind: "key", key: "adr" }, "field"))).toEqual(['& [data-key="adr"] > .fb-field']);
+  });
+  it("sans portée, ou pour tout l'intérieur d'un contrôle, tous les libellés sont visés", () => {
+    expect(selectorsFor(T({ kind: "all" }, "label"))[0]).toBe("& .fb-field > label");
+    expect(selectorsFor(T({ kind: "in", key: "adr" }, "label"))[0]).toBe('& [data-key="adr"] .ctl .fb-field > label');
+  });
+  it("les parties sans version « propre » (saisie, options) gardent leur sélecteur large", () => {
+    expect(selectorsFor(T({ kind: "key", key: "nom" }, "input"))[0]).toBe('& [data-key="nom"] input[type="text"]');
+  });
+  it("une règle écrite relit sa cible", () => {
+    for (const t of [T({ kind: "key", key: "adr" }, "label"), T({ kind: "type", type: "custom" }, "help"), T({ kind: "in", key: "adr", sub: "v" }, "error")]) expect(targetOf(ruleOf(t))).toMatchObject({ part: t.part, scope: t.scope });
   });
 });

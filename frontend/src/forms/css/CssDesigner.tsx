@@ -7,13 +7,15 @@ import { orderedFields } from "../layout";
 import { Pop } from "../StyleEditor";
 import { isBlock, type FormDefinition } from "../types";
 import { Inspector } from "./Inspector";
+import { PickPanel } from "./PickPanel";
+import { candidatesFor, describeElement, snapTarget, type Candidate } from "./pick";
 import { parse, ruleKey, serialize, setDecl, setMany, type Rule } from "./model";
 import { CUSTOM, PARTS, SCREENS, STATES, defaultTarget, describe as describeTarget, ruleOf, selectorsFor, targetFromElement, targetOf, type Scope, type Target } from "./targets";
 import { THEMES, applyTheme } from "./themes";
 import { ReadRegion } from "../../components/ReadRegion";
 
 const icon = (n: string) => n as FormIconName;
-const GROUPS: [string, string][] = [["form", "Formulaire"], ["field", "Champs"], ["content", "Contenu"], ["action", "Boutons"]];
+const GROUPS: [string, string][] = [["form", "Formulaire"], ["field", "Champs"], ["control", "Contrôles personnalisés"], ["content", "Contenu"], ["action", "Boutons"]];
 
 /** Menu rows with an icon and a name (the list of things to style is long: names stay readable). */
 function MenuRow({ on, iconName, children, onClick }: { on: boolean; iconName: string; children: React.ReactNode; onClick: () => void }) {
@@ -40,6 +42,12 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
   const committed = useRef(css ?? "");
   const seq = useRef(0);
   const zone = useRef<HTMLDivElement>(null);
+  // « cible libre » : l'élément survolé (entouré dans l'aperçu), puis ce qu'on peut viser à partir du dernier clic
+  const [hover, setHover] = useState("");
+  const [cands, setCands] = useState<Candidate[]>([]);
+  const lit = useRef<HTMLElement | null>(null);
+  const unlight = () => { if (lit.current) { lit.current.style.outline = ""; lit.current.style.outlineOffset = ""; lit.current = null; } };
+  useEffect(() => () => { const el = lit.current; if (el) { el.style.outline = ""; el.style.outlineOffset = ""; } }, []);
 
   useEffect(() => { if ((css ?? "") !== committed.current) { committed.current = css ?? ""; setRules(parse(css) ?? []); } }, [css]);
 
@@ -85,6 +93,19 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
     return [base, mark].filter(Boolean).join("\n\n");
   }, [rules, target, force, rule, selKey, pick]);
 
+  const free = target.part === CUSTOM;
+  const onHover = (e: React.MouseEvent) => {
+    if (!pick || !free) { unlight(); return; }
+    const root = zone.current?.querySelector(".fb-form");
+    const el = root ? snapTarget(e.target as Element, root) : null;
+    if (el === lit.current) return;
+    unlight();
+    if (!el || !root) { setHover(""); return; }
+    (el as HTMLElement).style.outline = "2px solid #2563eb";
+    (el as HTMLElement).style.outlineOffset = "1px";
+    lit.current = el as HTMLElement;
+    setHover(describeElement(el, root));
+  };
   const onPick = (e: React.MouseEvent) => {
     if (!pick) return;
     const root = zone.current?.querySelector(".fb-form");
@@ -92,13 +113,24 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
     e.preventDefault();
     e.stopPropagation();
     if (e.type !== "click") return;
+    if (free) {
+      const el = snapTarget(e.target as Element, root);
+      if (!el) return;
+      const list = candidatesFor(el, root);
+      setCands(list);
+      if (list[0]) setTarget((t) => ({ ...t, custom: (list[0] as Candidate).selector }));
+      return;
+    }
     const hit = targetFromElement(e.target as Element, root);
     if (!hit) return;
     setTarget((t) => {
       const part = PARTS.find((p) => p.id === hit.part);
       let scope: Scope = t.scope;
-      if (e.shiftKey && hit.key) scope = { kind: "key", key: hit.key };
+      if (e.shiftKey && hit.key) scope = hit.control ? { kind: "in", key: hit.control, sub: hit.key } : { kind: "key", key: hit.key };
       else if (e.altKey && hit.type) scope = { kind: "type", type: hit.type };
+      else if ((e.ctrlKey || e.metaKey) && (hit.control ?? (hit.type === "custom" ? hit.key : undefined))) scope = { kind: "in", key: (hit.control ?? hit.key) as string };
+      else if (t.scope.kind === "in" && hit.control === t.scope.key) scope = { kind: "in", key: t.scope.key, sub: t.scope.sub ? hit.key : undefined };
+      else if (t.scope.kind === "in" && hit.type === "custom" && hit.key === t.scope.key) scope = t.scope;
       else if (t.scope.kind === "key" && hit.key) scope = { kind: "key", key: hit.key };
       else if (t.scope.kind === "type" && hit.type) scope = { kind: "type", type: hit.type };
       if (part && !part.scoped) scope = { kind: "all" };
@@ -108,10 +140,18 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
 
   const fields = orderedFields(def).filter((f) => !isBlock(f.type));
   const types = [...new Set(fields.map((f) => f.type))];
+  const customs = fields.filter((f) => f.type === "custom");
+  /** the sub-fields a custom control is made of (its own fields, or those of its options) */
+  const subsOf = (key: string) => {
+    const spec = fields.find((f) => f.key === key)?.control?.spec;
+    const parts = [...(spec?.parts ?? []), ...(spec?.items ?? []).flatMap((o) => o.parts ?? [])];
+    return parts.filter((p, i) => !isBlock(p.type) && parts.findIndex((q) => q.key === p.key) === i);
+  };
   const part = PARTS.find((p) => p.id === target.part);
   const state = STATES.find((s) => s.id === target.state) ?? (STATES[0] as (typeof STATES)[number]);
   const screen = SCREENS.find((s) => s.id === target.screen) ?? (SCREENS[0] as (typeof SCREENS)[number]);
-  const scopeLabel = target.scope.kind === "key" ? `Champ : ${fields.find((f) => f.key === (target.scope as { key: string }).key)?.label ?? target.scope.key}` : target.scope.kind === "type" ? `Type : ${target.scope.type}` : "Tous les champs";
+  const labelOf = (key: string) => fields.find((f) => f.key === key)?.label || key;
+  const scopeLabel = target.scope.kind === "in" ? `Dans « ${labelOf(target.scope.key)} »${target.scope.sub ? ` › ${subsOf(target.scope.key).find((s) => s.key === (target.scope as { sub: string }).sub)?.label || target.scope.sub}` : ""}` : target.scope.kind === "key" ? `Champ : ${fields.find((f) => f.key === (target.scope as { key: string }).key)?.label ?? target.scope.key}` : target.scope.kind === "type" ? `Type : ${target.scope.type}` : "Tous les champs";
   // the selected rule is highlighted in the generated text
   const gen = useMemo(() => {
     if (!rule) return { before: text, mark: "", after: "" };
@@ -132,9 +172,9 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
   return (
     <div className="cs-designer">
       <div className="cs-bar" role="toolbar" aria-label="Cible du style">
-        <button type="button" className={`fb-sbtn cs-wide${pick ? " on" : ""}`} aria-pressed={pick} aria-label="Sélectionner dans l'aperçu" title="Cliquer dans l'aperçu pour choisir l'élément (Maj + clic : ce champ · Alt + clic : ce type de champ)" onClick={() => setPick(!pick)}><FormIcon name="pointer" /></button>
+        <button type="button" className={`fb-sbtn cs-wide${pick ? " on" : ""}`} aria-pressed={pick} aria-label="Sélectionner dans l'aperçu" title="Cliquer dans l'aperçu pour choisir l'élément (Maj + clic : ce champ seul · Alt + clic : ce type de champ · Ctrl + clic : l'intérieur du contrôle personnalisé)" onClick={() => setPick(!pick)}><FormIcon name="pointer" /></button>
         <span className="fb-sep" aria-hidden="true" />
-        <Pop label={`Élément à styler : ${target.part === CUSTOM ? "sélecteur libre" : part?.label}`} icon={<span className="cs-chipbtn"><FormIcon name={icon(part?.icon ?? "code")} /><span>{target.part === CUSTOM ? "Sélecteur libre" : part?.label}</span></span>}>
+        <Pop label={`Élément à styler : ${target.part === CUSTOM ? "cible libre" : part?.label}`} icon={<span className="cs-chipbtn"><FormIcon name={icon(part?.icon ?? "code")} /><span>{target.part === CUSTOM ? "Cible libre" : part?.label}</span></span>}>
           {(close) => (
             <>
             <div role="menu" aria-label="Élément à styler" className="cs-menu">
@@ -142,9 +182,8 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
                 <div key={g}><div className="cs-mh" role="presentation">{name}</div>{PARTS.filter((p) => p.group === g).map((p) => <MenuRow key={p.id} on={target.part === p.id} iconName={p.icon} onClick={() => { setTarget({ ...target, part: p.id, scope: p.scoped ? target.scope : { kind: "all" }, custom: undefined }); close(); }}>{p.label}</MenuRow>)}</div>
               ))}
               <div className="cs-mh" role="presentation">Avancé</div>
-              <MenuRow on={target.part === CUSTOM} iconName="code" onClick={() => setTarget({ ...target, part: CUSTOM, custom: target.custom ?? "" })}>Sélecteur libre…</MenuRow>
+              <MenuRow on={target.part === CUSTOM} iconName="code" onClick={() => setTarget({ ...target, part: CUSTOM, custom: target.custom ?? "" })}>Cible libre (cliquer dans l'aperçu)…</MenuRow>
             </div>
-              {target.part === CUSTOM && <input className="cs-text" aria-label="Sélecteur libre" placeholder=".fb-field > label, [data-key=&quot;nom&quot;] input" value={target.custom ?? ""} onChange={(e) => setTarget({ ...target, custom: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") close(); }} />}
             </>
           )}
         </Pop>
@@ -157,6 +196,13 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
                 {types.map((t) => <MenuRow key={t} on={target.scope.kind === "type" && target.scope.type === t} iconName={t} onClick={() => { setTarget({ ...target, scope: { kind: "type", type: t } }); close(); }}>{t}</MenuRow>)}
                 {fields.length > 0 && <div className="cs-mh" role="presentation">Un champ précis</div>}
                 {fields.map((f) => <MenuRow key={f.key} on={target.scope.kind === "key" && target.scope.key === f.key} iconName={f.type} onClick={() => { setTarget({ ...target, scope: { kind: "key", key: f.key } }); close(); }}>{f.label || f.key}</MenuRow>)}
+                {customs.length > 0 && <div className="cs-mh" role="presentation">À l'intérieur d'un contrôle personnalisé</div>}
+                {customs.map((f) => (
+                  <div key={`in-${f.key}`}>
+                    <MenuRow on={target.scope.kind === "in" && target.scope.key === f.key && !target.scope.sub} iconName="custom" onClick={() => { setTarget({ ...target, scope: { kind: "in", key: f.key } }); close(); }}>Tout l'intérieur de « {f.label || f.key} »</MenuRow>
+                    {subsOf(f.key).map((s) => <div key={s.key} className="cs-sub"><MenuRow on={target.scope.kind === "in" && target.scope.key === f.key && target.scope.sub === s.key} iconName={s.type} onClick={() => { setTarget({ ...target, scope: { kind: "in", key: f.key, sub: s.key } }); close(); }}>↳ {s.label || s.key}</MenuRow></div>)}
+                  </div>
+                ))}
               </div>
             )}
           </Pop>
@@ -204,12 +250,13 @@ export function CssDesigner({ def, css, onCss, edit, lookup, onCode }: Props) {
       {problem && <p role="alert" className="field-error cs-problem">{problem}</p>}
       {offline && <p role="alert" className="cs-problem hint">{offline} <button type="button" onClick={() => apply(rules)}>Réessayer</button></p>}
       <div className="cs-main">
-        <section className={`cs-preview${pick ? " cs-pick-on" : ""}`} aria-label="Aperçu du formulaire" ref={zone} onClickCapture={onPick} onMouseDownCapture={onPick}>
+        <section className={`cs-preview${pick ? " cs-pick-on" : ""}`} aria-label="Aperçu du formulaire" ref={zone} onClickCapture={onPick} onMouseDownCapture={onPick} onMouseMove={onHover} onMouseLeave={() => { unlight(); setHover(""); }}>
           <DefinitionForm definition={{ ...def, css: previewCss || undefined }} values={values} onChange={setValues} lookup={lookup}><button type="button" className="primary">Envoyer</button></DefinitionForm>
         </section>
         <section className="cs-side" aria-label="Réglages de la règle">
           <p className="cs-now" title="La règle en cours de modification"><FormIcon name="design" size={14} /> {describeTarget(at) || "Choisissez un élément"}</p>
-          {usable ? <Inspector rule={rule} set={set} setMany={many} active={panel} onActive={setPanel} disabled={!edit} /> : <p className="hint">Saisissez un sélecteur dans le menu « Élément à styler ».</p>}
+          {free && <PickPanel hover={hover} candidates={cands} selector={target.custom ?? ""} onChoose={(s) => setTarget((t) => ({ ...t, custom: s }))} onSelector={(s) => { setCands([]); setTarget((t) => ({ ...t, custom: s })); }} disabled={!edit} />}
+          {usable ? <Inspector rule={rule} set={set} setMany={many} active={panel} onActive={setPanel} disabled={!edit} /> : <p className="hint">Cliquez sur un élément de l'aperçu pour le cibler.</p>}
         </section>
       </div>
       <details className="cs-gen" open>

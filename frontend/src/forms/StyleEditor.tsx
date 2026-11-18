@@ -109,6 +109,7 @@ export function StyleEditor({ style, onChange, edit }: { style: FormStyle | unde
         </Pop>
       ) : <span className="fb-sbtn" role="img" aria-label="Couleur d'accent" title="Couleur d'accent"><FormIcon name="palette" />{dot}</span>}
       <span className="fb-sep" aria-hidden="true" />
+      <Choice legend="Type d'affichage" value={s.display ?? "standard"} disabled={!edit} onChange={(display) => set({ display })} options={[{ id: "standard", label: "Standard", icon: "width3" }, { id: "page", label: "Pleine page", icon: "width4" }, { id: "modern", label: "Moderne", icon: "simple" }]} />
       <Choice legend="Densité" value={s.density ?? "normal"} disabled={!edit} onChange={(density) => set({ density })} options={[{ id: "compact", label: "Compacte", icon: "dense1" }, { id: "normal", label: "Normale", icon: "dense2" }, { id: "comfortable", label: "Aérée", icon: "dense3" }]} />
       <Choice legend="Libellés" value={s.labels ?? "top"} disabled={!edit} onChange={(labels) => set({ labels })} options={[{ id: "top", label: "Au-dessus", icon: "labelTop" }, { id: "left", label: "À gauche", icon: "labelLeft" }]} />
       <Choice legend="Coins" value={s.radius ?? "medium"} disabled={!edit} onChange={(radius) => set({ radius })} options={[{ id: "none", label: "Droits", icon: "corner0" }, { id: "small", label: "Légers", icon: "corner1" }, { id: "medium", label: "Arrondis", icon: "corner2" }, { id: "large", label: "Très arrondis", icon: "corner3" }]} />
