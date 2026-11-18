@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.8.0 — 2026-11-18
+
+**Fluxonata 0.8.0 : les assistants MCP rangent et renomment workflows, formulaires, contrôles, actions et skills dans des dossiers**
+
+- Assistants MCP : ranger dans des dossiers et renommer les workflows, formulaires, contrôles, actions et skills (list_folders, create_folder, update_item_info), sans toucher au contenu ni au code des actions
+
 ## v0.7.2 — 2026-11-18
 
 **Fluxonata 0.7.2 : un contrôle personnalisé ne peut plus s'utiliser lui-même (éditeur, serveur et assistants MCP)**

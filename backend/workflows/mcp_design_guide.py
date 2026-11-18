@@ -609,6 +609,12 @@ def guide(topic: str, workspace=None) -> dict:
             "(validate_workflow les redonne). 4) attach_form pour le formulaire d'entrée. 4 bis) ESSAYEZ : start_action_test sur le code de chaque action proposée, puis start_dry_run + get_dry_run sur le workflow, corrigez jusqu'à zéro problème (rubrique `essai`). 5) Arrêtez-vous : une PERSONNE relit, active les propositions et publie. "
             "Vous ne pouvez ni publier, ni lancer, ni activer. ESSAYEZ avant de rendre la main : start_dry_run exécute les scripts et les décisions du brouillon dans un bac à sable isolé (actions, IA et approbations simulées d'après leur contrat), puis get_dry_run donne les problèmes et les valeurs réelles ; corrigez jusqu'à zéro problème. Dites ensuite ce que l'essai ne couvre pas (code des actions, IA, effets externes). Lisez la `revision` d'un brouillon (get_*) avant de le modifier."
         ),
+        "rangement": (
+            "RANGER ET RENOMMER. list_folders {kind} (kind : workflow, form, control, action ou ai_skill ; un arbre par type) AVANT de ranger ; create_folder {kind, path} crée un dossier « A/B » (et ses parents) ; "
+            "update_item_info {kind, slug, folder?, name?, description?, tags?} déplace (folder « » = racine) ou renomme un élément, SANS toucher à son contenu. Rangez ce que vous créez en passant `folder` à create_workflow / create_form / create_control / propose_action / propose_skill. "
+            "Le contenu se change avec update_workflow / update_form / update_control (brouillons, révision lue juste avant) ; le code d'une action existante ne se modifie pas : proposez-en une nouvelle version seulement si l'action est encore une proposition. "
+            "Vous ne supprimez ni ne renommez de dossier. Un dossier privé auquel la personne n'a pas droit est refusé, au départ comme à l'arrivée."
+        ),
         "essai": (
             "ESSAI À BLANC. start_dry_run {slug, samples?} met un essai en file (le worker l'exécute) et renvoie un job_id ; rappelez get_dry_run {job_id} jusqu'à status = succeeded. "
             "SCRIPTS et DÉCISIONS sont exécutés pour de vrai dans un bac à sable (ni réseau, ni fichiers, ni secret) ; ACTIONS, IA, sous-workflows et approbations sont SIMULÉS d'après leur contrat. "

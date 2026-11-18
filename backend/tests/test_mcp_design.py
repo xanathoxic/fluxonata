@@ -34,6 +34,8 @@ WRITE_TOOLS_ALL = {
     "get_dry_run",
     "start_action_test",
     "create_control",
+    "create_folder",
+    "update_item_info",
     "update_control",
     "validate_control",
     "validate_form",
@@ -42,6 +44,7 @@ WRITE_TOOLS_ALL = {
 RUN_URL = "/api/v1/workspaces/team-a/mcp/"
 READ_TOOLS = {
     "list_controls",
+    "list_folders",
     "get_control",
     "search_actions",
     "get_action",
@@ -223,6 +226,7 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("list_triggers", {}),
         ("get_authoring_guide", {}),
         ("list_controls", {}),
+        ("list_folders", {"kind": "workflow"}),
         ("get_control", {"slug": "absent"}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié

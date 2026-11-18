@@ -466,7 +466,18 @@ TOOLS = {
             {
                 "topic": {
                     "type": "string",
-                    "enum": ["all", "method", "essai", "decision", "workflow", "form", "controles", "action", "skill"],
+                    "enum": [
+                        "all",
+                        "method",
+                        "essai",
+                        "decision",
+                        "workflow",
+                        "form",
+                        "controles",
+                        "rangement",
+                        "action",
+                        "skill",
+                    ],
                     "description": "Rubrique (défaut : all).",
                 }
             },
@@ -669,9 +680,10 @@ class McpDesignView(McpServerView):
 
 def _register_controls() -> None:
     """Les outils de lecture des contrôles personnalisés rejoignent la table (le module les décrit avec les aides ci-dessus)."""
-    from . import mcp_design_controls
+    from . import mcp_design_controls, mcp_design_organize
 
     TOOLS.update(mcp_design_controls.read_tools())
+    TOOLS.update(mcp_design_organize.read_tools())
 
 
 _register_controls()
