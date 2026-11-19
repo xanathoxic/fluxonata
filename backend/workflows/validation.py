@@ -1443,11 +1443,27 @@ def _validate_form(form, declared_inputs) -> list[dict]:
     return out
 
 
+def _resolve_input_form_ref(workspace, ref) -> tuple[dict | None, list[dict]]:
+    """Le formulaire de la bibliothèque qu'une référence désigne : (définition, []) ou (None, [problème]).
+    Un formulaire pas encore publié n'est qu'un avertissement : la publication du workflow l'exigera, c'est à publier avant."""
+    from formbuilder import service as formservice
+
+    if not (ref or {}).get("form"):
+        msg = "Formulaire d'entrée : choisissez le formulaire de la bibliothèque à utiliser."
+        return None, [issue(None, "bad_input_form", msg)]
+    try:
+        return formservice.resolve(workspace, ref)[1].definition, []
+    except formservice.FormNotPublishedError as exc:
+        msg = f"Formulaire d'entrée : {exc} Publiez-le avant de publier le workflow."
+        return None, [issue(None, "input_form_unpublished", msg, level="warning")]
+    except formservice.FormRefError as exc:
+        return None, [issue(None, "bad_input_form", f"Formulaire d'entrée : {exc}")]
+
+
 def _validate_input_form(definition, inputs, workspace) -> list[dict]:
     """The designed input form (`input_form`): well formed, bound to the workflow's own inputs, connections known."""
     if definition in (None, {}):
         return []
-    from formbuilder import service as formservice
     from triggers import formengine
 
     mapping = definition.get("map") if isinstance(definition, dict) else None  # which field feeds which input
@@ -1456,29 +1472,9 @@ def _validate_input_form(definition, inputs, workspace) -> list[dict]:
     if isinstance(definition, dict) and "ref" in definition and "sections" not in definition:
         if workspace is None:
             return []
-        if not (definition["ref"] or {}).get("form"):
-            return [
-                issue(
-                    None,
-                    "bad_input_form",
-                    "Formulaire d'entrée : choisissez le formulaire de la bibliothèque à utiliser.",
-                )
-            ]
-        try:
-            definition = formservice.resolve(workspace, definition["ref"])[1].definition
-        except (
-            formservice.FormNotPublishedError
-        ) as exc:  # la publication du workflow l'exigera : à publier avant, pas une erreur de conception
-            return [
-                issue(
-                    None,
-                    "input_form_unpublished",
-                    f"Formulaire d'entrée : {exc} Publiez-le avant de publier le workflow.",
-                    level="warning",
-                )
-            ]
-        except formservice.FormRefError as exc:
-            return [issue(None, "bad_input_form", f"Formulaire d'entrée : {exc}")]
+        definition, early = _resolve_input_form_ref(workspace, definition["ref"])
+        if early:
+            return early
     problems = formengine.check_definition(definition) or formengine.check_against_inputs(
         definition, inputs or {}, mapping
     )

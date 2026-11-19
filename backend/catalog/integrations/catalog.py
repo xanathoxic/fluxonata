@@ -327,7 +327,7 @@ INTEGRATIONS = [
         "Code",
         "Tickets et pipelines GitLab (gitlab.com ou auto-hébergé).",
         "api_key",
-        {"base_url": "https://gitlab.com/api/v4", "name": "PRIVATE-TOKEN", "in": "header"},
+        {"base_url": "https://gitlab.com/api/v4", "name": "PRIVATE-TOKEN", "in": "header", "test_path": "/user"},
         [
             op(
                 "create_issue",

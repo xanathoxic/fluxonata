@@ -1,3 +1,4 @@
+import re
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -264,9 +265,9 @@ class ConnectionUpdateSerializer(serializers.Serializer):
 
 
 CONFIG_FIELDS = {
-    Connection.Kind.HTTP_BEARER: ("base_url", "skip_tls_verify"),
-    Connection.Kind.API_KEY: ("base_url", "in", "name", "prefix", "skip_tls_verify"),
-    Connection.Kind.BASIC: ("base_url", "username", "skip_tls_verify"),
+    Connection.Kind.HTTP_BEARER: ("base_url", "test_path", "skip_tls_verify"),
+    Connection.Kind.API_KEY: ("base_url", "in", "name", "prefix", "test_path", "skip_tls_verify"),
+    Connection.Kind.BASIC: ("base_url", "username", "test_path", "skip_tls_verify"),
     Connection.Kind.OAUTH2_CLIENT: ("base_url", "token_url", "client_id", "scope", "skip_tls_verify"),
     Connection.Kind.OAUTH2_CODE: ("base_url", "authorize_url", "token_url", "client_id", "scope", "skip_tls_verify"),
     Connection.Kind.IMAP: ("host", "port", "username", "folder", "skip_tls_verify"),
@@ -287,6 +288,18 @@ CONFIG_FIELDS = {
     Connection.Kind.AWS_SIGV4: ("base_url", "access_key_id", "region", "service", "skip_tls_verify"),
 }
 URL_FIELDS = ("base_url", "token_url", "authorize_url")
+
+
+TEST_PATH_RE = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,199}$")
+
+
+def _check_test_path(config) -> None:
+    """Chemin appelé par « Tester » (ex. /user) : une API n'a souvent rien à sa racine. Toujours relatif à l'adresse du service."""
+    path = str(config.get("test_path") or "")
+    if path and (not TEST_PATH_RE.match(path) or path.startswith("//") or ".." in path.split("/")):
+        raise serializers.ValidationError(
+            {"config": "« test_path » : un chemin commençant par « / », par exemple /user."}
+        )
 
 
 def _check_tls_flag(config) -> None:
@@ -318,6 +331,7 @@ def _check_config(kind, config, dynamic: bool = False):
                     "connect_timeout_seconds",
                     "auth_timeout_seconds",
                     "skip_tls_verify",
+                    "test_path",
                 )
                 or key == "description"
                 or (dynamic and key in ("username", "bind_dn"))
@@ -335,6 +349,7 @@ def _check_config(kind, config, dynamic: bool = False):
         except registry.ConfigRefused as exc:
             raise serializers.ValidationError({"config": exc.message}) from None
         _check_tls_flag(config)
+        _check_test_path(config)
         if kind == Connection.Kind.API_KEY and config.get("in", "header") not in ("header", "query"):
             raise serializers.ValidationError({"config": "« in » : header ou query."})
         for key in URL_FIELDS:
@@ -599,6 +614,27 @@ class ConnectionDetailView(APIView):
         return Response(status=204)
 
 
+def probe_url(config) -> str:
+    """Adresse appelée par le test : l'adresse du service, suivie du chemin de test facultatif."""
+    base = str(config["base_url"])
+    path = str(config.get("test_path") or "")
+    return base.rstrip("/") + path if path else base
+
+
+def _verdict(status: int, config) -> tuple[bool, str]:
+    """Ce que signifie la réponse du service au test d'une connexion."""
+    if 200 <= status < 300:
+        return True, f"Le service a répondu (HTTP {status})."
+    if status in (401, 403):
+        return False, f"Le service a refusé les identifiants (HTTP {status})."
+    if status == 404 and not config.get("test_path"):
+        return False, (
+            "Le service répond (HTTP 404) à son adresse racine : fréquent pour une API, ce n'est pas forcément une erreur. "
+            "Renseignez un « chemin de test » valide (par exemple /user) pour vérifier les identifiants."
+        )
+    return False, f"Réponse inattendue du service (HTTP {status})."
+
+
 class ConnectionTestView(APIView):
     """Tests a connection without ever revealing the secret (neither in the response, the log nor the audit)."""
 
@@ -629,7 +665,7 @@ class ConnectionTestView(APIView):
             creds = auth.credentials(conn)
         except auth.AuthError as exc:
             return False, exc.message
-        url = conn.config["base_url"]
+        url = probe_url(conn.config)
         if creds.query:
             url += ("&" if "?" in url else "?") + urlencode(creds.query)
         try:
@@ -640,11 +676,7 @@ class ConnectionTestView(APIView):
             return False, f"Adresse refusée : {exc}"
         except OSError:
             return False, "Le service n'a pas répondu (réseau, délai dépassé ou certificat refusé)."
-        if 200 <= status < 300:
-            return True, f"Le service a répondu (HTTP {status})."
-        if status in (401, 403):
-            return False, f"Le service a refusé les identifiants (HTTP {status})."
-        return False, f"Réponse inattendue du service (HTTP {status})."
+        return _verdict(status, conn.config)
 
 
 def _redirect_uri(request) -> str:

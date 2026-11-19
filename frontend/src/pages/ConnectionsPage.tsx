@@ -53,15 +53,18 @@ interface CfgField {
 /** Certificat du serveur : vérifié par défaut ; la case le désactive pour cette connexion (certificat auto-signé, autorité privée, nom différent). */
 const SKIP_TLS: CfgField = { key: "skip_tls_verify", label: "Ne pas vérifier le certificat du serveur", optional: true, toggle: true };
 const URL_HINT = "https://api.exemple.org/";
+/** Chemin appelé par « Tester » : la racine d'une API répond souvent 404 (ex. GitLab /api/v4/), un chemin réel (/user) vérifie vraiment les identifiants. */
+const TEST_PATH: CfgField = { key: "test_path", label: "Chemin de test (facultatif)", placeholder: "/user", optional: true };
 const CONFIG: Record<string, CfgField[]> = {
-  http_bearer: [{ key: "base_url", label: "Adresse du service", placeholder: URL_HINT }, SKIP_TLS],
+  http_bearer: [{ key: "base_url", label: "Adresse du service", placeholder: URL_HINT }, TEST_PATH, SKIP_TLS],
   api_key: [
     { key: "base_url", label: "Adresse du service", placeholder: URL_HINT },
     { key: "name", label: "Nom de l'en-tête ou du paramètre", placeholder: "X-API-Key", optional: true },
     { key: "in", label: "Où envoyer la clé", options: ["header", "query"], optional: true },
+    TEST_PATH,
     SKIP_TLS,
   ],
-  basic: [{ key: "base_url", label: "Adresse du service", placeholder: URL_HINT }, { key: "username", label: "Identifiant" }, SKIP_TLS],
+  basic: [{ key: "base_url", label: "Adresse du service", placeholder: URL_HINT }, { key: "username", label: "Identifiant" }, TEST_PATH, SKIP_TLS],
   oauth2_client: [
     { key: "base_url", label: "Adresse du service", placeholder: URL_HINT },
     { key: "token_url", label: "Adresse d'obtention du jeton", placeholder: "https://auth.exemple.org/token" },

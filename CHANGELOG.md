@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.11.1 — 2026-11-19
+
+**Fluxonata 0.11.1 : tester une connexion GitLab (chemin de test facultatif)**
+
+- Validation : extraire la résolution de la référence de formulaire d'entrée (complexité 12 -> 10)
+- Connexions : chemin de test facultatif (la racine d'une API répond souvent 404, ex. GitLab /api/v4/)
+
 ## v0.11.0 — 2026-11-18
 
 **Fluxonata 0.11.0 : formulaires rattachés par référence, {{ inputs }}, variables JSON, insertion et suppression d'étapes, renommer**
