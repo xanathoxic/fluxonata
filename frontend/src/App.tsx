@@ -17,6 +17,9 @@ import { AppContext } from "./context";
 import { t } from "./i18n";
 import { roleLabel } from "./lib";
 import { CatalogDetailPage, CatalogPage } from "./pages/CatalogPage";
+import { ExtensionPage } from "./extensions/ExtensionPage";
+import { extensionPath } from "./extensions/types";
+import { useExtensions } from "./extensions/useExtensions";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { LazyBoundary } from "./components/LazyBoundary";
@@ -112,6 +115,9 @@ export function App() {
     }
   };
 
+  // extensions branchées sur la plateforme (ADR 0030) : le serveur ne renvoie que ce que la personne a le droit de voir ; aucune extension = liste vide
+  const wsForExt = meQuery.data?.workspaces.find((w) => w.slug === wsSlug) ?? meQuery.data?.workspaces[0];
+  const extensions = useExtensions(wsForExt?.slug ?? "", !!wsForExt && !(wsForExt.permissions.includes("catalog") && !wsForExt.permissions.includes("view")));
   if (meQuery.isLoading) return <p role="status" className="center">{t("common.loading")}</p>;
   if (meQuery.isError || !meQuery.data) return <LoginPage onLoggedIn={(me) => qc.setQueryData(["me"], me)} />;
 
@@ -133,7 +139,11 @@ export function App() {
   if (me.is_platform_admin) items.push(["/platform", "Plate-forme"]);
   // The menu by intention: use · design · connect · supervise (the entries a person may not reach are simply absent)
   const INTENTS: [string, string[]][] = catalogOnly ? [["", items.map(([to]) => to)]] : [["Utiliser", ["/home", "/catalog", "/executions", "/approvals"]], ["Concevoir", ["/workflows", "/library", "/triggers"]], ["Intégrer", ["/connections"]], ["Superviser", ["/ops", "/admin", "/platform"]]];
-  const groups = INTENTS.map(([title, tos]) => ({ title, entries: items.filter(([to]) => tos.includes(to)) })).filter((g) => g.entries.length > 0);
+  const extEntries = extensions.flatMap((e) => e.menu.map((m): [string, string, string] => [extensionPath(e.id, m.path), m.label, m.group]));
+  const groups = INTENTS.map(([title, tos]) => ({
+    title,
+    entries: [...items.filter(([to]) => tos.includes(to)), ...extEntries.filter(([, , group]) => group === title).map(([to, label]): [string, string] => [to, label])],
+  })).filter((g) => g.entries.length > 0);
   const logoutBtn = (
           <button type="button" className="icon-btn" onClick={logout} aria-label={t("nav.logout")} title={t("nav.logout")}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg>
@@ -219,6 +229,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<HomePage />} />
+            <Route path="/x/:ext/*" element={<ExtensionPage extensions={extensions} me={me} />} />
             <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/catalog/:slug" element={<CatalogDetailPage />} />
             <Route path="/library/actions/:slug/run" element={<ActionDetailPage />} />

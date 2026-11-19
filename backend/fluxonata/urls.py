@@ -8,7 +8,18 @@ from workflows import folder_api
 
 from .apiroles import API_ROLES, parse_api_roles, role_of
 
-APP_URLCONFS = ("tenancy", "catalog", "workflows", "runs", "formbuilder", "triggers", "vault", "bundles", "ai")
+APP_URLCONFS = (
+    "tenancy",
+    "catalog",
+    "workflows",
+    "runs",
+    "formbuilder",
+    "triggers",
+    "vault",
+    "bundles",
+    "ai",
+    "extensions",
+)
 
 PROBES = [  # servies par TOUS les rôles : une sonde de disponibilité doit répondre où qu'on la pose
     path("api/v1/health/live/", health.live),

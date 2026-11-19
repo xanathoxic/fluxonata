@@ -110,8 +110,24 @@ Tout se règle par variables d'environnement (`.env` en développement, `infra/.
 | `ORCH_LOG_FORMAT` | `json` | format des journaux |
 | `ORCH_HARDENED` | `0` | profil de conteneur renforcé (seccomp, capacités retirées) — §8 |
 | `ORCH_OIDC_ISSUER` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` | — | SSO OpenID Connect (voir [docs/ADMIN.md](ADMIN.md)) |
+| `ORCH_EXTENSIONS` | vide | extensions à activer, séparées par des virgules (ex. `apistore`) : voir [Activer l'API store](#activer-lapi-store-extension-optionnelle) |
 
 Les secrets (mots de passe, clés) ne doivent **jamais** être versionnés ni écrits dans les journaux : `scripts/scan-secrets.py` le contrôle en CI.
+
+### Activer l'API store (extension optionnelle)
+L'API store (`docs/API_STORE.md`, ADR 0030) est **livrée avec le code** (`backend/apistore/`, donc dans l'image) mais **inactive par défaut** : tant qu'elle n'est pas nommée, il n'existe ni table, ni route, ni entrée de menu.
+
+1. **Nommer l'extension** : ajoutez `ORCH_EXTENSIONS=apistore` à `.env` (développement) ou à `infra/.env.prod` (production). Tous les services lisent ce fichier : `migrate`, API, orchestrateur et workers voient donc la même configuration. Si vous pilotez les conteneurs autrement, la variable doit être identique partout.
+2. **Appliquer les migrations** : en production `docker compose … up -d` relance le service `migrate`, qui crée les tables ; en développement `scripts/dev-up.sh` fait de même. Hors de ces scripts : `cd backend && python manage.py migrate`.
+3. **Redémarrer l'API** pour qu'elle charge l'extension (`docker compose … restart api`, ou `scripts/dev-down.sh` puis `scripts/dev-up.sh`).
+4. **Vérifier** : l'entrée « API store » (groupe Intégrer) apparaît pour les rôles autorisés ; un manifeste ou un import fautif ne bloque jamais le démarrage, la raison d'un refus est renvoyée aux administrateurs de l'espace par `GET /api/v1/workspaces/<espace>/extensions/` (champ `refused`) — l'interface ne l'affiche pas encore ; en cas d'entrée absente, consultez cette réponse et les journaux de l'API.
+5. **Premiers pas** : créez un compte de service (rôle Opérateur) dédié à l'API store, puis, dans « API store → Administration », un produit (workflows, compte d'exécution, plan) à publier.
+
+À savoir :
+- **Désactiver** : retirez le nom de `ORCH_EXTENSIONS` et redémarrez. Menu et routes disparaissent ; **les tables et les données restent** (rien n'est supprimé), et se retrouvent si l'extension est réactivée.
+- **Topologie par rôles** (ADR 0022) : les routes d'une extension vivent toujours dans le rôle `ui`, jamais dans `ingest`. Les appels des consommateurs (`…/plugins/apistore/v1/…`, clés `fxs_…`) ne sont donc pas exposés par le rôle public : si vos consommateurs sont externes, publiez le rôle `ui` à leur intention (de préférence derrière un proxy qui limite le débit et n'expose que ce préfixe) ou gardez l'API store pour des consommateurs internes.
+- **Mise à niveau** : les migrations de l'extension suivent celles du cœur (`migrate`). Une extension utilise des éléments internes du cœur ; elle est testée avec lui, versionnée avec lui.
+- **Sauvegarde** : les tables de l'extension sont dans la même base PostgreSQL, donc dans les sauvegardes habituelles (§6).
 
 ## 5. Runners distants
 Un runner est un agent installé sur une autre machine (ou la même) qui exécute des actions pour la plateforme, partagé ou dédié à des espaces.

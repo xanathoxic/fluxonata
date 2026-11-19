@@ -51,7 +51,14 @@ INSTALLED_APPS = [
     "triggers",
     "bundles",
     "ai",
+    "extensions",
 ]
+# Extensions (ADR 0030) : paquets Python installés par l'administrateur, séparés par des virgules ; aucune par défaut. Un manifeste fautif est refusé, jamais fatal.
+ORCH_EXTENSIONS = env("ORCH_EXTENSIONS", "")
+from extensions.loader import discover  # noqa: E402 - après la définition de l'environnement, avant le chargement des applications
+
+EXTENSIONS, EXTENSIONS_REFUSED = discover(ORCH_EXTENSIONS)
+INSTALLED_APPS += [e.module for e in EXTENSIONS]
 MIDDLEWARE = [
     "core.logging.CorrelationMiddleware",
     "django.middleware.security.SecurityMiddleware",

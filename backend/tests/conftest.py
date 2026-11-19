@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 from catalog.demo_actions import TEXT_STATS
 from catalog.models import Action, ActionVersion
 from tenancy.models import Environment, Membership, Organization, Role, Workspace
+from tests.apistore_helpers import store  # noqa: F401 - fixture de l'API store
 from tests.ssh_helpers import ssh_ws, sshd, target  # noqa: F401 - fixtures of the SSH step tests (disposable server, synthetic connection)
 
 

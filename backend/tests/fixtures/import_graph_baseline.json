@@ -2,10 +2,12 @@
  "_doc": "Base gelée des dépendances entre modules (scripts/import_graph.py --write). Voir docs/ROADMAP_ARCHITECTURE.md, AR0.1.",
  "modules": [
   "ai",
+  "apistore",
   "audit",
   "bundles",
   "catalog",
   "core",
+  "extensions",
   "fluxonata",
   "formbuilder",
   "runs",
@@ -41,6 +43,22 @@
   ],
   [
    "ai",
+   "workflows"
+  ],
+  [
+   "apistore",
+   "audit"
+  ],
+  [
+   "apistore",
+   "runs"
+  ],
+  [
+   "apistore",
+   "tenancy"
+  ],
+  [
+   "apistore",
    "workflows"
   ],
   [
@@ -110,6 +128,14 @@
   [
    "catalog",
    "workflows"
+  ],
+  [
+   "extensions",
+   "tenancy"
+  ],
+  [
+   "fluxonata",
+   "extensions"
   ],
   [
    "fluxonata",

@@ -17,10 +17,13 @@ const PATHS: Record<string, React.ReactElement> = {
 };
 
 /** Decorative: the link's accessible name is its visible text. */
+/** Icône des entrées ajoutées par les extensions (aucune n'a de dessin propre) : une pièce de puzzle. */
+const PUZZLE = <path d="M10 4a2 2 0 1 1 4 0v2h4v4h-2a2 2 0 1 0 0 4h2v4h-4v-2a2 2 0 1 0-4 0v2H6v-4H4a2 2 0 1 1 0-4h2V6h4z" />;
+
 export function NavIcon({ to }: { to: string }) {
   return (
     <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      {PATHS[to]}
+      {PATHS[to] ?? PUZZLE}
     </svg>
   );
 }

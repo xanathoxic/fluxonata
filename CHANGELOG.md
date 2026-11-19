@@ -2,6 +2,15 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.0 — 2026-11-19
+
+**Fluxonata 0.12.0 : extensions et API store (optionnelle)**
+
+- Extensions : on peut brancher des modules additionnels (menu, page d'interface, routes d'API) sans toucher au code de la plateforme ; le cœur ne dépend d'aucune extension. Les fichiers d'interface d'une extension sont revalidés à chaque chargement (ETag).
+- API store (extension optionnelle, inactive par défaut) : produits regroupant des workflows, plans (quotas par minute et par jour, environnements, approbation automatique ou manuelle), souscriptions, clés hachées dont la durée de validité se choisit (l'option « illimitée » est réservée aux administrateurs), point d'application unique des appels, API de gestion, point d'accès MCP par produit.
+- API store, interface : catalogue (plans à choisir, étapes numérotées), souscriptions actives et archivées (réactiver ou supprimer une souscription archivée), usage, approbations, administration en liste filtrable avec recherche de workflows.
+- Documentation : activation de l'API store (`ORCH_EXTENSIONS`, migrations, redémarrage, désactivation, rôle `ui`) dans `docs/INSTALL.md` ; description complète dans `docs/API_STORE.md` et `docs/EXTENSIONS.md`, avec la revue de sécurité et ses limites connues.
+
 ## v0.11.2 — 2026-11-19
 
 **Fluxonata 0.11.2 : l'affichage moderne des formulaires respecte la disposition des contrôles**

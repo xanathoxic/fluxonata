@@ -4910,6 +4910,101 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/extensions/": {
+            "get": {
+                "operationId": "workspaces_extensions_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/extensions/{ext_id}/ui/{file}": {
+            "get": {
+                "operationId": "workspaces_extensions_ui_retrieve",
+                "description": "Un fichier du dossier `ui/` d'une extension. Jamais de sortie du dossier (liens symboliques compris), seulement .js, .css et .map.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "ext_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "file",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/favorites/": {
             "get": {
                 "operationId": "workspaces_favorites_retrieve",
