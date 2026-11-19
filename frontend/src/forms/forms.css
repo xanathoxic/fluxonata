@@ -586,7 +586,7 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .public-form:has(.fb-v-page) { padding-inline: 8px !important; }
 /* Moderne : une colonne, champs arrondis et aérés, cartes douces, focus net (dans l'esprit des formulaires Bootstrap récents) */
 .fb-v-modern { --fb-radius: 8px; --fb-gap: 20px; max-width: 720px; margin-inline: auto; }
-.fb-v-modern .fb-cell, .fb-v-modern .fb-tall { grid-column: 1 / -1; grid-row: auto; }
+/* La disposition choisie (colonne, ligne, largeur, hauteur de chaque contrôle) est conservée ; le repli sur une colonne ne vient que du conteneur étroit (@container ci-dessus). */
 .fb-v-modern.fb-l-left .fb-field { display: block; }
 .fb-v-modern.fb-l-left .fb-field > label, .fb-v-modern.fb-l-left .fb-field > .fb-label { padding-top: 0; }
 .fb-v-modern .fb-section { background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 12px rgba(15, 23, 42, .04); padding: 24px 28px; }

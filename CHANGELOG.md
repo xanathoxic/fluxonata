@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.11.2 — 2026-11-19
+
+**Fluxonata 0.11.2 : l'affichage moderne des formulaires respecte la disposition des contrôles**
+
+- Formulaires : l'affichage moderne respecte la disposition des contrôles (côte à côte)
+
 ## v0.11.1 — 2026-11-19
 
 **Fluxonata 0.11.1 : tester une connexion GitLab (chemin de test facultatif)**
