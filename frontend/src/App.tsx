@@ -99,6 +99,20 @@ export function App() {
     mo.observe(document.body, { childList: true, subtree: true });
     return () => mo.disconnect();
   }, [phone]);
+  // Barre du haut et menu de gauche restent affichés au défilement : la hauteur réelle de la barre (elle peut passer sur deux lignes) décale le menu
+  // et les éléments collants des pages (variable CSS --topbar-h, 56 px par défaut).
+  const shellReady = !!meQuery.data;
+  useEffect(() => {
+    const bar = shellReady ? document.querySelector<HTMLElement>("header.topbar") : null;
+    if (!bar) return;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--topbar-h", `${bar.offsetHeight + (phone ? 4 : 0)}px`);
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [phone, shellReady]);
   // Ctrl+K opens the global search, unless a screen already used it (the workflow editor keeps « go to a step »: it handles the key first)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !e.defaultPrevented) { e.preventDefault(); setSearching(true); } };

@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.13.1 — 2026-11-20
+
+**Fluxonata 0.13.1 : navigation toujours visible au défilement**
+
+- Interface : la barre du haut et le menu de gauche restent affichés au défilement
+
 ## v0.13.0 — 2026-11-20
 
 **Fluxonata 0.13.0 : déploiement en cluster actif/actif**

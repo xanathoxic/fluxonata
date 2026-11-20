@@ -912,3 +912,14 @@ input::placeholder, textarea::placeholder { color: #5b6b80; opacity: 1; }
 .var-json { display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; resize: vertical; tab-size: 2; }
 td:has(> .var-json) { min-width: 14rem; vertical-align: top; }
 .var-json-bar { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; margin-top: .6rem; padding-bottom: .25rem; }
+
+/* Navigation toujours visible : la barre du haut est collée en haut de la fenêtre, le menu de gauche reste sous elle et défile seul si besoin.
+   --topbar-h est mesurée par App.tsx (56 px tant qu'elle ne l'est pas). Les onglets collants du détail d'exécution se placent sous la barre ; ceux des éditeurs (zones à défilement interne) ne sont pas décalés. */
+:root { --topbar-h: 56px; }
+.topbar { position: sticky; top: 0; z-index: 40; }
+.env-stripe + .topbar { top: 4px; }
+@media (min-width: 901px) {
+  .sidebar { position: sticky; top: var(--topbar-h); align-self: start; height: calc(100vh - var(--topbar-h)); overflow-y: auto; overscroll-behavior: contain; }
+}
+.tabs.pt.run-tabs { top: calc(var(--topbar-h) + 4px); }
+html { scroll-padding-top: calc(var(--topbar-h) + 8px); }   /* focus, ancres et scrollIntoView ne passent pas sous la barre collée */
