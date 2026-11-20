@@ -10,6 +10,7 @@ from runs.models import WorkflowRun
 
 from . import service
 from .models import UsageEvent
+from .progress import progress
 
 
 class InvokeSerializer(serializers.Serializer):
@@ -87,5 +88,6 @@ class RunStatusView(ConsumerView):
                 "status": run.status,
                 "outputs": run.outputs if run.status == "succeeded" else None,
                 "finished": done,
+                "progress": progress(run),
             }
         )

@@ -16,9 +16,17 @@ POST /api/v1/plugins/apistore/v1/<espace>/<produit>/workflows/<workflow>/runs/
 Authorization: Bearer fxs_…           Idempotency-Key: <facultatif>
 {"environment": "test", "inputs": {…}}                      → 202 {"run_id", "status", "replayed"}
 GET  /api/v1/plugins/apistore/v1/<espace>/<produit>/runs/<run_id>/   → état et sorties (exécutions de la souscription seulement)
+   → {"run_id", "status", "outputs", "finished", "progress": {"steps_done", "steps_total", "current_step": {"name", "status", "status_label"} | null, "also_active", "workflow_status", "workflow_status_label"}}
 ```
 Refus : 401 clé invalide/expirée/révoquée · 403 souscription inactive, environnement non autorisé, gouvernance · 404 workflow hors produit (même réponse qu'un produit ou un espace inconnu) · 429 quota.
 Un rejeu avec la même `Idempotency-Key` renvoie l'exécution existante (200) sans consommer de quota ; la clé est propre à chaque souscription.
+
+### Progression d'une exécution
+`progress` dit où en est le workflow, calculé à la lecture depuis les étapes de l'exécution (pas celles de ses sous-exécutions) :
+- `steps_done` : étapes **passées**, c'est-à-dire réussies ou **ignorées** (branche non prise) ; `steps_total` : nombre d'étapes du workflow. Avec des branches, toutes ne s'exécutent pas, mais `steps_done` rejoint `steps_total` à la fin.
+- `current_step` : l'étape **active la plus ancienne** — `name` (le nom donné dans l'éditeur), `status` (`running`, `retry_wait`, `waiting`, `uncertain`) et son libellé français. `null` quand rien ne tourne ; pour une exécution **échouée**, c'est l'étape qui a échoué. `also_active` compte les autres étapes actives en parallèle.
+- `workflow_status` / `workflow_status_label` : état global (déjà présent à la racine sous `status`).
+- **Confidentialité** (choix du 2026-11-20, demandé par le propriétaire) : le **nom** d'une étape est visible des consommateurs ; ne mettez pas de donnée sensible dans les noms d'étapes d'un workflow exposé. **Jamais** exposés : entrées, sorties intermédiaires, messages d'erreur, identifiants de nœuds (sauf en repli si une étape n'a pas de nom). Test de non-fuite : `tests/test_apistore_progress.py`.
 
 ## Audit et confidentialité
 Chaque appel (accepté ou refusé) crée un événement d'usage : souscription, workflow, environnement, issue, identifiant d'exécution. **Jamais** de valeur d'entrée, de sortie ni de clé.
@@ -37,12 +45,24 @@ Préfixe `/api/v1/plugins/apistore/manage/<espace>/` ; droits vérifiés côté 
 | `POST subscriptions/<id>/status/` `{status: active\|suspended\|revoked}` (`active` aussi depuis révoquée) · `DELETE subscriptions/<id>/` (archivée seulement) | administrer, personne connectée |
 | `POST subscriptions/<id>/keys/` `{days}` ou `{unlimited: true}` (administrateur) · `POST …/keys/<id>/revoke/` · `GET …/usage/` | le demandeur ou un administrateur |
 
+| `GET products/<slug>/docs/` · `GET products/<slug>/docs/openapi/` | voir (produit publié ; un brouillon : administrer) |
+
 Décider, changer l'état et émettre ou révoquer une clé exigent une **personne connectée** : un jeton d'API ne le peut pas. La valeur d'une clé n'est renvoyée qu'à son émission.
 Ces routes sont hors du contrat OpenAPI du cœur (extension optionnelle).
 
 ## Interface (lot 5)
 Entrée de menu « API store » (groupe Intégrer) : **Catalogue** (produits publiés, plans, demande de souscription), **Souscriptions** (clés, usage sur 24 h et derniers appels), **Approbations** (demandes en attente) et **Administration** (produits, plans, workflows, compte de service, publication ; visible seulement si le serveur renvoie le compte d'exécution, donc aux administrateurs).
 Le module `ui/index.js` n'insère jamais de HTML venu du serveur (`textContent` uniquement) ; la clé en clair s'affiche une fois, avec l'avertissement de la copier. L'interface ne décide d'aucun droit : un refus du serveur est affiché tel quel.
+
+## Documentation générée d'un produit (lot 7)
+Onglet **Documentation** de l'interface (et bouton « Documentation de l'API » sur chaque carte du catalogue) : pour un produit, une page lisible par ses consommateurs, **calculée à chaque lecture** depuis l'état réel — rien n'est saisi à la main, donc rien ne se périme.
+- **Un endpoint par workflow publié du produit** : méthode et chemin, en-têtes, entrées (nom, type, obligatoire, valeurs permises, défaut, contraintes, description, tirés du schéma d'entrée de la **dernière version publiée**), corps d'exemple valide pour ce schéma, réponses 202/200, noms des sorties, schéma JSON complet repliable.
+- **Suivi d'une exécution**, authentification, plans et quotas, états d'une exécution, tableau des erreurs (HTTP + `code`) et adresse MCP.
+- **Exemples d'appel prêts à copier** en curl, Python (bibliothèque standard) et JavaScript (`fetch`). L'adresse du serveur est celle de la page ; la clé est un marqueur `fxs_VOTRE_CLE` : **aucune clé réelle n'apparaît jamais**.
+- **Description OpenAPI 3.1 du produit** téléchargeable (importable dans un outil client) : même source que la page.
+- Les workflows du produit sans version publiée sont signalés « pas encore appelables ». Un produit en brouillon n'est documenté que pour les administrateurs (aperçu avant publication).
+- Un produit sans workflow (ou sans version publiée) l'annonce au lieu de ne montrer que le suivi d'exécution ; une erreur du serveur sans message est expliquée selon son code (404, refus, panne).
+- **Limites** : le type des **sorties** n'est pas déclaré par la plateforme (seuls leurs noms le sont) ; les entrées sont décrites au premier niveau (le schéma complet est disponible pour les objets imbriqués) ; les exemples sont fabriqués depuis le schéma, pas depuis de vrais appels. Rendu dans un navigateur réel (E2E) **non exécuté** : vérifié par tests unitaires (serveur et interface).
 
 ## MCP (lot 6)
 ```

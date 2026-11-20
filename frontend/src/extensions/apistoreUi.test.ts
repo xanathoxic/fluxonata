@@ -370,3 +370,222 @@ describe("interface de l'API store", () => {
     expect(el.querySelector("[role=status]")?.textContent).toContain("sans expiration");
   });
 });
+
+const DOC = {
+  product: { slug: "meteo", name: "Météo", description: "<img src=x onerror=alert(1)>", status: "published" },
+  base_path: "/api/v1/plugins/apistore/v1/team-a/meteo",
+  auth: { scheme: "Bearer", header: "Authorization: Bearer fxs_VOTRE_CLE", text: "Toute requête porte la clé." },
+  environments: ["prod"],
+  plans: [{ slug: "gratuit", name: "Gratuit", per_minute: 10, per_day: null, environments: ["prod"], approval: "manual" }],
+  endpoints: [
+    {
+      id: "run-forecast",
+      kind: "invoke",
+      title: "Prévisions",
+      workflow: "forecast",
+      version: "1.2.0",
+      method: "POST",
+      path: "/api/v1/plugins/apistore/v1/team-a/meteo/workflows/forecast/runs/",
+      description: "Lance le workflow.",
+      headers: [{ name: "Authorization", required: true, description: "La clé." }],
+      environments: ["prod"],
+      parameters: [
+        {
+          name: "ville",
+          type: "string",
+          required: true,
+          default: null,
+          has_default: false,
+          enum: null,
+          description: "Ville <b>demandée</b>",
+          constraints: ["au plus 40 caractères"],
+        },
+      ],
+      input_schema: { type: "object", properties: { ville: { type: "string" } } },
+      request_example: { environment: "prod", inputs: { ville: "texte" } },
+      responses: [{ status: 202, description: "Créée.", example: { run_id: "<uuid>", status: "running", replayed: false } }],
+      outputs: ["temperature"],
+      examples: { curl: "curl -X POST <hôte>/x", python: "import json", javascript: "await fetch()" },
+    },
+    {
+      id: "run-status",
+      kind: "status",
+      title: "Suivre une exécution",
+      workflow: null,
+      version: null,
+      method: "GET",
+      path: "/api/v1/plugins/apistore/v1/team-a/meteo/runs/<run_id>/",
+      description: "État.",
+      headers: [],
+      environments: [],
+      parameters: [],
+      input_schema: null,
+      request_example: null,
+      response_fields: [["progress.steps_done", "Étapes **passées** avec `steps_total` pour total."]],
+      responses: [{ status: 200, description: "État.", example: { finished: true } }],
+      outputs: [],
+      examples: { curl: "curl <hôte>/s", python: "py", javascript: "js" },
+    },
+  ],
+  unavailable: ["brouillon"],
+  run_statuses: [{ status: "running", meaning: "En cours." }],
+  errors: [{ status: 429, code: "rate_limited", meaning: "Quota atteint." }],
+  error_format: { detail: "Message", code: "invalid" },
+  mcp: { path: "/api/v1/plugins/apistore/v1/team-a/meteo/mcp/", text: "Aussi en MCP." },
+};
+const DOC_URL = "/plugins/apistore/manage/team-a/products/meteo/docs/";
+
+describe("documentation générée d'un produit", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("s'ouvre depuis le catalogue, charge la documentation du produit et l'affiche sans interpréter de HTML", async () => {
+    const { el, api } = await open(routes({ [DOC_URL]: DOC }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    expect(api).toHaveBeenCalledWith(DOC_URL, undefined);
+    const text = el.textContent ?? "";
+    expect(text).toContain(`POST${location.origin}/api/v1/plugins/apistore/v1/team-a/meteo/workflows/forecast/runs/`);
+    expect(text).toContain("version publiée 1.2.0");
+    expect(text).toContain("au plus 40 caractères");
+    expect(text).toContain("Ville <b>demandée</b>");
+    expect(text).toContain("Pas encore appelable (aucune version publiée) : brouillon.");
+    expect(el.querySelector("img, b")).toBeNull();
+    expect(el.querySelector("pre[aria-label='Exemple curl']")?.textContent).toBe(`curl -X POST ${location.origin}/x`);
+  });
+
+  it("change de langage et d'endpoint", async () => {
+    const { el } = await open(routes({ [DOC_URL]: DOC }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    const tab = (name: string) => [...el.querySelectorAll("button[role=tab]")].find((b) => b.textContent === name) as HTMLButtonElement;
+    tab("Python").click();
+    expect(el.querySelector("pre[aria-label='Exemple Python']")?.textContent).toBe("import json");
+    tab("Suivre une exécution").click();
+    expect(el.textContent).toContain(`GET${location.origin}/api/v1/plugins/apistore/v1/team-a/meteo/runs/<run_id>/`);
+  });
+
+  it("copie l'exemple affiché et le dit, ou dit que la copie est impossible", async () => {
+    const { el } = await open(routes({ [DOC_URL]: DOC }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copier l'exemple curl")?.click();
+    await flush();
+    expect(writeText).toHaveBeenCalledWith(`curl -X POST ${location.origin}/x`);
+    expect(el.textContent).toContain("Copié dans le presse-papiers.");
+    writeText.mockRejectedValue(new Error("refus"));
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Copier l'exemple curl")?.click();
+    await flush();
+    expect(el.textContent).toContain("Copie impossible");
+  });
+
+  it("télécharge la description OpenAPI avec l'adresse réelle du serveur", async () => {
+    const spec = { openapi: "3.1.0", servers: [{ url: "https://hote.exemple" }], paths: {} };
+    const { el, api } = await open(routes({ [DOC_URL]: DOC, [`${DOC_URL}openapi/`]: spec }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    const blobs: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => {
+      blobs.push(b);
+      return "blob:test";
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Télécharger la description OpenAPI")?.click();
+    await flush();
+    expect(api).toHaveBeenCalledWith(`${DOC_URL}openapi/`, undefined);
+    expect(click).toHaveBeenCalled();
+    expect(JSON.parse(await (blobs[0] as Blob).text()).servers).toEqual([{ url: location.origin }]);
+    click.mockRestore();
+  });
+
+  it("montre le refus du serveur et ne liste les brouillons qu'aux administrateurs", async () => {
+    const brouillon = { ...PUBLISHED, slug: "b", name: "Brouillon", status: "draft" };
+    const lecteur = await open((p) => (p.endsWith("/products/") ? [PUBLISHED, brouillon] : []));
+    [...lecteur.el.querySelectorAll("button[role=tab]")].find((b) => b.textContent === "Documentation")?.dispatchEvent(new Event("click"));
+    await flush();
+    expect(lecteur.el.querySelector(".fx-side")?.textContent).not.toContain("Brouillon");
+    document.body.replaceChildren();
+    const admin = await open((p) => {
+      if (p.endsWith("/me/")) return { administer: true, approve: true, run: true };
+      if (p.endsWith("/products/")) return [PUBLISHED, brouillon];
+      if (p.endsWith("/docs/")) throw new Error("Produit introuvable.");
+      return [];
+    });
+    [...admin.el.querySelectorAll("button[role=tab]")].find((b) => b.textContent === "Documentation")?.dispatchEvent(new Event("click"));
+    await flush();
+    expect(admin.el.querySelector(".fx-side")?.textContent).toContain("Brouillon");
+    (admin.el.querySelector(".fx-row") as HTMLButtonElement).click();
+    await flush();
+    expect(admin.el.textContent).toContain("Produit introuvable.");
+    expect(admin.el.textContent).toContain("Documentation indisponible.");
+  });
+
+  it("dit de quoi il s'agit quand le serveur répond sans message (404, refus, panne), sans écraser un vrai message", async () => {
+    const withError = (error: unknown) =>
+      open((p) => {
+        if (p.endsWith("/products/")) return [PUBLISHED];
+        if (p.endsWith("/docs/")) throw error;
+        return [];
+      });
+    const attempt = async (error: unknown) => {
+      document.body.replaceChildren();
+      const { el } = await withError(error);
+      (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+      await flush();
+      return el.querySelector("[role=alert]")?.textContent ?? "";
+    };
+    expect(await attempt({ status: 404, message: "Erreur" })).toContain("n'a peut-être pas été redémarré");
+    expect(await attempt({ status: 403, message: "Erreur" })).toContain("Accès refusé");
+    expect(await attempt({ status: 502, message: "Erreur" })).toContain("journaux");
+    expect(await attempt({ status: 404, message: "Produit introuvable." })).toBe("Produit introuvable.");
+    expect(await attempt(new Error("réseau coupé"))).toBe("réseau coupé");
+  });
+
+  it("annonce un produit sans workflow au lieu de ne montrer que le suivi d'exécution", async () => {
+    const vide = {
+      ...DOC,
+      unavailable: [],
+      endpoints: DOC.endpoints.filter((x) => x.kind === "status"),
+    };
+    const admin = await open((p) => {
+      if (p.endsWith("/me/")) return { administer: true, approve: true, run: true };
+      if (p.endsWith("/products/")) return [PUBLISHED];
+      if (p.endsWith("/docs/")) return vide;
+      return [];
+    });
+    (admin.el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    expect(admin.el.textContent).toContain("ne contient encore aucun workflow");
+    expect(admin.el.textContent).toContain("onglet Administration");
+    expect(admin.el.querySelector("[aria-label='Endpoints']")).toBeNull();
+    expect(admin.el.textContent).toContain("Plans et quotas"); // le reste de la page (plans, erreurs) reste lisible
+    document.body.replaceChildren();
+    const lecteur = await open((p) => (p.endsWith("/products/") ? [PUBLISHED] : p.endsWith("/docs/") ? vide : []));
+    (lecteur.el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    expect(lecteur.el.textContent).toContain("Un administrateur doit en ajouter.");
+  });
+
+  it("tous les workflows non publiés : le dit, et ne propose aucun endpoint à appeler", async () => {
+    const seul = { ...DOC, unavailable: ["brouillon"], endpoints: DOC.endpoints.filter((x) => x.kind === "status") };
+    const { el } = await open(routes({ [DOC_URL]: seul }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    expect(el.textContent).toContain("Aucun workflow appelable pour l'instant");
+    expect(el.textContent).toContain("Pas encore appelable (aucune version publiée) : brouillon.");
+  });
+
+  it("décrit les champs de la réponse du suivi (progression comprise) et rend le code en <code>", async () => {
+    const { el } = await open(routes({ [DOC_URL]: DOC }));
+    (el.querySelector("button[aria-label='Documentation de Météo']") as HTMLButtonElement).click();
+    await flush();
+    [...el.querySelectorAll("button[role=tab]")].find((b) => b.textContent === "Suivre une exécution")?.dispatchEvent(new Event("click"));
+    const table = el.querySelector("table[aria-label='Champs de la réponse']");
+    expect(table?.textContent).toContain("progress.steps_done");
+    expect(table?.textContent).toContain("Étapes **passées** avec steps_total pour total.");
+    expect([...(table?.querySelectorAll("code") ?? [])].map((c) => c.textContent)).toEqual(["progress.steps_done", "steps_total"]);
+  });
+});

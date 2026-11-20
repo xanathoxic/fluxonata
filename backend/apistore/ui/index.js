@@ -95,6 +95,11 @@ const STYLE = `
 .fx-store .fx-main { min-width: 0; }
 @media (max-width: 900px) { .fx-store .fx-split { grid-template-columns: 1fr; } .fx-store .fx-side { position: static; max-height: none; } .fx-store .fx-rows { max-height: 260px; } }
 .fx-store .fx-section { display: grid; gap: 12px; }
+.fx-store .fx-code { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: auto; font-size: var(--fs-sm, 13px); max-height: 420px; }
+.fx-store .fx-code code { font-family: ui-monospace, monospace; white-space: pre; }
+.fx-store .fx-ep-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fx-store .fx-ep-path { word-break: break-all; font-size: var(--fs-md, 15px); }
+.fx-store details summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
 `;
 
 function addStyle(root) {
@@ -129,9 +134,23 @@ export default function mount(el, host) {
   let rights = { administer: false, approve: false, run: false };
   let options = { workflows: [], accounts: [] };
   let usage = null; // { id, data }
+  let docSel = null; // produit dont on lit la documentation
+  let doc = null; // documentation générée du produit (réponse du serveur)
+  let docEp = null; // endpoint ouvert
+  let docLang = "curl";
   let disposed = false;
 
-  const fail = (e) => { notice = { kind: "error", text: (e && e.message) || "Opération refusée." }; };
+  // L'interface n'a que « Erreur » quand le serveur ne répond pas en JSON (page introuvable, panne) : on dit au moins de quoi il s'agit.
+  function explain(e) {
+    const msg = e && e.message;
+    if (msg && msg !== "Erreur") return msg;
+    const status = e && e.status;
+    if (status === 404) return "Page introuvable sur le serveur : il n'a peut-être pas été redémarré depuis la dernière mise à jour, ou l'élément a été supprimé ou n'est pas publié.";
+    if (status === 401 || status === 403) return "Accès refusé : reconnectez-vous ou demandez le droit nécessaire.";
+    if (status >= 500) return "Le serveur a rencontré une erreur : réessayez, puis consultez ses journaux.";
+    return msg || "Opération refusée.";
+  }
+  const fail = (e) => { notice = { kind: "error", text: explain(e) }; };
   const isAdmin = () => rights.administer;
 
   async function load() {
@@ -211,6 +230,7 @@ export default function mount(el, host) {
       h("div", { class: "fx-head" }, h("h3", {}, p.name), statusChip(p.status)),
       h("p", { class: "fx-desc" }, p.description || "Aucune description."),
       h("div", {}, h("strong", { class: "fx-label" }, "Workflows que vous pourrez appeler"), tags(p.workflows, p.workflow_names)),
+      h("div", { class: "fx-actions" }, h("button", { type: "button", "aria-label": `Documentation de ${p.name}`, onclick: () => openDocs(p.slug) }, "Documentation de l'API")),
       p.plans.length ? subscribeForm(p) : h("p", { class: "fx-desc" }, "Aucun plan disponible."))));
   }
 
@@ -433,10 +453,122 @@ export default function mount(el, host) {
         h("div", {}, h("h4", {}, "Plans"), plansTable(p.plans), plan)));
   }
 
+
+  // ----- Documentation générée d'un produit : tout vient du serveur, qui la calcule depuis les workflows publiés et les plans.
+  const origin = () => (typeof location !== "undefined" && location.origin && location.origin !== "null" ? location.origin : "https://hote.exemple");
+  const fill = (text) => String(text == null ? "" : text).split("<hôte>").join(origin());
+  const json = (v) => JSON.stringify(v, null, 2);
+  // Les descriptions du serveur marquent le code entre accents graves : on le rend en <code>, sans jamais interpréter de HTML.
+  const rich = (text) => String(text == null ? "" : text).split("`").map((part, i) => (i % 2 ? h("code", {}, part) : part));
+  const code = (text, label) => h("pre", { class: "fx-code", tabindex: "0", "aria-label": label }, h("code", {}, text));
+
+  async function openDocs(slug) {
+    tab = "docs"; docSel = slug; doc = null; docEp = null; notice = null;
+    draw();
+    try { doc = await call(`/products/${encodeURIComponent(slug)}/docs/`); docEp = doc.endpoints.length ? doc.endpoints[0].id : null; }
+    catch (e) { fail(e); }
+    draw();
+  }
+
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); notice = { kind: "ok", text: "Copié dans le presse-papiers." }; }
+    catch { notice = { kind: "error", text: "Copie impossible : sélectionnez le texte à la main." }; }
+    draw();
+  }
+
+  async function downloadSpec(slug) {
+    try {
+      const spec = await call(`/products/${encodeURIComponent(slug)}/docs/openapi/`);
+      spec.servers = [{ url: origin() }];
+      const link = h("a", { href: URL.createObjectURL(new Blob([json(spec)], { type: "application/json" })), download: `${slug}.openapi.json` });
+      document.body.append(link); link.click(); link.remove();
+    } catch (e) { fail(e); draw(); }
+  }
+
+  const table = (heads, rows, label) => h("table", { class: "fx-plans", "aria-label": label },
+    h("thead", {}, h("tr", {}, heads.map((t) => h("th", { scope: "col" }, t)))),
+    h("tbody", {}, rows.map((r) => h("tr", {}, r.map((c) => h("td", {}, c))))));
+
+  function paramRows(ep) {
+    return ep.parameters.map((q) => [
+      h("code", {}, q.name), q.type,
+      q.required ? chip("obligatoire", "warn") : "facultatif",
+      [q.enum ? `Valeurs : ${q.enum.join(", ")}` : null, q.has_default ? `Défaut : ${JSON.stringify(q.default)}` : null, ...q.constraints].filter(Boolean).join(" · ") || "—",
+      q.description || "—",
+    ]);
+  }
+
+  function endpointCard(ep) {
+    const langs = ["curl", "python", "javascript"];
+    const LANG = { curl: "curl", python: "Python", javascript: "JavaScript" };
+    return h("div", { class: "fx-section" },
+      h("div", { class: "fx-ep-line" }, chip(ep.method, ep.method === "POST" ? "warn" : "ok"), h("code", { class: "fx-ep-path" }, fill("<hôte>" + ep.path))),
+      ep.version ? h("p", { class: "fx-sub" }, `Workflow « ${ep.workflow} », version publiée ${ep.version}.`) : null,
+      h("p", { class: "fx-desc" }, rich(ep.description)),
+      h("h4", {}, "En-têtes"),
+      table(["En-tête", "Obligatoire", "Rôle"], ep.headers.map((x) => [h("code", {}, x.name), x.required ? "oui" : "non", rich(x.description)]), "En-têtes"),
+      ep.parameters.length ? [h("h4", {}, ep.input_schema ? "Entrées (champ « inputs » du corps)" : "Paramètres"),
+        table(["Nom", "Type", "Obligatoire", "Contraintes", "Description"], paramRows(ep), "Entrées")] : null,
+      ep.response_fields ? [h("h4", {}, "Champs de la réponse"), table(["Champ", "Sens"], ep.response_fields.map(([name, meaning]) => [h("code", {}, name), rich(meaning)]), "Champs de la réponse")] : null,
+      ep.environments.length ? h("p", { class: "fx-desc" }, `Champ « environment » du corps : ${ep.environments.join(", ")} (selon votre plan).`) : null,
+      ep.request_example ? [h("h4", {}, "Corps de la requête (exemple)"), code(json(ep.request_example), "Exemple de requête")] : null,
+      h("h4", {}, "Réponses"),
+      ep.responses.map((r) => h("div", {}, h("p", { class: "fx-desc" }, [chip(String(r.status), r.status < 300 ? "ok" : "bad"), rich(` ${r.description}`)]), code(json(r.example), `Réponse ${r.status}`))),
+      ep.outputs.length ? h("p", { class: "fx-desc" }, `Sorties renvoyées dans « outputs » : ${ep.outputs.join(", ")}. Leur type n'est pas déclaré par le workflow.`) : null,
+      h("h4", {}, "Exemples d'appel"),
+      h("div", { class: "fx-tabs sub", role: "tablist", "aria-label": "Langage de l'exemple" }, langs.map((l) => h("button", { type: "button", role: "tab", "aria-selected": String(l === docLang), onclick: () => { docLang = l; draw(); } }, LANG[l]))),
+      code(fill(ep.examples[docLang]), `Exemple ${LANG[docLang]}`),
+      h("div", { class: "fx-actions" }, h("button", { type: "button", onclick: () => copy(fill(ep.examples[docLang])) }, `Copier l'exemple ${LANG[docLang]}`)),
+      ep.input_schema ? h("details", {}, h("summary", {}, "Schéma JSON complet des entrées"), code(json(ep.input_schema), "Schéma JSON")) : null);
+  }
+
+  function docOverview(d) {
+    return h("div", { class: "fx-section" },
+      h("h4", {}, "Authentification"), h("p", { class: "fx-desc" }, d.auth.text), code(d.auth.header, "En-tête d'authentification"),
+      h("p", { class: "fx-desc" }, `Adresse de base : ${fill("<hôte>")}${d.base_path}/`),
+      h("h4", {}, "Plans et quotas"), plansTable(d.plans),
+      h("h4", {}, "États d'une exécution"), table(["État", "Sens"], d.run_statuses.map((x) => [h("code", {}, x.status), rich(x.meaning)]), "États"),
+      h("h4", {}, "Erreurs"),
+      h("p", { class: "fx-desc" }, `Format : ${JSON.stringify(d.error_format)}`),
+      table(["HTTP", "code", "Sens"], d.errors.map((x) => [String(x.status), h("code", {}, x.code), rich(x.meaning)]), "Erreurs"),
+      h("h4", {}, "Protocole MCP"), h("p", { class: "fx-desc" }, [d.mcp.text, " ", h("code", {}, fill("<hôte>") + d.mcp.path)]));
+  }
+
+  function docs() {
+    const shown = products.filter((p) => p.status === "published" || isAdmin());
+    if (!shown.length) return empty("Aucun produit à documenter pour l'instant.");
+    const side = h("div", { class: "fx-side" },
+      h("h3", {}, "Produits"),
+      h("div", { class: "fx-rows" }, shown.map((p) => h("button", { type: "button", class: "fx-row", "aria-current": String(p.slug === docSel), onclick: () => openDocs(p.slug) },
+        h("span", { class: "fx-row-top" }, h("strong", {}, p.name), statusChip(p.status)), h("span", { class: "fx-desc" }, p.description || p.slug)))));
+    let main;
+    if (!docSel) main = empty("Choisissez un produit pour lire sa documentation.");
+    else if (!doc) main = empty(notice && notice.kind === "error" ? "Documentation indisponible." : "Chargement de la documentation…");
+    else {
+      const ep = doc.endpoints.find((x) => x.id === docEp) || doc.endpoints[0];
+      const callable = doc.endpoints.some((x) => x.kind === "invoke");
+      main = h("div", { class: "fx-card" },
+        h("div", { class: "fx-head" }, h("h3", {}, `API « ${doc.product.name} »`), statusChip(doc.product.status)),
+        h("p", { class: "fx-desc" }, doc.product.description || "Aucune description."),
+        h("div", { class: "fx-actions" }, h("button", { type: "button", onclick: () => downloadSpec(doc.product.slug) }, "Télécharger la description OpenAPI")),
+        doc.unavailable.length ? h("p", { class: "fx-banner error", role: "status" }, `Pas encore appelable (aucune version publiée) : ${doc.unavailable.join(", ")}.`) : null,
+        callable
+          ? [h("div", { class: "fx-tabs sub", role: "tablist", "aria-label": "Endpoints" },
+              doc.endpoints.map((x) => h("button", { type: "button", role: "tab", "aria-selected": String(x.id === ep.id), onclick: () => { docEp = x.id; draw(); } }, x.kind === "status" ? "Suivre une exécution" : x.title))),
+            endpointCard(ep)]
+          : empty(doc.unavailable.length
+            ? "Aucun workflow appelable pour l'instant : publiez une version de ceux qui sont listés ci-dessus."
+            : `Ce produit ne contient encore aucun workflow : il n'y a rien à appeler.${isAdmin() ? " Ajoutez-en dans l'onglet Administration." : " Un administrateur doit en ajouter."}`),
+        docOverview(doc));
+    }
+    return h("div", { class: "fx-split" }, side, h("div", { class: "fx-main" }, main));
+  }
+
   const TABS = () => [
     ["catalogue", "Catalogue", catalogue],
     ["subs", isAdmin() ? "Souscriptions" : "Mes souscriptions", mySubs],
     ["approvals", "Approbations", approvals],
+    ["docs", "Documentation", docs],
     ...(isAdmin() ? [["admin", "Administration", admin]] : []),
   ];
 

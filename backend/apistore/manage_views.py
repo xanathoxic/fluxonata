@@ -16,7 +16,7 @@ from tenancy.models import ServiceAccount
 from tenancy.permissions import ADMINISTER, APPROVE, RUN, VIEW, get_workspace, has_perm, require_human_session
 from workflows.models import Workflow
 
-from . import service
+from . import docs, service
 from .models import ApiKey, Plan, Product, Subscription, UsageEvent
 
 
@@ -186,6 +186,36 @@ class ProductDetailView(APIView):
         except service.Refused as exc:
             return refuse(exc)
         return Response(product_dict(_product_or_404(ws, slug), admin=True))
+
+
+def _documented_product(request, workspace, slug) -> Product:
+    """Produit à documenter : publié pour tout membre, brouillon seulement pour qui administre (aperçu)."""
+    ws = get_workspace(request.user, workspace, VIEW)
+    p = (
+        Product.objects.filter(workspace=ws, slug=slug)
+        .select_related("workspace")
+        .prefetch_related("links__workflow__versions", "plans")
+        .first()
+    )
+    if p is None or (p.status != Product.Status.PUBLISHED and not has_perm(request.user, ws, ADMINISTER)):
+        raise Http404()
+    return p
+
+
+@extend_schema(exclude=True)
+class ProductDocsView(APIView):
+    """Documentation générée du produit (endpoints, schémas d'entrée, exemples) : calculée depuis l'état réel, jamais stockée."""
+
+    def get(self, request, workspace, slug):
+        return Response(docs.build(_documented_product(request, workspace, slug)))
+
+
+@extend_schema(exclude=True)
+class ProductOpenApiView(APIView):
+    """Même documentation au format OpenAPI 3.1, pour l'importer dans un outil client."""
+
+    def get(self, request, workspace, slug):
+        return Response(docs.openapi(docs.build(_documented_product(request, workspace, slug))))
 
 
 @extend_schema(exclude=True)

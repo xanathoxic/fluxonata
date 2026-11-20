@@ -66,7 +66,7 @@ Renseignez `ORCH_ALLOWED_HOSTS` et `ORCH_TRUSTED_ORIGINS` (ex. `https://fluxonat
 - **Worker** : il monte le socket Docker pour lancer les conteneurs d'actions. C'est un composant de confiance (accès au socket ≈ root sur l'hôte) : dédiez l'hôte ou durcissez-le (§8).
   Le répertoire `ORCH_WORK_DIR` doit avoir **le même chemin** sur l'hôte et dans le conteneur du worker.
 - **Clés** : le volume `keys` contient les clés de chiffrement des secrets et de signature. Sauvegardez-le **séparément** de la base : sans lui, secrets et webhooks sont irrécupérables.
-- **Plusieurs workers** : `docker compose … up -d --scale worker=N`. Plusieurs processus se partagent la file ; l'équité entre espaces est assurée par la plateforme.
+- **Plusieurs workers** : `docker compose … up -d --scale worker=N`. Plusieurs processus se partagent la file ; l'équité entre espaces est assurée par la plateforme. Montée en charge, limites et réglages : [DIMENSIONNEMENT.md](DIMENSIONNEMENT.md).
 - **API** : l'image lance gunicorn avec des workers **à threads** (`gthread`), nécessaires aux runners distants dont les requêtes durent jusqu'à 20 s ; ne repassez pas à des workers synchrones.
 
 ## 4. Configuration

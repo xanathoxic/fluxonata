@@ -15,6 +15,8 @@ urlpatterns = [
     path("manage/<slug:workspace>/products/", m.ProductsView.as_view()),
     path("manage/<slug:workspace>/products/<slug:slug>/", m.ProductDetailView.as_view()),
     path("manage/<slug:workspace>/products/<slug:slug>/plans/", m.PlansView.as_view()),
+    path("manage/<slug:workspace>/products/<slug:slug>/docs/", m.ProductDocsView.as_view()),
+    path("manage/<slug:workspace>/products/<slug:slug>/docs/openapi/", m.ProductOpenApiView.as_view()),
     path("manage/<slug:workspace>/subscriptions/", m.SubscriptionsView.as_view()),
     path("manage/<slug:workspace>/subscriptions/<int:pk>/", m.SubscriptionDetailView.as_view()),
     path("manage/<slug:workspace>/subscriptions/<int:pk>/decision/", m.DecisionView.as_view()),

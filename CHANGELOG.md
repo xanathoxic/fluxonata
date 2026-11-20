@@ -2,6 +2,14 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.7 — 2026-11-20
+
+**Fluxonata 0.12.7 : documentation d'API des produits et progression des exécutions**
+
+- Documentation : page « Dimensionnement et montée en charge » (horizontal, vertical, limites non démontrées)
+- API store : documentation générée d'un produit (endpoints, schémas, exemples curl/Python/JS, OpenAPI)
+- API store : le suivi d'exécution renvoie la progression (étapes passées, total, étape en cours, états)
+
 ## v0.12.6 — 2026-11-20
 
 **Fluxonata 0.12.6 : inverser une condition d'un formulaire**
