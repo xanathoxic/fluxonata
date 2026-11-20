@@ -100,7 +100,7 @@ def test_a_valid_set_of_rules_is_accepted():
         {"when": cond("a", "not_empty"), "then": [{"do": "show", "x": 1}]},
         {"when": cond("a", "not_empty"), "then": [{"do": "text", "target": "value", "text": "x"}]},
         {"when": cond("a", "not_empty"), "then": [{"do": "text", "target": "label", "text": "x" * 501}]},
-        {"when": cond("a", "not_empty"), "then": [{"do": "text", "target": "label", "text": "{x}"}]},
+        {"when": cond("a", "not_empty"), "then": [{"do": "text", "target": "label", "text": "{inconnu}"}]},
         {"when": cond("a", "not_empty"), "then": [{"do": "options", "values": ["x"]}]},  # x is a text field
         {"when": cond("a", "not_empty"), "then": [{"do": "show"}] * 11},
         {"when": cond("a", "not_empty"), "then": [{"do": "show"}], "script": "x"},
@@ -483,3 +483,59 @@ def test_every_effect_has_a_check():
     from triggers import formrules
 
     assert set(formrules._EFFECT_CHECKS) == formrules.EFFECTS
+
+
+# ---- une règle lit le champ lui-même ------------------------------------------------------------------------------------
+def _self_form(then, **extra):
+    when = {"field": "code", "op": "starts_with", "value": "FR"}
+    return form(field("code", rules=[{"when": when, "then": then, **extra}]), field("autre"))
+
+
+def test_a_rule_may_read_the_field_itself_to_adjust_how_it_asks_for_its_value():
+    help_text = {"do": "text", "target": "help", "text": "Format FR-1234 ({code})"}
+    d = _self_form([help_text, {"do": "require"}])
+    assert formengine.check_definition(d) == {}
+    _, shown = formengine.field_states(d, {"code": "FR-9"})
+    state = {f["key"]: s for f, s in shown}["code"]
+    assert state["help"] == "Format FR-1234 (FR-9)" and state["required"] is True
+    _, shown = formengine.field_states(d, {"code": "BE-9"})
+    state = {f["key"]: s for f, s in shown}["code"]
+    assert state["help"] is None and state["required"] is False  # the condition does not hold: nothing changes
+
+
+def test_a_rule_reading_the_field_itself_may_not_hide_fill_limit_or_load_it():
+    for effect in (
+        {"do": "hide"},
+        {"do": "show"},
+        {"do": "fill", "value": "x"},
+        {"do": "readonly"},
+        {"do": "options", "values": ["a"]},
+    ):
+        problems = formengine.check_definition(_self_form([effect]))
+        assert problems, effect
+        if effect["do"] != "options":  # (« options » est déjà refusé sur un champ texte)
+            assert any("lui-même" in message for message in problems.values()), effect
+    # in the else branch too, and through a {token} of a text
+    else_hide = _self_form([{"do": "require"}], **{"else": [{"do": "hide"}]})
+    assert any("lui-même" in m for m in formengine.check_definition(else_hide).values())
+    token_only = form(
+        field(
+            "code",
+            rules=[
+                {
+                    "when": {"field": "autre", "op": "not_empty"},
+                    "then": [{"do": "hide"}, {"do": "text", "target": "help", "text": "{code}"}],
+                }
+            ],
+        ),
+        field("autre"),
+    )
+    assert any("lui-même" in m for m in formengine.check_definition(token_only).values())
+
+
+def test_reading_itself_is_not_a_dependency_or_a_loop():
+    d = _self_form([{"do": "require"}])
+    assert formengine.dependencies(d["sections"][0]["fields"][0]) == set()
+    assert [f["key"] for f in formengine.evaluation_order(d["sections"][0]["fields"])] == ["code", "autre"]
+    # a rule of ANOTHER field cannot read a calculated field that reads it back, as before
+    assert formengine.check_definition(d) == {}

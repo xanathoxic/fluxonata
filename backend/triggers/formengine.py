@@ -187,7 +187,8 @@ def _check_cross_references(sections) -> dict[str, str]:
             if rule not in (None, ""):
                 problems.update(_check_rule(rule, f"{where}.visible_if", [k for k in every if k != field["key"]]))
             others = {k: f for k, f in every.items() if k != field["key"]}
-            problems.update(formrules.check_rules(field.get("rules"), f"{where}.rules", field, others))
+            # the rules may also read the field itself (its own value); a formula and a legacy expression may not
+            problems.update(formrules.check_rules(field.get("rules"), f"{where}.rules", field, every))
             if "compute" in field and (message := formcalc.check(field["compute"], others)):
                 problems[f"{where}.compute"] = message
     return problems
@@ -225,7 +226,9 @@ def _all_fields(definition: dict):
 
 def dependencies(field: dict) -> set[str]:
     """Keys of the fields this one reads: its rules and its (legacy) visibility expression."""
-    out = formrules.reads(field) | formcalc.refs(field.get("compute"))
+    out = (formrules.reads(field) - {field.get("key")}) | formcalc.refs(
+        field.get("compute")
+    )  # reading itself is no dependency
     rule = field.get("visible_if")
     if isinstance(rule, str) and rule:
         try:
@@ -640,7 +643,10 @@ def _pass(ordered: list[dict], values: dict, known: list[str], kept: dict) -> li
     as that pass left it; every field is recomputed, so one that is now hidden drops its value."""
     shown: list[tuple[dict, dict]] = []
     for field in ordered:
-        state = formrules.apply_rules(field, kept, formrules.initial_state(field))
+        own = {field["key"]: values[field["key"]]} if field["key"] in values else {}
+        state = formrules.apply_rules(
+            field, {**kept, **own}, formrules.initial_state(field)
+        )  # a rule may read the field's own typed value
         kept.pop(field["key"], None)
         if state["visible"] and _is_visible(field, kept, known):
             shown.append((field, state))

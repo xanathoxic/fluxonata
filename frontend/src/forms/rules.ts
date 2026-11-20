@@ -174,7 +174,7 @@ export function reads(f: Pick<FormField, "rules" | "visible_if" | "compute">): S
 /** Fields so that each comes after the ones it reads (ties: reading order), like the server. */
 export function evaluationOrder<T extends Pick<FormField, "key" | "rules" | "visible_if" | "compute">>(fields: T[]): T[] {
   const keys = new Set(fields.map((f) => f.key));
-  const deps = new Map(fields.map((f) => [f.key, [...reads(f)].filter((k) => keys.has(k))]));
+  const deps = new Map(fields.map((f) => [f.key, [...reads(f)].filter((k) => k !== f.key && keys.has(k))])); // reading itself is no dependency
   const done = new Set<string>();
   const left = [...fields];
   const out: T[] = [];
@@ -193,7 +193,7 @@ export function readers<T extends Pick<FormField, "key" | "rules" | "visible_if"
   const queue = [key];
   while (queue.length) {
     const at = queue.pop() as string;
-    for (const f of fields) if (!found.has(f.key) && reads(f).has(at)) { found.add(f.key); queue.push(f.key); }
+    for (const f of fields) if (f.key !== at && !found.has(f.key) && reads(f).has(at)) { found.add(f.key); queue.push(f.key); }
   }
   return found;
 }
@@ -218,6 +218,11 @@ export function computeLoops<T extends Pick<FormField, "key" | "rules" | "visibl
   }
   return out;
 }
+
+/** A rule that reads the very field it belongs to may only adjust how the field asks for its value (same list as the server). */
+export const SELF_EFFECTS: ReadonlySet<Effect["do"]> = new Set(["require", "optional", "text"]);
+/** Whether a rule reads the field `key` (condition, compared field, composed value or {token} of a text). */
+export const ruleReads = (rule: Rule, key: string): boolean => reads({ rules: [rule], visible_if: undefined, compute: undefined }).has(key);
 
 /** What a « fill » effect gives to a field, converted like the server (number parsed, box ticked for « true / vrai / oui / 1 »). */
 export function fillValue(type: FormField["type"], text: string): unknown {

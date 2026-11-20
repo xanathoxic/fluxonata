@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.4 — 2026-11-20
+
+**Fluxonata 0.12.4 : une condition peut lire le champ lui-même**
+
+- Formulaires : une condition peut lire le champ lui-même (« Code (ce champ) »), pour adapter une aide, un texte ou l'obligation
+
 ## v0.12.3 — 2026-11-20
 
 **Fluxonata 0.12.3 : les colonnes d'un formulaire ne se déplacent plus l'une l'autre**

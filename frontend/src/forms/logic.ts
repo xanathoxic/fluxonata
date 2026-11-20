@@ -124,7 +124,7 @@ export function visibleState(def: FormDefinition, values: Record<string, unknown
     shown = new Set<string>();
     states = new Map<string, State>();
     for (const f of order) {
-      const state = applyRules(f, kept, initialState(f));
+      const state = applyRules(f, f.key in values ? { ...kept, [f.key]: values[f.key] } : kept, initialState(f));  // a rule may read the field's own typed value
       states.set(f.key, state);
       delete kept[f.key];
       if (state.visible && (!f.visible_if || ruleHolds(f.visible_if, kept, known))) {

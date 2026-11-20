@@ -433,8 +433,34 @@ def reads(field: dict) -> set[str]:
     return out
 
 
+# A rule may read the very field it belongs to (its own value, as typed), but then it may only adjust how the field asks for its value:
+# hiding, filling, limiting or loading it from its own value would lock the person out or never settle.
+SELF_EFFECTS = frozenset({"require", "optional", "text"})
+
+
+def rule_reads(rule: dict) -> set[str]:
+    """Keys read by one rule (condition, compared field, composed value, {tokens} of its texts)."""
+    return reads({"rules": [rule]})
+
+
+def _check_self_reading(rule: dict, at: str, field: dict, found: dict[str, str]) -> dict[str, str]:
+    key = field.get("key")
+    if any(k == at or k.startswith(f"{at}.") for k in found):  # only a well formed rule can be read
+        return {}
+    if not isinstance(key, str) or key not in rule_reads(rule):
+        return {}
+    for b in ("then", "else"):
+        for j, e in enumerate(rule.get(b) or []):
+            if isinstance(e, dict) and e.get("do") not in SELF_EFFECTS:
+                return {
+                    f"{at}.{b}.{j}": "Une règle qui lit le champ lui-même peut seulement le rendre obligatoire ou facultatif "
+                    "ou changer un texte (libellé, aide, exemple)."
+                }
+    return {}
+
+
 def check_rules(rules, path: str, field: dict, earlier: dict[str, dict]) -> dict[str, str]:
-    """Structure of the rules of one field. `earlier`: the other data fields of the form (anywhere), by key."""
+    """Structure of the rules of one field. `earlier`: the data fields of the form (anywhere, the field itself included), by key."""
     if rules is None:
         return {}
     if not isinstance(rules, list) or len(rules) > MAX_RULES:
@@ -460,4 +486,5 @@ def check_rules(rules, path: str, field: dict, earlier: dict[str, dict]) -> dict
                 continue
             for j, e in enumerate(effects):
                 out.update(_check_effect(e, f"{at}.{b}.{j}", field, earlier))
+        out.update(_check_self_reading(rule, at, field, out))
     return out

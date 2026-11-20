@@ -287,6 +287,42 @@ test("valeur composée dans une condition : « {prénom} {nom} » comparé à un
   await expect(page.getByLabel("Note")).not.toHaveAttribute("readonly", "");
 });
 
+test("une condition peut lire le champ lui-même, mais seulement pour adapter une aide ou l'obligation", async ({ page }) => {
+  await login(page);
+  const slug = `rs-${Date.now().toString().slice(-6)}`;
+  const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [f("code", "Code"), f("autre", "Autre")] }] };
+  expect((await call(page, "POST", "/form-library/", { slug, name: `Soi ${slug}`, definition: def })).status).toBe(201);
+  await page.goto(`/forms/${slug}`);
+  await card(page, "Code").click();
+  await page.getByRole("button", { name: "Ajouter des conditions" }).click();
+  const dlg = page.getByRole("dialog", { name: "Conditions du champ « Code »" });
+  await dlg.getByRole("button", { name: "Changer un texte si…" }).click();
+  await dlg.getByLabel("Condition 1 : champ").selectOption({ label: "Code (ce champ)" });
+  await dlg.getByLabel("Condition 1 : opérateur").selectOption({ label: "commence par" });
+  await dlg.getByLabel("Condition 1 : valeur", { exact: true }).fill("FR");
+  await dlg.getByLabel("Alors : effet 1 : texte à changer").selectOption({ label: "Aide sous le champ" });
+  await dlg.getByLabel("Alors : effet 1 : nouveau texte").fill("Format FR-1234");
+  await expect(dlg.getByRole("button", { name: "Appliquer" })).toBeEnabled();
+
+  // masquer le champ d'après sa propre valeur est refusé : la personne ne pourrait plus le corriger
+  await dlg.getByRole("button", { name: "Supprimer alors : effet 1" }).click();
+  await dlg.getByRole("button", { name: "Ajouter : Masquer le champ" }).first().click();
+  await expect(dlg.getByText("peut seulement le rendre obligatoire ou facultatif")).toBeVisible();
+  await expect(dlg.getByRole("button", { name: "Appliquer" })).toBeDisabled();
+  await dlg.getByRole("button", { name: "Supprimer alors : effet 1" }).click();
+  await dlg.getByRole("button", { name: "Ajouter : Changer un texte" }).first().click();
+  await dlg.getByLabel("Alors : effet 1 : texte à changer").selectOption({ label: "Aide sous le champ" });
+  await dlg.getByLabel("Alors : effet 1 : nouveau texte").fill("Format FR-1234");
+  await dlg.getByRole("button", { name: "Appliquer" }).click();
+
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await expect(page.getByText("Format FR-1234")).toHaveCount(0);
+  await page.getByLabel("Code", { exact: true }).fill("FR-9");
+  await expect(page.getByText("Format FR-1234")).toBeVisible();
+  await page.getByLabel("Code", { exact: true }).fill("BE-9");
+  await expect(page.getByText("Format FR-1234")).toHaveCount(0);
+});
+
 test("champ calculé : formule, essai en direct, valeur recalculée et non modifiable", async ({ page }) => {
   await login(page);
   const slug = `rk-${Date.now().toString().slice(-6)}`;

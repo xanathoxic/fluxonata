@@ -127,7 +127,9 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
     const all = orderedFields(def).filter((f) => !isBlock(f.type) && f.key !== current.key);
     const loops = computeLoops(orderedFields(def), current.key);
     const readersOf = readers(orderedFields(def), current.key); // a formula may not read what already reads this field
-    return { earlier: all.filter((f) => !loops.has(f.key)), calcFields: all.filter((f) => !readersOf.has(f.key)) };
+    // the field itself comes last: a condition may read its own value (to adjust how it asks for it)
+    const itself = { ...current, label: `${current.label || current.key} (ce champ)` };
+    return { earlier: [...all.filter((f) => !loops.has(f.key)), itself], calcFields: all.filter((f) => !readersOf.has(f.key)) };
   })();
   const earlier = readable.earlier;
 

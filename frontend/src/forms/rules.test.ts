@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { applyRules, canHide, computeLoops, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, sentence, textOf, type Node, type Rule } from "./rules";
+import { applyRules, canHide, computeLoops, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, ruleReads, sentence, textOf, type Node, type Rule } from "./rules";
 import { visibleState } from "./logic";
 import type { FormField } from "./types";
 
@@ -139,5 +139,31 @@ describe("conditions qui se lisent mutuellement (boucle)", () => {
     const calc = mk({ key: "a", rules: hideIfNo("b") }, { key: "b", compute: "{a} & 'x'" }).sections[0]?.fields ?? [];
     expect([...computeLoops(calc, "a")]).toEqual(["b"]); // a ne peut pas lire b : sa valeur calculée dépend de a
     expect([...computeLoops(calc, "b")]).toEqual(["a"]); // et b (calculé) ne peut pas faire lire par a ce qu'il lit
+  });
+});
+
+describe("une règle lit le champ lui-même", () => {
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  const ownHelp: Rule = { when: { field: "code", op: "starts_with", value: "FR" }, then: [{ do: "text", target: "help", text: "Format FR-1234 ({code})" }, { do: "require" }] };
+  const def = { version: 1, sections: [{ id: "s", title: "t", fields: [{ key: "code", type: "text", label: "Code", rules: [ownHelp] }, { key: "autre", type: "text", label: "Autre" }] }] } as unknown as Parameters<typeof visibleState>[0];
+
+  it("lit la valeur saisie et adapte l'aide et l'obligation, comme le serveur", () => {
+    const fr = visibleState(def, { code: "FR-9" }).states.get("code");
+    expect(fr?.help).toBe("Format FR-1234 (FR-9)");
+    expect(fr?.required).toBe(true);
+    const be = visibleState(def, { code: "BE-9" }).states.get("code");
+    expect(be?.help).toBeNull();
+    expect(be?.required).toBe(false);
+  });
+
+  it("ne crée ni dépendance ni boucle : l'ordre d'évaluation est celui de la lecture", () => {
+    const fields = def.sections[0]?.fields ?? [];
+    expect(evaluationOrder(fields).map((f) => f.key)).toEqual(["code", "autre"]);
+    expect([...readers(fields, "code")]).toEqual([]);
+  });
+
+  it("repère une règle qui lit le champ, par une condition ou un {jeton}", () => {
+    expect(ruleReads(ownHelp, "code")).toBe(true);
+    expect(ruleReads(ownHelp, "autre")).toBe(false);
   });
 });

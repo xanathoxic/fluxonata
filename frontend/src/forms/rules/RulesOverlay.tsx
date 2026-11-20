@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Overlay } from "../../components/Overlay";
 import { FormIcon, IconButton, type FormIconName } from "../FormIcon";
 import { exprToRuleSet } from "../logic";
-import { describeEffect, isGroup, sentence, TOKEN_RE, type Cond, type CondOp, type Group, type Node, type Rule } from "../rules";
+import { describeEffect, isGroup, ruleReads, SELF_EFFECTS, sentence, TOKEN_RE, type Cond, type CondOp, type Group, type Node, type Rule } from "../rules";
 import type { FormField } from "../types";
 import { COMPUTABLE } from "../calc";
 import { ModeTabs } from "../ModeTabs";
@@ -44,7 +44,7 @@ const TEMPLATES: Template[] = [
   { id: "free", label: "Règle libre", icon: "rule", build: (f) => ({ when: group(f), then: [] }) },
 ];
 
-function problems(rule: Rule, fields: FormField[]): string[] {
+function problems(rule: Rule, fields: FormField[], selfKey: string): string[] {
   const out: string[] = [];
   const keys = new Set(fields.map((f) => f.key));
   const walk = (n: Node, at: string) => {
@@ -58,6 +58,7 @@ function problems(rule: Rule, fields: FormField[]): string[] {
   };
   walk(rule.when, "1");
   if (rule.then.length === 0) out.push("Ajoutez au moins un effet dans « Alors ».");
+  if (ruleReads(rule, selfKey) && [...rule.then, ...(rule.else ?? [])].some((e) => !SELF_EFFECTS.has(e.do))) out.push("Une règle qui lit le champ lui-même peut seulement le rendre obligatoire ou facultatif, ou changer un texte (libellé, aide, exemple).");
   return out;
 }
 
@@ -77,7 +78,7 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
   const label = (key: string) => earlier.find((f) => f.key === key)?.label || key;
   const rule = rules[sel];
   const set = (next: Rule) => setRules(rules.map((r, i) => (i === sel ? next : r)));
-  const all = useMemo(() => rules.map((r) => problems(r, earlier)), [rules, earlier]);
+  const all = useMemo(() => rules.map((r) => problems(r, earlier, field.key)), [rules, earlier, field.key]);
   const blocked = all.some((p) => p.length > 0) || Boolean(calcProblem(formula, calcFields));
   const add = (t: Template) => { setRules([...rules, { ...t.build(earlier, field), id: `r${Date.now().toString(36)}` }]); setSel(rules.length); };
   const move = (i: number, d: -1 | 1) => { const j = i + d; if (j < 0 || j >= rules.length) return; const c = [...rules]; [c[i], c[j]] = [c[j] as Rule, c[i] as Rule]; setRules(c); setSel(j); };
