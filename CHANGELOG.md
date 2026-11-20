@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.5 — 2026-11-20
+
+**Fluxonata 0.12.5 : une règle sur le champ lui-même peut avoir n'importe quel effet**
+
+- Formulaires : une règle qui lit le champ lui-même peut avoir n'importe quel effet (masquer, remplir, verrouiller…)
+
 ## v0.12.4 — 2026-11-20
 
 **Fluxonata 0.12.4 : une condition peut lire le champ lui-même**

@@ -31,11 +31,14 @@ interface Props {
   inline?: boolean;
 }
 
+const MAX_AUTO = 25;
+
 /** The form a person fills in: sections laid out on a 12-column grid, the fields hidden by their rules left out, dressed in
  * the form's style. Used by the public page, the launch pages and the builder's preview, so what is previewed is what is shown. */
 export function DefinitionForm({ definition, values, onChange, errors = {}, disabled, lookup, children, idPrefix = "", inline }: Props) {
   const { shown, states, kept } = visibleState(definition, values);
-  const set = (key: string, v: unknown) => onChange({ ...values, [key]: v });
+  const auto = useRef(0); // corrections made by the rules since the last typing or since things settled
+  const set = (key: string, v: unknown) => { auto.current = 0; onChange({ ...values, [key]: v }); };
   const look = styleProps(definition.style);
   // a value that the rules no longer allow (the choices were limited) is cleared rather than silently kept
   useEffect(() => {
@@ -58,7 +61,10 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
       const picked = Array.isArray(v) ? v : [v];
       if (picked.some((x) => !allowed.includes(String(x)))) next = { ...(next ?? values), [f.key]: Array.isArray(v) ? picked.filter((x) => allowed.includes(String(x))) : "" };
     }
-    if (next) onChange(next);
+    // Rules that keep contradicting each other (a value filled with « b » when it is « a » and with « a » when it is « b ») would never settle:
+    // after MAX_AUTO corrections in a row, the form stops correcting until the next typing.
+    if (!next) auto.current = 0;
+    else if (auto.current < MAX_AUTO) { auto.current++; onChange(next); }
   });
   const scope = `fb-x-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (

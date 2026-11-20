@@ -219,11 +219,6 @@ export function computeLoops<T extends Pick<FormField, "key" | "rules" | "visibl
   return out;
 }
 
-/** A rule that reads the very field it belongs to may only adjust how the field asks for its value (same list as the server). */
-export const SELF_EFFECTS: ReadonlySet<Effect["do"]> = new Set(["require", "optional", "text"]);
-/** Whether a rule reads the field `key` (condition, compared field, composed value or {token} of a text). */
-export const ruleReads = (rule: Rule, key: string): boolean => reads({ rules: [rule], visible_if: undefined, compute: undefined }).has(key);
-
 /** What a « fill » effect gives to a field, converted like the server (number parsed, box ticked for « true / vrai / oui / 1 »). */
 export function fillValue(type: FormField["type"], text: string): unknown {
   if (type === "checkbox") return ["true", "vrai", "oui", "1"].includes(text.trim().toLowerCase());

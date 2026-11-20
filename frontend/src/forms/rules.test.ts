@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { applyRules, canHide, computeLoops, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, ruleReads, sentence, textOf, type Node, type Rule } from "./rules";
+import { applyRules, canHide, computeLoops, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, sentence, textOf, type Node, type Rule } from "./rules";
 import { visibleState } from "./logic";
 import type { FormField } from "./types";
 
@@ -162,8 +162,19 @@ describe("une règle lit le champ lui-même", () => {
     expect([...readers(fields, "code")]).toEqual([]);
   });
 
-  it("repère une règle qui lit le champ, par une condition ou un {jeton}", () => {
-    expect(ruleReads(ownHelp, "code")).toBe(true);
-    expect(ruleReads(ownHelp, "autre")).toBe(false);
+  it("tous les effets sont permis : masquer d'après sa propre valeur retire le champ et sa valeur", () => {
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+    const hideSelf: Rule = { when: { field: "code", op: "equals", value: "x" }, then: [{ do: "hide" }] };
+    const d = { version: 1, sections: [{ id: "s", title: "t", fields: [{ key: "code", type: "text", label: "Code", rules: [hideSelf] }] }] } as unknown as Parameters<typeof visibleState>[0];
+    expect(visibleState(d, { code: "x" }).shown.has("code")).toBe(false);
+    expect(visibleState(d, { code: "x" }).kept).toEqual({});
+    expect(visibleState(d, { code: "y" }).kept).toEqual({ code: "y" });
+  });
+
+  it("des règles qui se contredisent sur le champ lui-même ne bloquent pas l'évaluation", () => {
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+    const flip = (from: string, to: string): Rule => ({ when: { field: "code", op: "equals", value: from }, then: [{ do: "fill", value: to }] });
+    const d = { version: 1, sections: [{ id: "s", title: "t", fields: [{ key: "code", type: "text", label: "Code", rules: [flip("a", "b"), flip("b", "a")] }] }] } as unknown as Parameters<typeof visibleState>[0];
+    expect(visibleState(d, { code: "a" }).states.get("code")?.fill).toBe("b"); // une passe : la valeur saisie décide
   });
 });

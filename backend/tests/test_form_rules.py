@@ -77,7 +77,6 @@ def test_a_valid_set_of_rules_is_accepted():
     "bad",
     [
         {"when": cond("nope", "equals", value="x"), "then": [{"do": "show"}]},  # unknown field
-        {"when": cond("x", "equals", value="x"), "then": [{"do": "show"}]},  # the field itself
         {"when": cond("a", "bogus", value="x"), "then": [{"do": "show"}]},
         {"when": cond("a", "equals"), "then": [{"do": "show"}]},  # no operand
         {"when": cond("a", "equals", value="x", ref="a"), "then": [{"do": "show"}]},  # two operands
@@ -385,7 +384,6 @@ def test_a_composed_value_is_checked_and_read_like_a_field():
         {**ok, "template": "x" * 501},
         {**ok, "op": "is_true"},
         {**ok, "op": "includes_any", "values": ["a"]},
-        {"template": "{x}", "op": "equals", "value": "a"},  # the field itself
     ):
         bad_def = form(field("prenom"), field("nom"), _composed(**bad))
         assert formengine.check_definition(bad_def), bad
@@ -503,34 +501,42 @@ def test_a_rule_may_read_the_field_itself_to_adjust_how_it_asks_for_its_value():
     assert state["help"] is None and state["required"] is False  # the condition does not hold: nothing changes
 
 
-def test_a_rule_reading_the_field_itself_may_not_hide_fill_limit_or_load_it():
+def test_a_rule_reading_the_field_itself_may_have_any_effect():
     for effect in (
         {"do": "hide"},
         {"do": "show"},
         {"do": "fill", "value": "x"},
         {"do": "readonly"},
-        {"do": "options", "values": ["a"]},
+        {"do": "editable"},
+        {"do": "require"},
+        {"do": "text", "target": "label", "text": "{code}"},
     ):
-        problems = formengine.check_definition(_self_form([effect]))
-        assert problems, effect
-        if effect["do"] != "options":  # (« options » est déjà refusé sur un champ texte)
-            assert any("lui-même" in message for message in problems.values()), effect
-    # in the else branch too, and through a {token} of a text
-    else_hide = _self_form([{"do": "require"}], **{"else": [{"do": "hide"}]})
-    assert any("lui-même" in m for m in formengine.check_definition(else_hide).values())
-    token_only = form(
-        field(
-            "code",
-            rules=[
-                {
-                    "when": {"field": "autre", "op": "not_empty"},
-                    "then": [{"do": "hide"}, {"do": "text", "target": "help", "text": "{code}"}],
-                }
-            ],
-        ),
-        field("autre"),
-    )
-    assert any("lui-même" in m for m in formengine.check_definition(token_only).values())
+        assert formengine.check_definition(_self_form([effect])) == {}, effect
+    assert formengine.check_definition(_self_form([{"do": "require"}], **{"else": [{"do": "hide"}]})) == {}
+
+
+def test_hiding_or_filling_a_field_from_its_own_value():
+    hide = _self_form([{"do": "hide"}])  # hidden when the typed value starts with FR
+    kept, shown = formengine.field_states(hide, {"code": "FR-9", "autre": "v"})
+    assert kept == {"autre": "v"} and [f["key"] for f, _ in shown] == ["autre"]  # the field and its value are dropped
+    kept, _ = formengine.field_states(hide, {"code": "BE-9"})
+    assert kept == {"code": "BE-9"}
+    fill = _self_form([{"do": "fill", "value": "FR-0000"}])
+    assert formengine.field_states(fill, {"code": "FR-9"})[0] == {
+        "code": "FR-0000"
+    }  # what was typed decides, the rule's value is kept
+
+
+def test_rules_that_contradict_each_other_on_the_field_itself_still_end():
+    def flip(a, b):
+        return {"when": cond("code", "equals", value=a), "then": [{"do": "fill", "value": b}]}
+
+    d = form(field("code", rules=[flip("a", "b"), flip("b", "a")]))
+    assert formengine.check_definition(d) == {}
+    assert formengine.field_states(d, {"code": "a"})[0] == {
+        "code": "b"
+    }  # one reading of the typed value: it decides, nothing loops
+    assert formengine.field_states(d, {"code": "b"})[0] == {"code": "a"}
 
 
 def test_reading_itself_is_not_a_dependency_or_a_loop():

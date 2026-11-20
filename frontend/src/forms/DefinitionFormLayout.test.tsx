@@ -58,3 +58,20 @@ describe("mise en page : un champ masqué laisse la place", () => {
     expect([rowOf("prenom"), rowOf("nom"), rowOf("ville"), rowOf("cp")]).toEqual(["1", "1", "2", "2"]);
   });
 });
+
+// biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+const flip = (from: string, to: string) => ({ when: { field: "code", op: "equals", value: from }, then: [{ do: "fill", value: to }] });
+const contradicting = { version: 1, sections: [{ id: "s", title: "S", fields: [{ key: "code", type: "text", label: "Code", rules: [flip("a", "b"), flip("b", "a")], layout: { row: 1, col: 1, span: 12 } }] }] } as unknown as FormDefinition;
+
+function Flip({ onChange }: { onChange: () => void }) {
+  const [values, setValues] = useState<Record<string, unknown>>({ code: "a" });
+  return <DefinitionForm definition={contradicting} values={values} onChange={(v) => { onChange(); setValues(v); }} />;
+}
+
+describe("règles qui se contredisent sur le champ lui-même", () => {
+  it("la page arrête de corriger après un nombre borné de corrections au lieu de boucler", () => {
+    let changes = 0;
+    expect(() => render(<Flip onChange={() => { changes++; }} />)).not.toThrow();
+    expect(changes).toBeLessThanOrEqual(25);
+  });
+});

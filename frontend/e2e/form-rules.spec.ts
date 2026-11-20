@@ -287,7 +287,7 @@ test("valeur composée dans une condition : « {prénom} {nom} » comparé à un
   await expect(page.getByLabel("Note")).not.toHaveAttribute("readonly", "");
 });
 
-test("une condition peut lire le champ lui-même, mais seulement pour adapter une aide ou l'obligation", async ({ page }) => {
+test("une condition peut lire le champ lui-même, avec n'importe quel effet", async ({ page }) => {
   await login(page);
   const slug = `rs-${Date.now().toString().slice(-6)}`;
   const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [f("code", "Code"), f("autre", "Autre")] }] };
@@ -304,15 +304,6 @@ test("une condition peut lire le champ lui-même, mais seulement pour adapter un
   await dlg.getByLabel("Alors : effet 1 : nouveau texte").fill("Format FR-1234");
   await expect(dlg.getByRole("button", { name: "Appliquer" })).toBeEnabled();
 
-  // masquer le champ d'après sa propre valeur est refusé : la personne ne pourrait plus le corriger
-  await dlg.getByRole("button", { name: "Supprimer alors : effet 1" }).click();
-  await dlg.getByRole("button", { name: "Ajouter : Masquer le champ" }).first().click();
-  await expect(dlg.getByText("peut seulement le rendre obligatoire ou facultatif")).toBeVisible();
-  await expect(dlg.getByRole("button", { name: "Appliquer" })).toBeDisabled();
-  await dlg.getByRole("button", { name: "Supprimer alors : effet 1" }).click();
-  await dlg.getByRole("button", { name: "Ajouter : Changer un texte" }).first().click();
-  await dlg.getByLabel("Alors : effet 1 : texte à changer").selectOption({ label: "Aide sous le champ" });
-  await dlg.getByLabel("Alors : effet 1 : nouveau texte").fill("Format FR-1234");
   await dlg.getByRole("button", { name: "Appliquer" }).click();
 
   await page.getByRole("tab", { name: "Aperçu" }).click();
@@ -321,6 +312,18 @@ test("une condition peut lire le champ lui-même, mais seulement pour adapter un
   await expect(page.getByText("Format FR-1234")).toBeVisible();
   await page.getByLabel("Code", { exact: true }).fill("BE-9");
   await expect(page.getByText("Format FR-1234")).toHaveCount(0);
+
+  // masquer le champ d'après sa propre valeur est permis : il disparaît quand la valeur correspond
+  await page.getByRole("tab", { name: "Éditeur" }).click();
+  await card(page, "Code").click();
+  await page.getByRole("button", { name: /Gérer les conditions/ }).click();
+  const dlg2 = page.getByRole("dialog", { name: "Conditions du champ « Code »" });
+  await dlg2.getByRole("button", { name: "Ajouter : Masquer le champ" }).first().click();
+  await expect(dlg2.getByRole("button", { name: "Appliquer" })).toBeEnabled();
+  await dlg2.getByRole("button", { name: "Appliquer" }).click();
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByLabel("Code", { exact: true }).fill("FR-1");
+  await expect(page.getByLabel("Code", { exact: true })).toHaveCount(0);
 });
 
 test("champ calculé : formule, essai en direct, valeur recalculée et non modifiable", async ({ page }) => {
