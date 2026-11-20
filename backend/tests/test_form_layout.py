@@ -50,7 +50,9 @@ def test_a_rule_reads_any_other_field_wherever_it_is_laid_out():
         {**at(1, 1, 6, key="a"), "visible_if": "values.b == 'x'"},
         {**at(1, 7, 6, key="b"), "visible_if": "values.a == 'x'"},
     )
-    assert "boucle" in formengine.check_definition(loop)["_"]
+    assert (
+        formengine.check_definition(loop) == {}
+    )  # side by side, reading each other: accepted (evaluated until stable)
     kept, errors = formengine.validate_submission(d, {"a": "v", "b": "x"})
     assert kept == {"a": "v", "b": "x"} and errors == {}
     assert formengine.validate_submission(d, {"a": "v", "b": "y"})[0] == {"b": "y"}

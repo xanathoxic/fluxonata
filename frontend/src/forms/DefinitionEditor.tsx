@@ -7,7 +7,7 @@ import { DefinitionForm, type LookupFn } from "./DefinitionForm";
 import { FieldProperties, type InputInfo } from "./FieldProperties";
 import { FormIcon, IconButton, IconLabel, fieldIcon } from "./FormIcon";
 import { LayoutCanvas } from "./LayoutCanvas";
-import { readers } from "./rules";
+import { computeLoops, readers } from "./rules";
 import { append, COLS, MAX_HEIGHT, normalize, orderedFields, place, readingOrder } from "./layout";
 import { CssTab } from "./CssTab";
 import { ModeTabs } from "./ModeTabs";
@@ -120,13 +120,16 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
   const patchSection = (i: number, patch: Partial<FormSection>) => commit({ ...def, sections: def.sections.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const setFields = (i: number, next: FormField[]) => patchSection(i, { fields: next });
   const current = sel.key ? fields.find((f) => f.key === sel.key) : undefined;
-  // every other data field of the form, wherever it is laid out, except those that already read this one (that would be a loop)
-  const earlier = (() => {
-    if (!current) return [];
-    const all = orderedFields(def);
-    const loops = readers(all, current.key);
-    return all.filter((f) => !isBlock(f.type) && f.key !== current.key && !loops.has(f.key));
+  // every other data field of the form, wherever it is laid out. Conditions may read any of them, even one that already reads this field
+  // (the evaluation is repeated until stable); only a loop through a calculated value is refused.
+  const readable = (() => {
+    if (!current) return { earlier: [] as FormField[], calcFields: [] as FormField[] };
+    const all = orderedFields(def).filter((f) => !isBlock(f.type) && f.key !== current.key);
+    const loops = computeLoops(orderedFields(def), current.key);
+    const readersOf = readers(orderedFields(def), current.key); // a formula may not read what already reads this field
+    return { earlier: all.filter((f) => !loops.has(f.key)), calcFields: all.filter((f) => !readersOf.has(f.key)) };
   })();
+  const earlier = readable.earlier;
 
   const freeKey = (prefix: string, start: number) => { let n = start; while (used.has(`${prefix}${n}`)) n++; return `${prefix}${n}`; };
   const addField = (type: FieldType) => {
@@ -269,7 +272,7 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
             <h2>Propriétés</h2>
             {current ? (
               <fieldset disabled={!edit} style={{ border: 0, padding: 0, margin: 0 }}>
-                <FieldProperties key={`${si}-${fields.findIndex((x) => x.key === current.key)}`} field={current} earlier={earlier} inputs={inputs} connections={connections} part={control}
+                <FieldProperties key={`${si}-${fields.findIndex((x) => x.key === current.key)}`} field={current} earlier={earlier} calcFields={readable.calcFields} inputs={inputs} connections={connections} part={control}
                   onChange={(f) => { setFields(si, normalize(section.fields).map((x) => (x.key === current.key ? f : x))); if (f.key !== current.key) setSel({ s: si, key: f.key }); }} />
               </fieldset>
             ) : <p className="hint">Sélectionnez un champ pour le régler : libellé, type, liaison au workflow, choix, placement, règle d'affichage. Glissez-le sur la grille pour le déplacer.</p>}

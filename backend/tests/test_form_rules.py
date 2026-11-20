@@ -277,14 +277,44 @@ def test_a_rule_may_read_any_other_field_even_side_by_side_or_below():
     assert formengine.validate_submission(d, {"a": "v", "b": "y"})[0] == {"a": "v", "b": "y"}
 
 
-def test_fields_reading_each_other_in_a_loop_are_refused():
-    def hide(other):
+def test_fields_reading_each_other_in_a_loop_are_accepted_and_settle():
+    def hide_if_no(other):
+        return [{"when": cond(other, "equals", value="no"), "then": [{"do": "hide"}]}]
+
+    d = form(field("a", rules=hide_if_no("b")), field("b", rules=hide_if_no("a")))
+    assert formengine.check_definition(d) == {}
+    assert (
+        formengine.check_definition(form(field("a", visible_if="values.b == 'x'"), field("b", rules=hide_if_no("a"))))
+        == {}
+    )
+    # the same result wherever the fields are placed: a reads b (below) and b reads a (above)
+    flipped = form(field("b", rules=hide_if_no("a")), field("a", rules=hide_if_no("b")))
+    for values in ({"a": "x", "b": "no"}, {"a": "no", "b": "x"}, {"a": "x", "b": "y"}):
+        # (a = b = « no » : les deux règles se contredisent, le premier champ dans l'ordre de lecture l'emporte)
+
+        kept, shown = formengine.visible_values(d, values)
+        kept2, shown2 = formengine.visible_values(flipped, values)
+        assert kept == kept2 and sorted(f["key"] for f in shown) == sorted(f["key"] for f in shown2), values
+    assert formengine.visible_values(d, {"a": "x", "b": "no"})[0] == {"b": "no"}
+    assert formengine.visible_values(d, {"a": "x", "b": "y"})[0] == {"a": "x", "b": "y"}
+
+
+def test_contradicting_rules_in_a_loop_stop_after_a_bounded_number_of_passes():
+    def hide_if_filled(other):
         return [{"when": cond(other, "not_empty"), "then": [{"do": "hide"}]}]
 
-    d = form(field("a", rules=hide("b")), field("b", rules=hide("c")), field("c", rules=hide("a")))
+    d = form(field("a", rules=hide_if_filled("b")), field("b", rules=hide_if_filled("a")))
+    assert formengine.check_definition(d) == {}
+    first = formengine.visible_values(d, {"a": "1", "b": "1"})
+    assert first == formengine.visible_values(d, {"a": "1", "b": "1"})  # deterministic, and it ends
+
+
+def test_a_loop_through_a_calculated_field_is_still_refused():
+    d = form(
+        field("a", rules=[{"when": cond("b", "not_empty"), "then": [{"do": "hide"}]}]),
+        field("b", type="number", compute="{a} & 'x'"),
+    )
     assert "boucle" in formengine.check_definition(d)["_"]
-    legacy = form(field("a", visible_if="values.b == 'x'"), field("b", rules=hide("a")))
-    assert "boucle" in formengine.check_definition(legacy)["_"]
 
 
 def test_dependencies_are_evaluated_first_whatever_the_reading_order():
@@ -361,12 +391,13 @@ def test_a_composed_value_is_checked_and_read_like_a_field():
         assert formengine.check_definition(bad_def), bad
 
 
-def test_composed_values_take_part_in_loop_detection():
+def test_composed_values_take_part_in_dependencies():
     loop = form(
         field("a", rules=[{"when": {"template": "{b}!", "op": "not_empty"}, "then": [{"do": "hide"}]}]),
         field("b", rules=[{"when": cond("a", "not_empty"), "then": [{"do": "hide"}]}]),
     )
-    assert "boucle" in formengine.check_definition(loop)["_"]
+    assert formengine.check_definition(loop) == {}
+    assert formrules.reads(loop["sections"][0]["fields"][0]) == {"b"}
 
 
 def _load_field(what="options", **extra):

@@ -53,7 +53,9 @@ def test_structure_checks_refuse_malformed_definitions():
         "options manquantes": definition(field("a", "select")),
         "options sur un texte": definition(field("a", "text", options=[{"value": "x"}])),
         "règle sur soi-même": definition(field("a", visible_if="values.a == 1")),
-        "règle en boucle": definition(field("a", visible_if="values.b == 1"), field("b", visible_if="values.a == 1")),
+        "règle en boucle par un champ calculé": definition(
+            field("a", visible_if="values.b == 1"), field("b", compute="{a} & 'x'")
+        ),
         "règle hors formulaire": definition(field("a"), field("b", visible_if="inputs.a == 1")),
         "règle invalide": definition(field("a"), field("b", visible_if="values.a ==")),
         "champ inconnu": definition({**field("a"), "script": "x"}),

@@ -91,10 +91,15 @@ def test_a_compute_expression_that_does_not_check_is_reported_on_the_field():
     assert any(path.endswith(".compute") for path in problems)
 
 
-def test_fields_that_read_each_other_in_a_loop_are_reported_last():
-    d = definition(field("a", visible_if="values.b == 'x'"), field("b", visible_if="values.a == 'x'"))
+def test_a_loop_through_a_calculated_field_is_reported_last():
+    d = definition(field("a", visible_if="values.b == 'x'"), field("b", compute="{a} & 'x'"))
     problems = check_definition(d)
     assert list(problems) == ["_"] and problems["_"].startswith("Ces champs se lisent en boucle")
+
+
+def test_fields_that_read_each_other_for_their_conditions_are_accepted():
+    d = definition(field("a", visible_if="values.b == 'x'"), field("b", visible_if="values.a == 'x'"))
+    assert check_definition(d) == {}
 
 
 def test_the_module_still_exposes_what_the_rest_of_the_application_imports():

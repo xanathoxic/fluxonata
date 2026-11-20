@@ -186,7 +186,7 @@ test("conditions : une ancienne règle d'affichage est reprise comme première r
   expect(saved.rules[0]).toMatchObject({ then: [{ do: "show" }], else: [{ do: "hide" }] });
 });
 
-test("conditions entre champs côte à côte : le champ de gauche peut lire celui de droite, sans boucle", async ({ page }) => {
+test("conditions entre champs côte à côte : chacun peut lire l'autre, quelle que soit la position (la boucle est évaluée jusqu'à stabilité)", async ({ page }) => {
   await login(page);
   const slug = `rc-${Date.now().toString().slice(-6)}`;
   const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [
@@ -207,12 +207,25 @@ test("conditions entre champs côte à côte : le champ de gauche peut lire celu
   await dlg.getByRole("button", { name: "Appliquer" }).click();
   await expect(dlg).toBeHidden();
 
-  // « Code postal » ne peut plus lire « Ville » : ce serait une boucle
+  // « Code postal » peut lire « Ville » à son tour : les deux se lisent, la position ne compte pas
   await card(page, "Code postal").click();
   await page.getByRole("button", { name: "Ajouter des conditions" }).click();
   const dlg2 = page.getByRole("dialog", { name: "Conditions du champ « Code postal »" });
-  await expect(dlg2.getByText("il n'y en a pas encore")).toBeVisible();
-  await dlg2.getByRole("button", { name: "Annuler" }).click();
+  await expect(dlg2.getByText("il n'y en a pas encore")).toHaveCount(0);
+  await dlg2.getByRole("button", { name: "Masquer si…" }).click();
+  await expect(dlg2.getByLabel("Condition 1 : champ").locator("option", { hasText: "Ville" })).toHaveCount(1);
+  await dlg2.getByLabel("Condition 1 : champ").selectOption({ label: "Ville" });
+  await dlg2.getByLabel("Condition 1 : opérateur").selectOption({ label: "est égal à" });
+  await dlg2.getByLabel("Condition 1 : valeur").fill("secret");
+  await dlg2.getByRole("button", { name: "Appliquer" }).click();
+  await expect(dlg2).toBeHidden();
+
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByLabel("Code postal").fill("99100");
+  await expect(page.getByLabel("Ville")).toHaveCount(0); // « Ville » lit « Code postal »
+  await page.getByLabel("Code postal").fill("75001");
+  await page.getByLabel("Ville").fill("secret");
+  await expect(page.getByLabel("Code postal")).toHaveCount(0); // « Code postal » lit « Ville »
 });
 
 test("règle « Remplir le champ » : la valeur est mise par la règle et le champ n'est plus modifiable", async ({ page }) => {

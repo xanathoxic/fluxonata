@@ -106,28 +106,40 @@ export function ruleHolds(expr: string, values: Record<string, unknown>, known: 
   try { return Boolean(new Evaluator(tokenize(expr), values, known).run()); } catch { return false; }
 }
 
+/** Same number as the server (`MAX_PASSES` in triggers/formengine.py): fields that read each other settle in a few passes, or stop here. */
+export const MAX_PASSES = 8;
+
 /** Fields shown for these values, and the values the server would keep (a hidden field's value is dropped). */
 export function visibleState(def: FormDefinition, values: Record<string, unknown>): { shown: Set<string>; kept: Record<string, unknown>; states: Map<string, State> } {
-  const shown = new Set<string>();
+  let shown = new Set<string>();
   const kept: Record<string, unknown> = {};
-  const states = new Map<string, State>();
+  let states = new Map<string, State>();
   const all = orderedFields(def);
   const known = new Set(all.filter((f) => !isBlock(f.type)).map((f) => f.key));
-  // a field's rules read the values kept so far; the fields it reads come first, wherever they are laid out (like the server)
-  for (const f of evaluationOrder(all)) {
-    const state = applyRules(f, kept, initialState(f));
-    states.set(f.key, state);
-    if (state.visible && (!f.visible_if || ruleHolds(f.visible_if, kept, known))) {
-      shown.add(f.key);
-      if (!isBlock(f.type) && state.fill !== null) kept[f.key] = fillValue(f.type, state.fill);
-      else if (!isBlock(f.type) && f.compute) {  // calculated: the formula's result, never what was typed
-        const v = valueFor(f.type, evaluate(f.compute, kept));
-        if (v !== null) kept[f.key] = v;
-      } else if (!isBlock(f.type) && f.key in values) {
-        kept[f.key] = values[f.key];
-        if (f.type === "custom") { const r = processControl(f, values[f.key]); if (!r.problem) kept[f.key] = r.value; }  // else keep what was typed: the check reports it
+  const order = evaluationOrder(all);
+  // A field's rules read the values kept so far; the fields it reads come first, wherever they are laid out (like the server). Fields that
+  // read each other (a loop) are evaluated again, each seeing what the previous pass kept, until nothing changes.
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const before = JSON.stringify([kept, [...shown]]);
+    shown = new Set<string>();
+    states = new Map<string, State>();
+    for (const f of order) {
+      const state = applyRules(f, kept, initialState(f));
+      states.set(f.key, state);
+      delete kept[f.key];
+      if (state.visible && (!f.visible_if || ruleHolds(f.visible_if, kept, known))) {
+        shown.add(f.key);
+        if (!isBlock(f.type) && state.fill !== null) kept[f.key] = fillValue(f.type, state.fill);
+        else if (!isBlock(f.type) && f.compute) {  // calculated: the formula's result, never what was typed
+          const v = valueFor(f.type, evaluate(f.compute, kept));
+          if (v !== null) kept[f.key] = v;
+        } else if (!isBlock(f.type) && f.key in values) {
+          kept[f.key] = values[f.key];
+          if (f.type === "custom") { const r = processControl(f, values[f.key]); if (!r.problem) kept[f.key] = r.value; }  // else keep what was typed: the check reports it
+        }
       }
     }
+    if (JSON.stringify([kept, [...shown]]) === before) break;
   }
   return { shown, kept, states };
 }

@@ -198,6 +198,27 @@ export function readers<T extends Pick<FormField, "key" | "rules" | "visible_if"
   return found;
 }
 
+/** Fields that `key` may NOT read for its conditions: reading them would close a loop through a calculated value (a value that would depend on
+ *  itself). Fields that only read each other for their conditions may loop: the evaluation is repeated until it is stable (`MAX_PASSES`). */
+export function computeLoops<T extends Pick<FormField, "key" | "rules" | "visible_if" | "compute">>(fields: T[], key: string): Set<string> {
+  const calculated = new Set(fields.filter((f) => f.compute).map((f) => f.key));
+  const seen = new Set<string>();
+  const out = new Set<string>();
+  const queue: [string, boolean][] = [[key, calculated.has(key)]];
+  while (queue.length) {
+    const [at, through] = queue.pop() as [string, boolean];
+    for (const f of fields) {
+      if (f.key === key || !reads(f).has(at)) continue;
+      const flag = through || calculated.has(f.key);
+      if (seen.has(`${f.key}:${flag}`)) continue;
+      seen.add(`${f.key}:${flag}`);
+      if (flag) out.add(f.key);
+      queue.push([f.key, flag]);
+    }
+  }
+  return out;
+}
+
 /** What a « fill » effect gives to a field, converted like the server (number parsed, box ticked for « true / vrai / oui / 1 »). */
 export function fillValue(type: FormField["type"], text: string): unknown {
   if (type === "checkbox") return ["true", "vrai", "oui", "1"].includes(text.trim().toLowerCase());

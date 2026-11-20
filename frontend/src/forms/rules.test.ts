@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { applyRules, canHide, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, sentence, textOf, type Node, type Rule } from "./rules";
+import { applyRules, canHide, computeLoops, canLoad, describeEffect, evalNode, gatedLoads, evaluationOrder, initialState, readers, render, sentence, textOf, type Node, type Rule } from "./rules";
 import { visibleState } from "./logic";
 import type { FormField } from "./types";
 
@@ -105,5 +105,39 @@ describe("chargement d'un service piloté par les règles", () => {
     expect(canLoad(field, applyRules(field, { pays: "BE" }, initialState({})), "prefill")).toBe(true); // aucune règle ne la nomme
     expect([...gatedLoads(field)]).toEqual(["options"]);
     expect(describeEffect({ do: "load", what: "prefill" })).toContain("précharger");
+  });
+});
+
+describe("conditions qui se lisent mutuellement (boucle)", () => {
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  const hideIfNo = (other: string) => [{ when: { field: other, op: "equals", value: "no" }, then: [{ do: "hide" }] }];
+  const mk = (...fields: object[]) => ({ version: 1, sections: [{ id: "s", title: "t", fields: fields.map((f) => ({ type: "text", label: "x", ...f })) }] }) as unknown as Parameters<typeof visibleState>[0];
+  const a = { key: "a", rules: hideIfNo("b") };
+  const b = { key: "b", rules: hideIfNo("a") };
+
+  it("les mêmes résultats que le serveur, quelle que soit la position des champs", () => {
+    for (const [values, expected] of [
+      [{ a: "x", b: "no" }, { b: "no" }],
+      [{ a: "no", b: "x" }, { a: "no" }],
+      [{ a: "x", b: "y" }, { a: "x", b: "y" }],
+    ] as const) {
+      expect(visibleState(mk(a, b), values).kept).toEqual(expected);
+      expect(visibleState(mk(b, a), values).kept).toEqual(expected);
+    }
+  });
+
+  it("deux règles qui se contredisent s'arrêtent après un nombre borné de passes, de façon déterministe", () => {
+    // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+    const filled = (o: string) => [{ when: { field: o, op: "not_empty" }, then: [{ do: "hide" }] }];
+    const d = mk({ key: "a", rules: filled("b") }, { key: "b", rules: filled("a") });
+    expect(visibleState(d, { a: "1", b: "1" }).kept).toEqual(visibleState(d, { a: "1", b: "1" }).kept);
+  });
+
+  it("n'interdit que la boucle qui passe par une valeur calculée", () => {
+    const fields = mk(a, b).sections[0]?.fields ?? [];
+    expect([...computeLoops(fields, "a")]).toEqual([]); // a et b peuvent se lire mutuellement
+    const calc = mk({ key: "a", rules: hideIfNo("b") }, { key: "b", compute: "{a} & 'x'" }).sections[0]?.fields ?? [];
+    expect([...computeLoops(calc, "a")]).toEqual(["b"]); // a ne peut pas lire b : sa valeur calculée dépend de a
+    expect([...computeLoops(calc, "b")]).toEqual(["a"]); // et b (calculé) ne peut pas faire lire par a ce qu'il lit
   });
 });

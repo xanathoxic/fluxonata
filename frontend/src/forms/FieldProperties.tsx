@@ -30,10 +30,10 @@ function textToColumns(t: string): GridColumn[] {
   });
 }
 
-interface Props { field: FormField; earlier: FormField[]; inputs: InputInfo[]; connections: string[]; onChange: (f: FormField) => void; /** a sub-field of a custom control: no workflow input, no dynamic list */ part?: boolean }
+interface Props { field: FormField; earlier: FormField[]; /** fields a formula may read (a loop through a calculated value is refused) */ calcFields?: FormField[]; inputs: InputInfo[]; connections: string[]; onChange: (f: FormField) => void; /** a sub-field of a custom control: no workflow input, no dynamic list */ part?: boolean }
 
 /** The properties of one field: what it asks, how it is bound to the workflow, its choices and when it is shown. */
-export function FieldProperties({ field, earlier, inputs, connections, onChange, part }: Props) {
+export function FieldProperties({ field, earlier, calcFields, inputs, connections, onChange, part }: Props) {
   const { workspace } = useApp();
   const published = useQuery({ queryKey: ["control-library-published", workspace.slug], enabled: field.type === "custom", queryFn: () => api<{ results: ControlCard[] }>(`/workspaces/${workspace.slug}/control-library/?published=1`) });
   const [rulesOpen, setRulesOpen] = useState<false | "rules" | "calc">(false);
@@ -67,7 +67,7 @@ export function FieldProperties({ field, earlier, inputs, connections, onChange,
       {field.compute && <p className="fb-rsum" title="Valeur calculée à partir des autres champs : elle n'est pas modifiable"><strong>Calcul :</strong> <code>{field.compute}</code></p>}
       {count === 0 && <p className="hint">Aucune condition : le champ est toujours affiché.</p>}
       <button type="button" className="primary fp-rules-btn" onClick={() => setRulesOpen("rules")} aria-haspopup="dialog"><IconLabel icon="rule">{count ? `Gérer les conditions (${count})` : field.compute ? "Gérer les conditions et le calcul" : canCalc ? "Ajouter des conditions ou un calcul" : "Ajouter des conditions"}</IconLabel></button>
-      {rulesOpen && <RulesOverlay field={field} earlier={earlier} tab={rulesOpen} onApply={onChange} onClose={() => setRulesOpen(false)} />}
+      {rulesOpen && <RulesOverlay field={field} earlier={earlier} calcFields={calcFields} tab={rulesOpen} onApply={onChange} onClose={() => setRulesOpen(false)} />}
     </fieldset>
   );
   if (isBlock(field.type)) {

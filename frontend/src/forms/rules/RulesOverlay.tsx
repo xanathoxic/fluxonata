@@ -52,7 +52,7 @@ function problems(rule: Rule, fields: FormField[]): string[] {
     if (n.template !== undefined) {
       if (n.template.trim() === "") out.push(`Condition ${at} : écrivez la valeur composée.`);
       for (const m of n.template.matchAll(TOKEN_RE)) if (!keys.has(m[1] as string)) out.push(`Condition ${at} : le champ « ${m[1]} » n'est plus disponible.`);
-    } else if (!keys.has(n.field as string)) out.push(`Condition ${at} : le champ « ${n.field} » n'est plus disponible (supprimé, ou il lit déjà ce champ).`);
+    } else if (!keys.has(n.field as string)) out.push(`Condition ${at} : le champ « ${n.field} » n'est plus disponible (supprimé, ou une valeur calculée le ferait dépendre de lui-même).`);
     if (n.ref !== undefined && !keys.has(n.ref)) out.push(`Condition ${at} : le champ comparé n'existe plus.`);
     if ((n.op === "in_list" || n.op === "includes_any") && (n.values ?? []).length === 0) out.push(`Condition ${at} : indiquez au moins une valeur.`);
   };
@@ -61,11 +61,11 @@ function problems(rule: Rule, fields: FormField[]): string[] {
   return out;
 }
 
-interface Props { field: FormField; earlier: FormField[]; tab?: "rules" | "calc"; onApply: (next: FormField) => void; onClose: () => void }
+interface Props { field: FormField; earlier: FormField[]; /** fields a formula may read; defaults to `earlier` */ calcFields?: FormField[]; tab?: "rules" | "calc"; onApply: (next: FormField) => void; onClose: () => void }
 
 /** The condition editor, in a window centred on the screen: rules with their conditions (groups, operators, comparison with a
  * value or another field) and their effects, written back as a sentence, with a way to try them. Nothing changes until « Appliquer ». */
-export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply, onClose }: Props) {
+export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstTab = "rules", onApply, onClose }: Props) {
   const legacy = !field.rules?.length ? legacyAsRule(field.visible_if) : null;
   const keepLegacy = Boolean(field.visible_if) && !legacy; // a hand-written expression stays, untouched
   const [rules, setRules] = useState<Rule[]>(() => field.rules ?? (legacy ? [legacy] : []));
@@ -78,7 +78,7 @@ export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply,
   const rule = rules[sel];
   const set = (next: Rule) => setRules(rules.map((r, i) => (i === sel ? next : r)));
   const all = useMemo(() => rules.map((r) => problems(r, earlier)), [rules, earlier]);
-  const blocked = all.some((p) => p.length > 0) || Boolean(calcProblem(formula, earlier));
+  const blocked = all.some((p) => p.length > 0) || Boolean(calcProblem(formula, calcFields));
   const add = (t: Template) => { setRules([...rules, { ...t.build(earlier, field), id: `r${Date.now().toString(36)}` }]); setSel(rules.length); };
   const move = (i: number, d: -1 | 1) => { const j = i + d; if (j < 0 || j >= rules.length) return; const c = [...rules]; [c[i], c[j]] = [c[j] as Rule, c[i] as Rule]; setRules(c); setSel(j); };
   const summary = (r: Rule) => r.name || `Quand ${sentence(r.when, label)}`;
@@ -93,7 +93,7 @@ export function RulesOverlay({ field, earlier, tab: firstTab = "rules", onApply,
       onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="button" className="primary" onClick={apply} disabled={blocked}>Appliquer</button></>}>
       {canCalc && <div className="cc-tabs"><ModeTabs label="Contenu de la fenêtre" active={tab} onChange={(t) => setTab(t as "rules" | "calc")} tabs={[{ id: "rules", label: `Conditions${rules.length ? ` (${rules.length})` : ""}`, icon: "rule" }, { id: "calc", label: `Calcul${formula.trim() ? " ✓" : ""}`, icon: "braces" }]} /></div>}
-      {tab === "calc" ? <CalcEditor field={field} others={earlier} formula={formula} onFormula={setFormula} /> : (
+      {tab === "calc" ? <CalcEditor field={field} others={calcFields} formula={formula} onFormula={setFormula} /> : (
       <div className="rl">
         <nav className="rl-list" aria-label="Règles du champ">
           <h3>Règles</h3>

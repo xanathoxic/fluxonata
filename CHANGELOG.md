@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.2 — 2026-11-20
+
+**Fluxonata 0.12.2 : les conditions d'un formulaire lisent n'importe quel champ**
+
+- Formulaires : une condition peut lire n'importe quel champ, même un champ qui la lit déjà (boucles évaluées jusqu'à stabilité)
+
 ## v0.12.1 — 2026-11-20
 
 **Fluxonata 0.12.1 : import de paquets et exploitation**

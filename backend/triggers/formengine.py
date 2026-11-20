@@ -3,7 +3,8 @@
 A definition is plain JSON (sections of fields). Every field is bound to one input of the workflow (`key` = input name),
 so a submission is always checked twice: by the form (what the page asks) and by the workflow's input schema.
 Visibility rules use the workflow expression language, over `values` only, and may look at any other field, wherever it is
-placed; a loop (A reads B which reads A) is refused and fields are evaluated after the ones they read.
+placed. Fields are evaluated after the ones they read; fields that read each other in a loop (A reads B which reads A) are evaluated
+again, up to MAX_PASSES times, until nothing changes. A loop through a calculated value is refused.
 """
 
 import re
@@ -234,25 +235,27 @@ def dependencies(field: dict) -> set[str]:
     return out
 
 
+def _path_back(deps: dict[str, list[str]], start: str) -> list[str]:
+    """A chain of readings that leads from `start` back to itself, or []."""
+    seen: set[str] = set()
+    stack = [(start, [start])]
+    while stack:
+        key, path = stack.pop()
+        for d in deps.get(key, []):
+            if d == start:
+                return [*path, d]
+            if d not in seen:
+                seen.add(d)
+                stack.append((d, [*path, d]))
+    return []
+
+
 def _find_loop(every: dict[str, dict], fields: list[dict]) -> list[str]:
+    """A loop through a calculated field (its value would depend on itself). Fields that only read each other for their conditions may loop:
+    their evaluation is repeated until it is stable (`field_states`)."""
     deps = {f["key"]: sorted(dependencies(f) & set(every)) for f in fields}
-    state: dict[str, int] = {}
-    stack: list[str] = []
-
-    def visit(k: str) -> list[str]:
-        state[k] = 1
-        stack.append(k)
-        for d in deps.get(k, []):
-            if state.get(d) == 1:
-                return stack[stack.index(d) :] + [d]
-            if d not in state and (found := visit(d)):
-                return found
-        stack.pop()
-        state[k] = 2
-        return []
-
-    for k in deps:
-        if k not in state and (found := visit(k)):
+    for field in fields:
+        if "compute" in field and (found := _path_back(deps, field["key"])):
             return found
     return []
 
@@ -627,16 +630,18 @@ def _is_visible(field: dict, values: dict, known: list[str]) -> bool:
         return False  # an unreadable situation (a missing value compared to a number…) hides the field
 
 
-def field_states(definition: dict, values: dict) -> tuple[dict, list[tuple[dict, dict]]]:
-    """Values of the visible fields only (a hidden field's value is dropped, never forwarded) and, for each visible field, its state
-    once its rules have been applied: `required`, accepted `options`… Conditions read the values kept so far (earlier fields)."""
-    kept: dict = {}
-    fields = list(data_fields(definition))
-    known = [f["key"] for f in fields]
-    rank = {f["key"]: i for i, f in enumerate(fields)}
+MAX_PASSES = (
+    8  # same number in the browser (`forms/logic.ts`): fields that read each other settle in a few passes, or stop here
+)
+
+
+def _pass(ordered: list[dict], values: dict, known: list[str], kept: dict) -> list[tuple[dict, dict]]:
+    """One evaluation of every field in order. `kept` holds what the previous pass kept: a field read before its own turn (a loop) is seen
+    as that pass left it; every field is recomputed, so one that is now hidden drops its value."""
     shown: list[tuple[dict, dict]] = []
-    for field in evaluation_order(fields):
+    for field in ordered:
         state = formrules.apply_rules(field, kept, formrules.initial_state(field))
+        kept.pop(field["key"], None)
         if state["visible"] and _is_visible(field, kept, known):
             shown.append((field, state))
             if state["fill"] is not None:  # a rule fills the field: its value is the rule's, whatever was sent
@@ -651,6 +656,24 @@ def field_states(definition: dict, values: dict) -> tuple[dict, list[tuple[dict,
                     normal, problem = formcontrols.process(field, values[field["key"]])
                     if not problem:  # otherwise keep what was sent: the validation below reports the problem
                         kept[field["key"]] = normal
+    return shown
+
+
+def field_states(definition: dict, values: dict) -> tuple[dict, list[tuple[dict, dict]]]:
+    """Values of the visible fields only (a hidden field's value is dropped, never forwarded) and, for each visible field, its state
+    once its rules have been applied: `required`, accepted `options`… Conditions read the values kept so far; fields that read each
+    other (a loop) are evaluated again until the result no longer changes (at most MAX_PASSES times)."""
+    kept: dict = {}
+    fields = list(data_fields(definition))
+    known = [f["key"] for f in fields]
+    rank = {f["key"]: i for i, f in enumerate(fields)}
+    ordered = evaluation_order(fields)
+    shown: list[tuple[dict, dict]] = []
+    for _ in range(MAX_PASSES):
+        before = (dict(kept), [f["key"] for f, _ in shown])
+        shown = _pass(ordered, values, known, kept)
+        if (kept, [f["key"] for f, _ in shown]) == before:
+            break
     shown.sort(key=lambda fs: rank[fs[0]["key"]])
     return kept, shown
 
