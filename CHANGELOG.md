@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.8 — 2026-11-20
+
+**Fluxonata 0.12.8 : mise à jour de sécurité de nginx (1.30.7)**
+
+- Sécurité : image nginx 1.27.5 → 1.30.7 (web et runner-edge), correctifs de sécurité nginx d'octobre-novembre 2026
+
 ## v0.12.7 — 2026-11-20
 
 **Fluxonata 0.12.7 : documentation d'API des produits et progression des exécutions**
