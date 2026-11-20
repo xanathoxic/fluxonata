@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.9 — 2026-11-20
+
+**Fluxonata 0.12.9 : Referrer-Policy renforcée**
+
+- Sécurité : Referrer-Policy origin (le Referer du journal d'erreurs nginx ne porte plus l'adresse d'une page à jeton)
+
 ## v0.12.8 — 2026-11-20
 
 **Fluxonata 0.12.8 : mise à jour de sécurité de nginx (1.30.7)**

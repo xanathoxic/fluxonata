@@ -468,3 +468,12 @@ def test_the_token_stops_at_html_and_quote_characters(html):
     out = redact_url_tokens(html.format(t=TOK))
     assert TOK not in out and "[jeton]" in out
     assert out.count("<") == html.count("<") and out.count(">") == html.count(">")  # the markup is intact
+
+
+@pytest.mark.parametrize("conf", ["nginx.conf", "nginx.roles.conf"])
+def test_nginx_referrer_policy_never_sends_the_path_so_a_token_page_cannot_leak_through_the_error_log(conf):
+    # Le journal d'erreurs de nginx écrit l'en-tête Referer brut hors routes à jeton : la politique `same-origin`
+    # envoyait l'adresse complète (jeton compris) aux appels de l'interface vers /api/. `origin` n'envoie que l'origine.
+    text = (ROOT / "infra" / conf).read_text()
+    policies = re.findall(r"add_header Referrer-Policy (\S+) always;", text)
+    assert len(policies) == 2 and set(policies) == {"origin"}, f"{conf}: {policies}"
