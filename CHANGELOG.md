@@ -2,6 +2,14 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.13.0 — 2026-11-20
+
+**Fluxonata 0.13.0 : déploiement en cluster actif/actif**
+
+- Déploiement multi-instances : ORCH_NUM_PROXIES (nombre de proxys de confiance) pour que les limites de débit par adresse ne soient plus contournables par X-Forwarded-For
+- Documentation : page « Déploiement en cluster actif/actif » (réglages obligatoires, topologies, vérifications, limites non démontrées)
+- Essai de cluster actif/actif sur éléments jetables (scripts/cluster-test.sh) : répartition, session partagée, limite de connexion sous X-Forwarded-For falsifié, arrêt et retour d'une instance ; résultats dans la page Cluster
+
 ## v0.12.9 — 2026-11-20
 
 **Fluxonata 0.12.9 : Referrer-Policy renforcée**

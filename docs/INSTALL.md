@@ -66,7 +66,7 @@ Renseignez `ORCH_ALLOWED_HOSTS` et `ORCH_TRUSTED_ORIGINS` (ex. `https://fluxonat
 - **Worker** : il monte le socket Docker pour lancer les conteneurs d'actions. C'est un composant de confiance (accès au socket ≈ root sur l'hôte) : dédiez l'hôte ou durcissez-le (§8).
   Le répertoire `ORCH_WORK_DIR` doit avoir **le même chemin** sur l'hôte et dans le conteneur du worker.
 - **Clés** : le volume `keys` contient les clés de chiffrement des secrets et de signature. Sauvegardez-le **séparément** de la base : sans lui, secrets et webhooks sont irrécupérables.
-- **Plusieurs workers** : `docker compose … up -d --scale worker=N`. Plusieurs processus se partagent la file ; l'équité entre espaces est assurée par la plateforme. Montée en charge, limites et réglages : [DIMENSIONNEMENT.md](DIMENSIONNEMENT.md).
+- **Plusieurs workers** : `docker compose … up -d --scale worker=N`. Plusieurs processus se partagent la file ; l'équité entre espaces est assurée par la plateforme. Montée en charge, limites et réglages : [DIMENSIONNEMENT.md](DIMENSIONNEMENT.md). Plusieurs instances derrière un répartiteur de charge (actif/actif) : [CLUSTER.md](CLUSTER.md).
 - **API** : l'image lance gunicorn avec des workers **à threads** (`gthread`), nécessaires aux runners distants dont les requêtes durent jusqu'à 20 s ; ne repassez pas à des workers synchrones.
 
 ## 4. Configuration
@@ -80,6 +80,7 @@ Tout se règle par variables d'environnement (`.env` en développement, `infra/.
 | `ORCH_TRUSTED_ORIGINS` | — | origines HTTPS de confiance (CSRF) |
 | `ORCH_DB_HOST` / `_PORT` / `_NAME` / `_USER` / `_PASSWORD` | `127.0.0.1` / `5433` / `fluxonata` / `fluxonata` / — | PostgreSQL |
 | `ORCH_BEHIND_TLS_PROXY` | `0` | `1` derrière un proxy TLS : l'API se fie à `X-Forwarded-Proto: https` (le proxy doit l'envoyer) |
+| `ORCH_NUM_PROXIES` | non défini | nombre de proxys de confiance entre le client et l'API (nginx livré seul : `1` ; répartiteur TLS devant nginx : `2` ; API exposée directement : `0`). Non défini : l'en-tête `X-Forwarded-For` du client est pris tel quel et les limites de débit par adresse (connexion, webhooks, formulaires publics) sont contournables. Une valeur invalide empêche le démarrage |
 | `ORCH_INSECURE_COOKIES` | `0` | `1` pour une évaluation en HTTP simple uniquement |
 | `ORCH_KEY_DIR` | `~/.config/fluxonata/keys` | clés de chiffrement et de signature |
 | `ORCH_ARTIFACTS_DIR` | `var/artifacts` | fichiers produits par les actions |

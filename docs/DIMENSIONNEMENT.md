@@ -24,7 +24,7 @@ Légende : **Mesuré** (essai réel, source citée) · **Déduit** (arithmétiqu
   **Mesuré** : avec `locmem` sur 2 processus, 18 requêtes passent là où la limite en autorise 10 ; avec `db`, 10.
   Ne jamais laisser `locmem` dès qu'il y a plus d'un processus. `redis://…` est prévu mais **non exécuté** ([INSTALL.md](INSTALL.md)).
 - La limite *générale* par utilisateur reste locale à chaque processus : elle se multiplie avec le nombre de réplicas.
-- Placer les réplicas derrière un répartiteur de charge quelconque ; aucune affinité de session n'est requise.
+- Placer les réplicas derrière un répartiteur de charge quelconque ; aucune affinité de session n'est requise. Réglages et vérifications d'un cluster actif/actif : [CLUSTER.md](CLUSTER.md).
 - Mise à jour d'un rôle à plusieurs réplicas : suivre la recette de [VERSIONING.md](VERSIONING.md) (`up` seul coupe l'interface ≈ 10 s, **mesuré**).
 
 ### 2.2 Orchestrateur

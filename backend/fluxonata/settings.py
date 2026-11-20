@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from .cacheconf import build_caches
+from .proxyconf import num_proxies
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BASE_DIR.parent
@@ -144,6 +145,9 @@ REST_FRAMEWORK = {
     },
     "EXCEPTION_HANDLER": "fluxonata.errors.exception_handler",
 }
+_NUM_PROXIES = num_proxies(env("ORCH_NUM_PROXIES"))  # voir fluxonata/proxyconf.py
+if _NUM_PROXIES is not None:
+    REST_FRAMEWORK["NUM_PROXIES"] = _NUM_PROXIES
 SPECTACULAR_SETTINGS = {
     "TITLE": "Fluxonata API",
     "DESCRIPTION": "Plateforme d'orchestration open source (Apache-2.0).",
