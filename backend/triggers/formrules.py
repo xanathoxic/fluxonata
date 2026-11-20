@@ -128,10 +128,13 @@ def eval_cond(cond: dict, values: dict) -> bool:
 
 
 def eval_node(node: dict, values: dict) -> bool:
+    """A condition or a group; `not: true` turns the answer around (« n'est pas… »), also when the situation is unreadable."""
     if "items" in node:
         results = (eval_node(i, values) for i in node["items"])
-        return all(results) if node.get("op") == "all" else any(results)
-    return eval_cond(node, values)
+        holds = all(results) if node.get("op") == "all" else any(results)
+    else:
+        holds = eval_cond(node, values)
+    return not holds if node.get("not") is True else holds
 
 
 def render(template: str, values: dict) -> str:
@@ -289,9 +292,11 @@ def _cond_operands(cond: dict, path: str, earlier: dict[str, dict]) -> dict[str,
 
 
 def _check_cond(cond: dict, path: str, earlier: dict[str, dict], count: list[int]) -> dict[str, str]:
-    allowed = {"field", "template", "op", "value", "ref", "values", "ci"}
+    allowed = {"field", "template", "op", "value", "ref", "values", "ci", "not"}
     if set(cond) - allowed:
         return {path: "Condition invalide."}
+    if "not" in cond and not isinstance(cond["not"], bool):
+        return {f"{path}.not": "Vrai ou faux attendu."}
     count[0] += 1
     if count[0] > MAX_CONDITIONS:
         return {path: f"{MAX_CONDITIONS} conditions au plus par règle."}
@@ -305,8 +310,14 @@ def _check_node(node, path: str, earlier: dict[str, dict], depth: int, count: li
     if not isinstance(node, dict):
         return {path: "Condition invalide."}
     if "items" in node:
-        if set(node) != {"op", "items"} or node["op"] not in ("all", "any") or not isinstance(node["items"], list):
+        if (
+            set(node) - {"not"} != {"op", "items"}
+            or node["op"] not in ("all", "any")
+            or not isinstance(node["items"], list)
+        ):
             return {path: "Groupe invalide : {op: all|any, items: [...]}."}
+        if "not" in node and not isinstance(node["not"], bool):
+            return {f"{path}.not": "Vrai ou faux attendu."}
         if depth > MAX_DEPTH:
             return {path: f"{MAX_DEPTH} niveaux de groupes au plus."}
         if not node["items"]:

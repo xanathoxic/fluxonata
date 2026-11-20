@@ -326,6 +326,47 @@ test("une condition peut lire le champ lui-même, avec n'importe quel effet", as
   await expect(page.getByLabel("Code", { exact: true })).toHaveCount(0);
 });
 
+test("bouton « ! » (négation) : « n'est pas l'une de » sur une condition, et sur un groupe", async ({ page }) => {
+  await login(page);
+  const slug = `rn-${Date.now().toString().slice(-6)}`;
+  const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [f("pays", "Pays"), f("tva", "TVA")] }] };
+  expect((await call(page, "POST", "/form-library/", { slug, name: `Non ${slug}`, definition: def })).status).toBe(201);
+  await page.goto(`/forms/${slug}`);
+  await card(page, "TVA").click();
+  await page.getByRole("button", { name: "Ajouter des conditions" }).click();
+  const dlg = page.getByRole("dialog", { name: "Conditions du champ « TVA »" });
+  await dlg.getByRole("button", { name: "Afficher seulement si…" }).click();
+  await dlg.getByLabel("Condition 1 : opérateur").selectOption({ label: "est l'une de" });
+  await dlg.getByLabel("Condition 1 : valeurs (séparées par des virgules)").fill("FR, BE");
+  await dlg.getByRole("button", { name: "Condition 1 : inverser" }).click();
+  await expect(dlg.getByRole("button", { name: "Condition 1 : inverser" })).toHaveAttribute("aria-pressed", "true");
+  await expect(dlg.getByRole("status", { name: "Résumé de la règle" })).toContainText("NON (Pays est l'une de « FR », « BE »)");
+  await dlg.getByRole("button", { name: "Appliquer" }).click();
+
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await expect(page.getByLabel("TVA", { exact: true })).toBeVisible(); // « Pays » est vide : il n'est pas dans la liste, la condition niée est vraie
+  await page.getByLabel("Pays", { exact: true }).fill("FR");
+  await expect(page.getByLabel("TVA", { exact: true })).toHaveCount(0); // FR est dans la liste : « n'est pas l'une de » est faux
+  await page.getByLabel("Pays", { exact: true }).fill("DE");
+  await expect(page.getByLabel("TVA", { exact: true })).toBeVisible(); // DE n'y est pas
+
+  // sur un groupe : NON (… ET …)
+  await page.getByRole("tab", { name: "Éditeur" }).click();
+  await card(page, "TVA").click();
+  await page.getByRole("button", { name: /Gérer les conditions/ }).click();
+  const dlg2 = page.getByRole("dialog", { name: "Conditions du champ « TVA »" });
+  await dlg2.getByRole("button", { name: "Condition 1 : inverser" }).click(); // la ligne revient à « est l'une de »
+  await dlg2.getByRole("button", { name: "Inverser les conditions" }).click();
+  await expect(dlg2.getByRole("button", { name: "Inverser les conditions" })).toHaveAttribute("aria-pressed", "true");
+  await expect(dlg2.getByRole("status", { name: "Résumé de la règle" })).toContainText("NON (Pays est l'une de « FR », « BE »)");
+  await dlg2.getByRole("button", { name: "Appliquer" }).click();
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  await page.getByLabel("Pays", { exact: true }).fill("BE");
+  await expect(page.getByLabel("TVA", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Pays", { exact: true }).fill("DE");
+  await expect(page.getByLabel("TVA", { exact: true })).toBeVisible();
+});
+
 test("champ calculé : formule, essai en direct, valeur recalculée et non modifiable", async ({ page }) => {
   await login(page);
   const slug = `rk-${Date.now().toString().slice(-6)}`;

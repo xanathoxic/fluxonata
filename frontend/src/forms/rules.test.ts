@@ -178,3 +178,16 @@ describe("une règle lit le champ lui-même", () => {
     expect(visibleState(d, { code: "a" }).states.get("code")?.fill).toBe("b"); // une passe : la valeur saisie décide
   });
 });
+
+describe("négation d'une condition ou d'un groupe (NON)", () => {
+  const label = (k: string) => ({ pays: "Pays", age: "Âge" })[k] ?? k;
+  it("se lit dans le résumé de la règle", () => {
+    expect(sentence({ field: "pays", op: "in_list", values: ["FR", "BE"], not: true }, label)).toBe("NON (Pays est l'une de « FR », « BE »)");
+    expect(sentence({ op: "all", not: true, items: [{ field: "pays", op: "equals", value: "FR" }, { field: "age", op: "gte", value: 18 }] }, label)).toBe("NON (Pays est égal à « FR » ET Âge est supérieur ou égal à 18)");
+    expect(sentence({ field: "pays", op: "equals", value: "FR" }, label)).toBe("Pays est égal à « FR »");
+  });
+  it("une négation dans un groupe garde ses parenthèses", () => {
+    const g: Node = { op: "any", items: [{ field: "pays", op: "equals", value: "FR", not: true }, { field: "age", op: "lt", value: 18 }] };
+    expect(sentence({ op: "all", items: [g, { field: "pays", op: "not_empty" }] }, label)).toBe("(NON (Pays est égal à « FR ») OU Âge est inférieur à 18) ET Pays n'est pas vide");
+  });
+});

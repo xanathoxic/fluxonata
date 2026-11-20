@@ -6,8 +6,9 @@ import type { FormField } from "./types";
  * (`backend/tests/fixtures/form_rules_*.json`). What decides is the server. */
 export type CondOp = "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "in_list" | "includes_any" | "is_empty" | "not_empty" | "is_true" | "is_false" | "gt" | "gte" | "lt" | "lte";
 export type Scalar = string | number | boolean;
-export interface Cond { field?: string; template?: string; op: CondOp; value?: Scalar; ref?: string; values?: (string | number)[]; ci?: boolean }
-export interface Group { op: "all" | "any"; items: Node[] }
+/** `not`: the condition (or group) is turned around: « n'est pas… ». */
+export interface Cond { field?: string; template?: string; op: CondOp; value?: Scalar; ref?: string; values?: (string | number)[]; ci?: boolean; not?: boolean }
+export interface Group { op: "all" | "any"; items: Node[]; not?: boolean }
 export type Node = Cond | Group;
 export type TextTarget = "label" | "help" | "placeholder";
 export type Effect = { do: "show" } | { do: "hide" } | { do: "require" } | { do: "optional" } | { do: "readonly" } | { do: "editable" } | { do: "text"; target: TextTarget; text: string } | { do: "options"; values: string[] } | { do: "fill"; value: string } | { do: "load"; what: LoadKind };
@@ -70,8 +71,8 @@ export function evalCond(c: Cond, values: Values): boolean {
 }
 
 export function evalNode(n: Node, values: Values): boolean {
-  if (isGroup(n)) return n.op === "all" ? n.items.every((i) => evalNode(i, values)) : n.items.some((i) => evalNode(i, values));
-  return evalCond(n, values);
+  const holds = isGroup(n) ? (n.op === "all" ? n.items.every((i) => evalNode(i, values)) : n.items.some((i) => evalNode(i, values))) : evalCond(n, values);
+  return n.not === true ? !holds : holds;
 }
 
 export const TOKEN_RE = /\{([A-Za-z_][A-Za-z0-9_]{0,63})\}/g;
@@ -127,10 +128,15 @@ export const opLabel = (op: CondOp): string => [...TEXTY, ...ORDER, ...operators
 const q = (v: unknown) => (typeof v === "string" ? `« ${v} »` : String(v));
 /** A condition tree as a sentence: « Pays est égal à « FR » ET (Âge est supérieur ou égal à 18 OU … ) ». */
 export function sentence(n: Node, label: (key: string) => string, depth = 0): string {
+  const text = plainSentence(n, label, depth);
+  if (n.not !== true) return text;
+  return `NON (${isGroup(n) ? text.replace(/^\((.*)\)$/, "$1") : text})`;
+}
+function plainSentence(n: Node, label: (key: string) => string, depth: number): string {
   if (isGroup(n)) {
     const parts = n.items.map((i) => sentence(i, label, depth + 1));
     const text = parts.join(n.op === "all" ? " ET " : " OU ");
-    return depth > 0 && parts.length > 1 ? `(${text})` : text;
+    return depth > 0 && parts.length > 1 && n.not !== true ? `(${text})` : text;
   }
   const info = operatorsFor("text").concat(ORDER, operatorsFor("checkbox"), operatorsFor("checkbox_list")).find((o) => o.id === n.op);
   const left = n.template !== undefined ? `la valeur composée « ${n.template.replace(TOKEN_RE, (_, k: string) => `{${label(k)}}`)} »` : label(n.field as string);

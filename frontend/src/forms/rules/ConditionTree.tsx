@@ -12,6 +12,7 @@ export function shape(c: Cond): Cond {
   const info = operatorsFor("text").concat(operatorsFor("checkbox"), operatorsFor("checkbox_list"), operatorsFor("number")).find((o) => o.id === c.op);
   const out: Cond = c.template !== undefined ? { template: c.template, op: c.op } : { field: c.field, op: c.op };
   if (c.ci && CI_OPS.has(c.op)) out.ci = true;
+  if (c.not) out.not = true;
   if (info?.unary) return out;
   if (info?.list) { out.values = c.values ?? (c.value !== undefined && c.value !== "" ? [String(c.value)] : []); return out; }
   if (c.ref !== undefined) out.ref = c.ref; else out.value = c.value ?? "";
@@ -34,13 +35,14 @@ export function GroupEditor({ group, fields, path, onChange, onRemove }: TreePro
     // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className={`rl-group d${Math.min(depth, 3)}`} role="group" aria-label={depth === 0 ? "Conditions" : `Groupe ${path.map((p) => p + 1).join(".")}`}>
       <div className="rl-ghead">
+        <button type="button" className={`rl-ci${group.not ? " on" : ""}`} aria-pressed={Boolean(group.not)} aria-label={depth === 0 ? "Inverser les conditions" : `Inverser le groupe ${path.map((p) => p + 1).join(".")}`} title="! (non) : le groupe est vrai quand ses conditions ne le sont pas" onClick={() => onChange(group.not ? { op: group.op, items: group.items } : { ...group, not: true })}>!</button>
         <span ref={combine.ref} onKeyDown={combine.onKeyDown} className="rl-seg" role="radiogroup" aria-label={`Combinaison${depth ? ` du groupe ${path.map((p) => p + 1).join(".")}` : ""}`}>
           {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={group.op === "all"} className={group.op === "all" ? "on" : ""} title="Toutes les conditions doivent être vraies" onClick={() => onChange({ ...group, op: "all" })}>ET</button>
           {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <button type="button" role="radio" aria-checked={group.op === "any"} className={group.op === "any" ? "on" : ""} title="Au moins une condition doit être vraie" onClick={() => onChange({ ...group, op: "any" })}>OU</button>
         </span>
-        <span className="hint">{group.op === "all" ? "toutes les conditions" : "au moins une condition"}</span>
+        <span className="hint">{group.not ? (group.op === "all" ? "pas toutes les conditions" : "aucune condition") : group.op === "all" ? "toutes les conditions" : "au moins une condition"}</span>
         <span className="fb-spacer" />
         <button type="button" className="rl-small" onClick={() => set([...group.items, newCond(fields)])} disabled={fields.length === 0}><FormIcon name="plus" size={14} /> Condition</button>
         {depth < MAX_DEPTH && <button type="button" className="rl-small" onClick={() => set([...group.items, { op: group.op === "all" ? "any" : "all", items: [newCond(fields)] }])} disabled={fields.length === 0}><FormIcon name="layers" size={14} /> Groupe</button>}
@@ -84,6 +86,7 @@ function CondRow({ cond, fields, label, onChange, onRemove }: { cond: Cond; fiel
   return (
     // biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme
     <div className="rl-cond" role="group" aria-label={label}>
+      <button type="button" className={`rl-ci${cond.not ? " on" : ""}`} aria-pressed={Boolean(cond.not)} aria-label={`${label} : inverser`} title="! (non) : la condition est vraie quand elle ne l'est pas" onClick={() => onChange(shape({ ...cond, not: !cond.not }))}>!</button>
       <select aria-label={`${label} : champ`} value={composed ? COMPOSED : cond.field} onChange={(e) => setField(e.target.value)}>
         {!src && !composed && <option value={cond.field}>{cond.field} (introuvable)</option>}
         {fields.map((f) => <option key={f.key} value={f.key}>{f.label || f.key}</option>)}

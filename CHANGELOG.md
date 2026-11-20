@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.6 — 2026-11-20
+
+**Fluxonata 0.12.6 : inverser une condition d'un formulaire**
+
+- Formulaires : bouton « ! » au début d'une condition ou d'un groupe pour l'inverser (« n'est pas l'une de… »)
+
 ## v0.12.5 — 2026-11-20
 
 **Fluxonata 0.12.5 : une règle sur le champ lui-même peut avoir n'importe quel effet**

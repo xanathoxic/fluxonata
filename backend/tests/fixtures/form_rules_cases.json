@@ -1408,5 +1408,111 @@
   },
   "values": {},
   "expected": false
+ },
+ {
+  "name": "non : n'est pas l'une de (vrai)",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "FR",
+    "BE"
+   ],
+   "not": true
+  },
+  "values": {
+   "a": "DE"
+  },
+  "expected": true
+ },
+ {
+  "name": "non : n'est pas l'une de (faux)",
+  "cond": {
+   "field": "a",
+   "op": "in_list",
+   "values": [
+    "FR",
+    "BE"
+   ],
+   "not": true
+  },
+  "values": {
+   "a": "BE"
+  },
+  "expected": false
+ },
+ {
+  "name": "non : not false ne change rien",
+  "cond": {
+   "field": "a",
+   "op": "equals",
+   "value": "FR",
+   "not": false
+  },
+  "values": {
+   "a": "FR"
+  },
+  "expected": true
+ },
+ {
+  "name": "non : une comparaison illisible devient vraie une fois niée",
+  "cond": {
+   "field": "a",
+   "op": "gt",
+   "value": 5,
+   "not": true
+  },
+  "values": {
+   "a": "abc"
+  },
+  "expected": true
+ },
+ {
+  "name": "non : groupe nié",
+  "cond": {
+   "op": "all",
+   "not": true,
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "FR"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "x"
+    }
+   ]
+  },
+  "values": {
+   "a": "FR",
+   "b": "x"
+  },
+  "expected": false
+ },
+ {
+  "name": "non : groupe nié, une condition fausse",
+  "cond": {
+   "op": "all",
+   "not": true,
+   "items": [
+    {
+     "field": "a",
+     "op": "equals",
+     "value": "FR"
+    },
+    {
+     "field": "b",
+     "op": "equals",
+     "value": "x"
+    }
+   ]
+  },
+  "values": {
+   "a": "FR",
+   "b": "y"
+  },
+  "expected": true
  }
 ]
