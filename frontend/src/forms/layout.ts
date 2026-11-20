@@ -1,3 +1,4 @@
+import { canHide } from "./rules";
 import { isBlock, type FieldType, type FormDefinition, type FormField, type Layout } from "./types";
 
 /** Placement of fields on the 12-column grid of a section. A field covers `span` columns and `height` rows. The reading order of
@@ -127,4 +128,49 @@ export function visibleRows(shown: FormField[], all: FormField[] = shown): Map<s
   for (const { l } of moved) for (let r = l.row; r <= bottom(l); r++) covered.add(r);
   const order = [...covered].sort((a, b) => a - b);
   return new Map(moved.map(({ key, l }) => [key, { ...l, row: order.indexOf(l.row) + 1 }]));
+}
+
+/** A band of a section: the fields between two full-width fields (a title, a paragraph, a field across the whole grid). When the fields
+ *  of the band sit in columns that do not share their rows (a short field on the left next to a stack of other fields on the right…),
+ *  `stacks` holds each column group as its own stack: its fields keep their order, but a row that grows in one stack, or a field that
+ *  appears there, no longer moves the fields of the other. */
+export interface Band { fields: FormField[]; stacks: FormField[][] | null }
+
+const sameShape = (a: FormField[], b: FormField[]): boolean => {
+  const shape = (fs: FormField[]) => fs.map((f) => `${(f.layout as Layout).row}:${heightOf(f)}`).sort().join(",");
+  return shape(a) === shape(b);
+};
+
+/** The section cut into bands (designed placement, hidden fields included, so that the cut never depends on what is shown). */
+export function bands(all: FormField[]): Band[] {
+  const cut: FormField[][] = [];
+  let open = false; // the last band still takes fields (the previous field was not full width)
+  for (const f of readingOrder(all)) {
+    const { col, span } = f.layout as Layout;
+    if (span >= COLS && col === 1) { cut.push([f]); open = false; continue; }
+    if (!open) { cut.push([]); open = true; }
+    (cut[cut.length - 1] as FormField[]).push(f);
+  }
+  return cut.map((fields) => ({ fields, stacks: columnStacks(fields) }));
+}
+
+/** Whether a field may leave the form (a rule shows or hides it, or a legacy visibility expression): the rows below it then change. */
+const mayHide = (f: FormField): boolean => canHide(f) || Boolean(f.visible_if);
+
+/** Column groups of a band (fields that share a column, directly or through others), or null when there is one group, when no field of
+ *  the band can be hidden, or when every group has the same rows: a form that never changes keeps its grid as designed (side by side
+ *  fields on the same rows stay aligned, a tall field covers the short ones next to it). */
+function columnStacks(fields: FormField[]): FormField[][] | null {
+  const groups: { lo: number; hi: number; fields: FormField[] }[] = [];
+  for (const f of fields) {
+    const { col, span } = f.layout as Layout;
+    const touching = groups.filter((g) => col <= g.hi && g.lo <= col + span - 1);
+    const merged = { lo: Math.min(col, ...touching.map((g) => g.lo)), hi: Math.max(col + span - 1, ...touching.map((g) => g.hi)), fields: [f, ...touching.flatMap((g) => g.fields)] };
+    for (const g of touching) groups.splice(groups.indexOf(g), 1);
+    groups.push(merged);
+  }
+  if (groups.length < 2 || !fields.some(mayHide)) return null;
+  const first = (groups[0] as (typeof groups)[number]).fields;
+  if (groups.every((g) => sameShape(g.fields, first))) return null;
+  return groups.sort((a, b) => a.lo - b.lo).map((g) => readingOrder(g.fields));
 }

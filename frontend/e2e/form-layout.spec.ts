@@ -550,3 +550,30 @@ test("hauteur : une cartouche représente l'épaisseur du champ ; un texte long 
   expect(Math.abs(pt.y + pt.height - (pb.y + pb.height))).toBeLessThan(4);
   await anon.close();
 });
+
+test("colonnes indépendantes : une longue liste qui apparaît à droite ne déplace pas les champs de gauche", async ({ page }) => {
+  await login(page);
+  const slug = `stk-${Date.now().toString().slice(-6)}`;
+  const opts = Array.from({ length: 30 }, (_, i) => ({ value: `m${i}`, label: `Membre ${i}` }));
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  const shownWhen = (v: string) => [{ when: { field: "mode", op: "equals", value: v }, then: [{ do: "show" }], else: [{ do: "hide" }] }];
+  const definition = { version: 1, sections: [{ id: "s1", title: "Test", fields: [
+    { key: "intro", type: "paragraph", label: "Choisissez ce que vous voulez gérer.", layout: { row: 1, col: 1, span: 12 } },
+    { key: "mode", type: "select", label: "Mode", options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], layout: { row: 2, col: 1, span: 6 } },
+    { key: "action", type: "select", label: "Action", options: [{ value: "x", label: "X" }], layout: { row: 3, col: 1, span: 6 } },
+    { key: "motif", type: "textarea", label: "Motif", layout: { row: 4, col: 1, span: 6, height: 4 } },
+    { key: "groupe", type: "text", label: "Groupe", layout: { row: 2, col: 7, span: 6 } },
+    { key: "tag", type: "text", label: "Tag", layout: { row: 3, col: 7, span: 6 }, rules: shownWhen("zz") },
+    { key: "membres", type: "checkbox_list", label: "Membres", options: opts, layout: { row: 4, col: 7, span: 6 }, rules: shownWhen("b") },
+  ] }] };
+  expect((await call(page, "POST", "/form-library/", { slug, name: `Piles ${slug}`, definition })).status).toBe(201);
+  await page.goto(`/forms/${slug}`);
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  const top = async (label: string) => (await boxOf(page.getByLabel(label, { exact: true }))).y;
+  await expect(page.getByLabel("Mode", { exact: true })).toBeVisible();
+  const before = { action: await top("Action"), motif: await top("Motif") };
+  await page.getByLabel("Mode", { exact: true }).selectOption("b");
+  await expect(page.getByText("Membre 29")).toBeAttached(); // la longue liste est affichée
+  expect(await top("Action")).toBeCloseTo(before.action, 0);
+  expect(await top("Motif")).toBeCloseTo(before.motif, 0); // la liste de droite n'a rien déplacé à gauche
+});

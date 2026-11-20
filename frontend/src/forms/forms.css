@@ -642,3 +642,7 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .cs-crumb.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 .cs-levelbtns { display: inline-flex; gap: 6px; }
 .cs-levelbtns button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 2px 10px; }
+
+/* Colonnes dont les lignes ne s'alignent pas (voir `bands` dans layout.ts) : chacune est une pile à part, ce qui apparaît dans l'une ne déplace pas l'autre. */
+.fb-stack { grid-column: var(--c) / span var(--s); min-width: 0; }
+@container (max-width: 560px) { .fb-stack { grid-column: 1 / -1; } .fb-stack > .fb-grid { grid-template-columns: minmax(0, 1fr) !important; } }

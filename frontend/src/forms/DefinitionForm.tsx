@@ -2,12 +2,12 @@ import { type CSSProperties, type ReactNode, useEffect, useEffectEvent, useId, u
 import { ControlInput } from "./ControlInput";
 import { DualList } from "./DualList";
 import { IconButton, IconLabel } from "./FormIcon";
-import { orderedFields, readingOrder, visibleRows } from "./layout";
+import { bands, orderedFields, readingOrder, visibleRows } from "./layout";
 import { visibleState } from "./logic";
 import { waitingFor } from "./serviceParams";
 import { canLoad, fillValue, type State } from "./rules";
 import { styleProps } from "./style";
-import { isBlock, type FieldOption, type FormDefinition, type FormField } from "./types";
+import { isBlock, type FieldOption, type FormDefinition, type FormField, type Layout } from "./types";
 import "./forms.css";
 
 /** Asks the server (which asks the service, through a connection) for the options of a dynamic list, or for the whole
@@ -82,22 +82,60 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
           );
         }
         if (fields.length === 0 && s.fields.length > 0) return null;
+        const cell = (f: FormField, l: Layout | undefined, col0 = 0) => {
+          const h = l?.height ?? 1;
+          const at = { "--c": (l?.col ?? 1) - col0, "--s": l?.span ?? 12, "--r": l?.row ?? 1, "--h": h } as CSSProperties;
+          return (
+            <div key={f.key} className={`fb-cell${h > 1 ? " fb-tall" : ""}`} style={at} data-key={f.key} data-type={f.type}>
+              {isBlock(f.type) ? <Block field={{ ...f, label: states.get(f.key)?.label ?? f.label }} /> : <FieldInput field={f} state={states.get(f.key)} value={values[f.key]} values={values} error={errors[f.key]} disabled={disabled} lookup={lookup} idPrefix={idPrefix} onChange={(v) => set(f.key, v)} />}
+            </div>
+          );
+        };
+        const cut = bands(everyField);
+        // Columns whose rows do not line up are stacks of their own: what appears in one (a long list…) never moves the fields of the other.
+        // A section without such columns keeps its single grid, as designed.
+        if (cut.some((b) => b.stacks)) {
+          return (
+            <fieldset key={s.id ?? i} className="fb-section">
+              {s.title && <legend>{s.title}</legend>}
+              {s.description && <p className="hint">{s.description}</p>}
+              {cut.map((b) => {
+                const mineOf = (st: FormField[]) => st.filter((f) => shown.has(f.key));
+                if (!b.stacks) {
+                  const mine = mineOf(b.fields);
+                  if (mine.length === 0) return null;
+                  const rows = visibleRows(mine, b.fields);
+                  return <div key={(b.fields[0] as FormField).key} className="fb-grid">{mine.map((f) => cell(f, rows.get(f.key)))}</div>;
+                }
+                return (
+                  <div key={(b.fields[0] as FormField).key} className="fb-grid">
+                    {b.stacks.map((st) => {
+                      const mine = mineOf(st);
+                      if (mine.length === 0) return null;
+                      const rows = visibleRows(mine, st);
+                      const lo = Math.min(...st.map((f) => (f.layout as Layout).col));
+                      const hi = Math.max(...st.map((f) => (f.layout as Layout).col + (f.layout as Layout).span - 1));
+                      return (
+                        <div key={(st[0] as FormField).key} className="fb-stack" style={{ "--c": lo, "--s": hi - lo + 1 } as CSSProperties}>
+                          <div className="fb-grid" style={{ gridTemplateColumns: `repeat(${hi - lo + 1}, minmax(0, 1fr))` }}>
+                            {mine.map((f) => cell(f, rows.get(f.key), lo - 1))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </fieldset>
+          );
+        }
         const rows = visibleRows(fields, everyField); // the fields under a hidden one move up into its place
         return (
           <fieldset key={s.id ?? i} className="fb-section">
             {s.title && <legend>{s.title}</legend>}
             {s.description && <p className="hint">{s.description}</p>}
             <div className="fb-grid">
-              {fields.map((f) => {
-                const l = rows.get(f.key);
-                const h = l?.height ?? 1;
-                const cell = { "--c": l?.col ?? 1, "--s": l?.span ?? 12, "--r": l?.row ?? 1, "--h": h } as CSSProperties;
-                return (
-                  <div key={f.key} className={`fb-cell${h > 1 ? " fb-tall" : ""}`} style={cell} data-key={f.key} data-type={f.type}>
-                    {isBlock(f.type) ? <Block field={{ ...f, label: states.get(f.key)?.label ?? f.label }} /> : <FieldInput field={f} state={states.get(f.key)} value={values[f.key]} values={values} error={errors[f.key]} disabled={disabled} lookup={lookup} idPrefix={idPrefix} onChange={(v) => set(f.key, v)} />}
-                  </div>
-                );
-              })}
+              {fields.map((f) => cell(f, rows.get(f.key)))}
             </div>
           </fieldset>
         );

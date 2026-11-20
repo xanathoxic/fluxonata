@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { append, normalize, orderedFields, place, readingOrder, rowCount, visibleRows } from "./layout";
+import { append, bands, normalize, orderedFields, place, readingOrder, rowCount, visibleRows } from "./layout";
 import { contrastWithWhite, styleProps } from "./style";
 import type { FormField } from "./types";
 
@@ -188,3 +188,32 @@ describe("un champ masqué laisse la place : ceux du dessous remontent, colonne 
   });
 });
 
+
+describe("bands : piles de colonnes indépendantes", () => {
+  const at = (key: string, row: number, col: number, span: number, height?: number) => ({ key, type: "text", label: key, layout: { row, col, span, ...(height ? { height } : {}) } }) as unknown as Parameters<typeof bands>[0][number];
+  const hideable = (f: ReturnType<typeof at>) => ({ ...f, visible_if: "values.x == 1" }) as typeof f;
+  it("sépare des colonnes dont les lignes ne s'alignent pas, bande par bande, quand un champ peut être masqué", () => {
+    const b = bands([at("titre", 1, 1, 12), at("g1", 2, 1, 6), at("g2", 3, 1, 6), hideable(at("d1", 2, 7, 6)), at("d2", 3, 7, 6, 3)]);
+    expect(b.map((x) => x.fields.map((f) => f.key))).toEqual([["titre"], ["g1", "d1", "g2", "d2"]]);
+    expect(b[0]?.stacks).toBeNull();
+    expect(b[1]?.stacks?.map((st) => st.map((f) => f.key))).toEqual([["g1", "g2"], ["d1", "d2"]]);
+  });
+  it("un formulaire qui ne change jamais garde sa grille : un champ haut couvre les courts à côté de lui", () => {
+    const b = bands([at("a", 1, 1, 6), at("b", 2, 1, 6), at("t", 1, 7, 6, 2)]);
+    expect(b).toHaveLength(1);
+    expect(b[0]?.stacks).toBeNull();
+  });
+  it("garde une grille unique quand les colonnes ont les mêmes lignes", () => {
+    const b = bands([at("a", 1, 1, 6), hideable(at("b", 1, 7, 6)), at("c", 2, 1, 6), at("d", 2, 7, 6)]);
+    expect(b).toHaveLength(1);
+    expect(b[0]?.stacks).toBeNull();
+  });
+  it("une seule colonne (ou un champ pleine largeur) ne fait pas de piles", () => {
+    expect(bands([at("a", 1, 1, 12), at("b", 2, 1, 6), at("c", 2, 7, 6, 2)])[0]?.stacks).toBeNull();
+    expect(bands([at("a", 1, 1, 12), at("b", 2, 1, 12)]).every((x) => x.stacks === null)).toBe(true);
+  });
+  it("un champ qui chevauche deux colonnes les relie : une seule pile", () => {
+    const b = bands([at("g", 1, 1, 6), at("d", 1, 7, 6, 2), at("pont", 2, 4, 6)]);
+    expect(b[0]?.stacks).toBeNull();
+  });
+});

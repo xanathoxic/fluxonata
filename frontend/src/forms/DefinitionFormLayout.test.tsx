@@ -29,11 +29,32 @@ describe("mise en page : un champ masqué laisse la place", () => {
   it("fait remonter le champ du dessous, puis le remet à sa place quand le champ réapparaît", async () => {
     const u = userEvent.setup();
     render(<Harness />);
-    expect([rowOf("utilisateur"), rowOf("motif")]).toEqual(["3", "4"]);
+    // les lignes se comptent dans la pile de gauche (groupe, utilisateur, motif), à part de celle du champ haut de droite
+    expect([rowOf("groupe"), rowOf("utilisateur"), rowOf("motif")]).toEqual(["1", "2", "3"]);
     await u.selectOptions(screen.getByLabelText("Action"), "retirer"); // « utilisateur » est masqué
     expect(document.querySelector('[data-key="utilisateur"]')).toBeNull();
-    expect(rowOf("motif")).toBe("3"); // il prend la place de celui du dessus, malgré le champ haut de droite
+    expect(rowOf("motif")).toBe("2"); // il prend la place de celui du dessus, malgré le champ haut de droite
     await u.selectOptions(screen.getByLabelText("Action"), "ajouter");
-    expect([rowOf("utilisateur"), rowOf("motif")]).toEqual(["3", "4"]);
+    expect([rowOf("utilisateur"), rowOf("motif")]).toEqual(["2", "3"]);
+  });
+
+  it("deux colonnes dont les lignes ne s'alignent pas sont deux piles : la hauteur de l'une ne déplace pas l'autre", () => {
+    render(<Harness />);
+    const stackOf = (key: string) => document.querySelector(`[data-key="${key}"]`)?.closest(".fb-stack");
+    expect(stackOf("groupe")).toBe(stackOf("motif"));
+    expect(stackOf("membres")).not.toBe(stackOf("groupe"));
+    expect(document.querySelector('[data-key="action"]')?.closest(".fb-stack")).toBeNull(); // la ligne pleine largeur reste dans la grille de la section
+  });
+
+  it("des champs côte à côte sur les mêmes lignes restent alignés dans une seule grille", () => {
+    const d: FormDefinition = { version: 1, sections: [{ id: "s", title: "S", fields: [
+      { key: "prenom", type: "text", label: "Prénom", layout: { row: 1, col: 1, span: 6 } },
+      { key: "nom", type: "text", label: "Nom", layout: { row: 1, col: 7, span: 6 } },
+      { key: "ville", type: "text", label: "Ville", layout: { row: 2, col: 1, span: 6 } },
+      { key: "cp", type: "text", label: "Code postal", layout: { row: 2, col: 7, span: 6 } },
+    ] }] };
+    render(<DefinitionForm definition={d} values={{}} onChange={() => {}} />);
+    expect(document.querySelector(".fb-stack")).toBeNull();
+    expect([rowOf("prenom"), rowOf("nom"), rowOf("ville"), rowOf("cp")]).toEqual(["1", "1", "2", "2"]);
   });
 });

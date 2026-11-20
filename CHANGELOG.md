@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.3 — 2026-11-20
+
+**Fluxonata 0.12.3 : les colonnes d'un formulaire ne se déplacent plus l'une l'autre**
+
+- Formulaires : une colonne qui change (liste qui apparaît, champs masqués) ne déplace plus les champs de l'autre colonne
+
 ## v0.12.2 — 2026-11-20
 
 **Fluxonata 0.12.2 : les conditions d'un formulaire lisent n'importe quel champ**
