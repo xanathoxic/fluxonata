@@ -118,7 +118,14 @@ class ImportView(APIView):
         if mode not in ("preview", "apply") or strategy not in ("abort", "skip"):
             raise serializers.ValidationError({"mode": "Mode ou stratégie inconnu."})
         report = service.import_package(ws, request.user, up.read(), apply=(mode == "apply"), strategy=strategy)
-        return Response(report, status=200 if report.get("can_apply") or not report["errors"] else 400)
+        if report.get("can_apply") or not report["errors"]:
+            return Response(report)
+        # Refus : le rapport complet reste (clients existants) ET la raison suit le format d'erreur de la plate-forme, sinon l'interface
+        # n'affichait que « Erreur » (la politique de signature, un secret probable, une version déjà importée… restaient invisibles).
+        message = " ".join(report["errors"])[:500]
+        return Response(
+            {**report, "error": {"code": "import_refused", "message": message, "details": dict(report)}}, status=400
+        )
 
 
 class TrustedKeysView(APIView):

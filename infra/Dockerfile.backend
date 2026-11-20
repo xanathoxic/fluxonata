@@ -13,7 +13,7 @@ COPY backend/requirements.txt backend/constraints.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 COPY backend /app/backend
 COPY workers /app/workers
-RUN useradd --system --uid 10001 --home /nonexistent fluxonata && mkdir -p /app/var /keys && chown -R fluxonata /app/var /keys
+RUN useradd --system --uid 10001 --home /nonexistent fluxonata && mkdir -p /app/var/artifacts /keys && chown -R fluxonata /app/var /keys   # le dossier existe dans l'image : un volume neuf en hérite le propriétaire (sinon Docker le crée en root et l'API ne peut plus y écrire)
 USER fluxonata
 WORKDIR /app/backend
 ENV DJANGO_SETTINGS_MODULE=fluxonata.settings ORCH_KEY_DIR=/keys ORCH_ARTIFACTS_DIR=/app/var/artifacts ORCH_VERSION=$ORCH_VERSION ORCH_REVISION=$ORCH_REVISION

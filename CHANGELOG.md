@@ -2,6 +2,14 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.12.1 — 2026-11-20
+
+**Fluxonata 0.12.1 : import de paquets et exploitation**
+
+- Paquets : un import refusé affiche sa raison (politique de signature, secret détecté…) au lieu d'« Erreur »
+- Exploitation : le dossier des artefacts est inscriptible par l'API dès l'installation (l'export et l'import de paquets échouaient sur un volume créé en root) ; les dossiers créés par le worker restent accessibles à l'API
+- Interface : les fichiers statiques sont compressés et les fichiers à empreinte mis en cache un an (premier chargement allégé) ; les polices intégrées au CSS ne sont plus bloquées par la politique de sécurité
+
 ## v0.12.0 — 2026-11-19
 
 **Fluxonata 0.12.0 : extensions et API store (optionnelle)**

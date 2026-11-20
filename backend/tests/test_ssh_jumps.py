@@ -203,8 +203,14 @@ def test_every_connection_of_the_chain_is_closed_after_the_step(ssh_ws, world, c
 
 def test_a_partial_result_survives_a_failure_in_the_middle_of_a_chain_session(ssh_ws, world, chain):
     _, _, tgt = chain
+    # Seule « hang » a un délai court (1 s) : le délai global et celui de « echo avant » (ouverture du canal comprise) restent larges,
+    # sinon une machine chargée les épuise avant la première commande (stdout absent, constaté sur la suite complète).
     _, sr = run_ssh(
-        ssh_ws, world, jumps=["b1"], commands=["echo avant", "hang"], timeout_seconds=3, command_timeout_seconds=1
+        ssh_ws,
+        world,
+        jumps=["b1"],
+        commands=["echo avant", {"id": "lent", "run": "hang", "timeout_seconds": 1}],
+        timeout_seconds=30,
     )
     r = sr.output["results"]
     assert r[0]["stdout"] == "avant\n" and r[1]["status"] == "timeout" and sr.output["uncertain"] is True

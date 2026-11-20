@@ -431,6 +431,9 @@ def test_policy_can_require_trusted_signatures(exported, world):
     c = client_for(world["outsider"])
     blocked = upload(c, B, data, mode="apply")
     assert blocked.status_code == 400 and "exige un paquet signé" in blocked.json()["errors"][0]
+    # La raison arrive aussi au format d'erreur de la plate-forme : l'interface l'affiche au lieu d'un simple « Erreur ».
+    err = blocked.json()["error"]
+    assert "exige un paquet signé" in err["message"] and err["details"]["errors"] == blocked.json()["errors"]
     assert not ActionVersion.objects.filter(action__workspace=world["ws_b"], action__slug="echo").exists()
     manifest, _ = archive.read(data)
     client_for(admin_b).post(

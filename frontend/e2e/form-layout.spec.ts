@@ -105,7 +105,7 @@ test("style : couleur, libellés à gauche, largeur et bouton ; une couleur illi
   await page.getByRole("tab", { name: "Apparence" }).click();
   // la barre de style : de petites icônes, chacune ouvre un menu contextuel d'options en icônes (nom et aide en infobulle)
   const bar = page.getByRole("toolbar", { name: "Style du formulaire" });
-  await expect(bar.getByRole("button")).toHaveCount(8);
+  await expect(bar.getByRole("button")).toHaveCount(9); // couleur d'accent + 7 réglages (affichage, densité, libellés, coins, largeur, sections, bouton) + réinitialiser
   await expect(bar.getByRole("button", { name: /^Libellés/ })).toHaveAttribute("title", /Au-dessus/);
   await bar.getByRole("button", { name: /^Libellés/ }).click();
   await expect(page.getByRole("menuitemradio", { name: "Au-dessus" })).toHaveAttribute("aria-checked", "true");
@@ -338,9 +338,9 @@ test("CSS sans code : cliquer dans l'aperçu, régler visuellement, CSS génér�
   await page.getByRole("button", { name: /^Écran/ }).click();
   await page.getByRole("menuitemradio", { name: /^Mobile/ }).click();
   await page.getByRole("tab", { name: "Espacement" }).click();
-  await page.getByRole("spinbutton", { name: "Marge intérieure", exact: true }).fill("20");
+  await page.getByRole("spinbutton", { name: "Marge intérieure : haut", exact: true }).fill("20"); // côtés liés par défaut : les quatre prennent 20
   await expect(code).toContainText("@media (max-width: 600px) {");
-  await expect(code).toContainText('[data-key="mail"] .fb-field > label');
+  await expect(code).toContainText('& [data-key="mail"] > .fb-field > label');
 
   // 5. le menu des règles les liste et permet de les supprimer
   await page.getByRole("button", { name: /^Règles du formulaire/ }).click();

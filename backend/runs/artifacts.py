@@ -3,6 +3,7 @@
 import base64
 import binascii
 import hashlib
+import os
 import re
 import uuid
 from pathlib import Path
@@ -33,9 +34,18 @@ class FileSystemStore:
             raise ValueError("Clé de stockage invalide.")
         return p
 
+    def _make_dirs(self, directory: Path) -> None:
+        """Crée les dossiers manquants ; lancé en root (worker), ils reviennent au propriétaire de la racine, pour que l'API (autre utilisateur) puisse y écrire."""
+        missing = [d for d in (directory, *directory.parents) if self.root in d.parents and not d.exists()]
+        directory.mkdir(parents=True, exist_ok=True)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            owner = self.root.stat()
+            for d in missing:
+                os.chown(d, owner.st_uid, owner.st_gid)
+
     def put(self, key: str, data: bytes) -> None:
         p = self._path(key)
-        p.parent.mkdir(parents=True, exist_ok=True)
+        self._make_dirs(p.parent)
         tmp = p.with_suffix(".tmp")
         tmp.write_bytes(data)
         tmp.replace(p)
