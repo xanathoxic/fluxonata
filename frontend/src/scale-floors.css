@@ -1,0 +1,43 @@
+/* Planchers de l'échelle (WCAG 2.2 AA, cibles d'au moins 24 px) : ce que la mise à l'échelle de 0,8 ferait passer en dessous. Une ligne par écart constaté par axe en E2E. */
+
+/* Icônes : leur taille est un attribut (width/height), que la mise à l'échelle du CSS ne voit pas. Un zoom sur ces feuilles seules (aucune position n'en dépend) leur donne l'échelle de la page.
+   Exclus : graphiques (info-bulles positionnées à la souris) et canevas de l'éditeur (react-flow). */
+@media (min-width: 901px) {
+  svg[width][height]:not(.viz-svg):not(.react-flow__edges):not(.react-flow__background):not(.react-flow__minimap) { zoom: var(--ui-s); }
+}
+
+/* Largeurs de texte : sans cela, le texte réduit à l'échelle 0,8 reçoit des largeurs de lettres arrondies au pixel (≈ 3 % d'écart de largeur avec le même texte vu à 80 % de zoom). */
+@media (min-width: 901px) { html { text-rendering: geometricPrecision; } }
+
+/* Valeurs par défaut du navigateur, écrites en pixels dans sa feuille de style (ni le plugin ni le zoom d'icônes ne les voient) : même échelle que le reste. `:where` = aucune spécificité, le CSS de l'application garde la priorité. */
+@media (min-width: 901px) {
+  :where(input[type="checkbox"], input[type="radio"]) { width: calc(13px * var(--ui-s)); height: calc(13px * var(--ui-s)); margin: calc(3px * var(--ui-s)) calc(3px * var(--ui-s)) calc(3px * var(--ui-s)) calc(4px * var(--ui-s)); }
+  :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"]), textarea, select, button) { font-size: max(11px, calc(13.3333px * var(--ui-s))); }
+  :where(ul, ol) { padding-inline-start: calc(40px * var(--ui-s)); }
+  :where(table) { border-spacing: calc(2px * var(--ui-s)); }
+  :where(fieldset) { border-width: calc(2px * var(--ui-s)); }
+}
+
+/* Cibles : 24 px au moins (WCAG 2.2 AA, critère « taille de la cible »). La mise à l'échelle de 0,8 ramènerait sous ce seuil tout ce qui mesure moins de 30 px.
+   `!important` : des règles d'origine plus spécifiques fixent une hauteur ou `min-height: 0` (boutons-liens, pastilles d'aide, options de style) et le plancher doit gagner.
+   Les cibles que le plancher agrandit s'écartent de 80 % de la référence. */
+@media (min-width: 901px) {
+  /* Hauteur : tous les contrôles cliquables. Pas de largeur minimale ici : fixer `min-width` à une longueur supprime le `min-width: auto` des éléments de rangée flex
+     (onglets, boutons de groupe), qui se rétrécissent alors sous la largeur de leur texte et se chevauchent. */
+  :where(button, [role="button"], [role="tab"], [role="menuitem"], [role="menuitemradio"], summary, a.icon-btn, .cs-opt, .linklike, .help-pill, .react-flow__controls-button) { min-height: 24px !important; box-sizing: border-box; }
+  /* Largeur : seulement les boutons carrés d'icône, qui n'ont pas de texte à protéger. */
+  :where(.icon-btn, a.icon-btn, .cs-opt, .react-flow__controls-button) { min-width: 24px !important; }
+}
+
+/* Palette de l'éditeur de workflow : trois onglets à parts égales. Avec le texte relevé à 11 px (la référence est à 10,4 px), « Actions 60 » dépasse de quelques pixels à 1280 px : marges internes réduites. */
+@media (min-width: 901px) {
+  .palette .seg { overflow-x: auto; scrollbar-width: none; }
+  .palette .seg .seg-btn { padding-inline: 2px; gap: 2px; flex: 1 1 auto; }
+}
+
+/* Interrupteurs : 22 px de haut à l'origine, 17,6 px à l'échelle 0,8 → sous les 24 px. Hauteur portée à 24 px, pastille recentrée. */
+@media (min-width: 901px) {
+  .adm-switch, .adm-rule input.adm-switch { height: 24px; min-height: 24px; }
+  .adm-switch::after { top: 50%; transform: translateY(-50%); }
+  .adm-switch:checked::after { transform: translate(calc(18px * var(--ui-s)), -50%); }
+}

@@ -77,9 +77,19 @@ ou identifiants dynamiques (le nom d'utilisateur est alors fourni par Vault). Ad
 (avec, pour un secret écrit par Fluxonata, suppression facultative dans Vault). Si Vault ne répond pas, les étapes concernées échouent avec un message explicite ; rien n'est lu dans le coffre de Fluxonata à la place. Voir `docs/DECISIONS/0019-coffre-externe-vault.md`.
 
 ## Authentification
-Locale (développement) ou **OIDC** (Keycloak, Authentik… ; flux code + PKCE). Variables : `ORCH_OIDC_ISSUER`, `ORCH_OIDC_CLIENT_ID`, `ORCH_OIDC_CLIENT_SECRET`,
-`ORCH_OIDC_REDIRECT_URI`, `ORCH_OIDC_GROUP_ROLES` (JSON groupe → espace/rôle). Les comptes sont liés par (émetteur, `sub`), **jamais par e-mail**.
-Un fournisseur d'identité interne doit figurer dans `ORCH_EGRESS_ALLOWLIST`. Testé contre un fournisseur simulé conforme ; **non testé contre un Keycloak réel**.
+Comptes locaux, plus des fournisseurs d'identité réglés dans l'interface (**Plate-forme → Authentification (SSO)**, administrateurs de la plate-forme seulement ; ADR 0031) :
+**OpenID Connect** (Keycloak, Entra ID, Okta, Authentik… ; code + PKCE) et **SAML 2.0** (AD FS, Entra ID, Keycloak… ; connexion initiée par l'application, réponse signée).
+- **Fournisseur** : nom (affiché sur le bouton de la page de connexion), réglages de connexion, correspondance des attributs (identifiant, e-mail, nom, groupes), domaines d'e-mail autorisés. Le secret
+  d'un client OpenID Connect est chiffré et jamais réaffiché. Pour SAML : importer les métadonnées du fournisseur (adresse ou XML) ou saisir l'identifiant, l'adresse de connexion et le certificat de signature (public).
+- **Adresses à donner au fournisseur** (onglet du même nom) : URI de redirection (OpenID Connect) ou identifiant du service, adresse de réponse et métadonnées (SAML). Derrière un proxy, réglez `ORCH_PUBLIC_URL`.
+- **Comptes et droits** : créer le compte à la première connexion ou non ; refuser ou accepter sans accès une personne dont aucun groupe ne correspond ; **règles groupe → droit** (rôle dans un espace, groupe
+  d'utilisateurs, administration de la plate-forme) et **simulateur**. Le rôle le plus élevé gagne ; un espace n'est piloté que s'il figure dans une règle.
+- **Qui décide** : un droit donné à la main n'est **jamais** modifié par un fournisseur. Un droit donné par un fournisseur est mis à jour (ajouté, changé, retiré) à chaque connexion ; l'écran des membres et des
+  utilisateurs le signale (« Donné par le SSO »), et le changer à la main le reprend à la main. Supprimer un fournisseur garde les droits qu'il a donnés. Le dernier administrateur de la plate-forme n'est jamais retiré.
+- Les comptes sont liés par (émetteur, sujet), **jamais par e-mail**. Un fournisseur interne doit figurer dans **Plate-forme → Réseau** (ou `ORCH_EGRESS_ALLOWLIST`).
+- **Limites** : pas d'assertions SAML chiffrées ni de déconnexion unique ; SCIM ne gère que les utilisateurs ; testé contre Keycloak 26 réel (OpenID Connect et SAML), **non testé contre AD FS ni Entra ID**.
+- Fournisseur par l'environnement (historique, toujours pris en charge) : `ORCH_OIDC_ISSUER`, `ORCH_OIDC_CLIENT_ID`, `ORCH_OIDC_CLIENT_SECRET`, `ORCH_OIDC_REDIRECT_URI`, `ORCH_OIDC_GROUP_ROLES` (JSON groupe → espace/rôle) ;
+  visible, non modifiable dans l'écran SSO.
 
 ## Assistant IA (facultatif)
 Modes : *désactivé* (défaut), *local strict* (aucun envoi cloud, aucun repli externe), *cloud autorisé* (fournisseur choisi explicitement, données masquées,

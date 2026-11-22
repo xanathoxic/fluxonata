@@ -62,6 +62,8 @@ export interface FormDefinition {
   style?: FormStyle;
   /** the author's own CSS, in the canonical form the server wrote (see triggers/formcss.py) */
   css?: string;
+  /** conditions on the submit button (hide it, block it, change its label or the message beside it): the same rules as a field's, which read the data fields */
+  submit?: { rules?: import("./rules").Rule[] };
   /** a workflow's `input_form` only: which field (key) feeds each input of the workflow ({input: field key}; "" = none) */
   map?: Record<string, string>;
 }

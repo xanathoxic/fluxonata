@@ -10,3 +10,5 @@ jsonschema==4.26.0
 cryptography==50.0.2
 joserfc==1.7.7
 gunicorn==26.2.0
+signxml==5.3.1
+lxml==6.1.3

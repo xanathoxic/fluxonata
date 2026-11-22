@@ -1,3 +1,4 @@
+import { px } from "../scale";
 import { FolderTree, inFolder } from "../components/FolderTree";
 import { RowIcon } from "../components/RowIcon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -114,7 +115,7 @@ export function WorkflowsPage() {
                   strokeLinejoin="round"
                   aria-hidden="true"
                   focusable="false"
-                  style={{ verticalAlign: "-3px", marginRight: 6 }}
+                  style={{ verticalAlign: px(-3), marginRight: px(6) }}
                 >
                   <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
                 </svg>

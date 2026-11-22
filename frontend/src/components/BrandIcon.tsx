@@ -1,3 +1,4 @@
+import { px } from "../scale";
 import { BRANDS } from "./brandIconData";
 
 /** Perceived luminance of a hex colour (0 dark … 1 light), used to keep a logo readable on a white tile. */
@@ -14,7 +15,7 @@ export const hasBrand = (slug?: string | null) => Boolean(slug && BRANDS[slug]);
  *  we have no logo for the service. */
 export function BrandIcon({ slug, name, size = 24 }: { slug?: string | null; name: string; size?: number }) {
   const b = slug ? BRANDS[slug] : undefined;
-  const box = { width: size, height: size, borderRadius: Math.round(size * 0.28) };
+  const box = { width: px(size), height: px(size), borderRadius: px(Math.round(size * 0.28)) };
   if (b) {
     const dark = luminance(b.hex) > 0.8; // very light brand colours would vanish on white
     return (
@@ -25,5 +26,5 @@ export function BrandIcon({ slug, name, size = 24 }: { slug?: string | null; nam
   }
   const hue = HUES[[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % HUES.length] as number;
   const letters = name.replace(/\(.*?\)/g, "").split(/[\s_-]+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
-  return <span className="brand-ico brand-mono" aria-hidden="true" data-letters={letters} style={{ ...box, background: `hsl(${hue} 55% 30%)`, fontSize: Math.round(size * 0.4) }} />;
+  return <span className="brand-ico brand-mono" aria-hidden="true" data-letters={letters} style={{ ...box, background: `hsl(${hue} 55% 30%)`, fontSize: `max(12px, ${px(Math.round(size * 0.4))})` }} />;
 }

@@ -104,7 +104,7 @@ test("plan avant génération : valider (avec un plan modifié à la main) lance
   await expect(plan.getByLabel("Nom du workflow")).toHaveValue("Création d'une VM");
   const box = (await boxOf(plan)); // au milieu de la page, avec de la place pour lire et répondre
   const view = viewportOf(page);
-  expect(box.width).toBeGreaterThan(800);
+  expect(box.width).toBeGreaterThan(700); // 784 px depuis l'échelle de l'interface (980 × 0,8)
   expect(Math.abs(box.x + box.width / 2 - view.width / 2)).toBeLessThan(10);
   await expect(plan.getByLabel(/Ce que fera le workflow/)).toHaveValue(/Autoriser la création/);
   await expect(plan.getByRole("heading", { name: "Déjà disponible dans votre espace et réutilisé" })).toBeVisible();

@@ -1,9 +1,9 @@
-import { type CSSProperties, type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { Children, cloneElement, type CSSProperties, isValidElement, type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { ControlInput } from "./ControlInput";
 import { DualList } from "./DualList";
 import { IconButton, IconLabel } from "./FormIcon";
 import { bands, orderedFields, readingOrder, visibleRows } from "./layout";
-import { visibleState } from "./logic";
+import { submitView, visibleState, type SubmitView } from "./logic";
 import { waitingFor } from "./serviceParams";
 import { canLoad, fillValue, type State } from "./rules";
 import { styleProps } from "./style";
@@ -23,8 +23,10 @@ interface Props {
   disabled?: boolean;
   /** Loads the options of a dynamic list; absent in the builder's preview, which then explains it. */
   lookup?: LookupFn;
-  /** Rendered after the sections, inside the form's own style (the submit buttons, so they follow its look). */
-  children?: ReactNode;
+  /** Rendered after the sections, inside the form's own style (the submit buttons, so they follow its look). A function receives what the
+   * submit button's conditions say (label, blocked); with plain content the buttons are simply disabled while blocked. The zone is left out
+   * when a condition hides the button. */
+  children?: ReactNode | ((submit: SubmitView) => ReactNode);
   /** prefix of the ids of the inputs (a form nested in another one, or repeated, needs its own) */
   idPrefix?: string;
   /** one line of a table: the fields side by side in order, a cell kept (empty) for a hidden one, their labels left to the header */
@@ -37,6 +39,7 @@ const MAX_AUTO = 25;
  * the form's style. Used by the public page, the launch pages and the builder's preview, so what is previewed is what is shown. */
 export function DefinitionForm({ definition, values, onChange, errors = {}, disabled, lookup, children, idPrefix = "", inline }: Props) {
   const { shown, states, kept } = visibleState(definition, values);
+  const submit = submitView(definition, kept);
   const auto = useRef(0); // corrections made by the rules since the last typing or since things settled
   const set = (key: string, v: unknown) => { auto.current = 0; onChange({ ...values, [key]: v }); };
   const look = styleProps(definition.style);
@@ -146,7 +149,12 @@ export function DefinitionForm({ definition, values, onChange, errors = {}, disa
           </fieldset>
         );
       })}
-      {children && <div className="fb-actions">{children}</div>}
+      {children && submit.visible && (
+        <>
+          <div className="fb-actions">{typeof children === "function" ? children(submit) : submit.blocked ? Children.map(children, (c) => (isValidElement<{ disabled?: boolean }>(c) && c.type === "button" ? cloneElement(c, { disabled: true }) : c)) : children}</div>
+          {submit.blocked && submit.message && <p className="hint fb-submit-hint" role="status">{submit.message}</p>}
+        </>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { RowIcon } from "../components/RowIcon";
 import { Tabs } from "../components/Tabs";
 import { Kpi } from "./OpsCharts";
 import { NetworkTab } from "./platform/NetworkTab";
+import { SsoTab } from "./platform/SsoTab";
 import { VaultTab } from "./platform/VaultTab";
 import { RunnersPanel } from "./runners/RunnersPanel";
 import { UsersPanel } from "./users/UsersPanel";
@@ -21,7 +22,7 @@ const P = "/platform";
 const ACTION_LABEL: Record<string, string> = {
   "platform.workspace_create": "Espace créé", "platform.workspace_rename": "Espace renommé", "platform.workspace_archive": "Espace archivé", "platform.workspace_restore": "Espace restauré",
   "platform.workspace_admin_grant": "Administrateur d'espace ajouté", "platform.workers_purge": "Processus arrêtés oubliés", "platform.admin_grant": "Administrateur de plate-forme ajouté", "platform.admin_revoke": "Administrateur de plate-forme retiré",
-  "platform.egress_add": "Adresse interne autorisée", "platform.egress_remove": "Adresse interne retirée", "platform.vault_configure": "Coffre externe configuré", "platform.vault_test": "Coffre externe testé", "platform.vault_grants": "Accès au coffre externe modifiés",
+  "platform.egress_add": "Adresse interne autorisée", "platform.egress_remove": "Adresse interne retirée", "platform.vault_configure": "Coffre externe configuré", "platform.sso_create": "Fournisseur SSO créé", "platform.sso_update": "Fournisseur SSO modifié", "platform.sso_delete": "Fournisseur SSO supprimé", "platform.sso_rules": "Règles de droits SSO modifiées", "platform.sso_test": "Fournisseur SSO testé", "platform.vault_test": "Coffre externe testé", "platform.vault_grants": "Accès au coffre externe modifiés",
 };
 const msg = (e: unknown) => ((e as ApiError | null)?.message ?? "");
 
@@ -224,6 +225,7 @@ export function PlatformPage() {
         { id: "spaces", label: "Espaces", content: <SpacesTab /> },
         { id: "users", label: "Utilisateurs", content: <UsersPanel /> },
         { id: "runners", label: "Runners", content: <RunnersPanel mode="platform" /> },
+        { id: "sso", label: "Authentification (SSO)", content: <SsoTab /> },
         { id: "vault", label: "Coffre externe", content: <VaultTab /> },
         { id: "network", label: "Réseau", content: <NetworkTab /> },
         { id: "workers", label: "Processus", content: <WorkersTab /> },

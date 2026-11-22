@@ -54,8 +54,12 @@ export function RunForm({ definition, schema, workspace, workflow, environment, 
       if (Object.keys(problems).length === 0) onSubmit(toInputs(definition, schema, definition.map, visibleState(definition, values).kept));
     }}>
       <DefinitionForm definition={definition} values={values} onChange={onChange} errors={errorsToFields(definition, schema, definition.map, errors)} lookup={lookup} disabled={disabled || busy}>
-        <button type="submit" className="primary" disabled={disabled || busy} aria-describedby={disabled ? "no-run" : undefined}><IconLabel icon="play">{submitLabel}</IconLabel></button>
-        {onCancel && <button type="button" onClick={onCancel}><IconLabel icon="back">Annuler</IconLabel></button>}
+        {(submit) => (
+          <>
+            <button type="submit" className="primary" disabled={disabled || busy || submit.blocked} aria-describedby={disabled ? "no-run" : undefined}><IconLabel icon="play">{submit.label ?? submitLabel}</IconLabel></button>
+            {onCancel && <button type="button" onClick={onCancel}><IconLabel icon="back">Annuler</IconLabel></button>}
+          </>
+        )}
       </DefinitionForm>
       {errors._ && <p role="alert" className="field-error">{errors._}</p>}
     </form>

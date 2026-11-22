@@ -200,3 +200,19 @@ def test_placement_and_control_inner_selectors_are_accepted():
     assert formcss.normalize("label { position: fixed }")[1]
     assert formcss.normalize("label { order: url(x) }")[1]
     assert formcss.normalize("label { transform: translateX(1px) }")[1] == []
+
+
+def test_the_editor_vocabulary_follows_the_server_grammar():
+    """L'éditeur de CSS du navigateur suggère ce que le serveur accepte : son vocabulaire (frontend/src/forms/css/vocabulary.json)
+    doit rester identique aux ensembles de `formcss`. Écart = relancer la génération décrite dans l'en-tête du fichier TS."""
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "frontend" / "src" / "forms" / "css" / "vocabulary.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    groups = {"layout": formcss.LAYOUT, "box": formcss.BOX, "look": formcss.LOOK, "text": formcss.TEXT}
+    assert data["properties"] == {g: sorted(v) for g, v in groups.items()}
+    assert data["enums"] == {k: sorted(v) for k, v in formcss.ENUMS.items()}
+    assert data["functions"] == sorted(formcss.FUNCTIONS) and data["units"] == sorted(formcss.UNITS)
+    assert data["elements"] == sorted(formcss.ELEMENTS) and data["attributes"] == sorted(formcss.ATTRIBUTES)
+    assert data["pseudoClasses"] == list(formcss.PSEUDO_CLASSES)

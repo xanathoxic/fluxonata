@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Overlay } from "../../components/Overlay";
 import { FormIcon, IconButton, type FormIconName } from "../FormIcon";
 import { exprToRuleSet } from "../logic";
-import { describeEffect, isGroup, sentence, TOKEN_RE, type Cond, type CondOp, type Group, type Node, type Rule } from "../rules";
+import { describeEffect, isGroup, isSubmit, sentence, TOKEN_RE, type Cond, type CondOp, type Group, type Node, type Rule } from "../rules";
 import type { FormField } from "../types";
 import { COMPUTABLE } from "../calc";
 import { ModeTabs } from "../ModeTabs";
@@ -44,6 +44,21 @@ const TEMPLATES: Template[] = [
   { id: "free", label: "Règle libre", icon: "rule", build: (f) => ({ when: group(f), then: [] }) },
 ];
 
+const BUTTON_TEMPLATES: Template[] = [
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "enable", label: "Activer le bouton seulement si…", icon: "check", build: (f) => ({ when: group(f), then: [{ do: "editable" }], else: [{ do: "readonly" }, { do: "text", target: "help", text: "Complétez le formulaire pour pouvoir l'envoyer." }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "block", label: "Bloquer le bouton si…", icon: "lock", build: (f) => ({ when: group(f), then: [{ do: "readonly" }, { do: "text", target: "help", text: "Envoi impossible pour le moment." }], else: [{ do: "editable" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "show", label: "Afficher le bouton seulement si…", icon: "eye", build: (f) => ({ when: group(f), then: [{ do: "show" }], else: [{ do: "hide" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "hide", label: "Masquer le bouton si…", icon: "eyeOff", build: (f) => ({ when: group(f), then: [{ do: "hide" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "label", label: "Changer le libellé si…", icon: "paragraph", build: (f) => ({ when: group(f), then: [{ do: "text", target: "label", text: "Envoyer" }] }) },
+  // biome-ignore lint/suspicious/noThenProperty: `then` est un nom du format des règles du formulaire (contrat d'API) ; ces objets sont des données, jamais attendues par `await` — acceptée le 2026-11-12 : valeur toujours un tableau (littéral ici ; donnée serveur validée par `check_rules`)
+  { id: "free", label: "Règle libre", icon: "rule", build: (f) => ({ when: group(f), then: [] }) },
+];
+
 function problems(rule: Rule, fields: FormField[]): string[] {
   const out: string[] = [];
   const keys = new Set(fields.map((f) => f.key));
@@ -69,7 +84,8 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
   const legacy = !field.rules?.length ? legacyAsRule(field.visible_if) : null;
   const keepLegacy = Boolean(field.visible_if) && !legacy; // a hand-written expression stays, untouched
   const [rules, setRules] = useState<Rule[]>(() => field.rules ?? (legacy ? [legacy] : []));
-  const canCalc = (COMPUTABLE as string[]).includes(field.type);
+  const button = isSubmit(field);
+  const canCalc = !button && (COMPUTABLE as string[]).includes(field.type);
   const [tab, setTab] = useState<"rules" | "calc">(canCalc ? firstTab : "rules");
   const [formula, setFormula] = useState(field.compute ?? "");
   const [sel, setSel] = useState(0);
@@ -88,8 +104,8 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
     onClose();
   };
   return (
-    <Overlay variant="modal" wide title={`Conditions du champ « ${field.label || field.key} »`}
-      description="Une règle dit quand elle s'applique (conditions sur la valeur d'un autre champ, où qu'il soit placé) et ce que le champ devient ; un calcul fixe sa valeur à partir des autres champs. Rien n'est modifié avant « Appliquer »."
+    <Overlay variant="modal" wide title={button ? "Conditions du bouton d'envoi" : `Conditions du champ « ${field.label || field.key} »`}
+      description={button ? "Une règle dit quand elle s'applique (conditions sur la valeur d'un champ du formulaire) et ce que devient le bouton d'envoi : masqué, bloqué avec un message, ou un autre libellé. Le serveur refuse aussi un envoi dont le bouton serait masqué ou bloqué. Rien n'est modifié avant « Appliquer »." : "Une règle dit quand elle s'applique (conditions sur la valeur d'un autre champ, où qu'il soit placé) et ce que le champ devient ; un calcul fixe sa valeur à partir des autres champs. Rien n'est modifié avant « Appliquer »."}
       onClose={onClose}
       footer={<><button type="button" onClick={onClose}>Annuler</button><button type="button" className="primary" onClick={apply} disabled={blocked}>Appliquer</button></>}>
       {canCalc && <div className="cc-tabs"><ModeTabs label="Contenu de la fenêtre" active={tab} onChange={(t) => setTab(t as "rules" | "calc")} tabs={[{ id: "rules", label: `Conditions${rules.length ? ` (${rules.length})` : ""}`, icon: "rule" }, { id: "calc", label: `Calcul${formula.trim() ? " ✓" : ""}`, icon: "braces" }]} /></div>}
@@ -97,7 +113,7 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
       <div className="rl">
         <nav className="rl-list" aria-label="Règles du champ">
           <h3>Règles</h3>
-          {rules.length === 0 && <p className="hint">Aucune règle : le champ est toujours affiché, comme défini dans ses propriétés.</p>}
+          {rules.length === 0 && <p className="hint">{button ? "Aucune règle : le bouton est toujours affiché et actif." : "Aucune règle : le champ est toujours affiché, comme défini dans ses propriétés."}</p>}
           {rules.map((r, i) => (
             <div key={r.id ?? i} className={`rl-item${i === sel ? " on" : ""}`}>
               <button type="button" aria-pressed={i === sel} className="rl-pick" onClick={() => setSel(i)}><span className="rl-n">{i + 1}</span><span className="rl-t">{summary(r)}</span>{all[i]?.length ? <FormIcon name="warn" size={14} /> : null}</button>
@@ -111,7 +127,7 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
           <h3>Nouvelle règle</h3>
           {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="rl-templates" role="group" aria-label="Nouvelle règle">
-            {TEMPLATES.map((t) => {
+            {(button ? BUTTON_TEMPLATES : TEMPLATES).map((t) => {
               const why = t.id === "options" || t.id === "load" ? unavailable(t.id, field) : "";
               return <button key={t.id} type="button" className="rl-tpl" disabled={Boolean(why) || earlier.length === 0} title={why || (earlier.length === 0 ? "Aucun autre champ à lire dans ce formulaire." : t.label)} onClick={() => add(t)}><FormIcon name={t.icon} size={16} />{t.label}</button>;
             })}
@@ -123,7 +139,7 @@ export function RulesOverlay({ field, earlier, calcFields = earlier, tab: firstT
         <div className="rl-edit">
           {!rule ? <p className="hint">Choisissez une règle, ou créez-en une avec un modèle.</p> : (
             <>
-              <p className="rl-sentence" role="status" aria-label="Résumé de la règle"><strong>Quand</strong> {sentence(rule.when, label)}<br /><strong>alors</strong> {rule.then.length ? rule.then.map(describeEffect).join(" · ") : "…"}{rule.else?.length ? <><br /><strong>sinon</strong> {rule.else.map(describeEffect).join(" · ")}</> : null}</p>
+              <p className="rl-sentence" role="status" aria-label="Résumé de la règle"><strong>Quand</strong> {sentence(rule.when, label)}<br /><strong>alors</strong> {rule.then.length ? rule.then.map((e) => describeEffect(e, button)).join(" · ") : "…"}{rule.else?.length ? <><br /><strong>sinon</strong> {rule.else.map((e) => describeEffect(e, button)).join(" · ")}</> : null}</p>
               <div className="field"><label htmlFor="rl-name">Nom de la règle (facultatif)</label><input id="rl-name" value={rule.name ?? ""} maxLength={120} placeholder="ex. Seulement pour la France" onChange={(e) => set({ ...rule, name: e.target.value || undefined })} /></div>
               <h3><FormIcon name="rule" size={16} /> Quand</h3>
               {/* a rule written as ONE condition (the simple form the server and the MCP accept) is edited as a group of one */}

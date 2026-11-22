@@ -7,11 +7,13 @@ import { DefinitionForm, type LookupFn } from "./DefinitionForm";
 import { FieldProperties, type InputInfo } from "./FieldProperties";
 import { FormIcon, IconButton, IconLabel, fieldIcon } from "./FormIcon";
 import { LayoutCanvas } from "./LayoutCanvas";
-import { computeLoops, readers } from "./rules";
+import { computeLoops, readers, SUBMIT_FIELD, type Rule } from "./rules";
 import { append, COLS, MAX_HEIGHT, normalize, orderedFields, place, readingOrder } from "./layout";
 import { CssTab } from "./CssTab";
 import { ModeTabs } from "./ModeTabs";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { LookMenu } from "./LookMenu";
+import { RulesOverlay } from "./rules/RulesOverlay";
 import { StyleEditor } from "./StyleEditor";
 import { controlIcon, fieldForControl, type ControlCard } from "./controls";
 import { FIELD_TYPES, PART_TYPES, isBlock, type FieldType, type FormDefinition, type FormField, type FormSection, type FormStyle, type Layout } from "./types";
@@ -162,6 +164,8 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
     setFields(si, next);
   };
   const setStyle = (style: FormStyle | undefined) => { const { style: _old, ...rest } = def; commit(style ? { ...rest, style } : rest); };
+  const setSubmit = (rules: Rule[] | undefined) => { const { submit: _old, ...rest } = def; commit(rules?.length ? { ...rest, submit: { rules } } : rest); };
+  const [submitOpen, setSubmitOpen] = useState(false);
   const setCss = (css: string | undefined) => { const { css: _old, ...rest } = def; commit(css ? { ...rest, css } : rest); };
 
   const toolbar = current && edit && (
@@ -249,7 +253,7 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
     ...(control ? [] : [{ id: "look", label: "Apparence", icon: "palette" as const }]),
     { id: "preview", label: "Aperçu", icon: "eye" as const },
   ];
-  const sample = <DefinitionForm definition={def} values={preview} onChange={setPreview} lookup={lookup}><button type="button" className="primary">Envoyer</button></DefinitionForm>;
+  const sample = <DefinitionForm definition={def} values={preview} onChange={setPreview} lookup={lookup}>{(submit) => <button type="button" className="primary" disabled={submit.blocked}>{submit.label ?? "Envoyer"}</button>}</DefinitionForm>;
   return (
     <div className="fb-editor-fill">
       <div className="fb-bar" role="toolbar" aria-label="Outils de l'éditeur de formulaire">
@@ -258,7 +262,12 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
           <IconButton icon="redo" label="Rétablir" onClick={redo} disabled={!edit || future.current.length === 0} />
         </span>
         {tab === "build" && edit && <button type="button" className="fb-addbtn" aria-pressed={showPalette} onClick={() => setShowPalette(!showPalette)} title="Afficher ou masquer la palette"><IconLabel icon="plus">Ajouter</IconLabel></button>}
-        <ModeTabs tabs={tabs} active={narrow ? "preview" : tab} onChange={setTab} label="Vue de l'éditeur" />
+        <LookMenu look={look} onLook={(v) => { setLook(v); setTab("look"); }} enabled={!narrow && !control}><ModeTabs tabs={tabs} active={narrow ? "preview" : tab} onChange={setTab} label="Vue de l'éditeur" /></LookMenu>
+        {!narrow && !control && (edit || Boolean(def.submit?.rules?.length)) && (
+          <button type="button" className="fb-addbtn" onClick={() => setSubmitOpen(true)} title="Conditions du bouton d'envoi : le masquer, le bloquer avec un message, changer son libellé">
+            <IconLabel icon="rule">{`Bouton d'envoi${def.submit?.rules?.length ? ` (${def.submit.rules.length})` : ""}`}</IconLabel>
+          </button>
+        )}
         <span className="fb-spacer" />
         {toolbarExtra}
         {pill}
@@ -283,7 +292,6 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
       )}
       {!narrow && tab === "look" && (
         <div className="fb-look">
-          <div className="cs-modes"><SegmentedControl label="Niveau de réglage de l'apparence" active={look} onChange={(v) => setLook(v as "simple" | "css")} segments={[{ id: "simple", label: "Simple", icon: "design" }, { id: "css", label: "Avancé (CSS)", icon: "braces" }]} /></div>
           {look === "simple" ? (
             <section className="fb-panel fb-stylepanel" aria-label="Style du formulaire">
               <StyleEditor style={def.style} onChange={setStyle} edit={edit} />
@@ -294,14 +302,17 @@ export function DefinitionEditor({ def, onChange, edit, schema, connections, loo
       )}
       {(narrow || tab === "preview") && (
         <section className="fb-panel fb-scroll" aria-label="Aperçu du formulaire">
-          <p className="hint">Voici ce que verra la personne : placement, style, CSS et règles d'affichage s'appliquent. Rien n'est envoyé.</p>
+          <p className="hint">Voici ce que verra la personne : placement, style, CSS, règles d'affichage et conditions du bouton d'envoi s'appliquent. Rien n'est envoyé.</p>
           <div className="cs-modes"><SegmentedControl label="Largeur de l'aperçu" active={previewW} onChange={(v) => setPreviewW(v as "full" | "tablet" | "phone")} segments={[{ id: "full", label: "Bureau", icon: "layers" }, { id: "tablet", label: "Tablette 768", icon: "list" }, { id: "phone", label: "Mobile 390", icon: "phone" }]} /></div>
           <div className="fb-previewframe" data-width={previewW} style={{ maxWidth: previewW === "phone" ? 390 : previewW === "tablet" ? 768 : undefined }}>
-            <DefinitionForm definition={def} values={preview} onChange={setPreview} lookup={lookup} />
+            {sample}
           </div>
         </section>
       )}
       </div>
+      {submitOpen && (
+        <RulesOverlay field={{ ...SUBMIT_FIELD, rules: def.submit?.rules }} earlier={orderedFields(def).filter((f) => !isBlock(f.type))} onApply={(next) => setSubmit(next.rules)} onClose={() => setSubmitOpen(false)} />
+      )}
       {confirm && <Confirm title={confirm.title} confirmLabel="Confirmer" onConfirm={() => { confirm.run(); setConfirm(null); }} onCancel={() => setConfirm(null)}>Cette action modifie le formulaire.</Confirm>}
     </div>
   );

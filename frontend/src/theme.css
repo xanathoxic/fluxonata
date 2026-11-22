@@ -1,7 +1,11 @@
+/* Échelle de l'interface : `--ui-s` multiplie toutes les longueurs en pixels (postcss-scale.mjs, à la construction). 0,8 sur ordinateur = rendu d'un navigateur à 80 %
+   de zoom, sans zoom. Planchers : texte 11 px (dans le plugin), cibles 24 px (scale-floors.css). Retour à l'échelle d'origine : `--ui-s: 1`. */
+:root { --ui-s: 1; }
+@media (min-width: 901px) { :root { --ui-s: .8; } }
 /* Thème « Minimal & Clean » : couleurs douces, cartes arrondies, ombres légères.
    Toutes les couleurs de texte et d'interface respectent le contraste WCAG 2.2 AA (vérifié par axe en E2E). */
 :root {
-  /* échelle typographique (plancher absolu : 12 px) */
+  /* échelle typographique (plancher : 11 px depuis l'échelle 0,8 de l'interface, 12 px avant ; décision du 2026-11-22) */
   --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 22px; --fs-2xl: 28px;
   /* rôles de couleur */
   --primary: #0e7490; --link: #0e7490; --focus: #0e7490; --border-mid: #cbd5e1; --border-strong: #8190a5; --brand-ink: #0b1f4b; --ink-on-dark: #e2e8f0;
@@ -923,3 +927,5 @@ td:has(> .var-json) { min-width: 14rem; vertical-align: top; }
 }
 .tabs.pt.run-tabs { top: calc(var(--topbar-h) + 4px); }
 html { scroll-padding-top: calc(var(--topbar-h) + 8px); }   /* focus, ancres et scrollIntoView ne passent pas sous la barre collée */
+main.login .login-sso { display: grid; gap: 8px; margin-top: 16px; } main.login .login-sso a.button { text-align: center; }
+main.login .login-sso-error { margin-top: 12px; }

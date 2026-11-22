@@ -1,3 +1,4 @@
+import { px } from "../scale";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -58,7 +59,7 @@ export function PublicFormPage({ kind = "forms" }: { kind?: "forms" | "resume-fo
     onError: (e) => setErrors(e.status === 400 && e.details ? Object.fromEntries(Object.entries(e.details).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])) : { _: e.message }),
   });
   return (
-    <main id="main" className="public-form" style={{ maxWidth: pageWidth(def.data?.definition?.style), margin: "32px auto", padding: "0 16px" }}>
+    <main id="main" className="public-form" style={{ maxWidth: pageWidth(def.data?.definition?.style), margin: `${px(32)} auto`, padding: `0 ${px(16)}` }}>
       {def.isLoading && <p role="status">Chargement…</p>}
       {def.isError && <><h1>Formulaire introuvable</h1><p>Ce formulaire n'existe pas, a déjà reçu une réponse ou n'est plus disponible.</p></>}
       {def.data && (send.data ? (
@@ -71,7 +72,7 @@ export function PublicFormPage({ kind = "forms" }: { kind?: "forms" | "resume-fo
           {def.data.definition ? (
             <form noValidate onSubmit={(e) => { e.preventDefault(); submitDefinition(def.data.definition as FormDefinition); }}>
               <DefinitionForm definition={def.data.definition} values={values} onChange={setValues} errors={errors} lookup={lookup} disabled={send.isPending}>
-                <button type="submit" className="primary" disabled={send.isPending}>{def.data.submit_label}</button>
+                {(submit) => <button type="submit" className="primary" disabled={send.isPending || submit.blocked}>{submit.label ?? def.data.submit_label}</button>}
               </DefinitionForm>
             </form>
           ) : def.data.schema && (

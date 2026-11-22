@@ -8,6 +8,7 @@ test("plate-forme : coffre externe — réglages, guide de mise en place, test e
   await goNav(page, "Plate-forme");
   await page.getByRole("tab", { name: "Coffre externe" }).click();
   await expect(page.getByRole("heading", { name: "Connexion à Vault" })).toBeVisible();
+  await page.locator("#vt-on").evaluate((e) => e.scrollIntoView({ block: "center" })); // à 720 px de haut, l'interrupteur touche le bas de la fenêtre, sous la barre d'enregistrement collée (scrollIntoViewIfNeeded le laisse là) : on le centre, comme le ferait la personne
   await expectNoA11yViolations(page);
 
   await page.getByRole("button", { name: "Guide de mise en place" }).click();

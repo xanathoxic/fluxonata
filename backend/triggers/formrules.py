@@ -342,6 +342,8 @@ def _fx_show(effect, path, field, earlier):
 
 
 def _fx_require(effect, path, field, earlier):
+    if field.get("type") == "submit":
+        return {path: "Le bouton d'envoi n'a pas de valeur à rendre obligatoire."}
     if field.get("type") in _BLOCKS:
         return {path: "Un bloc de contenu ne peut pas être obligatoire."}
     return _no_parameter(effect, path)
@@ -358,6 +360,8 @@ def _fx_text(effect, path, field, earlier):
         return {path: "Texte : {target: label|help|placeholder, text}."}
     if field.get("type") in _BLOCKS and effect["target"] != "label":
         return {path: "Un bloc de contenu n'a que son texte."}
+    if field.get("type") == "submit" and effect["target"] == "placeholder":
+        return {path: "Le bouton d'envoi a un libellé (label) et un message (help)."}
     text = effect["text"]
     if not isinstance(text, str) or len(text) > MAX_TEXT:
         return {f"{path}.text": f"Texte de {MAX_TEXT} caractères au plus."}

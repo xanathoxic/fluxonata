@@ -132,7 +132,15 @@ def data_fields(definition: dict):
 
 def _check_envelope(definition) -> dict[str, str]:
     """The shape of the whole definition (known keys, reference, input map, number of sections): one problem stops the check."""
-    if not isinstance(definition, dict) or set(definition) - {"version", "sections", "ref", "map", "style", "css"}:
+    if not isinstance(definition, dict) or set(definition) - {
+        "version",
+        "sections",
+        "ref",
+        "map",
+        "style",
+        "css",
+        "submit",
+    }:
         return {"_": "Définition invalide : un objet {version, sections} est attendu."}
     ref = definition.get("ref")
     if ref is not None and not (
@@ -194,6 +202,30 @@ def _check_cross_references(sections) -> dict[str, str]:
     return problems
 
 
+SUBMIT_KEY = "_submit"
+SUBMIT_FIELD = {
+    "key": SUBMIT_KEY,
+    "type": "submit",
+    "label": "Bouton d'envoi",
+}  # le bouton se règle comme un champ sans valeur
+
+
+def _check_submit(submit, every: dict[str, dict]) -> dict[str, str]:
+    """Conditions du bouton d'envoi : `{rules: [...]}`, les mêmes règles que celles d'un champ (elles lisent les champs de données)."""
+    if submit is None:
+        return {}
+    if not isinstance(submit, dict) or set(submit) - {"rules"}:
+        return {"submit": "Bouton d'envoi invalide : {rules} attendu."}
+    return formrules.check_rules(submit.get("rules"), "submit.rules", SUBMIT_FIELD, every)
+
+
+def submit_state(definition: dict, values: dict) -> dict:
+    """État du bouton d'envoi (visible, bloqué = `readonly`, libellé `label`, message `help`) pour ces valeurs (celles que le formulaire garde)."""
+    rules = (definition.get("submit") or {}).get("rules")
+    field = {**SUBMIT_FIELD, "rules": rules}
+    return formrules.apply_rules(field, values, formrules.initial_state(field))
+
+
 def check_definition(definition) -> dict[str, str]:
     """Structure only (no workflow needed). Returns {path: message}, empty when the definition is well formed.
 
@@ -214,6 +246,8 @@ def check_definition(definition) -> dict[str, str]:
     if problems := _check_cross_references(definition["sections"]):
         return problems
     every = {f["key"]: f for s_ in definition["sections"] for f in s_["fields"] if f.get("type") not in BLOCK_TYPES}
+    if problems := _check_submit(definition.get("submit"), every):
+        return problems
     if loop := _find_loop(every, list(_all_fields(definition))):
         problems["_"] = "Ces champs se lisent en boucle : " + " → ".join(loop) + "."
     return problems
@@ -795,4 +829,10 @@ def validate_submission(definition: dict, values: dict) -> tuple[dict, dict[str,
                 problem = "Choix non proposé."
         if problem:
             errors[key] = problem
+    if definition.get(
+        "submit"
+    ):  # un bouton masqué ou bloqué par ses conditions : un envoi forgé hors de l'interface est refusé aussi
+        state = submit_state(definition, kept)
+        if not state["visible"] or state["readonly"]:
+            errors["_"] = state["help"] or "L'envoi n'est pas possible : une condition du formulaire n'est pas remplie."
     return kept, errors

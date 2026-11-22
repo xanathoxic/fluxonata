@@ -11,3 +11,4 @@ types-paramiko==5.1.0.20261030
 types-ldap3==2.9.13.20261107
 types-PyMySQL==1.2.4.20261111
 types-gunicorn==26.2.0.20261008
+lxml-stubs==0.5.1

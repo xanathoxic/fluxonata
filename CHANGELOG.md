@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.14.0 — 2026-11-22
+
+**SSO OpenID Connect et SAML 2.0, conditions sur le bouton d'envoi, éditeur CSS avancé**
+
+- SSO : les champs d'une règle de droits sont alignés (grille à quatre colonnes, hauteurs égales, deux colonnes sur petit écran)
+
 ## v0.13.1 — 2026-11-20
 
 **Fluxonata 0.13.1 : navigation toujours visible au défilement**

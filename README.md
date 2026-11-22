@@ -111,7 +111,7 @@ Interface React/TypeScript strict (`frontend/`), protocole d'actions indépendan
 - Livraison des tâches **au moins une fois** : aucune promesse « exactement une fois » pour les effets externes (les actions à effet non idempotent ne sont jamais rejouées automatiquement).
 - Le journal d'audit est *append-only* au niveau applicatif, pas contre un administrateur de base de données.
 - Un runner distant compromis expose le code et les secrets des tâches qu'il reçoit (pas ceux des autres espaces) : dédiez des runners aux espaces sensibles.
-- **Version 0.1** : la plateforme n'a pas fait l'objet d'un audit de sécurité externe ni d'une étude utilisateur ; l'authentification SSO (OIDC) a été testée contre un fournisseur simulé, pas contre un fournisseur réel.
+- **Version 0.1** : la plateforme n'a pas fait l'objet d'un audit de sécurité externe ni d'une étude utilisateur ; le SSO (OpenID Connect et SAML, réglé dans l'interface) a été testé contre un Keycloak 26 réel, pas contre un fournisseur d'entreprise (AD FS, Entra ID…).
 
 ## Vérifier le projet
 

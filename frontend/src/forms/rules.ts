@@ -146,15 +146,18 @@ function plainSentence(n: Node, label: (key: string) => string, depth: number): 
   const right = n.ref !== undefined ? `la valeur de « ${label(n.ref)} »` : q(n.value ?? "");
   return `${left} ${info?.label ?? n.op} ${right}${ci}`;
 }
-export const describeEffect = (e: Effect): string => {
+/** The pseudo-field that stands for the submit button when its conditions are edited (same rules as a field's, other wording). */
+export const SUBMIT_FIELD: FormField = { key: "_submit", label: "Bouton d'envoi", type: "submit" as FormField["type"] };
+export const isSubmit = (f: Pick<FormField, "type">): boolean => (f.type as string) === "submit";
+export const describeEffect = (e: Effect, button = false): string => {
   switch (e.do) {
-    case "show": return "afficher le champ";
-    case "hide": return "masquer le champ";
+    case "show": return button ? "afficher le bouton" : "afficher le champ";
+    case "hide": return button ? "masquer le bouton" : "masquer le champ";
     case "require": return "le rendre obligatoire";
     case "optional": return "le rendre facultatif";
-    case "readonly": return "le mettre en lecture seule";
-    case "editable": return "le rendre modifiable";
-    case "text": return `${{ label: "libellé", help: "aide", placeholder: "texte d'exemple" }[e.target]} : « ${e.text} »`;
+    case "readonly": return button ? "bloquer le bouton" : "le mettre en lecture seule";
+    case "editable": return button ? "débloquer le bouton" : "le rendre modifiable";
+    case "text": return `${{ label: button ? "libellé du bouton" : "libellé", help: button ? "message" : "aide", placeholder: "texte d'exemple" }[e.target]} : « ${e.text} »`;
     case "fill": return `remplir le champ avec « ${e.value} »`;
     case "load": return e.what === "options" ? "charger les options depuis le service" : "précharger la valeur depuis le service";
     default: return `ne proposer que ${e.values.map((v) => `« ${v} »`).join(", ")}`;

@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { controlIcon } from "./controls";
 import { FormIcon, fieldIcon } from "./FormIcon";
+import { px, scaleFactor } from "../scale";
 import { COLS, MAX_HEIGHT } from "./layout";
 import { FIELD_TYPES, type FormField, type Layout } from "./types";
 
@@ -42,8 +43,8 @@ export function LayoutCanvas({ fields, selectedKey, onSelect, onPlace, edit, lab
     const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
     if (!d.moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
     d.moved = true;
-    const colsMoved = Math.round(dx / ((box.width + GAP) / COLS));
-    const rowsMoved = Math.round(dy / (ROW_H + GAP));
+    const colsMoved = Math.round(dx / ((box.width + GAP * scaleFactor()) / COLS));
+    const rowsMoved = Math.round(dy / ((ROW_H + GAP) * scaleFactor()));
     const s = d.start;
     const next: Layout = d.mode === "move"
       ? { ...s, row: Math.max(1, s.row + rowsMoved), col: clamp(s.col + colsMoved, 1, COLS - s.span + 1) }
@@ -78,7 +79,7 @@ export function LayoutCanvas({ fields, selectedKey, onSelect, onPlace, edit, lab
     <>
       <p id="fb-lgrid-help" className="sr-only">Flèches : déplacer le champ sélectionné. Maj + flèche gauche ou droite : changer sa largeur ; Maj + flèche haut ou bas : changer sa hauteur.</p>
       {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
-      <div ref={grid} className="fb-lgrid" role="group" aria-label={label} style={{ gridTemplateRows: `repeat(${rows}, ${ROW_H}px)` }}>
+      <div ref={grid} className="fb-lgrid" role="group" aria-label={label} style={{ gridTemplateRows: `repeat(${rows}, ${px(ROW_H)})` }}>
         {fields.map((f) => {
           const l = ghost?.key === f.key ? ghost.layout : (f.layout as Layout);
           const selected = f.key === selectedKey;

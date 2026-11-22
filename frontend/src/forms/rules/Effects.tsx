@@ -1,5 +1,5 @@
 import { FormIcon, type FormIconName } from "../FormIcon";
-import type { Effect, LoadKind, TextTarget } from "../rules";
+import { isSubmit, type Effect, type LoadKind, type TextTarget } from "../rules";
 import { isBlock, type FormField } from "../types";
 
 export const EFFECT_KINDS: { id: Effect["do"]; label: string; icon: FormIconName }[] = [
@@ -15,10 +15,14 @@ export const EFFECT_KINDS: { id: Effect["do"]; label: string; icon: FormIconName
   { id: "load", label: "Charger les données du service", icon: "link" },
 ];
 const FILLABLE = ["text", "textarea", "email", "date", "number", "select", "radio", "combobox", "checkbox"];
+/** The submit button has no value: it can be shown, hidden, blocked and re-worded, nothing else. */
+const BUTTON_KINDS: Record<string, string> = { show: "Afficher le bouton", hide: "Masquer le bouton", readonly: "Bloquer le bouton", editable: "Débloquer le bouton", text: "Changer le libellé ou le message" };
+export const kindsFor = (field: FormField) => (isSubmit(field) ? EFFECT_KINDS.filter((k) => k.id in BUTTON_KINDS).map((k) => ({ ...k, label: BUTTON_KINDS[k.id] as string })) : EFFECT_KINDS);
+const BUTTON_TARGETS: { id: TextTarget; label: string }[] = [{ id: "label", label: "Libellé du bouton" }, { id: "help", label: "Message près du bouton bloqué" }];
 const TARGETS: { id: TextTarget; label: string }[] = [{ id: "label", label: "Libellé" }, { id: "help", label: "Aide sous le champ" }, { id: "placeholder", label: "Texte d'exemple" }];
 
 export function blankEffect(kind: Effect["do"], field: FormField): Effect {
-  if (kind === "text") return { do: "text", target: "label", text: field.label ?? "" };
+  if (kind === "text") return { do: "text", target: "label", text: isSubmit(field) ? "Envoyer" : (field.label ?? "") };
   if (kind === "fill") return { do: "fill", value: "" };
   if (kind === "options") return { do: "options", values: (field.options ?? []).map((o) => o.value) };
   if (kind === "load") return { do: "load", what: field.source ? "options" : "prefill" };
@@ -27,6 +31,7 @@ export function blankEffect(kind: Effect["do"], field: FormField): Effect {
 
 /** Why an effect cannot be offered for this field (a block has no value, only a static list can be limited…). */
 export function unavailable(kind: Effect["do"], field: FormField): string {
+  if (isSubmit(field) && !(kind in BUTTON_KINDS)) return "Le bouton d'envoi n'a pas de valeur.";
   if (isBlock(field.type) && (kind === "require" || kind === "optional")) return "Un bloc de contenu n'a pas de valeur.";
   if (isBlock(field.type) && (kind === "readonly" || kind === "editable")) return "Un bloc de contenu n'a pas de valeur à verrouiller.";
   if (kind === "fill" && !FILLABLE.includes(field.type)) return "Ce type de champ ne peut pas être rempli par une règle.";
@@ -45,7 +50,7 @@ export function EffectList({ effects, field, earlier, onChange, label }: Props) 
     <div className="rl-effects" role="group" aria-label={label}>
       {effects.length === 0 && <p className="hint">Aucun effet.</p>}
       {effects.map((e, i) => {
-        const kind = EFFECT_KINDS.find((k) => k.id === e.do) as (typeof EFFECT_KINDS)[number];
+        const kind = kindsFor(field).find((k) => k.id === e.do) ?? (EFFECT_KINDS.find((k) => k.id === e.do) as (typeof EFFECT_KINDS)[number]);
         const n = `${label} : effet ${i + 1}`;
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: liste affichée en entier, sans réordonnancement ni état par ligne
@@ -55,7 +60,7 @@ export function EffectList({ effects, field, earlier, onChange, label }: Props) 
             {e.do === "text" && (
               <>
                 <select aria-label={`${n} : texte à changer`} value={e.target} onChange={(ev) => set(i, { ...e, target: ev.target.value as TextTarget })}>
-                  {TARGETS.filter((t) => !isBlock(field.type) || t.id === "label").map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  {(isSubmit(field) ? BUTTON_TARGETS : TARGETS).filter((t) => !isBlock(field.type) || t.id === "label").map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
                 <input aria-label={`${n} : nouveau texte`} value={e.text} maxLength={500} placeholder="Nouveau texte, avec des {champs}" onChange={(ev) => set(i, { ...e, text: ev.target.value })} />
                 {earlier.length > 0 && (
@@ -99,7 +104,7 @@ export function EffectList({ effects, field, earlier, onChange, label }: Props) 
       })}
       {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
       <div className="rl-add" role="group" aria-label={`${label} : ajouter un effet`}>
-        {EFFECT_KINDS.map((k) => {
+        {kindsFor(field).map((k) => {
           const why = unavailable(k.id, field);
           return <button key={k.id} type="button" className="rl-small" disabled={Boolean(why)} title={why || k.label} aria-label={`Ajouter : ${k.label}`} onClick={() => onChange([...effects, blankEffect(k.id, field)])}><FormIcon name={k.icon} size={14} /> {k.label}</button>;
         })}

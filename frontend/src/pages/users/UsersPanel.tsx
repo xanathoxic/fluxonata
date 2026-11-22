@@ -10,9 +10,9 @@ import { Kpi } from "../OpsCharts";
 import { HelpTip } from "../../components/HelpTip";
 import { ReadRegion } from "../../components/ReadRegion";
 
-interface Membership { workspace: string; name: string; role: string; archived: boolean }
+interface Membership { workspace: string; name: string; role: string; source: string; archived: boolean }
 interface UserRow {
-  username: string; email: string; is_active: boolean; is_platform_admin: boolean; sso_only: boolean;
+  username: string; email: string; is_active: boolean; is_platform_admin: boolean; sso_only: boolean; sso_platform_admin: boolean;
   must_change_password: boolean; last_login: string | null; memberships: Membership[];
 }
 interface Space { slug: string; name: string; archived: boolean }
@@ -106,7 +106,7 @@ function SpacesOverlay({ user, spaces, onClose }: { user: UserRow; spaces: Space
           <thead><tr><th scope="col">Espace</th><th scope="col">Rôle</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{user.memberships.map((m) => (
             <tr key={m.workspace}>
-              <td>{m.name}{m.archived && " (archivé)"}</td>
+              <td>{m.name}{m.archived && " (archivé)"}{m.source && <> <Badge tone="info">Donné par le SSO « {m.source} »</Badge></>}</td>
               <td><label className="sr-only" htmlFor={`${id}-${m.workspace}`}>Rôle dans {m.name}</label>
                 <select id={`${id}-${m.workspace}`} value={m.role} disabled={m.archived || set.isPending} onChange={(e) => set.mutate({ workspace: m.workspace, role: e.target.value })}>
                   {ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
@@ -193,7 +193,7 @@ export function UsersPanel() {
               <td>
                 <span className="adm-chips">
                   {u.is_active ? <Badge tone="ok">Actif</Badge> : <Badge tone="bad">Désactivé</Badge>}
-                  {u.is_platform_admin && <Badge tone="info">Admin plate-forme</Badge>}
+                  {u.is_platform_admin && <Badge tone="info">Admin plate-forme{u.sso_platform_admin ? " (SSO)" : ""}</Badge>}
                   {u.sso_only && <Badge>SSO</Badge>}
                   {u.must_change_password && <Badge tone="warn">Mot de passe provisoire</Badge>}
                 </span>

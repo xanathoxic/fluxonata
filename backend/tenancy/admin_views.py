@@ -37,7 +37,12 @@ class MembersView(APIView):
         return Response(
             {
                 "results": [
-                    {"username": m.user.username, "role": m.role, "is_service": hasattr(m.user, "service_account")}
+                    {
+                        "username": m.user.username,
+                        "role": m.role,
+                        "is_service": hasattr(m.user, "service_account"),
+                        "source": m.source.removeprefix("sso:") if m.source else "",
+                    }
                     for m in rows
                 ]
             }
@@ -78,6 +83,7 @@ class MemberDetailView(APIView):
         if role not in PRIVILEGED:
             self._guard_last_admin(ws, m)
         old, m.role = m.role, role
+        m.source = ""  # un choix de la main reprend la main sur le fournisseur : il ne le défera plus à la connexion
         m.save()
         record("member.role", actor=request.user, workspace=ws, target=m.user, old=old, new=role)
         return Response(status=204)

@@ -92,7 +92,7 @@ test("menu de gauche : se replie en rail d'icônes, reste accessible et utilisab
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   const main = page.locator("main#main");
   const w = async (l: ReturnType<Page["locator"]>) => Math.round((await boxOf(l)).width);
-  expect(await w(nav)).toBeGreaterThan(190);
+  expect(await w(nav)).toBeGreaterThan(150); // menu déplié (168 px depuis la réduction de l'interface) ; le rail replié fait 64 px
   const mainBefore = await w(main);
 
   const toggle = page.getByRole("button", { name: "Replier la navigation" });
@@ -100,7 +100,7 @@ test("menu de gauche : se replie en rail d'icônes, reste accessible et utilisab
   await toggle.click();
   await expect(page.getByRole("button", { name: "Déplier la navigation" })).toHaveAttribute("aria-expanded", "false");
   expect(await w(nav)).toBeLessThanOrEqual(80);
-  expect(await w(main)).toBeGreaterThan(mainBefore + 120); // le contenu gagne la place
+  expect(await w(main)).toBeGreaterThan(mainBefore + 90); // le contenu gagne la place (168 - 64 = 104 px depuis la réduction de l'interface)
   // icônes seules, mais les noms restent (lecteurs d'écran) et les liens fonctionnent
   await expect(nav.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("title", "Workflows");
   await nav.getByRole("link", { name: "Workflows", exact: true }).click();
@@ -113,6 +113,6 @@ test("menu de gauche : se replie en rail d'icônes, reste accessible et utilisab
   await page.reload(); // mémorisé
   expect(await w(nav)).toBeLessThanOrEqual(80);
   await page.getByRole("button", { name: "Déplier la navigation" }).click();
-  expect(await w(nav)).toBeGreaterThan(190);
+  expect(await w(nav)).toBeGreaterThan(150); // menu déplié (168 px depuis la réduction de l'interface) ; le rail replié fait 64 px
   await expect(nav.getByRole("link", { name: "Accueil", exact: true })).toBeVisible();
 });

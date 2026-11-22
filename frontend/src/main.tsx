@@ -6,6 +6,7 @@ import { PublicFormPage } from "./pages/PublicFormPage";
 import "@fontsource-variable/plus-jakarta-sans";
 import "./styles.css";
 import "./theme.css";
+import "./scale-floors.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } });
 

@@ -61,12 +61,18 @@ class UserProfile(models.Model):
     must_change_password = models.BooleanField(
         default=False
     )  # temporary password: only the change-password route works
+    sso_platform_admin = models.BooleanField(
+        default=False
+    )  # administrateur de plate-forme parce qu'un groupe SSO le dit (et non à la main)
 
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships")
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
     role = models.CharField(max_length=20, choices=Role.choices)
+    # d'où vient ce droit : vide = donné à la main (jamais touché par un fournisseur d'identité) ; « sso:<fournisseur> » = donné par les groupes
+    # de ce fournisseur, qui peut le modifier ou le retirer à la connexion suivante
+    source = models.CharField(max_length=60, blank=True, default="")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "workspace"], name="uniq_membership")]
@@ -188,11 +194,71 @@ class OidcIdentity(models.Model):
     issuer = models.CharField(max_length=300)
     subject = models.CharField(max_length=255)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="oidc_identities")
+    provider = models.ForeignKey(
+        "IdentityProvider", null=True, blank=True, on_delete=models.SET_NULL, related_name="identities"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["issuer", "subject"], name="uniq_oidc_identity")]
+
+
+class IdentityProvider(models.Model):
+    """Un fournisseur d'identité réglé dans l'interface (OpenID Connect ou SAML 2.0). Le secret du client n'est jamais stocké en clair
+    (chiffré par le coffre) ni renvoyé par l'API ; les réglages qui ne sont pas secrets sont dans `config` (voir `tenancy/sso_config.py`)."""
+
+    class Kind(models.TextChoices):
+        OIDC = "oidc", "OpenID Connect"
+        SAML = "saml", "SAML 2.0"
+
+    class Unmapped(models.TextChoices):
+        ALLOW = "allow", "Connexion autorisée, sans accès"
+        DENY = "deny", "Connexion refusée"
+
+    slug = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=80)
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    enabled = models.BooleanField(default=False)
+    config = models.JSONField(default=dict, blank=True)
+    secret_key_id = models.CharField(max_length=64, blank=True)
+    secret_token = models.TextField(blank=True)
+    auto_create = models.BooleanField(default=True)  # créer le compte à la première connexion
+    unmapped = models.CharField(
+        max_length=8, choices=Unmapped.choices, default=Unmapped.ALLOW
+    )  # aucune règle de groupe ne correspond
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+
+class GroupRule(models.Model):
+    """Si l'utilisateur est dans ce groupe du fournisseur, alors il reçoit ce droit : un rôle dans un espace (et, au choix, l'appartenance à
+    un groupe d'utilisateurs de l'espace) ou l'administration de la plate-forme. Le droit le plus élevé gagne quand plusieurs règles s'appliquent."""
+
+    class Match(models.TextChoices):
+        EXACT = "exact", "Nom exact"
+        GLOB = "glob", "Motif (* et ?)"
+
+    class Grant(models.TextChoices):
+        WORKSPACE = "workspace", "Rôle dans un espace"
+        PLATFORM_ADMIN = "platform_admin", "Administrateur de la plate-forme"
+
+    provider = models.ForeignKey(IdentityProvider, on_delete=models.CASCADE, related_name="rules")
+    position = models.PositiveIntegerField(default=0)
+    group = models.CharField(max_length=255)
+    match = models.CharField(max_length=6, choices=Match.choices, default=Match.EXACT)
+    grant = models.CharField(max_length=16, choices=Grant.choices, default=Grant.WORKSPACE)
+    workspace = models.ForeignKey(Workspace, null=True, blank=True, on_delete=models.CASCADE, related_name="sso_rules")
+    role = models.CharField(max_length=20, choices=Role.choices, blank=True)
+    user_group = models.CharField(
+        max_length=80, blank=True
+    )  # groupe d'utilisateurs de l'espace à alimenter (créé au besoin)
+
+    class Meta:
+        ordering = ["position", "id"]
 
 
 class Folder(models.Model):

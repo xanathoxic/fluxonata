@@ -4,6 +4,8 @@ from . import admin_views as a
 from . import mcp_tokens as mt
 from . import platform_views as pf
 from . import scim, views
+from . import sso_admin_views as sa
+from . import sso_views as sv
 from . import user_views as uv
 
 urlpatterns = [
@@ -28,6 +30,17 @@ urlpatterns = [
     path("scim/v2/ServiceProviderConfig", scim.ServiceProviderConfigView.as_view()),
     path("scim/v2/Users", scim.UsersView.as_view()),
     path("scim/v2/Users/<str:pk>", scim.UserDetailView.as_view()),
+    path("platform/sso/providers/", sa.ProvidersView.as_view()),
+    path("platform/sso/providers/<slug:slug>/", sa.ProviderView.as_view()),
+    path("platform/sso/providers/<slug:slug>/test/", sa.ProviderTestView.as_view()),
+    path("platform/sso/providers/<slug:slug>/rules/", sa.RulesView.as_view()),
+    path("platform/sso/providers/<slug:slug>/simulate/", sa.SimulateView.as_view()),
+    path("platform/sso/saml/import-metadata/", sa.SamlMetadataImportView.as_view()),
+    path("auth/sso/providers/", sv.ProvidersView.as_view()),
+    path("auth/sso/<slug:slug>/login/", sv.LoginView.as_view()),
+    path("auth/sso/<slug:slug>/callback/", sv.CallbackView.as_view()),
+    path("auth/sso/<slug:slug>/acs/", sv.AcsView.as_view()),
+    path("auth/sso/<slug:slug>/metadata/", sv.MetadataView.as_view()),
     path("auth/oidc/config/", views.OidcConfigView.as_view()),
     path("auth/oidc/login/", views.OidcLoginView.as_view()),
     path("auth/oidc/callback/", views.OidcCallbackView.as_view()),

@@ -144,6 +144,16 @@ export function visibleState(def: FormDefinition, values: Record<string, unknown
   return { shown, kept, states };
 }
 
+/** What the submit button's conditions make of it, for the values the form keeps: shown or not, blocked or not, its label and the message beside it. */
+export interface SubmitView { visible: boolean; blocked: boolean; label: string | null; message: string | null }
+export const SUBMIT_KEY = "_submit";
+export function submitView(def: FormDefinition, kept: Record<string, unknown>): SubmitView {
+  const rules = def.submit?.rules;
+  if (!rules?.length) return { visible: true, blocked: false, label: null, message: null };
+  const state = applyRules({ rules }, kept, initialState({ required: false }));
+  return { visible: state.visible, blocked: state.readonly, label: state.label, message: state.help };
+}
+
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export const isEmpty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && v !== null && !Array.isArray(v) && Object.keys(v).length === 0);
 
@@ -158,6 +168,10 @@ export function validateDefinition(def: FormDefinition, values: Record<string, u
     if (isEmpty(v)) { if (state.required) errors[f.key] = "Ce champ est obligatoire."; continue; }
     const e = fieldError(f, v) || (state.options && (Array.isArray(v) ? v : [v]).some((x) => !(state.options as string[]).includes(textOf(x))) ? "Choix non proposé." : "");
     if (e) errors[f.key] = e;
+  }
+  if (def.submit?.rules?.length) {  // same as the server: a hidden or blocked button means no submission (Enter in a field, for instance)
+    const view = submitView(def, kept);
+    if (!view.visible || view.blocked) errors._ = view.message ?? "L'envoi n'est pas possible : une condition du formulaire n'est pas remplie.";
   }
   return errors;
 }

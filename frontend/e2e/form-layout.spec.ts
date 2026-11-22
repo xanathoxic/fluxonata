@@ -9,6 +9,11 @@ async function call(page: Page, method: string, path: string, body?: unknown) {
   }, { method, path, body });
 }
 const text = (key: string, extra: Record<string, unknown> = {}) => ({ key, label: key.toUpperCase(), type: "text", ...extra });
+/** L'onglet « Apparence » a un menu au clic droit : Simple ou Avancé (CSS). */
+async function openAdvanced(page: Page) {
+  await page.getByRole("tab", { name: "Apparence" }).click({ button: "right" });
+  await page.getByRole("menuitemradio", { name: "Avancé (CSS)" }).click();
+}
 const card = (page: Page, name: string) => page.getByRole("button", { name: new RegExp(`^${name}( \\*)? [^,]*, ligne`) });
 
 test("mise en page : déplacer et redimensionner au clavier, à la souris et par les nombres ; l'aperçu suit", async ({ page }) => {
@@ -193,9 +198,8 @@ test("CSS personnalisé : appliqué à l'aperçu et à la page publique, normali
   expect((await call(page, "POST", "/form-library/", { slug, name: `Css ${slug}`, definition: def })).status).toBe(201);
   await page.goto(`/forms/${slug}`);
   await page.getByRole("tab", { name: "Apparence" }).click();
-  await page.getByRole("tab", { name: "Avancé (CSS)" }).click();
-  await page.getByRole("tab", { name: "Code" }).click(); // le mode visuel est celui par défaut ; ici, le code
-  const area = page.getByRole("textbox", { name: "CSS personnalisé" });
+  await openAdvanced(page);
+  const area = page.getByRole("textbox", { name: "CSS généré" }); // zone modifiable du bas
   await area.fill('.fb-heading{color:#b91c1c}/* commentaire */\n[data-key="a"] input{border-color:#15803d}');
   await expect(page.getByRole("status").filter({ hasText: "CSS valide et appliqué" })).toBeVisible();
   const heading = page.locator(".fb-form").last().locator(".fb-heading");
@@ -296,8 +300,8 @@ test("CSS sans code : cliquer dans l'aperçu, régler visuellement, CSS génér�
   expect((await call(page, "POST", "/form-library/", { slug, name: `NoCode ${slug}`, definition: def })).status).toBe(201);
   await page.goto(`/forms/${slug}`);
   await page.getByRole("tab", { name: "Apparence" }).click();
-  await page.getByRole("tab", { name: "Avancé (CSS)" }).click();
-  await expect(page.getByRole("tab", { name: "Visuel" })).toHaveAttribute("aria-selected", "true");
+  await openAdvanced(page);
+  await expect(page.getByRole("tab", { name: "Visuel" })).toHaveCount(0); // plus de bascule Visuel / Code : le visuel est le seul mode
 
   const preview = page.getByRole("region", { name: "Aperçu du formulaire" });
   const code = page.getByLabel("CSS généré");
@@ -357,15 +361,18 @@ test("CSS sans code : cliquer dans l'aperçu, régler visuellement, CSS génér�
   await expect(code).toContainText("color: #b91c1c;"); // les réglages d'avant sont conservés
   await expect(preview.locator(".fb-section")).toHaveCSS("border-top-left-radius", "20px");
 
-  // 7. le même texte en mode code, qu'on peut adapter à la main ; le retour au visuel le relit
-  await page.getByRole("button", { name: "Modifier à la main" }).click();
-  const area = page.getByRole("textbox", { name: "CSS personnalisé" });
-  await expect(area).toHaveValue(/& \.fb-heading \{/);
-  await area.fill(`${await area.inputValue()}\n\n& .fb-actions button {\n  letter-spacing: 0.1em;\n}`);
-  await expect(page.getByRole("status").filter({ hasText: "CSS valide et appliqué" })).toBeVisible();
-  await page.getByRole("tab", { name: "Visuel" }).click();
-  await page.getByRole("button", { name: /^Règles du formulaire/ }).click();
-  await expect(page.getByRole("menu", { name: "Règles" })).toContainText("Boutons");
+  // 7. le même texte, modifiable à la main dans la zone du bas ; le concepteur le relit
+  const area = page.getByRole("textbox", { name: "CSS généré" });
+  await expect(area).toContainText("& .fb-heading {");
+  await area.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.insertText("\n\n& .fb-actions button {\n  letter-spacing: 0.1em;\n}");
+  await area.blur();
+  // le concepteur relit le texte tapé à la main une fois qu'il est vérifié et appliqué
+  await expect(async () => {
+    await page.getByRole("button", { name: /^Règles du formulaire/ }).click();
+    await expect(page.getByRole("menu", { name: "Règles" })).toContainText("Boutons", { timeout: 500 });
+  }).toPass();
   await page.keyboard.press("Escape");
 
   // 8. enregistré, publié, rattaché : la page publique porte ce style
@@ -390,7 +397,7 @@ test("CSS visuel : une session expirée n'est pas présentée comme un CSS refus
   expect((await call(page, "POST", "/form-library/", { slug, name: `Session ${slug}`, definition: { version: 1, sections: [{ id: "s1", title: "T", fields: [text("a")] }] } })).status).toBe(201);
   await page.goto(`/forms/${slug}`);
   await page.getByRole("tab", { name: "Apparence" }).click();
-  await page.getByRole("tab", { name: "Avancé (CSS)" }).click();
+  await openAdvanced(page);
   const preview = page.getByRole("region", { name: "Aperçu du formulaire" });
   // le serveur répond « non authentifié » (session terminée)
   await page.route("**/form-library/check/", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "not_authenticated", message: "Authentification requise." } }) }));
@@ -414,7 +421,7 @@ test("menus contextuels : ils restent dans la fenêtre (pas de défilement horiz
   expect((await call(page, "POST", "/form-library/", { slug, name: `Menus ${slug}`, definition: { version: 1, sections: [{ id: "s1", title: "T", fields: [text("a")] }] } })).status).toBe(201);
   await page.goto(`/forms/${slug}`);
   await page.getByRole("tab", { name: "Apparence" }).click();
-  await page.getByRole("tab", { name: "Avancé (CSS)" }).click();
+  await openAdvanced(page);
   // le débordement se voit sur le panneau de la page (qui défile) autant que sur le document
   const overflow = () => page.evaluate(() => {
     const panel = document.querySelector(".fb-fill > .tabpanel:not([hidden])") as HTMLElement;
@@ -576,4 +583,31 @@ test("colonnes indépendantes : une longue liste qui apparaît à droite ne dép
   await expect(page.getByText("Membre 29")).toBeAttached(); // la longue liste est affichée
   expect(await top("Action")).toBeCloseTo(before.action, 0);
   expect(await top("Motif")).toBeCloseTo(before.motif, 0); // la liste de droite n'a rien déplacé à gauche
+});
+
+test("bouton d'envoi : bloqué avec un message tant qu'une case n'est pas cochée, testé dans l'aperçu ; le serveur refuse un envoi forgé", async ({ page }) => {
+  await login(page);
+  const slug = `submit-${Date.now().toString().slice(-6)}`;
+  const def = { version: 1, sections: [{ id: "s1", title: "T", fields: [{ key: "ok", type: "checkbox", label: "J'ai lu les conditions" }, text("nom")] }] };
+  expect((await call(page, "POST", "/form-library/", { slug, name: `Submit ${slug}`, definition: def })).status).toBe(201);
+  await page.goto(`/forms/${slug}`);
+  await page.getByRole("button", { name: /^Bouton d'envoi/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Conditions du bouton d'envoi" });
+  await dialog.getByRole("button", { name: "Activer le bouton seulement si…" }).click();
+  await expectNoA11yViolations(page);
+  await dialog.getByRole("button", { name: "Appliquer" }).click();
+  await expect(page.getByRole("button", { name: "Bouton d'envoi (1)" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Aperçu" }).click();
+  const send = page.getByRole("button", { name: "Envoyer", exact: true });
+  await expect(send).toBeDisabled();
+  await expect(page.getByText("Complétez le formulaire pour pouvoir l'envoyer.")).toBeVisible();
+  await page.getByLabel("J'ai lu les conditions").check();
+  await expect(send).toBeEnabled();
+  await expect(page.getByText("Complétez le formulaire pour pouvoir l'envoyer.")).toHaveCount(0);
+
+  // le serveur refuse aussi : une définition dont une règle lit un champ qui n'existe pas est rejetée à l'enregistrement
+  const rules = JSON.parse('[{"when":{"field":"absent","op":"is_true"},"then":[{"do":"hide"}]}]');
+  const bad = { ...def, submit: { rules } };
+  expect((await call(page, "POST", "/form-library/", { slug: `${slug}-bad`, name: "Bad", definition: bad })).status).toBe(400);
 });

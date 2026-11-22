@@ -34,7 +34,7 @@
 @media (max-width: 1100px) { .fb-builder { grid-template-columns: 1fr; } }
 
 /* icons */
-.fb-ibtn { width: 34px; height: 34px; min-height: 34px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.fb-ibtn { width: 34px; min-width: 28px; flex: none; height: 34px; min-height: 34px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--fg); cursor: pointer; }
 .fb-ibtn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .fb-ibtn.fb-del:hover:not(:disabled) { background: var(--err-soft); color: var(--err); border-color: var(--err); }
 .fb-ibtn:disabled { opacity: .4; cursor: not-allowed; }
@@ -254,7 +254,7 @@
 .cs-used { position: absolute; top: 3px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: #d97706; border: 1.5px solid var(--surface); }
 .cs-panel { border: 0; padding: 10px 0 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
 .cs-row { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) 24px; gap: 8px; align-items: center; }
-.cs-row.wide { grid-template-columns: 6.2rem minmax(0, 1fr) 24px; align-items: start; }
+.cs-row.wide { grid-template-columns: minmax(0, 1fr) 24px; align-items: start; } .cs-row.wide > :first-child { grid-column: 1 / -1; }
 .cs-label { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
 .cs-ctl { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 0; }
 .cs-x { width: 24px; height: 24px; min-width: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-grid; place-items: center; cursor: pointer; }
@@ -412,7 +412,7 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .ctl-tfoot { font-weight: 600; background: var(--surface-2, #f4f5f7); border-radius: 0 0 10px 10px; }
 .ctl-trow .fb-inline .fb-field > label, .ctl-trow .fb-inline .fb-field > .fb-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ctl-trow .fb-inline .fb-field .hint { display: none; }
-.ctl-tools { display: inline-flex; gap: 2px; width: 7.5rem; justify-content: flex-end; }
+.ctl-tools { display: inline-flex; gap: 2px; width: 146px; flex: none; justify-content: flex-end; }
 .ctl-item-head { display: flex; align-items: center; gap: 8px; }
 .ctl-detailbtn { display: inline-flex; }
 .ctl-subeditor { height: min(70vh, 640px); display: flex; flex-direction: column; min-height: 0; }
@@ -622,17 +622,17 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 .fb-side-row output { min-width: 3.2rem; text-align: right; font-weight: 600; }
 
 /* Marge et padding : deux boîtes imbriquées */
-.cs-boxmodel { width: 100%; }
-.cs-box { display: grid; gap: 4px; border: 1px dashed var(--border-strong, #94a3b8); border-radius: 8px; padding: 6px; }
+.cs-boxmodel { width: 100%; min-width: 0; overflow-x: auto; }
+.cs-box { display: grid; min-width: 0; gap: 4px; border: 1px dashed var(--border-strong, #94a3b8); border-radius: 8px; padding: 6px; }
 .cs-box-outer { background: color-mix(in srgb, #f59e0b 12%, transparent); }
 .cs-box-inner { background: color-mix(in srgb, #22c55e 14%, transparent); border-style: solid; }
-.cs-boxbar { display: flex; align-items: center; gap: 4px; }
+.cs-boxbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .cs-boxname { flex: 1 1 auto; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .cs-boxbar select { min-height: 26px; padding: 0 4px; }
-.cs-boxgrid { display: grid; grid-template-columns: 3.4rem minmax(5rem, 1fr) 3.4rem; grid-template-areas: ". top ." "left center right" ". bottom ."; gap: 4px; align-items: center; justify-items: center; }
+.cs-boxgrid { display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; grid-template-areas: ". top ." "left center right" ". bottom ."; gap: 4px; align-items: center; justify-items: center; }
 .cs-b-top { grid-area: top; } .cs-b-right { grid-area: right; } .cs-b-bottom { grid-area: bottom; } .cs-b-left { grid-area: left; } .cs-bcenter { grid-area: center; width: 100%; }
-.cs-bside { width: 3.4rem; min-height: 28px; padding: 2px 4px; text-align: center; }
-.cs-elt { display: block; text-align: center; padding: 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted); }
+.cs-bside { width: 46px; min-height: 28px; padding: 2px 2px; text-align: center; -moz-appearance: textfield; appearance: textfield; } .cs-bside::-webkit-inner-spin-button, .cs-bside::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.cs-elt { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center; padding: 8px 2px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted); }
 
 /* Cible libre : viser le parent, l'enfant, ou n'importe quel niveau du chemin */
 .cs-levels { display: grid; gap: 6px; }
@@ -646,3 +646,32 @@ button.cs-x:hover { background: var(--err-soft); color: var(--err); }
 /* Colonnes dont les lignes ne s'alignent pas (voir `bands` dans layout.ts) : chacune est une pile à part, ce qui apparaît dans l'une ne déplace pas l'autre. */
 .fb-stack { grid-column: var(--c) / span var(--s); min-width: 0; }
 @container (max-width: 560px) { .fb-stack { grid-column: 1 / -1; } .fb-stack > .fb-grid { grid-template-columns: minmax(0, 1fr) !important; } }
+
+/* menu contextuel de l'onglet Apparence (clic droit) */
+.fb-lookwrap { display: inline-flex; }
+.fb-ctxmenu { position: fixed; z-index: 60; min-width: 170px; display: grid; gap: 2px; padding: 4px; background: var(--card); border: 1px solid var(--border-mid, var(--border)); border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
+.fb-ctxmenu button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; border: 0; background: transparent; padding: 4px 10px; border-radius: 6px; font-weight: 600; text-align: left; }
+.fb-ctxmenu button:hover, .fb-ctxmenu button[aria-checked="true"] { background: var(--accent-soft, var(--surface-2, #eef0f3)); }
+.fb-ctxmenu button[aria-checked="true"] span::after { content: " ✓"; }
+.cs-codeedit { display: block; width: 100%; box-sizing: border-box; min-height: 56px; max-height: 70vh; resize: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; }
+.cs-codeedit:read-only { opacity: .85; }
+.cs-genstate { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); align-self: center; } .cs-genstate.bad { color: var(--err); font-weight: 600; }
+.cs-genproblem { margin: 0 0 6px; }
+.cs-gen { position: relative; } .cs-grip { position: absolute; top: -7px; left: 0; right: 0; height: 14px; margin: 0; z-index: 2; display: grid; place-items: center; cursor: ns-resize; touch-action: none; } .cs-grip span { width: 56px; height: 6px; border-radius: 3px; background: var(--border-strong, #94a3b8); border: 1px solid var(--card); } .cs-grip:hover span, .cs-grip:focus-visible span { background: var(--accent); }
+
+/* éditeur de CSS (CodeMirror) */
+.cs-live { display: flex; flex-direction: column; gap: 6px; min-height: 0; margin-top: 2px; }
+.cs-live .cs-genbar { flex: none; flex-wrap: wrap; align-items: center; margin: 0; }
+.cs-cm { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; } .cs-cm-host { flex: 1 1 auto; min-height: 0; } .cs-cm-host .cm-editor { height: 100%; }
+.cs-pos { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cs-tbwrap { position: relative; display: inline-flex; }
+.cs-tbwrap > button { min-height: 28px; padding: 2px 10px; display: inline-flex; align-items: center; gap: 4px; }
+.cs-tbmenu { position: absolute; z-index: 40; top: 100%; left: 0; margin-top: 4px; min-width: 240px; max-height: 280px; overflow: auto; display: grid; gap: 1px; padding: 4px; background: var(--card); border: 1px solid var(--border-mid, var(--border)); border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
+.cs-tbmenu button { display: flex; align-items: baseline; gap: 8px; justify-content: flex-start; border: 0; background: transparent; padding: 4px 8px; border-radius: 6px; text-align: left; }
+.cs-tbmenu button:hover, .cs-tbmenu button:focus-visible { background: var(--accent-soft, var(--surface-2, #eef0f3)); }
+.cs-tbmenu small { color: var(--muted); }
+.cs-tbmenu .cs-mh { margin: 6px 6px 2px; font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.cm-swatch { display: inline-block; position: relative; width: 11px; height: 11px; margin: 0 4px 0 1px; vertical-align: -1px; border: 1px solid rgba(15, 23, 42, .45); border-radius: 3px; overflow: hidden; }
+.cm-swatch input[type="color"] { position: absolute; inset: -4px; width: 20px; height: 20px; opacity: 0; cursor: pointer; padding: 0; border: 0; }
+.cs-genproblem { margin: 4px 0 6px; padding-left: 18px; }
+.fb-submit-hint { margin: 6px 0 0; }

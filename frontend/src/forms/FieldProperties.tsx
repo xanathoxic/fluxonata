@@ -61,7 +61,7 @@ export function FieldProperties({ field, earlier, calcFields, inputs, connection
   const rule = (
     <fieldset>
       <legend><FormIcon name="rule" size={14} /> {canCalc ? "Conditions, règles et calcul" : "Conditions et règles"}</legend>
-      {(field.rules ?? []).slice(0, 3).map((r, i) => <p key={r.id ?? i} className="fb-rsum" title={`Quand ${sentence(r.when, label)} → ${r.then.map(describeEffect).join(", ")}`}><strong>{i + 1}.</strong> {r.name || `Quand ${sentence(r.when, label)}`}</p>)}
+      {(field.rules ?? []).slice(0, 3).map((r, i) => <p key={r.id ?? i} className="fb-rsum" title={`Quand ${sentence(r.when, label)} → ${r.then.map((e) => describeEffect(e)).join(", ")}`}><strong>{i + 1}.</strong> {r.name || `Quand ${sentence(r.when, label)}`}</p>)}
       {(field.rules?.length ?? 0) > 3 && <p className="hint">… et {(field.rules?.length ?? 0) - 3} autre(s)</p>}
       {field.visible_if && !field.rules?.length && <p className="fb-rsum">Règle d'affichage : <code>{field.visible_if}</code></p>}
       {field.compute && <p className="fb-rsum" title="Valeur calculée à partir des autres champs : elle n'est pas modifiable"><strong>Calcul :</strong> <code>{field.compute}</code></p>}

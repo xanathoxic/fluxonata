@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { FormIcon } from "../FormIcon";
-import { applyRules, describeEffect, evalNode, initialState, isGroup, TOKEN_RE, type Node, type Rule } from "../rules";
+import { applyRules, describeEffect, evalNode, initialState, isGroup, isSubmit, TOKEN_RE, type Node, type Rule } from "../rules";
 import type { FormField } from "../types";
 
 function involved(n: Node, out: Set<string>) {
@@ -38,8 +38,8 @@ export function Tryout({ rule, field, fields }: { rule: Rule; field: FormField; 
       </div>
       <p className={`rl-verdict ${holds ? "yes" : "no"}`} role="status"><FormIcon name={holds ? "check" : "close"} size={14} /> La condition est {holds ? "vraie" : "fausse"}</p>
       <p className="rl-result" role="status">
-        {branch.length === 0 ? "Aucun effet dans ce cas." : <>Effets : {branch.map(describeEffect).join(" · ")}</>}
-        <br /><small>Résultat : {state.visible ? "affiché" : "masqué"} · {state.required ? "obligatoire" : "facultatif"}{state.readonly ? " · lecture seule" : ""}{state.label !== null ? ` · libellé « ${state.label} »` : ""}{state.help !== null ? ` · aide « ${state.help} »` : ""}{state.placeholder !== null ? ` · exemple « ${state.placeholder} »` : ""}{state.fill !== null ? ` · valeur « ${state.fill} »` : ""}{state.options ? ` · choix : ${state.options.join(", ") || "aucun"}` : ""}</small>
+        {branch.length === 0 ? "Aucun effet dans ce cas." : <>Effets : {branch.map((e) => describeEffect(e, isSubmit(field))).join(" · ")}</>}
+        <br />{isSubmit(field) ? <small>Résultat : bouton {state.visible ? "affiché" : "masqué"}{state.readonly ? " · bloqué" : ""}{state.label !== null ? ` · libellé « ${state.label} »` : ""}{state.help !== null ? ` · message « ${state.help} »` : ""}</small> : <small>Résultat : {state.visible ? "affiché" : "masqué"} · {state.required ? "obligatoire" : "facultatif"}{state.readonly ? " · lecture seule" : ""}{state.label !== null ? ` · libellé « ${state.label} »` : ""}{state.help !== null ? ` · aide « ${state.help} »` : ""}{state.placeholder !== null ? ` · exemple « ${state.placeholder} »` : ""}{state.fill !== null ? ` · valeur « ${state.fill} »` : ""}{state.options ? ` · choix : ${state.options.join(", ") || "aucun"}` : ""}</small>}
       </p>
     </section>
   );

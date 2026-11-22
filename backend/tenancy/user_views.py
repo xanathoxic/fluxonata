@@ -50,6 +50,7 @@ def _row(u) -> dict:
         "is_active": u.is_active,
         "is_platform_admin": u.is_superuser,
         "sso_only": not u.has_usable_password(),
+        "sso_platform_admin": bool(prof and prof.sso_platform_admin),
         "must_change_password": bool(prof and prof.must_change_password),
         "last_login": u.last_login,
         "memberships": [
@@ -57,6 +58,9 @@ def _row(u) -> dict:
                 "workspace": m.workspace.slug,
                 "name": m.workspace.name,
                 "role": m.role,
+                "source": m.source.removeprefix("sso:")
+                if m.source
+                else "",  # vide = donné à la main, sinon le fournisseur qui le donne
                 "archived": m.workspace.archived_at is not None,
             }
             for m in sorted(u.memberships.all(), key=lambda m: m.workspace.name.lower())
@@ -251,7 +255,10 @@ class UserMembershipsView(_Guarded):
         elif m.role != role:
             _guard_last_space_admin(ws, m, role)
             old, m.role = m.role, role
-            m.save(update_fields=["role"])
+            m.source = (
+                ""  # un choix de la main reprend la main sur le fournisseur : il ne le défera plus à la connexion
+            )
+            m.save(update_fields=["role", "source"])
             record("member.role", actor=request.user, workspace=ws, target=user, old=old, new=role, via="platform")
         record(
             "platform.user_membership",
