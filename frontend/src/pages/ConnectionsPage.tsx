@@ -70,6 +70,7 @@ const CONFIG: Record<string, CfgField[]> = {
     { key: "token_url", label: "Adresse d'obtention du jeton", placeholder: "https://auth.exemple.org/token" },
     { key: "client_id", label: "Identifiant client" },
     { key: "scope", label: "Périmètre (scope)", optional: true },
+    TEST_PATH,
     SKIP_TLS,
   ],
   aws_sigv4: [
@@ -142,6 +143,7 @@ const CONFIG: Record<string, CfgField[]> = {
     { key: "token_url", label: "Adresse d'obtention du jeton", placeholder: "https://auth.exemple.org/token" },
     { key: "client_id", label: "Identifiant client" },
     { key: "scope", label: "Périmètre (scope)", optional: true },
+    TEST_PATH,
     SKIP_TLS,
   ],
 };

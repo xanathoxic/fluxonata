@@ -206,6 +206,10 @@ def _workflows(request, ws):
 def _workflow_row(w) -> dict:
     v = w.latest_version()
     return {
+        # publication automatique du résultat dans le cache : un réglage HUMAIN (Résumé du workflow), lisible ici, jamais modifiable par un assistant
+        "cache": {"key": w.cache_key, "ttl_seconds": w.cache_ttl_seconds, "sensitive": w.cache_sensitive}
+        if w.cache_key
+        else None,
         "slug": w.slug,
         "name": w.name,
         "description": w.description,
@@ -265,6 +269,31 @@ def list_connections(request, ws, args):
         }
         for c in Connection.objects.filter(workspace=ws).order_by("name", "id")
         if _match(q, c.name, c.label, c.kind)
+    ]
+    return _ok({"count": len(rows), "results": rows[: _limit(args)]})
+
+
+# --- cache nommé : ce qui existe, jamais les valeurs ---------------------------------------------------------------------
+def list_caches(request, ws, args):
+    from runs.models import CacheEntry
+    from tenancy.permissions import EDIT, get_workspace
+
+    get_workspace(request.user, ws.slug, EDIT)  # comme l'API : réservé aux personnes qui conçoivent
+    q = _text(args)
+    producers = {w.cache_key: w.slug for w in Workflow.objects.filter(workspace=ws).exclude(cache_key="")}
+    rows = [
+        {
+            "key": e.key,
+            "environment": e.environment.kind,
+            "version": e.version,
+            "size_bytes": e.size_bytes,
+            "updated_at": e.updated_at.isoformat(),
+            "expires_at": e.expires_at.isoformat() if e.expires_at else None,
+            "sensitive": e.sensitive,  # la valeur elle-même n'est JAMAIS renvoyée à un assistant
+            "producer": producers.get(e.key),
+        }
+        for e in CacheEntry.objects.filter(workspace=ws).select_related("environment").order_by("key", "id")
+        if _match(q, e.key, producers.get(e.key) or "")
     ]
     return _ok({"count": len(rows), "results": rows[: _limit(args)]})
 
@@ -475,6 +504,7 @@ TOOLS = {
                         "form",
                         "controles",
                         "rangement",
+                        "cache",
                         "action",
                         "skill",
                     ],
@@ -513,6 +543,15 @@ TOOLS = {
             | {"slug": {"type": "string", "description": "Détail d'une intégration (opérations et paramètres)."}},
         ),
         list_integrations,
+    ),
+    "list_caches": (
+        _spec(
+            "list_caches",
+            "Lister le cache",
+            "Clés du cache nommé de l'espace (par environnement) : version, taille, dates, workflow producteur (celui qui publie la clé). Jamais les valeurs. À consulter avant d'écrire une étape `cache`.",
+            QUERY | LIMIT,
+        ),
+        list_caches,
     ),
     "list_connections": (
         _spec(

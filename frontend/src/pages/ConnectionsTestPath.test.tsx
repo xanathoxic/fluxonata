@@ -12,6 +12,18 @@ vi.mock("../api", async (orig) => ({ ...(await orig<typeof import("../api")>()),
 const base = { environment: null, last_test_ok: null, last_test_at: null, last_test_message: "", secret: "s", secret_provider: "internal" };
 const CONNS = [
   { ...base, id: 1, name: "gitlab", label: "GitLab", kind: "http_bearer", config: { base_url: "https://git.exemple.org/api/v4/" } },
+  {
+    ...base,
+    id: 2,
+    name: "keycloak",
+    label: "Keycloak",
+    kind: "oauth2_client",
+    config: {
+      base_url: "https://sso.exemple.org/admin",
+      token_url: "https://sso.exemple.org/realms/master/protocol/openid-connect/token",
+      client_id: "fluxonata-admin",
+    },
+  },
   { ...base, id: 3, name: "db", label: "Base", kind: "postgres", config: { host: "db", database: "d", username: "u" } },
 ];
 
@@ -52,6 +64,17 @@ describe("Connexions : chemin de test", () => {
       base_url: "https://git.exemple.org/api/v4/",
       test_path: "/user",
     });
+  });
+
+  it("un service OAuth2 (identifiants client) propose aussi un chemin de test, conservé à l'enregistrement", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("button", { name: "Modifier la connexion Keycloak" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/Chemin de test/), "/realms");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Enregistrer/ }));
+    const call = api.mock.calls.find((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH");
+    if (!call) throw new Error("aucune modification envoyée");
+    expect((call[1] as { json: { config: Record<string, string> } }).json.config).toMatchObject({ client_id: "fluxonata-admin", test_path: "/realms" });
   });
 
   it("un type sans adresse HTTP (PostgreSQL) n'a pas ce champ", async () => {

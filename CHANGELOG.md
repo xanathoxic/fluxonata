@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.17.0 — 2026-11-23
+
+**MCP de conception : étapes Cache, essai à blanc et lecture du cache ; connexions OAuth2 : chemin de test conservé, redirections expliquées**
+
+- MCP de conception : étapes Cache (guide et exemples validés), essai à blanc qui simule le cache, outil list_caches (jamais les valeurs), réglage de publication visible mais non modifiable par un assistant
+- Connexions OAuth2 : le « chemin de test » est conservé et proposé dans le formulaire (il était écarté sans erreur) ; recette Keycloak pour administrer tous les domaines
+
 ## v0.16.0 — 2026-11-23
 
 **Cache nommé entre workflows : nœud Cache, publication automatique, reconstruction, page et onglet Caches ; connexion qui redirige mieux expliquée**

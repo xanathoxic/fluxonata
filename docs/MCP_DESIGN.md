@@ -34,7 +34,7 @@ Une demande en langage courant, sans invite, suffit donc aussi ; les invites don
 | Outil | Effet |
 |---|---|
 | `get_authoring_guide` | **à lire en premier** : format exact d'un graphe, d'un formulaire, d'une action et d'un skill, avec des exemples validés par le serveur, et la méthode |
-| `search_actions`, `get_action`, `list_skills`, `get_skill`, `list_forms`, `get_form`, `list_workflows`, `get_workflow`, `list_connections`, `list_integrations` (catalogue statique : services, opérations, paramètres), `list_triggers` (planifications, webhooks, interrogations, formulaires publics : type, workflow, état ; jamais d'adresse, de jeton ni de valeur) | lecture ; une connexion ne sort que par son nom, son libellé et son type |
+| `search_actions`, `get_action`, `list_skills`, `get_skill`, `list_forms`, `get_form`, `list_workflows`, `get_workflow`, `list_connections`, `list_caches` (clés du cache nommé de l'espace, par environnement : version, taille, dates, workflow producteur ; **jamais les valeurs**), `list_integrations` (catalogue statique : services, opérations, paramètres), `list_triggers` (planifications, webhooks, interrogations, formulaires publics : type, workflow, état ; jamais d'adresse, de jeton ni de valeur) | lecture ; une connexion ne sort que par son nom, son libellé et son type |
 | `create_workflow`, `update_workflow` | brouillon d'un workflow (révision obligatoire) ; renvoie les problèmes à corriger |
 | `create_form`, `update_form`, `attach_form` | brouillon d'un formulaire ; rattachement au brouillon d'un workflow (toujours une référence à la bibliothèque ; non publié : avertissement jusqu’à sa publication) |
 | `list_controls`, `get_control` | contrôles personnalisés de la bibliothèque (publiés ou brouillons) : lire AVANT d'en créer |
@@ -71,3 +71,11 @@ Tout ce qui est écrit porte l'étiquette `assistant-externe`. Quota : 60 écrit
 - `scripts/mcp-design-smoke.sh` joue un assistant avec le **client officiel du SDK MCP** (Streamable HTTP) contre la pile de dev : espace jetable, jetons de 2 heures, 18 outils, puis contrôle en base que rien n'a été publié, lancé ni activé, et suppression de l'espace. Le client de l'inspecteur MCP officiel (`tools/list --strict`, `tools/call`) passe aussi.
 - **Seconde session réelle, avec le guide** (demande complexe : formulaire à champs conditionnels, workflow à script, décision, approbation, aiguillage) : **8 appels, 0 erreur**, guide lu en premier, contre 22 appels et plusieurs erreurs sans guide ; formulaire valide, workflow de 11 étapes dont la seule erreur de validation est « action proposée à relire » ; il a signalé ce qu'il n'avait pas pu faire (pas de champ « fichier », TVA fixée, e-mail du validateur non utilisé) au lieu de l'inventer.
 - **Non vérifié** : d'autres modèles que celui essayé ; ChatGPT ; OAuth (connecteurs distants de Claude.ai et ChatGPT : ADR suivant).
+
+## Cache nommé entre workflows
+
+Un assistant peut **concevoir** des étapes `cache` (lire, écrire, supprimer une valeur partagée entre les workflows de l'espace, avec `on_missing: rebuild` pour reconstruire par le workflow producteur) : la rubrique `cache` de `get_authoring_guide` donne les formats, avec des exemples validés par le serveur. Comme pour le reste, ce sont des brouillons : l'écriture dans le cache n'a lieu que lorsqu'une personne publie le workflow et qu'il est lancé. Garde-fous :
+- **Essai à blanc** (`start_dry_run`) : l'étape est simulée (`found` faux, rien n'est lu, écrit, supprimé ni reconstruit dans le cache réel).
+- **Lecture** : `list_caches` ne renvoie jamais une valeur (une valeur peut être une donnée métier), et exige le droit de modifier, comme la page « Caches ». `get_workflow` montre le réglage de publication automatique (`cache`).
+- **Publication automatique** (« Publier le résultat dans le cache ») : réglage **humain** dans l'éditeur ; un assistant ne peut ni le régler ni le modifier (il agirait sur des exécutions déjà publiées, sans relecture). Aucun outil d'invalidation.
+

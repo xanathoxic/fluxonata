@@ -277,8 +277,20 @@ def _sftp_output(node: dict) -> dict:
     }
 
 
+def _cache_output(node: dict) -> dict:
+    """Étape « Cache » simulée : le cache réel n'est ni lu ni écrit (ni reconstruit) dans un essai à blanc."""
+    key = str(node.get("key") or "")
+    outputs: dict[str, dict] = {
+        "read": {"found": False, "value": None, "version": 0, "age_seconds": None, "key": key, "rebuilt": False},
+        "write": {"written": True, "key": key, "version": 1, "size_bytes": 0, "expires_at": None},
+        "delete": {"deleted": False, "key": key},
+    }
+    return outputs.get(str(node.get("operation")), {})
+
+
 # kinds that are only simulated: (output, message) — the output may depend on the step
 _FIXED_STEPS = {
+    "cache": (_cache_output, "Cache simulé : rien n'est lu, écrit ni supprimé dans le cache réel."),
     "smtp": (
         {"sent": False, "simulated": True, "recipients": 1, "message_id": None},
         "E-mail simulé : rien n'est envoyé.",
@@ -632,7 +644,7 @@ AWAITED = re.compile(
 def _awaited_values(graph: dict) -> list[tuple]:
     """(step, field, value, text shown) for every decision that waits for a given value from a SIMULATED step: simulated
     outputs are typical values, so without this the branch such a decision opens is never walked."""
-    simulated = {n["id"] for n in graph.get("nodes", []) if n["type"] in ("action", "subworkflow", "ai")}
+    simulated = {n["id"] for n in graph.get("nodes", []) if n["type"] in ("action", "subworkflow", "ai", "cache")}
     found, seen = [], set()
     for n in graph.get("nodes", []):
         if n["type"] != "condition":

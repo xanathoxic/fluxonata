@@ -142,3 +142,73 @@ def test_a_redirect_without_location_still_explains():
 
     ok, message = _verdict(302, {}, {})
     assert ok is False and "redirige (HTTP 302)" in message and "vers" not in message
+
+
+@pytest.fixture
+def idp_like(settings):
+    """Un serveur d'identité : /token délivre un jeton ; /admin/realms répond 200 avec ce jeton ; toute autre adresse (dont /admin) redirige vers sa console."""
+    seen = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def _go(self):
+            seen.append(self.path)
+            if self.path == "/token":
+                body = b'{"access_token": "at-opaque-xyz", "expires_in": 300, "token_type": "Bearer"}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/admin/realms" and self.headers.get("Authorization") == "Bearer at-opaque-xyz":
+                self.send_response(200)
+                self.end_headers()
+                return
+            self.send_response(302)
+            self.send_header("Location", "/admin/master/console/")
+            self.end_headers()
+
+        do_GET = do_POST = _go
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    settings.ORCH_EGRESS_ALLOWLIST = "127.0.0.1"
+    yield f"http://127.0.0.1:{srv.server_address[1]}", seen
+    srv.shutdown()
+
+
+@pytest.mark.parametrize("kind", ["oauth2_client", "oauth2_code"])
+def test_oauth2_connections_keep_their_test_path(world, kind):
+    c = client_for(world["designer"])
+    config = {
+        "base_url": "https://8.8.8.8/admin",
+        "token_url": "https://8.8.8.8/token",
+        "client_id": "cid",
+        "test_path": "/realms",
+    }
+    if kind == "oauth2_code":
+        config["authorize_url"] = "https://8.8.8.8/authorize"
+    body = {"name": f"c-{kind}", "label": "C", "kind": kind, "config": config, "secret_value": "abcdefgh"}
+    created = c.post(f"{BASE}/connections/", body, format="json")
+    assert (
+        created.status_code == 201 and created.json()["config"]["test_path"] == "/realms"
+    )  # plus jamais écarté sans erreur
+    bad = c.post(
+        f"{BASE}/connections/", {**body, "name": "mauvais", "config": {**config, "test_path": "realms"}}, format="json"
+    )
+    assert bad.status_code == 400 and "test_path" in str(bad.json())
+
+
+def test_an_oauth2_connection_is_tested_on_its_test_path_with_the_token(world, idp_like):
+    base, seen = idp_like
+    c = client_for(world["designer"])
+    cfg = {"base_url": f"{base}/admin", "token_url": f"{base}/token", "client_id": "cid"}
+    blind = mk_conn(c, name="sans-chemin", kind="oauth2_client", config=cfg)
+    r = c.post(f"{BASE}/connections/{blind['id']}/test/").json()
+    assert r["ok"] is False and "redirige" in r["message"] and "/admin/master/console/" in r["message"]
+    sure = mk_conn(c, name="avec-chemin", kind="oauth2_client", config={**cfg, "test_path": "/realms"})
+    r = c.post(f"{BASE}/connections/{sure['id']}/test/").json()
+    assert r["ok"] is True and "/admin/realms" in seen and "at-opaque-xyz" not in str(r)

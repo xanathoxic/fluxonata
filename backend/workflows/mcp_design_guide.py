@@ -149,6 +149,25 @@ OTHER_NODES = {
         "items": "inputs.lignes",
         "where": "item.montant >= 30",
     },
+    "cache : lire (reconstruit la valeur si elle manque)": {
+        "id": "inventaire",
+        "type": "cache",
+        "name": "Lire l'inventaire",
+        "operation": "read",
+        "key": "inventaire-serveurs",
+        "max_age_seconds": 21600,
+        "on_missing": "rebuild",
+        "rebuild_inputs": {},
+    },
+    "cache : écrire (partager une valeur avec d'autres workflows)": {
+        "id": "garder_inventaire",
+        "type": "cache",
+        "name": "Garder l'inventaire",
+        "operation": "write",
+        "key": "inventaire-serveurs",
+        "value": "{{ inputs.lignes }}",
+        "ttl_seconds": 21600,
+    },
     "http (appel d'un service web par une connexion)": {
         "id": "creer_ticket",
         "type": "http",
@@ -653,6 +672,14 @@ def guide(topic: str, workspace=None) -> dict:
             "Si l'espace n'en a pas, dites à la personne de la créer par Connexions → « Partir d'un modèle d'intégration » : ne l'inventez pas. "
             "Les intégrations sont décrites d'après la documentation publique des services et vérifiées contre un faux serveur seulement : signalez-le dans votre récapitulatif. "
             "Pour un service absent de la liste, utilisez l'étape `http` générique avec une connexion « Service HTTP »."
+        ),
+        "cache": (
+            "CACHE NOMMÉ (partager une valeur entre workflows). Un workflow qui produit un résultat coûteux (inventaire…) le laisse sous une clé ; un autre le relit plus tard sans le recalculer. "
+            "Étape `cache` {operation: read|write|delete, key, …} (formats dans `examples.other_nodes`, entrées « cache : … »). `key` : 1 à 120 caractères (lettres, chiffres, . _ : / -), une expression est permise ; le cache est séparé par ESPACE et par ENVIRONNEMENT (un test n'alimente pas la production). "
+            "`write` : `value` (JSON ou expression, 1 Mio au plus), `ttl_seconds`? (durée de vie), `sensitive`? (vrai : valeur visible des seuls administrateurs dans la page « Caches » ; ce n'est PAS un coffre, aucun secret dans le cache). Sorties : `written`, `version`, `size_bytes`, `expires_at`. "
+            "`read` : `max_age_seconds`? (ignore une valeur plus vieille), `on_missing`? : `empty` (défaut : `found` faux), `fail` (échoue, branche `error`) ou `rebuild` (lance le workflow producteur de cette clé, un seul à la fois, puis lit la valeur ; `rebuild_inputs`? = ses entrées). Sorties : `found`, `value`, `version`, `age_seconds`, `rebuilt`. "
+            "`delete` : invalide la clé (sortie `deleted`). Le PRODUCTEUR d'une clé est le workflow dont le réglage « Publier le résultat dans le cache » porte cette clé : ce réglage se fait dans l'éditeur (Informations → Exécution et cache) par une PERSONNE, vous ne pouvez pas le modifier ; `get_workflow` le montre (`cache`). "
+            "`rebuild` exige exactement UN producteur de la clé : sinon dites à la personne de régler la publication sur le bon workflow. list_caches montre les clés existantes et leur producteur (jamais les valeurs). Dans l'essai à blanc l'étape est simulée (rien n'est lu ni écrit : `found` faux). Le cache ne vaut que pour un workflow publié et lancé par une personne : vous ne l'alimentez pas vous-même."
         ),
         "erreurs": (
             "GESTION DES ERREURS. Une étape `action`, `script`, `http`, `sql`, `ldap`, `sftp`, `smtp`, `ai`, `agent`, `approval`, `foreach`, `while` ou `subworkflow` qui échoue fait échouer le workflow, sauf si une arête de label `error` part d'elle : "
