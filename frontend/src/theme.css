@@ -938,3 +938,63 @@ td:has(> .var-json) { min-width: 14rem; vertical-align: top; }
 html { scroll-padding-top: calc(var(--topbar-h) + 8px); }   /* focus, ancres et scrollIntoView ne passent pas sous la barre collée */
 main.login .login-sso { display: grid; gap: 8px; margin-top: 16px; } main.login .login-sso a.button { text-align: center; }
 main.login .login-sso-error { margin-top: 12px; }
+
+/* ───────── Image de marque (ADR 0033) ───────── */
+.logo-img { display: block; width: auto; max-width: min(320px, 60vw); object-fit: contain; }
+.logo-mono { display: inline-grid; place-items: center; flex: none; border-radius: 22%; background: var(--accent); color: var(--accent-fg); font-weight: 800; line-height: 1; letter-spacing: 0; }
+.login-title .logo-img { max-width: min(360px, 80vw); }
+.login-shell { min-height: 100vh; display: grid; grid-template-rows: 1fr auto; justify-items: center; align-items: center; padding: 24px 16px 16px; box-sizing: border-box; }
+.login-shell .login { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); box-shadow: var(--shadow); padding: 28px 28px 24px; }
+.login-shell.login-plain .login { box-shadow: none; }
+.login-shell.login-tint { background: var(--accent-soft); }
+.login-shell.login-gradient { background: linear-gradient(135deg, var(--accent-soft) 0%, color-mix(in srgb, var(--accent) 22%, white) 100%); }
+.login-tagline { margin: -6px 0 14px; color: var(--muted); font-size: var(--fs-md); }
+.login-message { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--fg); font-size: var(--fs-sm); }
+.login-footer { padding: 14px 0 4px; font-size: var(--fs-sm); color: var(--muted); text-align: center; }
+.login-footer a { color: var(--link); }
+/* administration : réglage de l'image de marque */
+.brand-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .brand-grid { grid-template-columns: 1fr; } }
+.brand-sticky { position: sticky; top: 12px; }
+.asset-slot { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+.asset-slot:first-of-type { border-top: 0; }
+.asset-thumb { height: 72px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; place-items: center; background: repeating-conic-gradient(#f1f5f9 0% 25%, #fff 0% 50%) 0 / 14px 14px; overflow: hidden; }
+.asset-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; padding: 0; list-style: none; }
+.swatch { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; font-size: var(--fs-sm); }
+.swatch i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--border-strong); }
+.swatch[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.color-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.color-row input[type=color] { width: 52px; height: 40px; padding: 2px; }
+.color-row input[type=text] { width: 120px; font-family: ui-monospace, monospace; }
+.contrast-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-sm); }
+.contrast-list li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 10px; border-radius: 8px; background: var(--bg); }
+.contrast-list .ok { color: var(--ok); font-weight: 700; } .contrast-list .ko { color: var(--err); font-weight: 700; }
+.brand-preview { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); font-size: var(--fs-sm); }
+.brand-preview header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); min-height: 48px; }
+.brand-preview .bp-body { display: grid; grid-template-columns: 110px 1fr; min-height: 150px; }
+.brand-preview aside { padding: 10px 8px; background: var(--surface); border-right: 1px solid var(--border); display: grid; gap: 2px; align-content: start; }
+.brand-preview aside span { padding: 6px 10px; border-radius: 8px; }
+.brand-preview aside .on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.brand-preview .bp-main { padding: 12px; display: grid; gap: 10px; align-content: start; }
+.brand-preview .bp-main .bp-link { color: var(--link); text-decoration: underline; } .brand-preview .bp-main .bp-btn { justify-self: start; padding: 6px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.brand-preview .bp-login { padding: 16px; display: grid; place-items: center; }
+.brand-preview .bp-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; gap: 8px; justify-items: start; }
+
+/* ───────── Fonds de barre de la marque (ADR 0033) : le texte, les icônes et les états se déduisent du fond (branding/palette.ts) ─────────
+   Un repère data-topbar / data-sidebar sur <html> n'existe que si la marque a choisi un fond : sans lui, rien de ce qui suit ne s'applique. */
+:root[data-topbar] .topbar { --surface: var(--tb-bg); --card: var(--tb-bg); --bg: var(--tb-hover); --fg: var(--tb-fg); --muted: var(--tb-muted); --border: var(--tb-border); --border-mid: var(--tb-border); --border-strong: var(--tb-muted); --accent: var(--tb-fg); --accent-fg: var(--tb-bg); --accent-soft: var(--tb-active); --link: var(--tb-fg); --focus: var(--tb-fg); --brand-ink: var(--tb-fg); --hover: var(--tb-hover); color: var(--tb-fg); }
+:root[data-sidebar] .sidebar { --surface: var(--sb-bg); --card: var(--sb-bg); --bg: var(--sb-hover); --fg: var(--sb-fg); --muted: var(--sb-muted); --border: var(--sb-border); --border-mid: var(--sb-border); --border-strong: var(--sb-muted); --accent: var(--sb-fg); --accent-fg: var(--sb-bg); --accent-soft: var(--sb-active); --link: var(--sb-fg); --focus: var(--sb-fg); --brand-ink: var(--sb-fg); --hover: var(--sb-hover); color: var(--sb-fg); }
+:root[data-topbar] .topbar .brand, :root[data-topbar] .topbar .logo { color: var(--tb-fg); }
+:root[data-topbar] .topbar .ctx-field select { background-image: var(--tb-chevron); }
+:root[data-sidebar] .sidebar .ctx-field select { background-image: var(--sb-chevron); }
+:root[data-topbar] .topbar .ctx-env.env-prod select, :root[data-sidebar] .sidebar .ctx-env.env-prod select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b91c1c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
+:root[data-topbar] .topbar .icon-btn:hover { color: var(--tb-fg); background: var(--tb-hover); }
+:root[data-topbar] .topbar button:hover:not(:disabled), :root[data-topbar] .topbar a.user-chip:hover { background: var(--tb-hover); }
+:root[data-sidebar] .sidebar a:hover, :root[data-sidebar] .sidebar button:hover:not(:disabled) { background: var(--sb-hover); }
+:root[data-sidebar] .sidebar a.active, :root[data-sidebar] .sidebar a.in-group { background: var(--sb-active); color: var(--sb-fg); }
+:root[data-sidebar] .sidebar a.in-group:not(.active) { background: transparent; }
+:root[data-sidebar] .sidebar a.active:hover { background: var(--sb-active); }
+.asset-thumb-dark { background: #0f172a; }
+.asset-thumb-dark .hint { color: #cbd5e1; }
+.brand-save { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); align-items: center; }

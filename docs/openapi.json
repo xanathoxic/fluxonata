@@ -331,6 +331,64 @@
                 }
             }
         },
+        "/api/v1/branding/": {
+            "get": {
+                "operationId": "branding_retrieve",
+                "tags": [
+                    "branding"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/branding/assets/{kind}/": {
+            "get": {
+                "operationId": "branding_asset_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "kind",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "branding"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/forms/{token}/": {
             "get": {
                 "operationId": "forms_retrieve",
@@ -710,6 +768,201 @@
                 "responses": {
                     "200": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/platform/branding/": {
+            "get": {
+                "operationId": "platform_branding_retrieve",
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "platform_branding_update",
+                "tags": [
+                    "platform"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBranding"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBranding"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedBranding"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/platform/branding/assets/{kind}/": {
+            "put": {
+                "operationId": "platform_branding_asset_upload",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "kind",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "platform"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "platform_branding_asset_delete",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "kind",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/platform/branding/reset/": {
+            "post": {
+                "operationId": "platform_branding_reset",
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -14464,6 +14717,15 @@
                     "username"
                 ]
             },
+            "LoginStyleEnum": {
+                "enum": [
+                    "plain",
+                    "tint",
+                    "gradient"
+                ],
+                "type": "string",
+                "description": "* `plain` - Sobre\n* `tint` - Fond teinté\n* `gradient` - Dégradé"
+            },
             "Member": {
                 "type": "object",
                 "properties": {
@@ -14897,6 +15159,49 @@
                     "current_password",
                     "new_password"
                 ]
+            },
+            "PatchedBranding": {
+                "type": "object",
+                "properties": {
+                    "product_name": {
+                        "type": "string",
+                        "maxLength": 60
+                    },
+                    "tagline": {
+                        "type": "string",
+                        "maxLength": 140
+                    },
+                    "login_message": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "footer_text": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "footer_url": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "accent": {
+                        "type": "string",
+                        "maxLength": 7
+                    },
+                    "topbar_bg": {
+                        "type": "string",
+                        "maxLength": 7
+                    },
+                    "sidebar_bg": {
+                        "type": "string",
+                        "maxLength": 7
+                    },
+                    "login_style": {
+                        "$ref": "#/components/schemas/LoginStyleEnum"
+                    },
+                    "logo_has_name": {
+                        "type": "boolean"
+                    }
+                }
             },
             "PatchedConnectionUpdate": {
                 "type": "object",

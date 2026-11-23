@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { topbarIsDark, useBranding } from "../branding/store";
 
 /** Fluxonata mark: three flows (teal, indigo, violet) converging into one. Decorative: the name is always written next to it. */
 export function LogoMark({ size = 30 }: { size?: number }) {
@@ -16,6 +17,24 @@ export function LogoMark({ size = 30 }: { size?: number }) {
   );
 }
 
-export function Logo({ size = 30 }: { size?: number }) {
-  return <span className="logo"><LogoMark size={size} /><span className="logo-name">Flux<b>onata</b></span></span>;
+/** Marque de la plate-forme (ADR 0033) : le logo téléversé s'il y en a un, sinon la marque d'origine, sinon une pastille à l'initiale du nom choisi. */
+export function Logo({ size = 30, onTopbar = false }: { size?: number; onTopbar?: boolean }) {
+  const b = useBranding();
+  const picked = onTopbar && topbarIsDark(b) && b.logo_dark ? b.logo_dark : b.logo; // sur une barre sombre : le logo prévu pour les fonds sombres, s'il existe
+  if (picked) {
+    const showName = !b.logo_has_name;
+    return (
+      <span className="logo">
+        <img className="logo-img" src={picked.url} alt={showName ? "" : b.name} height={size} style={{ height: size }} />
+        {showName && <span className="logo-name">{b.name}</span>}
+      </span>
+    );
+  }
+  if (!b.custom_name) return <span className="logo"><LogoMark size={size} /><span className="logo-name">Flux<b>onata</b></span></span>;
+  return (
+    <span className="logo">
+      <span className="logo-mono" aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.55 }}>{[...b.name][0]?.toUpperCase()}</span>
+      <span className="logo-name">{b.name}</span>
+    </span>
+  );
 }

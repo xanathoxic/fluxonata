@@ -196,7 +196,7 @@ export function App() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{collapsed ? <path d="M13.5 10l2 2-2 2" /> : <path d="M16 10l-2 2 2 2" />}</svg>
         </button>
         <button type="button" className="menu-btn" aria-expanded={menuOpen} aria-controls="sidebar" onClick={() => setMenuOpen(!menuOpen)}>Menu</button>
-        <strong className="brand"><Logo size={26} /></strong>
+        <strong className="brand"><Logo size={26} onTopbar /></strong>
         <div className="context">
           {!phone && ctxFields}
           <span className="ctx-sep" aria-hidden="true" />

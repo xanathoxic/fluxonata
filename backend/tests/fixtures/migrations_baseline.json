@@ -64,6 +64,8 @@
   "tenancy/0013_catalog_role_groups",
   "tenancy/0014_personal_api_tokens",
   "tenancy/0015_sso_providers",
+  "tenancy/0016_branding",
+  "tenancy/0017_branding_menus",
   "triggers/0001_initial",
   "triggers/0002_public_forms",
   "triggers/0003_poll_triggers",

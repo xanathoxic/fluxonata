@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { initBranding, loadBranding } from "./branding/store";
 import { PublicFormPage } from "./pages/PublicFormPage";
 import "@fontsource-variable/plus-jakarta-sans";
 import "./styles.css";
@@ -10,6 +11,7 @@ import "./scale-floors.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } });
 
+initBranding(); // l'image de marque connue s'applique avant le premier affichage ; la version du serveur la remplace dès qu'elle arrive
 const isPublic = location.pathname.startsWith("/f/") || location.pathname.startsWith("/r/");
 
 /** Public form addresses load only the form page: no session call, and none of the application's code is sent to a visitor. */
@@ -29,6 +31,7 @@ async function start() {
       return <App />;
     })()
   );
+  void loadBranding();
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

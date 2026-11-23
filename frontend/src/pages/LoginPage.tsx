@@ -1,9 +1,11 @@
+import { useBranding } from "../branding/store";
 import { Logo } from "../components/Logo";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError, type Me } from "../api";
 import { t } from "../i18n";
 
 export function LoginPage({ onLoggedIn }: { onLoggedIn: (me: Me) => void }) {
+  const brand = useBranding();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +34,11 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (me: Me) => void }) {
   };
 
   return (
+    <div className={`login-shell login-${brand.login_style}`}>
     <main className="login">
       <h1 className="login-title"><Logo size={44} /></h1>
+      {brand.tagline && <p className="login-tagline">{brand.tagline}</p>}
+      {brand.login_message && <p className="login-message" role="note">{brand.login_message}</p>}
       <form onSubmit={submit} aria-labelledby="login-title">
         <h2 id="login-title">{t("login.title")}</h2>
         <div className="field">
@@ -55,5 +60,11 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (me: Me) => void }) {
         </nav>
       )}
     </main>
+    {brand.footer.text && (
+      <footer className="login-footer">
+        {brand.footer.url ? <a href={brand.footer.url} target="_blank" rel="noopener noreferrer">{brand.footer.text}<span className="sr-only"> (s'ouvre dans un nouvel onglet)</span></a> : brand.footer.text}
+      </footer>
+    )}
+    </div>
   );
 }

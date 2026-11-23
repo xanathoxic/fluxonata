@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.18.0 — 2026-11-23
+
+**Image de marque de la plate-forme : nom, logos, couleur d'accent contrôlée, fonds de la barre du haut et du menu de gauche, page de connexion personnalisable**
+
+- Image de marque de la plate-forme : nom, logos (logo, logo pour fond fonce, icone), couleur d'accent controlee (contraste AA), fonds de la barre du haut et du menu de gauche avec texte deduit, page de connexion, apercu ; administration en onglets
+
 ## v0.17.0 — 2026-11-23
 
 **MCP de conception : étapes Cache, essai à blanc et lecture du cache ; connexions OAuth2 : chemin de test conservé, redirections expliquées**

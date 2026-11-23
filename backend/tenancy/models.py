@@ -297,3 +297,48 @@ class EgressHost(models.Model):
 
     def __str__(self) -> str:
         return self.host
+
+
+class Branding(models.Model):
+    """Image de marque de la plate-forme (ADR 0033) : une seule ligne (pk = 1), réglée par les administrateurs de la plate-forme.
+    Une valeur vide = valeur d'origine (nom Fluxonata, logo d'origine, accent d'origine). `version` augmente à chaque changement :
+    elle invalide les caches des images et de la page."""
+
+    class LoginStyle(models.TextChoices):
+        PLAIN = "plain", "Sobre"
+        TINT = "tint", "Fond teinté"
+        GRADIENT = "gradient", "Dégradé"
+
+    product_name = models.CharField(max_length=60, blank=True)
+    tagline = models.CharField(max_length=140, blank=True)
+    login_message = models.CharField(max_length=300, blank=True)
+    footer_text = models.CharField(max_length=200, blank=True)
+    footer_url = models.CharField(max_length=300, blank=True)
+    accent = models.CharField(max_length=7, blank=True)
+    topbar_bg = models.CharField(
+        max_length=7, blank=True
+    )  # fond de la barre du haut ; vide = d'origine (blanc). Le texte se déduit.
+    sidebar_bg = models.CharField(max_length=7, blank=True)  # fond du menu de gauche ; vide = d'origine (blanc)
+    login_style = models.CharField(max_length=8, choices=LoginStyle.choices, default=LoginStyle.PLAIN)
+    logo_has_name = models.BooleanField(
+        default=True
+    )  # le logo téléversé contient déjà le nom : on n'écrit pas le nom à côté
+    version = models.PositiveIntegerField(default=1)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get(cls) -> "Branding":
+        return cls.objects.get_or_create(pk=1)[0]
+
+
+class BrandingAsset(models.Model):
+    """Une image de la marque, gardée dans la base (source de vérité) : « logo » (en-tête et connexion), « logo_dark » (en-tête quand sa couleur est sombre) ou « icon » (onglet du navigateur)."""
+
+    kind = models.CharField(max_length=12, unique=True)
+    content_type = models.CharField(max_length=24)
+    data = models.BinaryField()
+    sha256 = models.CharField(max_length=64)
+    width = models.PositiveIntegerField(null=True)
+    height = models.PositiveIntegerField(null=True)
+    updated_at = models.DateTimeField(auto_now=True)

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import admin_views as a
+from . import branding_views as br
 from . import mcp_tokens as mt
 from . import platform_views as pf
 from . import scim, views
@@ -14,6 +15,11 @@ urlpatterns = [
     path("platform/workspaces/<slug:slug>/admins/", pf.WorkspaceAdminView.as_view()),
     path("platform/admins/", pf.PlatformAdminsView.as_view()),
     path("platform/admins/<str:username>/", pf.PlatformAdminDetailView.as_view()),
+    path("branding/", br.PublicBrandingView.as_view()),
+    path("branding/assets/<slug:kind>/", br.PublicAssetView.as_view()),
+    path("platform/branding/", br.BrandingAdminView.as_view()),
+    path("platform/branding/reset/", br.BrandingResetView.as_view()),
+    path("platform/branding/assets/<slug:kind>/", br.BrandingAssetAdminView.as_view()),
     path("platform/egress/", pf.EgressView.as_view()),
     path("platform/egress/<int:pk>/", pf.EgressDetailView.as_view()),
     path("platform/audit/", pf.PlatformAuditView.as_view()),

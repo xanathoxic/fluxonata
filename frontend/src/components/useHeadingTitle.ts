@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-
-const SUFFIX = "Fluxonata";
+import { getBranding } from "../branding/store";
 
 /** Titre du document = titre de niveau 1 de la page (« Mes exécutions — Fluxonata »).
  *  Dans une application à page unique le titre ne change pas tout seul : sans cela, chaque écran porte le même titre et la
  *  personne qui s'oriente avec un lecteur d'écran ou l'historique du navigateur ne distingue pas les pages. */
 export function titleFor(heading: string | null | undefined): string {
+  const SUFFIX = getBranding().name;
   const h = (heading ?? "").replace(/\s+/g, " ").trim();
   return h && h !== SUFFIX ? `${h} — ${SUFFIX}` : SUFFIX;
 }
