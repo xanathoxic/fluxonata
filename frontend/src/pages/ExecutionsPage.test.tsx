@@ -55,6 +55,14 @@ describe("Mes exécutions : les états de la liste", () => {
     expect(screen.queryByText(NO_MATCH)).not.toBeInTheDocument();
   });
 
+  it("seules les exécutions de workflows sont listées : les exécutions d'actions (tâches script…) ne sont ni demandées ni affichées", async () => {
+    serve(RUNS);
+    show();
+    expect(await screen.findByText("Redémarrer des VM")).toBeInTheDocument();
+    expect(apiAll.mock.calls.every((c) => !String(c[0]).includes("/executions/"))).toBe(true);
+    expect(screen.queryByRole("group", { name: "Type" })).not.toBeInTheDocument();
+  });
+
   it("recherche sans résultat : message de filtre (et non d'absence totale), avec « Tout effacer »", async () => {
     serve(RUNS);
     show();

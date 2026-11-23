@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.15.1 — 2026-11-23
+
+**Liste des exécutions limitée aux workflows et sous-workflows**
+
+- Exécutions : la liste ne montre que les workflows et leurs sous-workflows (plus d'exécutions d'actions ni de tâches script)
+
 ## v0.15.0 — 2026-11-23
 
 **Mode d'exécution séquentiel, sous-workflows dans les exécutions, racine « Root » des dossiers, export de paquet complet**

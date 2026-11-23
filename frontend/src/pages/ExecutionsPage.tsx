@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, apiAll, type ChildRun, type Execution, type WorkflowRun } from "../api";
+import { api, apiAll, type ChildRun, type WorkflowRun } from "../api";
 import { Pagination } from "../components/Pagination";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
@@ -11,7 +11,6 @@ import { formatDate, t } from "../i18n";
 interface Row { key: string; to: string; name: string; kind: string; status: string; label: string; env: string; at: string; children?: boolean }
 
 const STATUSES: [string, string][] = [["", "Toutes"], ["running", "En cours"], ["succeeded", "Réussies"], ["failed", "Échouées"], ["cancelled", "Annulées"]];
-const KINDS: [string, string][] = [["", "Tous"], ["Workflow", "Workflows"], ["Action", "Actions"]];
 const ENVS: Record<string, string> = { dev: "Développement", test: "Recette", prod: "Production" };
 
 /** « il y a 5 min » for recent runs, the date afterwards: what people look for is « the one I just started ». */
@@ -74,10 +73,8 @@ const Magnifier = () => (
 
 export function ExecutionsPage() {
   const { workspace } = useApp();
-  const actions = useQuery({ queryKey: ["executions", workspace.slug], queryFn: () => apiAll<Execution>(`/workspaces/${workspace.slug}/executions/`, 500), refetchInterval: 3000 });
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
-  const [kind, setKind] = useState("");
   const [env, setEnv] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -92,20 +89,18 @@ export function ExecutionsPage() {
   const serverQs = new URLSearchParams(Object.entries({ q, status, environment: env, from, to, min_duration: minDur }).filter(([, v]) => v)).toString();
   const flows = useQuery({ queryKey: ["wruns", workspace.slug, serverQs], queryFn: () => apiAll<WorkflowRun>(`/workspaces/${workspace.slug}/workflow-runs/${serverQs ? `?${serverQs}` : ""}`, 500), refetchInterval: 3000 });
   const rows: Row[] = [
-    ...(actions.data?.results ?? []).map((e) => ({ key: e.id, to: `/executions/${e.id}`, name: e.action.name, kind: "Action", status: e.status, label: e.status_label, env: e.environment, at: e.created_at })),
     ...(flows.data?.results ?? []).map((r) => ({ key: r.id, to: `/runs/${r.id}`, name: r.workflow.name, kind: "Workflow", status: r.status, label: r.needs_decision ? "Décision requise" : r.status_label, env: r.environment, at: r.created_at, children: r.has_children })),
   ].sort((a, b) => b.at.localeCompare(a.at));
-  const byText = rows.filter((r) => (!q || r.name.toLowerCase().includes(q.toLowerCase())) && (!kind || r.kind === kind));
+  const byText = rows.filter((r) => (!q || r.name.toLowerCase().includes(q.toLowerCase())));
   const count = (s: string) => (s ? byText.filter((r) => r.status === s).length : byText.length);
   const shownAll = byText.filter((r) => !status || r.status === status);
   const pages = Math.max(1, Math.ceil(shownAll.length / pageSize));
   const cur = Math.min(page, pages);
   const shown = shownAll.slice((cur - 1) * pageSize, cur * pageSize);
-  const loading = actions.isLoading || flows.isLoading;
+  const loading = flows.isLoading;
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
   const active = [
     q && { k: "q", label: `Texte : « ${q} »`, clear: () => reset(setQ)("") },
-    kind && { k: "kind", label: `Type : ${kind === "Workflow" ? "workflows" : "actions"}`, clear: () => reset(setKind)("") },
     env && { k: "env", label: `Environnement : ${ENVS[env]}`, clear: () => reset(setEnv)("") },
     from && { k: "from", label: `Depuis le ${from}`, clear: () => reset(setFrom)("") },
     to && { k: "to", label: `Jusqu'au ${to}`, clear: () => reset(setTo)("") },
@@ -113,10 +108,10 @@ export function ExecutionsPage() {
   ].filter(Boolean) as { k: string; label: string; clear: () => void }[];
   // le texte, le statut, la période et la durée sont filtrés côté serveur (le type, côté client) : « aucune ligne » avec un filtre actif n'est pas « aucune exécution »
   const filtered = active.length > 0 || status !== "";
-  const clearAll = () => { setQ(""); setKind(""); setEnv(""); setFrom(""); setTo(""); setMinDur(""); setStatus(""); setPage(1); };
+  const clearAll = () => { setQ(""); setEnv(""); setFrom(""); setTo(""); setMinDur(""); setStatus(""); setPage(1); };
   return (
     <>
-      <PageHeader title={t("exec.title")} description="Toutes les exécutions d'actions et de workflows de votre espace, des plus récentes aux plus anciennes."
+      <PageHeader title={t("exec.title")} description="Toutes les exécutions de workflows de votre espace (leurs sous-workflows se déplient sous chaque ligne), des plus récentes aux plus anciennes."
         actions={<>
           <a className="button" href={`/api/v1/workspaces/${workspace.slug}/workflow-runs/export/${serverQs ? `?${serverQs}` : ""}`} download>Exporter en CSV</a>
           <button type="button" disabled={picked.length !== 2} onClick={() => navigate(`/runs/compare?a=${picked[0]}&b=${picked[1]}`)}>Comparer les 2 exécutions cochées</button>
@@ -133,10 +128,6 @@ export function ExecutionsPage() {
           {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
           <div className="xs-chips" role="group" aria-label="Statut">
             {STATUSES.map(([v, l]) => <button key={v} type="button" className={`xs-chip xs-${v || "all"}`} aria-pressed={status === v} onClick={() => reset(setStatus)(v)}>{l} <span className="xs-n">{count(v)}</span></button>)}
-          </div>
-          {/* biome-ignore lint/a11y/useSemanticElements: rôle explicite conservé ; l'élément natif changerait la mise en forme */}
-          <div className="xs-seg" role="group" aria-label="Type">
-            {KINDS.map(([v, l]) => <button key={v} type="button" aria-pressed={kind === v} onClick={() => reset(setKind)(v)}>{l}</button>)}
           </div>
         </div>
         {filters && (
@@ -156,8 +147,8 @@ export function ExecutionsPage() {
         )}
       </section>
       {loading && <p role="status">{t("common.loading")}</p>}
-      {(actions.isError || flows.isError) && <p role="alert">{t("common.error")}</p>}
-      {!loading && !actions.isError && !flows.isError && rows.length === 0 && !filtered && <p className="empty-state">{t("exec.empty")}</p>}
+      {flows.isError && <p role="alert">{t("common.error")}</p>}
+      {!loading && !flows.isError && rows.length === 0 && !filtered && <p className="empty-state">{t("exec.empty")}</p>}
       {rows.length > 0 && (
         <div className="table-wrap xtable">
           <table>
@@ -186,7 +177,7 @@ export function ExecutionsPage() {
           </table>
         </div>
       )}
-      {!loading && !actions.isError && !flows.isError && shownAll.length === 0 && (rows.length > 0 || filtered) && (
+      {!loading && !flows.isError && shownAll.length === 0 && (rows.length > 0 || filtered) && (
         <div className="ops-empty"><strong>Aucune exécution ne correspond à ces filtres</strong><p className="hint">Essayez un autre mot, une autre période ou retirez un filtre.</p><button type="button" className="primary" onClick={clearAll}>Tout effacer</button></div>
       )}
       {shownAll.length > 0 && <Pagination total={shownAll.length} page={cur} pageSize={pageSize} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} label="Pagination des exécutions" />}
