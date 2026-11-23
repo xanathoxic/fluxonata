@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -621,8 +621,34 @@ def probe_url(config) -> str:
     return base.rstrip("/") + path if path else base
 
 
-def _verdict(status: int, config) -> tuple[bool, str]:
+REDIRECTS = (301, 302, 303, 307, 308)
+
+
+def _redirect_target(headers) -> str:
+    """Où le service renvoie : schéma, hôte et chemin seulement (jamais la requête ni les identifiants d'une adresse : elle peut porter un jeton)."""
+    location = next((str(v) for k, v in (headers or {}).items() if str(k).lower() == "location"), "")
+    try:
+        parts = urlsplit(location)
+        host = parts.hostname or ""
+        port = f":{parts.port}" if parts.port else ""
+    except ValueError:
+        return ""
+    return f"{parts.scheme}://{host}{port}{parts.path}"[:100] if host else parts.path[:100]
+
+
+def _redirect_verdict(status: int, headers) -> str:
+    target = _redirect_target(headers)
+    where = f" vers « {target} »" if target else ""
+    return (
+        f"Le service redirige{where} (HTTP {status}) : les redirections ne sont jamais suivies. "
+        "Indiquez l'adresse finale comme adresse du service, ou un « chemin de test » qui répond directement."
+    )
+
+
+def _verdict(status: int, config, headers=None) -> tuple[bool, str]:
     """Ce que signifie la réponse du service au test d'une connexion."""
+    if status in REDIRECTS:
+        return False, _redirect_verdict(status, headers)
     if 200 <= status < 300:
         return True, f"Le service a répondu (HTTP {status})."
     if status in (401, 403):
@@ -669,14 +695,14 @@ class ConnectionTestView(APIView):
         if creds.query:
             url += ("&" if "?" in url else "?") + urlencode(creds.query)
         try:
-            status, _, _ = netsec.safe_request(
+            status, response_headers, _ = netsec.safe_request(
                 "GET", url, headers=creds.headers, timeout=5, ssl_context=netsec.context_for(conn.config)
             )
         except netsec.UnsafeURL as exc:
             return False, f"Adresse refusée : {exc}"
         except OSError:
             return False, "Le service n'a pas répondu (réseau, délai dépassé ou certificat refusé)."
-        return _verdict(status, conn.config)
+        return _verdict(status, conn.config, response_headers)
 
 
 def _redirect_uri(request) -> str:

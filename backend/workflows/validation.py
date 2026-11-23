@@ -15,7 +15,7 @@ import jsonschema
 from catalog.models import Action
 from vault.models import Connection
 
-from . import debug, transforms
+from . import cache_spec, debug, transforms
 from .expressions import WHOLE_RE, ExpressionError, coerce_structured, parse, paths_in, template_expressions
 
 MAX_NODES = 200
@@ -93,10 +93,12 @@ NODE_TYPES = {
     "smtp",
     "ssh",
     "transform",
+    "cache",
 }
 HTTP_CONNECTION_KINDS = ("http_bearer", "api_key", "basic", "oauth2_client", "oauth2_code", "aws_sigv4")
 HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 STATIC_OUTPUTS = {
+    "cache": {k: v for fields in cache_spec.STATIC_OUTPUTS.values() for k, v in fields.items()},
     "condition": {"result": {"type": "boolean"}},
     "switch": {"result": {"type": "string"}},
     "approval": {
@@ -175,6 +177,7 @@ STATIC_OUTPUTS = {
 }
 WEBHOOK_WAIT_OUTPUTS = {"resumed": {"type": "boolean"}, "payload": {"type": "object"}}
 ERROR_CAPABLE = {
+    "cache",
     "action",
     "subworkflow",
     "foreach",
@@ -980,6 +983,49 @@ def _validate_sql(n: dict, workspace, issues: list) -> None:
         )
 
 
+def _validate_cache_options(n: dict, issues: list) -> None:
+    nid, op = n["id"], n["operation"]
+    if op == "read" and n.get("on_missing", "empty") not in cache_spec.ON_MISSING:
+        issues.append(
+            issue(
+                nid,
+                "bad_cache",
+                "« Si absent » : continuer sans valeur (empty), échouer (fail) ou reconstruire (rebuild).",
+            )
+        )
+    if n.get("rebuild_inputs") not in (None, "") and not isinstance(n.get("rebuild_inputs"), dict):
+        issues.append(issue(nid, "bad_cache", "« rebuild_inputs » : un objet (les entrées du workflow producteur)."))
+    if n.get("sensitive") not in (None, True, False):
+        issues.append(issue(nid, "bad_cache", "« sensitive » : vrai ou faux."))
+
+
+def _validate_cache(n: dict, issues: list) -> None:
+    nid, op = n["id"], n.get("operation")
+    if op not in cache_spec.OPERATIONS:
+        issues.append(issue(nid, "bad_cache", "Choisissez l'opération du cache (lire, écrire ou supprimer)."))
+        return
+    key = n.get("key")
+    if not isinstance(key, str) or not key.strip():
+        issues.append(issue(nid, "bad_cache", "Indiquez la clé du cache (ex. inventaire-serveurs)."))
+    elif "{{" not in key and not cache_spec.KEY_RE.match(key):
+        issues.append(issue(nid, "bad_cache", "Clé invalide : 1 à 120 caractères (lettres, chiffres, . _ : / -)."))
+    if op == "write" and n.get("value") in (None, "", {}, []):
+        issues.append(issue(nid, "bad_cache", "Indiquez la valeur à écrire (ex. {{ steps.inventaire.output.rows }})."))
+    for name in ("ttl_seconds", "max_age_seconds"):
+        v = n.get(name)
+        if v not in (None, "") and (
+            isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= cache_spec.MAX_TTL_SECONDS
+        ):
+            issues.append(issue(nid, "bad_cache", f"« {name} » : entier de 1 à {cache_spec.MAX_TTL_SECONDS}."))
+    _validate_cache_options(n, issues)
+
+
+def _cfg_cache(s: _Scan, n: dict) -> None:
+    _validate_cache(n, s.issues)
+    s.check(n["id"], _node_expressions(n))
+    s.out_types[n["id"]] = cache_spec.STATIC_OUTPUTS.get(str(n.get("operation")), {})
+
+
 def _validate_transform(n: dict, issues: list) -> None:
     nid, op = n["id"], n.get("op")
     if op not in transforms.OPS:
@@ -1038,6 +1084,7 @@ _EXPRESSIONS_BEFORE_INPUTS = {
 }
 _EXPRESSIONS_AFTER_INPUTS = {
     "transform": _transform_sources,
+    "cache": lambda n: template_expressions([n.get("key", ""), n.get("value", ""), n.get("rebuild_inputs") or {}]),
     "while": lambda n: [str(n.get("condition") or "")],
     "smtp": _t("to", "cc", "subject", "body"),
     "approval": _t("title", "subject", "body", "instructions"),
@@ -1874,6 +1921,7 @@ _NODE_CHECKS = {
     "agent": _cfg_with_connection(_validate_agent, "agent"),
     "sql": _cfg_with_connection(_validate_sql, "sql"),
     "transform": _cfg_transform,
+    "cache": _cfg_cache,
     "approval": _cfg_approval,
     "script": _cfg_script,
     "throw": _cfg_throw,

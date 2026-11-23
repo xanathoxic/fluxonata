@@ -47,6 +47,8 @@
   "runs/0017_approval_subject_body",
   "runs/0018_runner_pin",
   "runs/0019_run_queued_status",
+  "runs/0020_cache_entry",
+  "runs/0021_cache_build_sensitive",
   "tenancy/0001_initial",
   "tenancy/0002_policyversion_promotion_serviceaccount_apitoken_and_more",
   "tenancy/0003_oidcidentity",
@@ -101,6 +103,8 @@
   "workflows/0013_workflow_tags",
   "workflows/0014_catalog_role_groups",
   "workflows/0015_runner_pin",
-  "workflows/0016_run_mode"
+  "workflows/0016_run_mode",
+  "workflows/0017_cache_publish",
+  "workflows/0018_cache_sensitive"
  ]
 }

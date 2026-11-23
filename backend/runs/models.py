@@ -354,3 +354,47 @@ class ServiceInstance(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(db_index=True)
     info = models.JSONField(default=dict, blank=True)
+
+
+class CacheEntry(models.Model):
+    """Entrée du cache nommé d'un espace (ADR 0032) : une valeur JSON sous une clé, par espace et par environnement.
+
+    Un test ou une recette n'écrit donc jamais dans le cache de la production. Écriture explicite seulement (nœud « Cache ») ;
+    `version` augmente à chaque écriture et sert de preuve de ce qu'une exécution a lu."""
+
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="cache_entries")
+    environment = models.ForeignKey("tenancy.Environment", on_delete=models.CASCADE, related_name="+")
+    key = models.CharField(max_length=120)
+    value = models.JSONField(null=True)
+    version = models.PositiveIntegerField(default=1)
+    size_bytes = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    sensitive = models.BooleanField(
+        default=False
+    )  # valeur visible seulement des administrateurs de l'espace dans l'API et la page (lot 3)
+    written_by_workflow = models.CharField(max_length=80, blank=True)
+    written_by_run = models.ForeignKey(
+        "runs.WorkflowRun", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["key"]
+        constraints = [models.UniqueConstraint(fields=["workspace", "environment", "key"], name="uniq_cache_entry_key")]
+
+
+class CacheBuild(models.Model):
+    """Verrou de reconstruction d'une clé du cache (ADR 0032, lot 3) : le workflow producteur lancé par un lecteur dont la valeur manquait.
+
+    Un second lecteur qui trouve la valeur absente pendant que `run` est actif attend ce même lancement au lieu d'en démarrer un autre.
+    La ligne n'est jamais « libérée » : un lancement terminé (ou disparu) ne retient plus rien."""
+
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="+")
+    environment = models.ForeignKey("tenancy.Environment", on_delete=models.CASCADE, related_name="+")
+    key = models.CharField(max_length=120)
+    run = models.ForeignKey("runs.WorkflowRun", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    started_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace", "environment", "key"], name="uniq_cache_build_key")]

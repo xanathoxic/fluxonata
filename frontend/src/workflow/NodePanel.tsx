@@ -10,6 +10,7 @@ import { OutputsTab } from "./OutputsTab";
 import { ExprPreview } from "./ExprPreview";
 import { HttpConfig } from "./HttpConfig";
 import { LdapConfig } from "./LdapConfig";
+import { CacheConfig } from "./CacheConfig";
 import { SftpConfig } from "./SftpConfig";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { SshConfig } from "./SshConfig";
@@ -445,6 +446,8 @@ export function NodePanel(p: Props) {
         </>
       ),
     });
+  } else if (node.type === "cache") {
+    tabs.push({ id: "config", label: "Cache", content: <CacheConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "transform") {
     tabs.push({ id: "config", label: "Transformation", content: <TransformConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "agent") {

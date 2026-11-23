@@ -14,6 +14,7 @@ import { useApp } from "../context";
 import { useAiMode } from "../components/AiBox";
 import { ActionAssistant, type ActionProposal } from "./library/ActionAssistant";
 import { NewActionForm } from "./library/NewActionForm";
+import { CachesTab } from "./library/CachesTab";
 import { PackagesTab } from "./library/PackagesTab";
 import { HelpTip } from "../components/HelpTip";
 import { TagFilter, TagList } from "../components/Tags";
@@ -89,10 +90,11 @@ export function LibraryPage() {
   const [tab, setTab] = useState("actions");
   return (
     <>
-      <PageHeader title="Actions" description="Briques exécutables réutilisables dans les workflows, rangées par dossiers, et paquets importables." />
+      <PageHeader title="Actions" description="Briques exécutables réutilisables dans les workflows, rangées par dossiers, paquets importables et cache partagé entre workflows." />
       <Tabs label="Bibliothèque d'actions" active={tab} onChange={setTab} tabs={[
         { id: "actions", label: "Actions", content: <ActionsTab /> },
         { id: "packages", label: "Paquets", content: <PackagesTab /> },
+        { id: "caches", label: "Caches", content: <CachesTab /> },
       ]} />
     </>
   );

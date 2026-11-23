@@ -10,6 +10,7 @@ export type PaletteItem = { kind: "generic"; type: NodeType } | { kind: "action"
 const GENERIC: { type: NodeType; hint: string; cat: StepCat }[] = [
   { type: "script", hint: "Code Python ou JavaScript", cat: "data" },
   { type: "transform", hint: "Filtrer, trier, regrouper, fusionner des listes (sans code)", cat: "data" },
+  { type: "cache", hint: "Garde une valeur sous une clé pour qu'un autre workflow la relise plus tard (inventaire, résultat coûteux…)", cat: "data" },
   { type: "ldap", hint: "Cherche dans un annuaire LDAP / Active Directory (lecture seule)", cat: "comm" },
   { type: "sql", hint: "Lit des données dans une base PostgreSQL (lecture seule)", cat: "comm" },
   { type: "http", hint: "Appelle un service web via une connexion", cat: "comm" },

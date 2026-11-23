@@ -111,6 +111,54 @@ describe("Réglages d'un workflow : runner imposé", () => {
     expect(sent()).toMatchObject({ run_mode: "concurrent" });
   });
 
+  it("la publication dans le cache est désactivée par défaut ; une clé et une durée de vie sont enregistrées", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("tab", { name: "Cache" }));
+    const key = await screen.findByLabelText("Publier le résultat dans le cache (clé)");
+    expect(key).toHaveValue("");
+    expect(screen.queryByLabelText("Durée de vie du résultat (secondes, facultatif)")).toBeNull();
+    await userEvent.type(key, "inventaire-serveurs");
+    await userEvent.type(screen.getByLabelText("Durée de vie du résultat (secondes, facultatif)"), "21600");
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(api.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH")).toBe(true));
+    expect(sent()).toMatchObject({ cache_key: "inventaire-serveurs", cache_ttl_seconds: 21600 });
+  });
+
+  it("le résultat publié peut être marqué sensible (case visible seulement avec une clé)", async () => {
+    show();
+    await userEvent.click(await screen.findByRole("tab", { name: "Cache" }));
+    expect(screen.queryByLabelText("Résultat sensible")).toBeNull();
+    await userEvent.type(await screen.findByLabelText("Publier le résultat dans le cache (clé)"), "inv");
+    await userEvent.click(screen.getByLabelText("Résultat sensible"));
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(api.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH")).toBe(true));
+    expect(sent()).toMatchObject({ cache_key: "inv", cache_sensitive: true });
+  });
+
+  it("les réglages d'exécution et de cache sont répartis en deux onglets ; le runner est l'onglet par défaut", async () => {
+    show();
+    expect(await screen.findByLabelText("Runner imposé")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Exécution", selected: true })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Publier le résultat dans le cache (clé)")).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: "Cache" }));
+    expect(screen.getByLabelText("Publier le résultat dans le cache (clé)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Runner imposé")).toBeNull();
+  });
+
+  it("une publication existante est affichée, et vider la clé la désactive (durée de vie remise à vide)", async () => {
+    wf = { cache_key: "inv", cache_ttl_seconds: 60 };
+    show();
+    await userEvent.click(await screen.findByRole("tab", { name: "Cache" }));
+    const key = await screen.findByLabelText("Publier le résultat dans le cache (clé)");
+    expect(key).toHaveValue("inv");
+    expect(screen.getByLabelText("Durée de vie du résultat (secondes, facultatif)")).toHaveValue("60");
+    await userEvent.clear(screen.getByLabelText("Durée de vie du résultat (secondes, facultatif)"));
+    await userEvent.clear(key);
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(api.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH")).toBe(true));
+    expect(sent()).toMatchObject({ cache_key: "", cache_ttl_seconds: null });
+  });
+
   it("un runner imposé qui n'est plus utilisable par l'espace est montré tel quel, avec une alerte", async () => {
     wf = { runner: "disparu", runner_name: "ancien-runner", runner_force_children: false };
     show();

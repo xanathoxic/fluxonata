@@ -15,7 +15,7 @@ from runs.builtin import get_script_version
 from tenancy.models import Environment
 from tenancy.permissions import EDIT, RUN, VIEW, get_workspace
 
-from . import access
+from . import access, cache_spec
 from .models import Favorite, Workflow
 from .validation import MAX_SCRIPT, _validate_script, issue
 
@@ -58,6 +58,31 @@ def _set_run_mode(wf, d) -> None:
     wf.run_mode = d["run_mode"]
 
 
+def _set_cache_publish(wf, d) -> None:
+    """Publication du résultat dans le cache nommé (ADR 0032) : clé fixe (vide = désactivé) et durée de vie facultative."""
+    if "cache_key" in d:
+        key = str(d["cache_key"] or "").strip()
+        if key and not cache_spec.KEY_RE.match(key):
+            raise serializers.ValidationError(
+                {"cache_key": "Clé invalide : 1 à 120 caractères (lettres, chiffres, . _ : / -)."}
+            )
+        wf.cache_key = key
+    if "cache_sensitive" in d:
+        if not isinstance(d["cache_sensitive"], bool):
+            raise serializers.ValidationError({"cache_sensitive": "Vrai ou faux."})
+        wf.cache_sensitive = d["cache_sensitive"]
+    if "cache_ttl_seconds" in d:
+        ttl = d["cache_ttl_seconds"]
+        if ttl in (None, ""):
+            wf.cache_ttl_seconds = None
+        elif isinstance(ttl, bool) or not isinstance(ttl, int) or not 1 <= ttl <= cache_spec.MAX_TTL_SECONDS:
+            raise serializers.ValidationError(
+                {"cache_ttl_seconds": f"Un nombre de secondes entre 1 et {cache_spec.MAX_TTL_SECONDS}, ou vide."}
+            )
+        else:
+            wf.cache_ttl_seconds = ttl
+
+
 class WorkflowMetaView(APIView):
     """PATCH name / description / folder / error workflow of a workflow (draft metadata; versions are untouched)."""
 
@@ -81,6 +106,7 @@ class WorkflowMetaView(APIView):
         if "mcp_exposed" in d:
             wf.mcp_exposed = bool(d["mcp_exposed"])
         _set_run_mode(wf, d)
+        _set_cache_publish(wf, d)
         _set_runner(wf, ws, d)
         for field, label in (("error_workflow", "d'erreur"), ("success_workflow", "de succès")):
             if field in d:
@@ -110,6 +136,9 @@ class WorkflowMetaView(APIView):
                     "success_workflow",
                     "mcp_exposed",
                     "run_mode",
+                    "cache_key",
+                    "cache_ttl_seconds",
+                    "cache_sensitive",
                     "runner",
                     "runner_force_children",
                 }
@@ -127,6 +156,9 @@ class WorkflowMetaView(APIView):
                 "success_workflow": wf.success_workflow,
                 "mcp_exposed": wf.mcp_exposed,
                 "run_mode": wf.run_mode,
+                "cache_key": wf.cache_key,
+                "cache_ttl_seconds": wf.cache_ttl_seconds,
+                "cache_sensitive": wf.cache_sensitive,
                 "runner": str(wf.runner_id) if wf.runner_id else None,
                 "runner_name": wf.runner.name if wf.runner_id else None,
                 "runner_force_children": wf.runner_force_children,

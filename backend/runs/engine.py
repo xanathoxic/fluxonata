@@ -50,6 +50,7 @@ from . import (
     smtp_node,
     sql_node,
     ssh_node,
+    step_cache,
 )
 from .models import Approval, CallbackDelivery, Execution, RunEvent, StepRun, WorkflowRun
 
@@ -540,6 +541,8 @@ def _complete(run, steps, graph):
     run.status, run.outputs, run.finished_at = R.SUCCEEDED, outputs, timezone.now()
     run.save()
     add_event(run, "succeeded", "Workflow terminé avec succès.")
+    if (published := step_cache.publish_run_result(run)) is not None:
+        add_event(run, "cache_published", published)
     _queue_callback(run)
     _start_followup(run, "success")
 
@@ -632,6 +635,57 @@ def _start_transform(run, node, sr, ctx, steps):
     except transforms.TransformError as exc:
         raise _StepError("TRANSFORM_ERROR", str(exc), "Vérifiez la liste en entrée et les expressions.") from None
     _succeed(run, sr, node, f"Transformation « {_label(node)} » terminée.", out)
+
+
+def _start_cache(run, node, sr, ctx, steps):
+    try:
+        out = step_cache.apply(run, node, ctx)
+    except step_cache.RebuildNeeded as need:
+        _rebuild_cache(run, node, sr, ctx, need.key)
+        return
+    except step_cache.CacheStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    verb = {"read": "lu", "write": "écrit", "delete": "supprimé"}[node["operation"]]
+    _succeed(run, sr, node, f"Cache « {_label(node)} » {verb} (clé « {out['key']} »).", out)
+
+
+def _rebuild_cache(run, node, sr, ctx, key):
+    """Valeur absente avec « reconstruire » : lance le workflow producteur de cette clé (un seul à la fois : un autre lecteur rejoint le lancement actif)
+    puis met l'étape en attente ; `_poll_cache` lit la valeur quand il se termine."""
+    try:
+        with transaction.atomic():
+            build = step_cache.join_or_claim(run, key)
+            joined = build is not None
+            if not joined:
+                slug = step_cache.producer_slug(run, key)
+                inputs = resolve(node.get("rebuild_inputs") or {}, ctx)
+                _start_child(run, {"workflow": slug, "version": "latest"}, sr, ctx, inputs, 0)
+                build = sr.child_runs.get()
+                step_cache.claim(run, key, build)
+    except step_cache.CacheStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    sr.output = {"rebuild_run": str(build.pk), "key": key}
+    sr.status = S.WAITING
+    sr.save()
+    verb = "rejoint la reconstruction en cours" if joined else "lance le workflow producteur"
+    add_event(run, "cache_rebuild", f"Cache « {key} » absent : {verb}.", node["id"])
+
+
+def _poll_cache(run, node, sr, steps, now, label) -> bool:
+    info = sr.output or {}
+    if sr.status != S.WAITING or "rebuild_run" not in info:
+        return False
+    build = WorkflowRun.objects.filter(pk=info["rebuild_run"]).first()
+    if build is not None and build.status in step_cache.ACTIVE_RUN:
+        return False
+    try:
+        out = step_cache.after_rebuild(run, info["key"], build)
+    except step_cache.CacheStepError as exc:
+        _finish(run, sr, S.FAILED, error=_StepError(exc.code, exc.message, exc.next_step).payload())
+        add_event(run, "step_failed", f"Étape « {label} » échouée : {exc.message}", node["id"])
+        return True
+    _succeed(run, sr, node, f"Cache « {label} » reconstruit et lu (clé « {out['key']} »).", out)
+    return True
 
 
 def _start_agent(run, node, sr, ctx, steps):
@@ -766,6 +820,7 @@ _STARTERS: dict[str, Callable[..., None]] = {
     "wait": _start_wait,
     "approval": _start_approval,
     "transform": _start_transform,
+    "cache": _start_cache,
     "agent": _start_agent,
     "ssh": _start_ssh,
     "subworkflow": _start_subworkflow,
@@ -1333,6 +1388,7 @@ _POLLERS = {
     "wait": _poll_wait,
     "approval": _poll_approval,
     "subworkflow": _poll_subworkflow,
+    "cache": _poll_cache,
     "while": lambda run, node, sr, steps, now, label: _poll_while(run, node, sr, steps, now, label),
     "foreach": _poll_foreach,
 }

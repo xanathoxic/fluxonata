@@ -144,6 +144,9 @@ export interface WorkflowSummary {
   runner_force_children?: boolean;
   /** Concurrent (défaut) : lancements simultanés ; séquentiel : un seul à la fois, les suivants attendent (statut « queued »). */
   run_mode?: "concurrent" | "sequential";
+  cache_key?: string;
+  cache_ttl_seconds?: number | null;
+  cache_sensitive?: boolean;
   folder_level?: "view" | "run" | "edit" | null; // level in a private folder (null: the folder is not private to this person)
   latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null; input_form?: import("./forms/types").FormDefinition | null } | null;
 }

@@ -32,6 +32,7 @@ export function defaultNode(graph: Graph, type: NodeType, action?: Action): Grap
   if (type === "switch") node.cases = [{ id: "cas_1", expr: "" }, { id: "cas_2", expr: "" }];
   if (type === "wait") node.seconds = 60;
   if (type === "transform") Object.assign(node, { op: "filter", items: "", where: "" });
+  if (type === "cache") Object.assign(node, { operation: "read", key: "", on_missing: "empty" });
   if (type === "agent") Object.assign(node, { goal: "", tools: [], provider: "", mode: "test", approval: "effectful", max_steps: 5 });
   if (type === "smtp") Object.assign(node, { connection: "", mode: "test", to: "", cc: "", subject: "", body: "" });
   if (type === "sftp") Object.assign(node, { connection: "", mode: "test", operation: "list", path: "/" });
@@ -298,6 +299,7 @@ const OUTPUT_LABELS: Record<string, Record<string, string>> = {
   foreach: { results: "résultats", count: "nombre d'éléments" },
   race: { winner: "branche gagnante (identifiant)", winner_name: "branche gagnante (nom)", value: "valeur de la branche gagnante" },
   wait_resume: { resumed: "reprise effectuée", payload: "données reçues à la reprise" },
+  cache: { found: "valeur trouvée", value: "valeur", version: "version", age_seconds: "âge (secondes)", key: "clé", rebuilt: "reconstruit par le workflow producteur", written: "écrit", size_bytes: "taille (octets)", expires_at: "expire le", deleted: "supprimé" },
   smtp: { sent: "envoyé", simulated: "simulé (mode test)", recipients: "nombre de destinataires", message_id: "identifiant du message" },
   sftp: { operation: "opération", path: "chemin", content: "contenu", file: "fichier", entries: "fichiers", count: "nombre", simulated: "simulé (mode test)" },
   ldap: { rows: "entrées", count: "nombre", truncated: "tronqué", simulated: "simulé (mode test)" },
@@ -454,6 +456,7 @@ export function summarize(n: GraphNode, actions: Action[]): string {
     case "sql": return `${n.mode === "reel" ? "" : "[test] "}${(n.statement ?? "").replace(/\s+/g, " ").slice(0, 50) || "requête à saisir"}`;
     case "http": if (n.integration) return `${n.mode === "reel" ? "" : "[test] "}${n.integration} · ${n.operation ?? "?"}`; return `${n.mode === "reel" ? "" : "[test] "}${n.method ?? "GET"} ${n.connection || "?"}${n.path ?? ""}`.slice(0, 70);
     case "transform": return `${({ filter: "Filtrer", map: "Transformer", sort: "Trier", group: "Regrouper", unique: "Dédoublonner", merge: "Fusionner", limit: "Limiter", set: "Définir", split: "Scinder", chunk: "Lots" } as Record<string, string>)[n.op ?? ""] ?? "Transformer"} ${n.items ?? ""}`.trim().slice(0, 70);
+    case "cache": return `Cache · ${({ read: "lire", write: "écrire", delete: "supprimer" } as Record<string, string>)[n.operation ?? "read"] ?? "lire"} ${n.key ?? ""}`.trim().slice(0, 70);
     case "wait": return n.resume === "webhook" ? `Attendre un appel HTTP (max ${n.seconds ?? "?"} s)` : `Attendre ${n.seconds ?? "?"} s`;
     case "approval": return n.title ? `Demander : ${n.title}` : "Approbation à définir";
     case "foreach": return `Pour chaque élément (max ${n.max_iterations ?? "?"})`;

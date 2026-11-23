@@ -2,6 +2,18 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.16.0 — 2026-11-23
+
+**Cache nommé entre workflows : nœud Cache, publication automatique, reconstruction, page et onglet Caches ; connexion qui redirige mieux expliquée**
+
+- Cache nommé entre workflows : nœud « Cache » (lire, écrire, supprimer) par espace et environnement (ADR 0032, lot 1)
+- Cache nommé, lot 2 : publication automatique du résultat d'un workflow, API de gestion et page « Caches »
+- Cache nommé, lot 3 : reconstruction automatique par le workflow producteur, verrou de reconstruction, valeurs sensibles
+- Connexions : le test d'une connexion qui redirige dit où et quoi faire (adresse finale ou chemin de test), sans afficher la requête de l'adresse
+- Résumé du workflow : « Résultat sensible » aligné comme les autres commutateurs, avec son aide
+- Résumé du workflow : la section Exécution devient « Exécution et cache » avec deux onglets (Exécution, Cache)
+- Workflow : onglet « Cache » (visible quand la publication dans le cache est activée) pour voir et invalider les valeurs publiées
+
 ## v0.15.1 — 2026-11-23
 
 **Liste des exécutions limitée aux workflows et sous-workflows**

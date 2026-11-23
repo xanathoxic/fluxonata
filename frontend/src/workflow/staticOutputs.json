@@ -11,6 +11,18 @@
     "comment": "string",
     "decided_by": "string"
   },
+  "cache": {
+    "age_seconds": "integer",
+    "deleted": "boolean",
+    "expires_at": "string",
+    "found": "boolean",
+    "key": "string",
+    "rebuilt": "boolean",
+    "size_bytes": "integer",
+    "value": null,
+    "version": "integer",
+    "written": "boolean"
+  },
   "condition": {
     "result": "boolean"
   },

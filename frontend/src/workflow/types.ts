@@ -1,6 +1,6 @@
 import type { JsonSchema } from "../api";
 
-export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform";
+export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform" | "cache";
 export type ScriptLanguage = "python" | "javascript";
 export type VarType = "string" | "integer" | "number" | "boolean" | "array" | "object";
 export interface ScriptOutput { name: string; type: VarType }
@@ -50,6 +50,14 @@ export interface GraphNode {
   mocks?: unknown[];
   integration?: string;
   operation?: string;
+  /** Cache step: key, value to write, lifetime, maximum age accepted when reading, behaviour when missing. */
+  key?: string;
+  value?: unknown;
+  ttl_seconds?: number | string;
+  max_age_seconds?: number | string;
+  on_missing?: "empty" | "fail" | "rebuild";
+  rebuild_inputs?: Record<string, unknown> | string;
+  sensitive?: boolean;
   content?: unknown;
   to?: string;
   cc?: string;
@@ -184,6 +192,7 @@ export const NODE_LABELS: Record<NodeType, string> = {
   ssh: "Commandes SSH",
   smtp: "Envoyer un e-mail",
   transform: "Transformer les données",
+  cache: "Cache",
 };
 
 const FIXED_LABELS: Record<string, string> = { next: "Ensuite", true: "Si oui", false: "Si non", error: "En cas d'erreur", default: "Sinon" };

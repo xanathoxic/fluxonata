@@ -13,6 +13,7 @@ import { errorText, useWsQuery } from "../lib";
 import { DraftProvider, useDraft } from "./DraftContext";
 import { PublishDialog } from "./PublishDialog";
 import { AuditTab } from "./tabs/AuditTab";
+import { CacheTab } from "./tabs/CacheTab";
 import { FollowTab } from "./tabs/FollowTab";
 import { FormTab } from "./tabs/FormTab";
 import { IOTab } from "./tabs/IOTab";
@@ -33,6 +34,7 @@ const TABS = [
   { id: "versions", label: "Versions", el: <VersionsTab /> },
   { id: "audit", label: "Activité", el: <AuditTab /> },
   { id: "runs", label: "Exécutions", el: <RunsTab /> },
+  { id: "cache", label: "Cache", el: <CacheTab />, only: (wf: { cache_key?: string }) => !!wf.cache_key }, // seulement si la publication dans le cache est activée
 ];
 interface Dep { actions: { slug: string; name: string | null; pinned: string | null; latest: string | null; deprecated: boolean; exists: boolean }[]; workflows: { slug: string; name: string | null; exists: boolean }[]; connections: string[]; ai_providers: string[] }
 interface Usage { results: { workflow: string; workflow_version: string; uses_versions: string[] }[] }
@@ -133,12 +135,13 @@ function Body() {
   const { tab = "summary" } = useParams();
   const d = useDraft();
   const parts = useHeaderParts();
-  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
+  const shown = TABS.filter((t) => !t.only || t.only(d.wf));
+  const current = shown.find((t) => t.id === tab) ?? shown[0];
   return (
     <EditorShell backTo="/workflows" backLabel="Retour aux workflows" title={d.wf.name} titleHint={d.wf.folder ? `Dossier : ${d.wf.folder}` : undefined}
       titleExtra={<FavoriteStar kind="workflow" slug={d.slug} name={d.wf.name} />} status={parts.status} actions={parts.actions} actionsLabel="Actions du workflow"
       fill={current?.id === "schema" ? "wf" : false}
-      tabs={<PageTabs label="Sections du workflow" className="wf-tabs" active={current?.id ?? ""} tabs={TABS.map((t) => ({ id: t.id, label: t.label, to: `/workflows/${d.slug}/${t.id}` }))} />}
+      tabs={<PageTabs label="Sections du workflow" className="wf-tabs" active={current?.id ?? ""} tabs={shown.map((t) => ({ id: t.id, label: t.label, to: `/workflows/${d.slug}/${t.id}` }))} />}
       notices={parts.notices}>
       <div className={`wf-content tab-${current?.id}`}>{current?.el}</div>
       {parts.dialogs}

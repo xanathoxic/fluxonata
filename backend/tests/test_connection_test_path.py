@@ -86,3 +86,59 @@ def test_the_gitlab_catalog_entry_presets_the_test_path():
 
     gl = next(i for i in INTEGRATIONS if i["slug"] == "gitlab")
     assert gl["connection"]["config"]["test_path"] == "/user"
+
+
+@pytest.fixture
+def redirecting(settings):
+    """Un serveur d'identité qui redirige sa racine (302) vers une page à jeton, et répond 200 sur le chemin final."""
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if self.path.startswith("/realms/demo"):
+                self.send_response(200)
+                self.end_headers()
+                return
+            self.send_response(302)
+            self.send_header(
+                "Location", "https://user:pw@sso.example:8443/admin/master/console/?token=SECRETVALUE#frag"
+            )
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    settings.ORCH_EGRESS_ALLOWLIST = "127.0.0.1"
+    yield f"http://127.0.0.1:{srv.server_address[1]}/"
+    srv.shutdown()
+
+
+def test_a_redirect_is_explained_with_its_destination_and_never_leaks_the_query(world, redirecting):
+    c = client_for(world["designer"])
+    conn = mk_conn(c, kind="http_bearer", config={"base_url": redirecting})
+    r = c.post(f"{BASE}/connections/{conn['id']}/test/").json()
+    assert r["ok"] is False and "HTTP 302" in r["message"]
+    assert "https://sso.example:8443/admin/master/console/" in r["message"] and "chemin de test" in r["message"]
+    assert "SECRETVALUE" not in str(r) and "user:pw" not in str(r) and "frag" not in r["message"]
+
+
+def test_the_redirect_message_is_cured_by_a_test_path_that_answers_directly(world, redirecting):
+    c = client_for(world["designer"])
+    conn = mk_conn(c, kind="http_bearer", config={"base_url": redirecting, "test_path": "/realms/demo"})
+    assert c.post(f"{BASE}/connections/{conn['id']}/test/").json()["ok"] is True
+
+
+@pytest.mark.parametrize("status", [301, 303, 307, 308])
+def test_every_redirect_status_gets_the_explanation(status):
+    from vault.views import _verdict
+
+    ok, message = _verdict(status, {}, {"Location": "/ailleurs"})
+    assert ok is False and f"HTTP {status}" in message and "/ailleurs" in message
+
+
+def test_a_redirect_without_location_still_explains():
+    from vault.views import _verdict
+
+    ok, message = _verdict(302, {}, {})
+    assert ok is False and "redirige (HTTP 302)" in message and "vers" not in message

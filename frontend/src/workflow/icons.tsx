@@ -5,6 +5,7 @@ const PATHS: Record<string, React.ReactElement> = {
   condition: <path d="M12 3l9 9-9 9-9-9z" />,
   switch: <path d="M12 3l9 9-9 9-9-9zM12 8v8M8 12h8" />,
   transform: <path d="M4 6h16M4 12h10M4 18h6M17 14l3 4-3 4" />,
+  cache: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /><path d="M16 17l2 2 3-3" /></>,
   sftp: <><path d="M4 4h10l6 6v10H4z" /><path d="M14 4v6h6M9 15h6M12 12v6" /></>,
   ssh: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M12 15h5" /></>,
   smtp: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>,

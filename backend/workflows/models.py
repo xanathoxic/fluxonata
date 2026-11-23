@@ -49,6 +49,14 @@ class Workflow(models.Model):
     # Avec un runner : ses sous-workflows (étapes Workflow, boucles) s'exécutent AUSSI sur ce runner, même si un autre leur est assigné.
     runner_force_children = models.BooleanField(default=False)
 
+    # Cache (ADR 0032, lot 2) : si `cache_key` est renseignée, le résultat (sorties) de chaque exécution réussie est écrit dans le cache nommé de l'espace
+    # sous cette clé (dans l'environnement de l'exécution), avec une durée de vie facultative en secondes.
+    cache_key = models.CharField(max_length=120, blank=True, default="")
+    cache_ttl_seconds = models.PositiveIntegerField(null=True, blank=True)
+    cache_sensitive = models.BooleanField(
+        default=False
+    )  # l'entrée publiée n'est visible que des administrateurs de l'espace
+
     class RunMode(models.TextChoices):
         CONCURRENT = "concurrent", "Concurrent"
         SEQUENTIAL = "sequential", "Séquentiel"

@@ -4120,6 +4120,130 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/caches/": {
+            "get": {
+                "operationId": "workspace_caches_list",
+                "description": "GET : les entrées de l'espace (sans valeur), filtrables par `environment` (dev | test | prod), `key` (clé exacte) et `q` (partie de la clé).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CacheList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/caches/{id}/": {
+            "get": {
+                "operationId": "workspace_cache_retrieve",
+                "description": "GET : une entrée avec sa valeur. DELETE : invalide l'entrée (journalisé ; la valeur n'est pas écrite dans l'audit).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CacheEntryDetail"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspace_cache_delete",
+                "description": "GET : une entrée avec sa valeur. DELETE : invalide l'entrée (journalisé ; la valeur n'est pas écrite dans l'audit).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/catalog/": {
             "get": {
                 "operationId": "workspaces_catalog_retrieve",
@@ -12524,6 +12648,165 @@
                 "type": "string",
                 "description": "* `major` - major\n* `minor` - minor\n* `patch` - patch"
             },
+            "CacheEntry": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "key": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "environment": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "size_bytes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "expired": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "sensitive": {
+                        "type": "boolean"
+                    },
+                    "written_by_workflow": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "written_by_run": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "environment",
+                    "expired",
+                    "id",
+                    "key",
+                    "updated_at"
+                ]
+            },
+            "CacheEntryDetail": {
+                "type": "object",
+                "description": "La valeur d'une entrée sensible n'est rendue qu'aux administrateurs de l'espace (`masked` : vrai, `value` : null pour les autres).",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "key": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "environment": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "size_bytes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "expired": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "sensitive": {
+                        "type": "boolean"
+                    },
+                    "written_by_workflow": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "written_by_run": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "value": {
+                        "description": "Given the *incoming* primitive data, return the value for this field\nthat should be validated and transformed to a native value.",
+                        "readOnly": true
+                    },
+                    "masked": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "environment",
+                    "expired",
+                    "id",
+                    "key",
+                    "masked",
+                    "updated_at",
+                    "value"
+                ]
+            },
+            "CacheList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CacheEntry"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "results"
+                ]
+            },
             "CatalogRunProgress": {
                 "type": "object",
                 "properties": {
@@ -16117,6 +16400,19 @@
                     "run_mode": {
                         "$ref": "#/components/schemas/RunModeEnum"
                     },
+                    "cache_key": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "cache_ttl_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "nullable": true
+                    },
+                    "cache_sensitive": {
+                        "type": "boolean"
+                    },
                     "runner": {
                         "type": "string",
                         "nullable": true,
@@ -16231,6 +16527,19 @@
                     },
                     "run_mode": {
                         "$ref": "#/components/schemas/RunModeEnum"
+                    },
+                    "cache_key": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "cache_ttl_seconds": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "nullable": true
+                    },
+                    "cache_sensitive": {
+                        "type": "boolean"
                     },
                     "runner": {
                         "type": "string",
