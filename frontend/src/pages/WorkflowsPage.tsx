@@ -66,7 +66,7 @@ export function WorkflowsPage() {
     () =>
       all.filter(
         (w) =>
-          inFolder(w.folder, folder) &&
+          inFolder(w.folder, folder, !!q.trim()) &&
           (!tagF || (w.tags ?? []).includes(tagF)) &&
           (!q || `${w.name} ${w.description} ${(w.tags ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase())),
       ),

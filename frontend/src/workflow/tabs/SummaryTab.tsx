@@ -45,7 +45,7 @@ function RunnerSettings({ value, onChange, force, onForce, choices, current }: {
 export function SummaryTab() {
   const d = useDraft();
   const { can } = useApp();
-  const meta = useWsMutation<{ description: string; folder: string; tags: string[]; error_workflow: string; success_workflow: string; mcp_exposed: boolean; runner: string; runner_force_children: boolean }>("PATCH", `/workflows/${d.slug}/meta/`, ["workflows"]);
+  const meta = useWsMutation<{ description: string; folder: string; tags: string[]; error_workflow: string; success_workflow: string; mcp_exposed: boolean; runner: string; runner_force_children: boolean; run_mode: string }>("PATCH", `/workflows/${d.slug}/meta/`, ["workflows"]);
   const runs = useWsQuery<Page<WorkflowRun>>(`wf-runs-${d.slug}`, `/workflow-runs/?workflow=${d.slug}`);
   const [description, setDescription] = useState(d.wf.description);
   const [folder, setFolder] = useState(d.wf.folder);
@@ -54,10 +54,11 @@ export function SummaryTab() {
   const [mcp, setMcp] = useState(d.wf.mcp_exposed ?? false);
   const [runner, setRunner] = useState(d.wf.runner ?? "");
   const [forceChildren, setForceChildren] = useState(d.wf.runner_force_children ?? false);
+  const [runMode, setRunMode] = useState(d.wf.run_mode ?? "concurrent");
   const runners = useWsQuery<{ results: RunnerChoice[] }>("runner-choices", "/runner-choices/", { enabled: can("edit") });
   const [tags, setTags] = useState<string[]>(d.wf.tags ?? []);
   const all = useWsQuery<Page<{ slug: string; name: string; tags?: string[] }>>("workflows-all", "/workflows/?limit=200");
-  useEffect(() => { setDescription(d.wf.description); setFolder(d.wf.folder); setErrorWf(d.wf.error_workflow ?? ""); setOkWf(d.wf.success_workflow ?? ""); setMcp(d.wf.mcp_exposed ?? false); setRunner(d.wf.runner ?? ""); setForceChildren(d.wf.runner_force_children ?? false); setTags(d.wf.tags ?? []); }, [d.wf.runner, d.wf.runner_force_children, d.wf.description, d.wf.folder, d.wf.error_workflow, d.wf.success_workflow, d.wf.mcp_exposed, d.wf.tags]);
+  useEffect(() => { setDescription(d.wf.description); setFolder(d.wf.folder); setErrorWf(d.wf.error_workflow ?? ""); setOkWf(d.wf.success_workflow ?? ""); setMcp(d.wf.mcp_exposed ?? false); setRunner(d.wf.runner ?? ""); setForceChildren(d.wf.runner_force_children ?? false); setRunMode(d.wf.run_mode ?? "concurrent"); setTags(d.wf.tags ?? []); }, [d.wf.run_mode, d.wf.runner, d.wf.runner_force_children, d.wf.description, d.wf.folder, d.wf.error_workflow, d.wf.success_workflow, d.wf.mcp_exposed, d.wf.tags]);
   const editable = can("edit");
   const { workspace } = useApp();
   const saveTpl = useWsMutation<{ name: string }>("POST", `/workflows/${d.slug}/save-as-template/`, ["workflow-templates"]);
@@ -74,7 +75,7 @@ export function SummaryTab() {
         <Kpi label="Dernière modification" value={formatDate(d.wf.updated_at)} hint={`propriétaire : ${d.wf.owner ?? "—"}`} tone="info" />
       </ul>
       {d.wf.deprecated && <p role="note" className="notice">⚠ Déprécié : {d.wf.deprecation_reason || "aucun motif"}.</p>}
-      <form onSubmit={(e) => { e.preventDefault(); meta.mutate({ description, folder, tags, error_workflow: errorWf, success_workflow: okWf, mcp_exposed: mcp, runner, runner_force_children: forceChildren && runner !== "" }, { onSuccess: () => void d.refetchWorkflow() }); }}>
+      <form onSubmit={(e) => { e.preventDefault(); meta.mutate({ description, folder, tags, error_workflow: errorWf, success_workflow: okWf, mcp_exposed: mcp, runner, runner_force_children: forceChildren && runner !== "", run_mode: runMode }, { onSuccess: () => void d.refetchWorkflow() }); }}>
         <fieldset disabled={!editable} className="bare">
           <div className="sum-grid">
             <Section title="Informations" hint="Ce que fait le workflow et où il se range.">
@@ -100,6 +101,13 @@ export function SummaryTab() {
             </Section>
             <Section title="Exécution" hint="Où s'exécutent les actions et les scripts de ce workflow.">
               <RunnerSettings value={runner} onChange={(v) => { setRunner(v); if (!v) setForceChildren(false); }} force={forceChildren} onForce={setForceChildren} choices={runners.data?.results ?? []} current={d.wf.runner_name ?? null} />
+              <div className="adm-rule">
+                <input id="sum-run-mode" className="adm-switch" type="checkbox" checked={runMode === "sequential"} onChange={(e) => setRunMode(e.target.checked ? "sequential" : "concurrent")} />
+                <div>
+                  <label htmlFor="sum-run-mode">Exécution séquentielle</label>
+                  <HelpTip>Désactivé (par défaut), le mode est concurrent : chaque lancement démarre tout de suite et plusieurs peuvent s'exécuter en même temps. Activé, le mode est séquentiel : un seul lancement à la fois (par environnement) ; les suivants, depuis le catalogue ou ailleurs, restent « En attente » et démarrent dans l'ordre d'arrivée dès que le précédent est terminé, réussi ou non.</HelpTip>
+                </div>
+              </div>
             </Section>
             </div>
             <Section title="Intégration" hint="Rendre ce workflow appelable par un assistant.">

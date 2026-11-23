@@ -49,6 +49,15 @@ def _set_runner(wf, ws, d) -> None:
         wf.runner_force_children = bool(d["runner_force_children"])
 
 
+def _set_run_mode(wf, d) -> None:
+    """Mode d'exécution : concurrent (défaut) ou sequential (un seul lancement actif à la fois, les autres attendent)."""
+    if "run_mode" not in d:
+        return
+    if d["run_mode"] not in Workflow.RunMode.values:
+        raise serializers.ValidationError({"run_mode": "Mode d'exécution inconnu (concurrent ou sequential)."})
+    wf.run_mode = d["run_mode"]
+
+
 class WorkflowMetaView(APIView):
     """PATCH name / description / folder / error workflow of a workflow (draft metadata; versions are untouched)."""
 
@@ -71,6 +80,7 @@ class WorkflowMetaView(APIView):
             wf.tags = clean_tags(d["tags"])
         if "mcp_exposed" in d:
             wf.mcp_exposed = bool(d["mcp_exposed"])
+        _set_run_mode(wf, d)
         _set_runner(wf, ws, d)
         for field, label in (("error_workflow", "d'erreur"), ("success_workflow", "de succès")):
             if field in d:
@@ -99,6 +109,7 @@ class WorkflowMetaView(APIView):
                     "error_workflow",
                     "success_workflow",
                     "mcp_exposed",
+                    "run_mode",
                     "runner",
                     "runner_force_children",
                 }
@@ -115,6 +126,7 @@ class WorkflowMetaView(APIView):
                 "error_workflow": wf.error_workflow,
                 "success_workflow": wf.success_workflow,
                 "mcp_exposed": wf.mcp_exposed,
+                "run_mode": wf.run_mode,
                 "runner": str(wf.runner_id) if wf.runner_id else None,
                 "runner_name": wf.runner.name if wf.runner_id else None,
                 "runner_force_children": wf.runner_force_children,

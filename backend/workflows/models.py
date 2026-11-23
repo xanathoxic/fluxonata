@@ -49,6 +49,14 @@ class Workflow(models.Model):
     # Avec un runner : ses sous-workflows (étapes Workflow, boucles) s'exécutent AUSSI sur ce runner, même si un autre leur est assigné.
     runner_force_children = models.BooleanField(default=False)
 
+    class RunMode(models.TextChoices):
+        CONCURRENT = "concurrent", "Concurrent"
+        SEQUENTIAL = "sequential", "Séquentiel"
+
+    # Concurrent : les lancements s'exécutent en même temps. Séquentiel : un seul à la fois par environnement ; les suivants attendent leur tour
+    # (statut « En attente »), dans l'ordre d'arrivée (`runs.queueing`).
+    run_mode = models.CharField(max_length=10, choices=RunMode.choices, default=RunMode.CONCURRENT)
+
     class Meta:
         constraints = [models.UniqueConstraint(fields=["workspace", "slug"], name="uniq_workflow_slug")]
         ordering = ["name", "id"]  # a unique tie-break: paginated lists must not skip or repeat equal names

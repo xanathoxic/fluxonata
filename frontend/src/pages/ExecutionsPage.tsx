@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiAll, type Execution, type WorkflowRun } from "../api";
+import { api, apiAll, type ChildRun, type Execution, type WorkflowRun } from "../api";
 import { Pagination } from "../components/Pagination";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
 
-interface Row { key: string; to: string; name: string; kind: string; status: string; label: string; env: string; at: string }
+interface Row { key: string; to: string; name: string; kind: string; status: string; label: string; env: string; at: string; children?: boolean }
 
 const STATUSES: [string, string][] = [["", "Toutes"], ["running", "En cours"], ["succeeded", "Réussies"], ["failed", "Échouées"], ["cancelled", "Annulées"]];
 const KINDS: [string, string][] = [["", "Tous"], ["Workflow", "Workflows"], ["Action", "Actions"]];
@@ -22,6 +22,50 @@ function ago(iso: string): string {
   if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
   if (s < 7 * 86400) return `il y a ${Math.round(s / 86400)} j`;
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Chevron de repli : pointe à droite quand la ligne est repliée, vers le bas quand elle est dépliée. */
+function Fold({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button type="button" className="xfold" aria-expanded={open} aria-label={label} onClick={onToggle}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ transform: open ? "rotate(90deg)" : undefined }}><path d="m9 6 6 6-6 6" /></svg>
+    </button>
+  );
+}
+
+/** Lignes des sous-workflows d'une exécution (chargées au dépliage, suivies tant qu'elles sont ouvertes) ; chacune peut se déplier à son tour. */
+function ChildRows({ parent, depth, open, toggle }: { parent: string; depth: number; open: Set<string>; toggle: (id: string) => void }) {
+  const { workspace } = useApp();
+  const kids = useQuery({ queryKey: ["wrun-children", workspace.slug, parent], queryFn: () => api<ChildRun[]>(`/workspaces/${workspace.slug}/workflow-runs/${parent}/children/`), refetchInterval: 3000 });
+  if (kids.isLoading) return <tr className="xchild"><td /><td colSpan={5} style={{ paddingLeft: `${depth * 24}px` }}><span role="status" className="hint">{t("common.loading")}</span></td></tr>;
+  if (kids.isError) return <tr className="xchild"><td /><td colSpan={5} style={{ paddingLeft: `${depth * 24}px` }}><span role="alert" className="hint">Les sous-workflows n'ont pas pu être chargés.</span></td></tr>;
+  return (
+    <>
+      {(kids.data ?? []).map((c) => {
+        const isOpen = open.has(c.id);
+        const name = c.workflow.name;
+        return (
+          <Fragment key={c.id}>
+            <tr className={`xrow-${c.status} xchild`}>
+              <td />
+              <td style={{ paddingLeft: `${depth * 24}px` }}>
+                <span className="xnamecell">
+                  {c.has_children ? <Fold open={isOpen} onToggle={() => toggle(c.id)} label={`${isOpen ? "Replier" : "Déplier"} les sous-workflows de ${name}`} /> : <span className="xfold-gap" />}
+                  <Link to={`/runs/${c.id}`} className="xname">{name}</Link>
+                  <span className="hint"> · étape « {c.step_name} »{c.child_index !== null ? ` · n° ${c.child_index + 1}` : ""}</span>
+                </span>
+              </td>
+              <td><span className="kind kind-sous-workflow">Sous-workflow</span></td>
+              <td><StatusBadge status={c.status} label={c.needs_decision ? "Décision requise" : c.status_label} /></td>
+              <td><span className={`env env-${c.environment}`}>{t(`env.${c.environment}` as never)}</span></td>
+              <td><time dateTime={c.created_at} title={formatDate(c.created_at)}>{ago(c.created_at)}</time><span className="xdate">{formatDate(c.created_at)}</span></td>
+            </tr>
+            {isOpen && <ChildRows parent={c.id} depth={depth + 1} open={open} toggle={toggle} />}
+          </Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 const Magnifier = () => (
@@ -39,6 +83,8 @@ export function ExecutionsPage() {
   const [to, setTo] = useState("");
   const [minDur, setMinDur] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleRow = (id: string) => setExpanded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [filters, setFilters] = useState(true);
@@ -47,7 +93,7 @@ export function ExecutionsPage() {
   const flows = useQuery({ queryKey: ["wruns", workspace.slug, serverQs], queryFn: () => apiAll<WorkflowRun>(`/workspaces/${workspace.slug}/workflow-runs/${serverQs ? `?${serverQs}` : ""}`, 500), refetchInterval: 3000 });
   const rows: Row[] = [
     ...(actions.data?.results ?? []).map((e) => ({ key: e.id, to: `/executions/${e.id}`, name: e.action.name, kind: "Action", status: e.status, label: e.status_label, env: e.environment, at: e.created_at })),
-    ...(flows.data?.results ?? []).map((r) => ({ key: r.id, to: `/runs/${r.id}`, name: r.workflow.name, kind: "Workflow", status: r.status, label: r.needs_decision ? "Décision requise" : r.status_label, env: r.environment, at: r.created_at })),
+    ...(flows.data?.results ?? []).map((r) => ({ key: r.id, to: `/runs/${r.id}`, name: r.workflow.name, kind: "Workflow", status: r.status, label: r.needs_decision ? "Décision requise" : r.status_label, env: r.environment, at: r.created_at, children: r.has_children })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const byText = rows.filter((r) => (!q || r.name.toLowerCase().includes(q.toLowerCase())) && (!kind || r.kind === kind));
   const count = (s: string) => (s ? byText.filter((r) => r.status === s).length : byText.length);
@@ -119,14 +165,22 @@ export function ExecutionsPage() {
             <thead><tr><th scope="col"><span className="sr-only">Comparer</span></th><th scope="col">Automatisation</th><th scope="col">Type</th><th scope="col">{t("exec.status")}</th><th scope="col">Environnement</th><th scope="col">Lancée</th></tr></thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.key} className={`xrow-${r.status}`}>
-                  <td>{r.kind === "Workflow" && <input type="checkbox" aria-label={`Comparer ${r.name} du ${formatDate(r.at)}`} checked={picked.includes(r.key)} disabled={!picked.includes(r.key) && picked.length >= 2} onChange={(e) => setPicked(e.target.checked ? [...picked, r.key] : picked.filter((k) => k !== r.key))} />}</td>
-                  <td><Link to={r.to} className="xname">{r.name}</Link></td>
-                  <td><span className={`kind kind-${r.kind.toLowerCase()}`}>{r.kind}</span></td>
-                  <td><StatusBadge status={r.status} label={r.label} /></td>
-                  <td><span className={`env env-${r.env}`}>{t(`env.${r.env}` as never)}</span></td>
-                  <td><time dateTime={r.at} title={formatDate(r.at)}>{ago(r.at)}</time><span className="xdate">{formatDate(r.at)}</span></td>
-                </tr>
+                <Fragment key={r.key}>
+                  <tr className={`xrow-${r.status}`}>
+                    <td>{r.kind === "Workflow" && <input type="checkbox" aria-label={`Comparer ${r.name} du ${formatDate(r.at)}`} checked={picked.includes(r.key)} disabled={!picked.includes(r.key) && picked.length >= 2} onChange={(e) => setPicked(e.target.checked ? [...picked, r.key] : picked.filter((k) => k !== r.key))} />}</td>
+                    <td>
+                      <span className="xnamecell">
+                        {r.children ? <Fold open={expanded.has(r.key)} onToggle={() => toggleRow(r.key)} label={`${expanded.has(r.key) ? "Replier" : "Déplier"} les sous-workflows de ${r.name}`} /> : <span className="xfold-gap" />}
+                        <Link to={r.to} className="xname">{r.name}</Link>
+                      </span>
+                    </td>
+                    <td><span className={`kind kind-${r.kind.toLowerCase()}`}>{r.kind}</span></td>
+                    <td><StatusBadge status={r.status} label={r.label} /></td>
+                    <td><span className={`env env-${r.env}`}>{t(`env.${r.env}` as never)}</span></td>
+                    <td><time dateTime={r.at} title={formatDate(r.at)}>{ago(r.at)}</time><span className="xdate">{formatDate(r.at)}</span></td>
+                  </tr>
+                  {r.children && expanded.has(r.key) && <ChildRows parent={r.key} depth={1} open={expanded} toggle={toggleRow} />}
+                </Fragment>
               ))}
             </tbody>
           </table>

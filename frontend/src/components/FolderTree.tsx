@@ -60,8 +60,8 @@ function Branch({ node, current, onPick, counts, locked, fold }: { node: Node; c
   );
 }
 
-/** Les éléments d'un dossier : ceux de CE dossier seulement, pas ceux de ses sous-dossiers (qui s'ouvrent en les choisissant). « Tous » (chemin vide) montre tout. */
-export const inFolder = (itemFolder: string, current: string) => !current || itemFolder === current;
+/** Les éléments d'un dossier : ceux de CE dossier seulement, pas ceux de ses sous-dossiers (qui s'ouvrent en les choisissant). La racine (chemin vide, « Root ») ne montre que ce qui n'est rangé dans aucun dossier ; sauf quand un texte est recherché (`searching`) : à la racine, la recherche porte sur tous les dossiers (sinon un élément rangé serait introuvable par son nom). Dans un dossier, elle reste limitée à ce dossier. */
+export const inFolder = (itemFolder: string, current: string, searching = false) => itemFolder === current || (searching && !current);
 
 export type FolderKind = "workflow" | "action" | "ai_skill" | "form" | "control";
 const parentOf = (p: string) => p.split("/").slice(0, -1).join("/");
@@ -152,7 +152,7 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
         </div>
       )}
       <div className="tree-row tree-all">
-        <button type="button" className="tree-item" aria-current={current === "" ? "true" : undefined} onClick={() => onPick("")}><AllIcon /> Tous ({folders.length})</button>
+        <button type="button" className="tree-item" aria-current={current === "" ? "true" : undefined} onClick={() => onPick("")}><AllIcon /> Root ({folders.filter((f) => !f).length})</button>
         {branches.length > 0 && (
           // biome-ignore lint/a11y/useSemanticElements: regroupement de boutons de repli ; un fieldset changerait la mise en forme
           <span className="tree-fold" role="group" aria-label="Déplier ou replier tout l'arbre">
@@ -181,7 +181,7 @@ export function FolderTree({ label, kind, folders, current, onPick, canEdit }: {
     </nav>
   );
   // On a phone the tree is folded behind « Dossier : … » so the list comes first (it unfolds on demand, and folds again once a folder is picked)
-  return phone ? <details className="ft-mobile" open={foldOpen} onToggle={(e) => setFoldOpen((e.currentTarget as HTMLDetailsElement).open)}><summary>Dossier : {current ? current.split("/").join(" / ") : "Tous"}</summary>{body}</details> : body;
+  return phone ? <details className="ft-mobile" open={foldOpen} onToggle={(e) => setFoldOpen((e.currentTarget as HTMLDetailsElement).open)}><summary>Dossier : {current ? current.split("/").join(" / ") : "Root"}</summary>{body}</details> : body;
 }
 
 const errorMessage = (e: ApiError) => {

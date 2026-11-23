@@ -46,6 +46,7 @@
   "runs/0016_run_next_check_at",
   "runs/0017_approval_subject_body",
   "runs/0018_runner_pin",
+  "runs/0019_run_queued_status",
   "tenancy/0001_initial",
   "tenancy/0002_policyversion_promotion_serviceaccount_apitoken_and_more",
   "tenancy/0003_oidcidentity",
@@ -60,6 +61,7 @@
   "tenancy/0012_control_folder",
   "tenancy/0013_catalog_role_groups",
   "tenancy/0014_personal_api_tokens",
+  "tenancy/0015_sso_providers",
   "triggers/0001_initial",
   "triggers/0002_public_forms",
   "triggers/0003_poll_triggers",
@@ -98,6 +100,7 @@
   "workflows/0012_git_sync",
   "workflows/0013_workflow_tags",
   "workflows/0014_catalog_role_groups",
-  "workflows/0015_runner_pin"
+  "workflows/0015_runner_pin",
+  "workflows/0016_run_mode"
  ]
 }

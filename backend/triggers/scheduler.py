@@ -16,7 +16,7 @@ from . import cron
 from .models import Schedule
 
 log = logging.getLogger("fluxonata.scheduler")
-ACTIVE = ("running", "compensating")
+ACTIVE = ("queued", "running", "compensating")  # un lancement en attente (workflow séquentiel) compte comme actif
 
 
 def _note(sch: Schedule, text: str) -> None:

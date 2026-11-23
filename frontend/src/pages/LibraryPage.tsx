@@ -40,7 +40,7 @@ function ActionsTab() {
   const all = q.data?.results ?? [];
   const folders = useMemo(() => all.map((a) => a.folder), [all]);
   const created = useFolders("action").data?.results ?? [];
-  const shown = all.filter((a) => inFolder(a.folder, folder) && (!tagF || (a.tags ?? []).includes(tagF)) && (!search || `${a.name} ${a.description} ${a.domain} ${(a.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
+  const shown = all.filter((a) => inFolder(a.folder, folder, !!search.trim()) && (!tagF || (a.tags ?? []).includes(tagF)) && (!search || `${a.name} ${a.description} ${a.domain} ${(a.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
   const { sorted, sort, toggle } = useSort(shown, { name: (a) => a.name, folder: (a) => a.folder, domain: (a) => a.domain, version: (a) => a.latest_version?.version ?? "", status: (a) => a.status }, { key: "name", dir: "asc" });
   const paged = usePaged(sorted, 25);
   return (

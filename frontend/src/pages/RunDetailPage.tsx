@@ -15,7 +15,7 @@ import { formatDate, t } from "../i18n";
 import { HelpTip } from "../components/HelpTip";
 import { ReadRegion } from "../components/ReadRegion";
 
-const ACTIVE = ["running", "compensating"];
+const ACTIVE = ["queued", "running", "compensating"];
 
 function UncertainBox({ step, runId, slug }: { step: StepRun; runId: string; slug: string }) {
   const qc = useQueryClient();

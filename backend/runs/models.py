@@ -127,6 +127,10 @@ class ExecutionEvent(models.Model):
 
 class WorkflowRun(models.Model):
     class Status(models.TextChoices):
+        QUEUED = (
+            "queued",
+            "En attente",
+        )  # workflow séquentiel : attend la fin du lancement précédent (voir runs.queueing)
         RUNNING = "running", "En cours"
         COMPENSATING = "compensating", "Compensation en cours"
         SUCCEEDED = "succeeded", "Réussie"

@@ -4,6 +4,7 @@ règles « groupe → droit » et simulation de ces règles. Le secret d'un clie
 from django.conf import settings
 from django.db import transaction
 from django.http import Http404
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.response import Response
 
@@ -113,6 +114,9 @@ class ProvidersView(_Guarded):
 
 
 class ProviderView(_Guarded):
+    @extend_schema(
+        operation_id="platform_sso_provider_retrieve"
+    )  # distinct de la liste : aucun conflit de nom d'opération
     def get(self, request, slug):
         return Response(_row(_provider(slug), request))
 

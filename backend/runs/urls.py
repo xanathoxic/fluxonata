@@ -37,6 +37,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/catalog-runs/<uuid:pk>/", catalog_views.CatalogRunDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/", run_views.WorkflowRunListView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/", run_views.WorkflowRunDetailView.as_view()),
+    path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/children/", run_views.WorkflowRunChildrenView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/events/", run_views.RunEventsView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/export/", run_views.WorkflowRunExportView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/compare/", run_views.WorkflowRunCompareView.as_view()),

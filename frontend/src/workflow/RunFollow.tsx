@@ -10,7 +10,7 @@ import { formatDate, t } from "../i18n";
 import { CanvasView } from "./CanvasView";
 import { RunSchemaView, RunSummary, runGraph } from "./RunSchemaView";
 
-const ACTIVE = ["running", "compensating"];
+const ACTIVE = ["queued", "running", "compensating"];
 const BUSY_STEP = ["running", "waiting", "retry_wait", "uncertain"];
 const MAX_AGGREGATED = 20;
 export const ALL_ACTIVE = "all";

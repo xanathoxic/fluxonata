@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type Action, type ApiError, type Page, type WorkflowSummary } from "../../api";
+import { api, apiAll, type Action, type ApiError, type Page, type WorkflowSummary } from "../../api";
 import { useApp } from "../../context";
 import { formatDate } from "../../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../../lib";
@@ -35,18 +36,24 @@ function Picker({ legend, items, selected, onToggle, onAll }: { legend: string; 
   );
 }
 
+/** Toutes les lignes d'une liste de l'espace (pas seulement la première page de 50) : on ne peut inclure dans un paquet que ce que la liste propose. */
+function useAllWs<T>(key: string, path: string) {
+  const { workspace } = useApp();
+  return useQuery({ queryKey: [key, workspace.slug], queryFn: () => apiAll<T>(`/workspaces/${workspace.slug}${path}`) });
+}
+
 export function PackagesTab() {
   const { workspace, can } = useApp();
   const pkgs = useWsQuery<Page<Pkg>>("packages", "/packages/");
-  const actions = useWsQuery<Page<Action>>("actions-lib", "/actions/");
-  const wfs = useWsQuery<Page<WorkflowSummary>>("workflows", "/workflows/");
+  const actions = useAllWs<Action>("pkg-actions-all", "/actions/");
+  const wfs = useAllWs<WorkflowSummary>("pkg-workflows-all", "/workflows/");
   const trusted = useWsQuery<{ results: unknown[] }>("trusted", "/packages/trusted-keys/", { enabled: can("administer") });
   const exp = useWsMutation<Record<string, unknown>>("POST", "/packages/export/", ["packages"]);
   const [f, setF] = useState({ name: "", slug: "", version: "1.0.0", description: "", sign: true });
   const [selA, setSelA] = useState<string[]>([]);
   const [selW, setSelW] = useState<string[]>([]);
   const [selF, setSelF] = useState<string[]>([]);
-  const forms = useWsQuery<{ results: { slug: string; name: string; is_template: boolean; latest_version: { version: string } | null }[] }>("form-library", "/form-library/");
+  const forms = useAllWs<{ slug: string; name: string; is_template: boolean; latest_version: { version: string } | null }>("pkg-forms-all", "/form-library/");
   const fItems = (forms.data?.results ?? []).filter((x) => !x.is_template && x.latest_version).map((x) => ({ key: `${x.slug}@${x.latest_version?.version}`, label: `${x.name} (v${x.latest_version?.version})` }));
   const [file, setFile] = useState<File | null>(null);
   const [strategy, setStrategy] = useState("abort");

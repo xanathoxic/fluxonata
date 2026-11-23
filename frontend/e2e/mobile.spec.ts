@@ -27,7 +27,7 @@ test("workflows : arbre de dossiers replié, liste d'abord ; tableaux en cartes"
   await login(page, "alice");
   await page.goto("/workflows");
   const fold = page.locator("details.ft-mobile > summary");
-  await expect(fold).toContainText("Dossier : Tous");
+  await expect(fold).toContainText("Dossier : Root");
   await expect(page.getByRole("navigation", { name: "Dossiers de workflows" })).toBeHidden(); // replié : l'arbre n'occupe pas l'écran
   const table = page.getByRole("table").first();
   await expect(table).toBeVisible();

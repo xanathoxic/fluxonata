@@ -2,6 +2,19 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.15.0 — 2026-11-23
+
+**Mode d'exécution séquentiel, sous-workflows dans les exécutions, racine « Root » des dossiers, export de paquet complet**
+
+- SSO : migration enregistrée dans la base gelée et nom d'opération distinct pour le détail d'un fournisseur (deux échecs de la CI complète)
+- SSO : mise en forme de la vue de détail d'un fournisseur (ruff format)
+- Workflows : mode d'exécution concurrent ou séquentiel (un seul lancement à la fois, les suivants attendent en file, statut « En attente »)
+- Exécutions : les sous-workflows s'affichent sous leur workflow parent, lignes repliables et dépliables
+- Workflows : le mode d'exécution se règle par un commutateur « Exécution séquentielle » (désactivé = concurrent)
+- Dossiers : « Tous » devient « Root » et la racine ne montre que les éléments sans dossier (workflows, actions, skills, formulaires, contrôles)
+- Paquets : l'export propose toutes les actions, workflows et formulaires de l'espace (la liste était limitée aux 50 premiers)
+- Dossiers : à la racine (Root) une recherche porte sur tous les dossiers ; scénarios E2E adaptés à la racine sans dossier
+
 ## v0.14.0 — 2026-11-22
 
 **SSO OpenID Connect et SAML 2.0, conditions sur le bouton d'envoi, éditeur CSS avancé**

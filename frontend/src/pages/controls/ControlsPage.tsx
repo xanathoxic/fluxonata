@@ -32,7 +32,7 @@ export function ControlsPage() {
   const [toDelete, setToDelete] = useState<ControlCard | null>(null);
   const list = useQuery({ queryKey: ["control-library", workspace.slug], refetchOnMount: "always", queryFn: () => api<{ results: ControlCard[] }>(`/workspaces/${workspace.slug}/control-library/`) });
   const all = list.data?.results ?? [];
-  const shown = useMemo(() => all.filter((c) => inFolder(c.folder, folder) && (!tagF || c.tags.includes(tagF)) && (!q || `${c.name} ${c.description} ${c.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, folder, q, tagF]);
+  const shown = useMemo(() => all.filter((c) => inFolder(c.folder, folder, !!q.trim()) && (!tagF || c.tags.includes(tagF)) && (!q || `${c.name} ${c.description} ${c.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, folder, q, tagF]);
   const { sorted, sort, toggle } = useSort(shown, { name: (c) => c.name, folder: (c) => c.folder, mode: (c) => c.mode ?? "", used: (c) => c.used_by ?? 0, updated: (c) => Date.parse(c.updated_at) || 0 }, { key: "updated", dir: "desc" });
   const paged = usePaged(sorted, 25);
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["control-library"] }); void qc.invalidateQueries({ queryKey: ["control-library-published"] }); };

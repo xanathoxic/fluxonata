@@ -54,6 +54,7 @@ def _card(wf: Workflow, version) -> dict:
         "changelog": version.changelog,
         "published_at": version.created_at,
         "inputs": len(props),
+        "run_mode": wf.run_mode,
     }
 
 

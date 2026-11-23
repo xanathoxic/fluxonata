@@ -278,7 +278,7 @@ class MetricsView(APIView):
                 Execution.objects.filter(status=status).count(),
                 f'{{status="{status}"}}',
             )
-        for status in ("running", "compensating", "succeeded", "failed", "cancelled"):
+        for status in ("queued", "running", "compensating", "succeeded", "failed", "cancelled"):
             gauge(
                 "fluxonata_workflow_runs",
                 "Workflow runs by status",

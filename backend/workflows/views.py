@@ -70,6 +70,7 @@ class WorkflowSerializer(serializers.ModelSerializer):
             "error_workflow",
             "success_workflow",
             "mcp_exposed",
+            "run_mode",
             "runner",
             "runner_name",
             "runner_force_children",

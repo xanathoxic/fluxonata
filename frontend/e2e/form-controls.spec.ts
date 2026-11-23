@@ -760,7 +760,12 @@ test("contrôles : arborescence de dossiers comme les formulaires — créer dan
   await page.getByRole("dialog").getByRole("button", { name: "Déplacer", exact: true }).click();
   // un dossier n'affiche que ses propres éléments : déplacé dans « Sous », le contrôle quitte la liste du dossier parent…
   await expect(page.getByRole("link", { name: new RegExp(`Rangé ${id}`) })).toHaveCount(0);
-  // … et se retrouve dans « Tous », avec son nouveau dossier
-  await tree.getByRole("button", { name: /^Tous/ }).click();
-  await expect(page.getByText(`${dossier}/Sous`).first()).toBeVisible();
+  // … et se retrouve dans son nouveau dossier (la racine, « Root », ne montre que ce qui n'a pas de dossier)
+  await tree
+    .locator("li")
+    .filter({ has: page.getByRole("button", { name: new RegExp(`^${dossier}`) }) })
+    .first()
+    .getByRole("button", { name: /^Sous/ })
+    .click(); // le « Sous » de CE dossier (d'autres existent)
+  await expect(page.getByRole("link", { name: new RegExp(`Rangé ${id}`) }).first()).toBeVisible();
 });

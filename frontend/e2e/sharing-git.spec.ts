@@ -35,6 +35,7 @@ test("dossier privé : l'administrateur le partage, seules les personnes choisie
   const alice = await (await browser.newContext()).newPage();
   await login(alice, "alice");
   await goNav(alice, "Workflows");
+  await alice.getByRole("navigation", { name: "Dossiers de workflows" }).getByRole("button", { name: new RegExp(folder) }).click(); // la racine ne montre que les workflows sans dossier
   await expect(alice.getByRole("link", { name: `Modifier Secret ${id}` })).toBeVisible();
 
   const bob = await (await browser.newContext()).newPage();

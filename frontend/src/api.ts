@@ -142,6 +142,8 @@ export interface WorkflowSummary {
   runner?: string | null;
   runner_name?: string | null;
   runner_force_children?: boolean;
+  /** Concurrent (défaut) : lancements simultanés ; séquentiel : un seul à la fois, les suivants attendent (statut « queued »). */
+  run_mode?: "concurrent" | "sequential";
   folder_level?: "view" | "run" | "edit" | null; // level in a private folder (null: the folder is not private to this person)
   latest_version: { version: string; created_at: string; changelog: string; input_schema: JsonSchema; form?: import("./workflow/types").FormDef | null; input_form?: import("./forms/types").FormDefinition | null } | null;
 }
@@ -178,12 +180,17 @@ export interface RunEvent {
   message: string;
   created_at: string;
 }
+/** Sous-workflow listé sous l'exécution qui l'a lancé : étape appelante et, pour une boucle, rang de l'itération. */
+export interface ChildRun extends WorkflowRun {
+  step_name: string;
+  child_index: number | null;
+}
 export interface WorkflowRun {
   id: string;
   workflow: { slug: string; version: string; name: string };
   environment: string;
   requested_by: string | null;
-  status: "running" | "compensating" | "succeeded" | "failed" | "cancelled";
+  status: "queued" | "running" | "compensating" | "succeeded" | "failed" | "cancelled";
   status_label: string;
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown> | null;
@@ -191,6 +198,8 @@ export interface WorkflowRun {
   created_at: string;
   finished_at: string | null;
   needs_decision: boolean;
+  /** A lancé des sous-workflows (étape Workflow, boucles) : la liste les replie sous cette ligne. */
+  has_children?: boolean;
   cancel_requested: boolean;
   /** Runner imposé à cette exécution (réglage du workflow ou hérité du parent), figé au lancement ; null : choix automatique. */
   runner?: { name: string; inherited: boolean } | null;

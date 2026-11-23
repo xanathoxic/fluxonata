@@ -33,7 +33,7 @@ export function FormsPage() {
   const list = useQuery({ queryKey: ["form-library", workspace.slug], refetchOnMount: "always", queryFn: () => api<{ results: FormCard[] }>(`/workspaces/${workspace.slug}/form-library/`) });
   const all = list.data?.results ?? [];
   const wantTemplates = tab === "templates";
-  const shown = useMemo(() => all.filter((f) => f.is_template === wantTemplates && inFolder(f.folder, folder) && (!tagF || f.tags.includes(tagF)) && (!q || `${f.name} ${f.description} ${f.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, wantTemplates, folder, tagF, q]);
+  const shown = useMemo(() => all.filter((f) => f.is_template === wantTemplates && inFolder(f.folder, folder, !!q.trim()) && (!tagF || f.tags.includes(tagF)) && (!q || `${f.name} ${f.description} ${f.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, wantTemplates, folder, tagF, q]);
   const { sorted, sort, toggle } = useSort(shown, { name: (f) => f.name, folder: (f) => f.folder, updated: (f) => Date.parse(f.updated_at) || 0 }, { key: "updated", dir: "desc" });
   const paged = usePaged(sorted, 25);
   const del = useMutation<unknown, ApiError, string>({

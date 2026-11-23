@@ -43,6 +43,7 @@ from . import (
     http_node,
     ldap_node,
     proposed,
+    queueing,
     runner_pin,
     services,
     sftp_node,
@@ -215,7 +216,9 @@ def start_run(
             {runner_pin.RUNNER_KEY: runner_info} if runner_info else {}
         ),  # runner imposé, résolu une fois pour toutes au lancement
     }
+    waits = queueing.waits_for_turn(workflow_version.workflow, environment, parent_step, graph_override)
     run = WorkflowRun.objects.create(
+        status=R.QUEUED if waits else R.RUNNING,
         workspace=workspace,
         environment=environment,
         workflow_version=workflow_version,
@@ -228,7 +231,7 @@ def start_run(
         idempotency_key=idempotency_key or None,
         callback_url=callback_url,
     )
-    add_event(run, "started", f"Workflow {workflow_version.workflow.name} v{workflow_version.version} démarré.")
+    add_event(run, *queueing.start_event(workflow_version, waits))
     if parent_step is None:
         record(
             "workflow_run.create",
@@ -1638,7 +1641,9 @@ def decide_uncertain(step_run_id, user, decision: str, output=None):
 @transaction.atomic
 def request_run_cancel(run_id, user):
     run = WorkflowRun.objects.select_for_update().get(pk=run_id)
-    if run.status in (R.RUNNING, R.COMPENSATING):
+    if run.status == R.QUEUED:
+        queueing.cancel_waiting(run, user)
+    elif run.status in (R.RUNNING, R.COMPENSATING):
         run.cancel_requested = True
         run.save()
         add_event(run, "cancel_requested", f"Annulation demandée par {user.username}.")

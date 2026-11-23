@@ -203,7 +203,9 @@ test("paquet : export puis aperçu d'import (éléments identiques) sans rien mo
   const exportDlg = page.getByRole("dialog", { name: "Exporter un paquet" });
   await exportDlg.getByLabel("Nom", { exact: true }).fill(`Paquet ${id}`);
   await exportDlg.getByLabel("Identifiant", { exact: true }).fill(`pkg-${id}`);
-  await exportDlg.getByRole("group", { name: "Actions à inclure" }).getByLabel(/Statistiques de texte/).check();
+  const actionsGroup = exportDlg.getByRole("group", { name: "Actions à inclure" });
+  await actionsGroup.getByRole("searchbox", { name: "Filtrer : Actions à inclure" }).fill("Statistiques de texte"); // la liste est limitée : on filtre
+  await actionsGroup.getByLabel(/Statistiques de texte/).check();
   await exportDlg.getByRole("button", { name: "Créer le paquet" }).click();
   await expect(page.getByText("Paquet créé")).toBeVisible();
   await page.getByLabel("Rechercher un paquet").fill(`Paquet ${id}`); // la liste est paginée

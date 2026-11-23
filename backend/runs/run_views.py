@@ -104,6 +104,7 @@ class RunSerializer(serializers.ModelSerializer):
     requested_by = serializers.CharField(source="requested_by.username", default=None)
     status_label = serializers.CharField(source="get_status_display")
     needs_decision = serializers.SerializerMethodField()
+    has_children = serializers.SerializerMethodField()
     runner = serializers.SerializerMethodField()
 
     class Meta:
@@ -121,6 +122,7 @@ class RunSerializer(serializers.ModelSerializer):
             "created_at",
             "finished_at",
             "needs_decision",
+            "has_children",
             "cancel_requested",
             "parent_step_id",
             "runner",
@@ -135,10 +137,30 @@ class RunSerializer(serializers.ModelSerializer):
         w = obj.definition["workflow"]
         return {"slug": w["slug"], "version": w["version"], "name": obj.workflow_version.workflow.name}
 
+    def get_has_children(self, obj) -> bool:
+        """Cette exécution a-t-elle lancé des sous-workflows ? (la liste les replie sous la ligne de leur parent)"""
+        if hasattr(obj, "_has_children"):
+            return obj._has_children
+        return WorkflowRun.objects.filter(parent_step__run=obj).exists()
+
     def get_needs_decision(self, obj) -> bool:
         if hasattr(obj, "_needs_decision"):
             return obj._needs_decision
         return obj.steps.filter(status=StepRun.Status.UNCERTAIN).exists()
+
+
+class ChildRunSerializer(RunSerializer):
+    """Un sous-workflow listé sous l'exécution qui l'a lancé : l'étape du parent qui l'a appelé et, pour une boucle, son rang."""
+
+    step_name = serializers.SerializerMethodField()
+
+    class Meta(RunSerializer.Meta):
+        fields = [*RunSerializer.Meta.fields, "step_name", "child_index"]
+
+    def get_step_name(self, obj) -> str:
+        step = obj.parent_step
+        nodes = {n["id"]: n for n in step.run.definition["graph"]["nodes"]}
+        return str(nodes.get(step.node_id, {}).get("name") or step.node_id)
 
 
 class RunDetailSerializer(RunSerializer):
@@ -215,10 +237,32 @@ class WorkflowRunListView(ListAPIView):
             WorkflowRun.objects.filter(workspace=ws, parent_step__isnull=True)
             .select_related("environment", "requested_by", "workflow_version__workflow")
             .annotate(  # AR1.6 : « a-t-elle une étape à issue incertaine ? » en une requête pour toute la page (50 requêtes avant)
-                _needs_decision=Exists(StepRun.objects.filter(run=OuterRef("pk"), status=StepRun.Status.UNCERTAIN))
+                _needs_decision=Exists(StepRun.objects.filter(run=OuterRef("pk"), status=StepRun.Status.UNCERTAIN)),
+                _has_children=Exists(WorkflowRun.objects.filter(parent_step__run=OuterRef("pk"))),
             )
         )
         return analysis.filter_runs(access.visible_runs(qs, self.request.user, ws), self.request.query_params)
+
+
+class WorkflowRunChildrenView(ListAPIView):
+    """Les sous-workflows lancés par une exécution (étape Workflow, boucles), du plus ancien au plus récent ; un niveau à la fois."""
+
+    serializer_class = ChildRunSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
+        parent = WorkflowRun.objects.filter(workspace=ws, pk=self.kwargs["pk"]).first()
+        if parent is None:
+            raise Http404()
+        access.require_run(self.request.user, ws, parent)
+        qs = (
+            WorkflowRun.objects.filter(workspace=ws, parent_step__run=parent)
+            .select_related("environment", "requested_by", "workflow_version__workflow", "parent_step__run")
+            .annotate(_has_children=Exists(WorkflowRun.objects.filter(parent_step__run=OuterRef("pk"))))
+        )
+        # un sous-workflow rangé dans un dossier privé que la personne ne voit pas n'apparaît pas (comme dans la liste)
+        return access.visible_runs(qs, self.request.user, ws).order_by("created_at", "child_index", "id")[:200]
 
 
 class WorkflowRunExportView(APIView):

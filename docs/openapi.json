@@ -994,7 +994,7 @@
         },
         "/api/v1/platform/sso/providers/{slug}/": {
             "get": {
-                "operationId": "platform_sso_providers_retrieve_2",
+                "operationId": "platform_sso_provider_retrieve",
                 "parameters": [
                     {
                         "in": "path",
@@ -9837,6 +9837,56 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/workflow-runs/{id}/children/": {
+            "get": {
+                "operationId": "workspaces_workflow_runs_children_list",
+                "description": "Les sous-workflows lancés par une exécution (étape Workflow, boucles), du plus ancien au plus récent ; un niveau à la fois.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ChildRun"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/workflow-runs/{id}/events/": {
             "get": {
                 "operationId": "workspaces_workflow_runs_events_retrieve",
@@ -12558,6 +12608,98 @@
                     "version"
                 ]
             },
+            "ChildRun": {
+                "type": "object",
+                "description": "Un sous-workflow listé sous l'exécution qui l'a lancé : l'étape du parent qui l'a appelé et, pour une boucle, son rang.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "workflow": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "environment": {
+                        "type": "string"
+                    },
+                    "requested_by": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/StatusF31Enum"
+                    },
+                    "status_label": {
+                        "type": "string"
+                    },
+                    "inputs": {},
+                    "outputs": {
+                        "nullable": true
+                    },
+                    "error": {
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "finished_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "needs_decision": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "has_children": {
+                        "type": "boolean",
+                        "description": "Cette exécution a-t-elle lancé des sous-workflows ? (la liste les replie sous la ligne de leur parent)",
+                        "readOnly": true
+                    },
+                    "cancel_requested": {
+                        "type": "boolean"
+                    },
+                    "parent_step_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "runner": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true,
+                        "description": "Le runner imposé à cette exécution (réglage du workflow, ou hérité de son parent), figé au lancement ; None : choix habituel.",
+                        "readOnly": true
+                    },
+                    "step_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "child_index": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "environment",
+                    "has_children",
+                    "id",
+                    "inputs",
+                    "needs_decision",
+                    "parent_step_id",
+                    "runner",
+                    "status_label",
+                    "step_name",
+                    "workflow"
+                ]
+            },
             "ConnectionCreate": {
                 "type": "object",
                 "properties": {
@@ -14987,7 +15129,7 @@
                         "type": "string"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/Status8f3Enum"
+                        "$ref": "#/components/schemas/StatusF31Enum"
                     },
                     "status_label": {
                         "type": "string"
@@ -15013,6 +15155,11 @@
                         "type": "boolean",
                         "readOnly": true
                     },
+                    "has_children": {
+                        "type": "boolean",
+                        "description": "Cette exécution a-t-elle lancé des sous-workflows ? (la liste les replie sous la ligne de leur parent)",
+                        "readOnly": true
+                    },
                     "cancel_requested": {
                         "type": "boolean"
                     },
@@ -15032,6 +15179,7 @@
                 "required": [
                     "created_at",
                     "environment",
+                    "has_children",
                     "id",
                     "inputs",
                     "needs_decision",
@@ -15061,7 +15209,7 @@
                         "type": "string"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/Status8f3Enum"
+                        "$ref": "#/components/schemas/StatusF31Enum"
                     },
                     "status_label": {
                         "type": "string"
@@ -15085,6 +15233,11 @@
                     },
                     "needs_decision": {
                         "type": "boolean",
+                        "readOnly": true
+                    },
+                    "has_children": {
+                        "type": "boolean",
+                        "description": "Cette exécution a-t-elle lancé des sous-workflows ? (la liste les replie sous la ligne de leur parent)",
                         "readOnly": true
                     },
                     "cancel_requested": {
@@ -15137,6 +15290,7 @@
                     "environment",
                     "events",
                     "graph",
+                    "has_children",
                     "id",
                     "inputs",
                     "inspector",
@@ -15176,6 +15330,14 @@
                     "seq",
                     "type"
                 ]
+            },
+            "RunModeEnum": {
+                "enum": [
+                    "concurrent",
+                    "sequential"
+                ],
+                "type": "string",
+                "description": "* `concurrent` - Concurrent\n* `sequential` - Séquentiel"
             },
             "RunRequest": {
                 "type": "object",
@@ -15510,8 +15672,9 @@
                 "type": "string",
                 "description": "* `queued` - En attente\n* `running` - En cours\n* `succeeded` - Réussie\n* `failed` - Échouée\n* `cancelled` - Annulée"
             },
-            "Status8f3Enum": {
+            "StatusF31Enum": {
                 "enum": [
+                    "queued",
                     "running",
                     "compensating",
                     "succeeded",
@@ -15519,7 +15682,7 @@
                     "cancelled"
                 ],
                 "type": "string",
-                "description": "* `running` - En cours\n* `compensating` - Compensation en cours\n* `succeeded` - Réussie\n* `failed` - Échouée\n* `cancelled` - Annulée"
+                "description": "* `queued` - En attente\n* `running` - En cours\n* `compensating` - Compensation en cours\n* `succeeded` - Réussie\n* `failed` - Échouée\n* `cancelled` - Annulée"
             },
             "Step": {
                 "type": "object",
@@ -15951,6 +16114,9 @@
                     "mcp_exposed": {
                         "type": "boolean"
                     },
+                    "run_mode": {
+                        "$ref": "#/components/schemas/RunModeEnum"
+                    },
                     "runner": {
                         "type": "string",
                         "nullable": true,
@@ -16063,6 +16229,9 @@
                     "mcp_exposed": {
                         "type": "boolean"
                     },
+                    "run_mode": {
+                        "$ref": "#/components/schemas/RunModeEnum"
+                    },
                     "runner": {
                         "type": "string",
                         "nullable": true,
@@ -16168,7 +16337,7 @@
                         "type": "string"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/Status8f3Enum"
+                        "$ref": "#/components/schemas/StatusF31Enum"
                     },
                     "status_label": {
                         "type": "string"
@@ -16194,6 +16363,11 @@
                         "type": "boolean",
                         "readOnly": true
                     },
+                    "has_children": {
+                        "type": "boolean",
+                        "description": "Cette exécution a-t-elle lancé des sous-workflows ? (la liste les replie sous la ligne de leur parent)",
+                        "readOnly": true
+                    },
                     "cancel_requested": {
                         "type": "boolean"
                     },
@@ -16216,6 +16390,7 @@
                 "required": [
                     "created_at",
                     "environment",
+                    "has_children",
                     "id",
                     "inputs",
                     "needs_decision",

@@ -41,7 +41,7 @@ export function SkillsPage() {
   const all = q.data?.results ?? [];
   const folders = useMemo(() => all.map((s) => s.folder), [all]);
   const created = useFolders("ai_skill").data?.results ?? [];
-  const shown = all.filter((s) => inFolder(s.folder, folder) && (!tagF || (s.tags ?? []).includes(tagF)) && (!search || `${s.name} ${s.description} ${(s.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
+  const shown = all.filter((s) => inFolder(s.folder, folder, !!search.trim()) && (!tagF || (s.tags ?? []).includes(tagF)) && (!search || `${s.name} ${s.description} ${(s.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
   const { sorted, sort, toggle } = useSort(shown, { name: (s) => s.name, folder: (s) => s.folder, version: (s) => s.latest_version?.version ?? "", status: (s) => s.status }, { key: "name", dir: "asc" });
   const paged = usePaged(sorted, 25);
   return (

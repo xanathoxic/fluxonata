@@ -89,6 +89,28 @@ describe("Réglages d'un workflow : runner imposé", () => {
     expect(sent()).toMatchObject({ runner: "", runner_force_children: false });
   });
 
+  it("l'exécution séquentielle est désactivée par défaut (mode concurrent) et s'active avec le commutateur", async () => {
+    show();
+    const mode = await screen.findByLabelText("Exécution séquentielle");
+    expect(mode).not.toBeChecked();
+    await userEvent.click(mode);
+    expect(mode).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(api.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH")).toBe(true));
+    expect(sent()).toMatchObject({ run_mode: "sequential" });
+  });
+
+  it("un workflow déjà séquentiel est affiché activé, et le désactiver renvoie le mode concurrent", async () => {
+    wf = { run_mode: "sequential" };
+    show();
+    const mode = await screen.findByLabelText("Exécution séquentielle");
+    expect(mode).toBeChecked();
+    await userEvent.click(mode);
+    await userEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(api.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "PATCH")).toBe(true));
+    expect(sent()).toMatchObject({ run_mode: "concurrent" });
+  });
+
   it("un runner imposé qui n'est plus utilisable par l'espace est montré tel quel, avec une alerte", async () => {
     wf = { runner: "disparu", runner_name: "ancien-runner", runner_force_children: false };
     show();
