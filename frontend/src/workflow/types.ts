@@ -1,6 +1,6 @@
 import type { JsonSchema } from "../api";
 
-export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform" | "cache";
+export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform" | "cache" | "schedule" | "file" | "model";
 export type ScriptLanguage = "python" | "javascript";
 export type VarType = "string" | "integer" | "number" | "boolean" | "array" | "object";
 export interface ScriptOutput { name: string; type: VarType }
@@ -33,6 +33,20 @@ export interface GraphNode {
   cases?: SwitchCase[];
   ai_review?: boolean; // script written by the AI: blocks publication until a person confirms having read it
   seconds?: number;
+  when?: "at" | "in"; // « Programmer » : à une date et une heure, ou après un délai
+  at?: string; // « Programmer » : 2026-12-01T08:30 (heure du fuseau du nœud) ou une expression
+  format?: "text" | "csv" | "xlsx" | "pdf" | "docx" | "pptx" | "html" | "zip"; // « Créer un fichier »
+  filename?: string;
+  markdown?: string; // « Modèle de document »
+  model?: string; // « Créer un fichier » : expression du modèle utilisé (ex. {{ steps.modele.output }})
+  body_model?: string; // « Envoyer un e-mail » : idem
+  rows?: string;
+  columns?: string[];
+  sheet?: string;
+  sources?: string[];
+  until?: string; // « Attente » : reprise à une date et une heure (2026-12-01T08:30) ou expression ; absent = attente d'une durée (`seconds`)
+  timezone?: string;
+  on_past?: "fail" | "now";
   connection?: string;
   jumps?: (string | SshJump)[]; // SSH: jump connections, in order (a name, or an object when the step names the host)
   host?: string; // SSH: host of the target when its connection has none (a reusable identity)
@@ -135,9 +149,12 @@ export interface GraphEdge {
   from: string;
   to: string;
   label?: EdgeLabel;
-  /** routing chosen by the person: the points the line goes through (drawn automatically when absent). `cx` (x of the vertical
-   *  segment) is the older, horizontal-only setting: still drawn, replaced as soon as the person places a point. */
-  ui?: { cx?: number; points?: { x: number; y: number }[] };
+  /** Tracé choisi par la personne : le lien est toujours orthogonal ; `route` en donne les coordonnées intérieures (abscisse du premier segment
+   *  vertical, ordonnée du segment horizontal suivant, etc. : voir `edgeRoute.ts`), absentes tant que le tracé est automatique. `cx` est l'ancien
+   *  réglage d'un seul segment vertical (lu comme `route: [cx]`) ; `points` l'ancien tracé libre, qui n'est plus dessiné. Les deux disparaissent
+   *  au premier réglage. `sf` et `tf` fixent la face de départ et d'arrivée (haut, droite, bas, gauche) quand la personne les a choisies en reliant les
+   *  étapes ; absentes, les faces sont choisies automatiquement et suivent les étapes quand on les déplace. */
+  ui?: { route?: number[]; sf?: "t" | "r" | "b" | "l"; tf?: "t" | "r" | "b" | "l"; cx?: number; points?: { x: number; y: number }[] };
 }
 
 /** Une variable du workflow peut aussi porter n'importe quel JSON ; jamais une entrée ni une sortie de script. */
@@ -145,9 +162,16 @@ export type VariableType = VarType | "json";
 export interface Variable { name: string; type: VariableType; value: unknown; description?: string; env_values?: Partial<Record<"dev" | "test" | "prod", unknown>> }
 export interface FormStep { title: string; description?: string; fields: string[] }
 export interface FormDef { steps: FormStep[] }
-export interface Note { id: string; text: string; ui: { x: number; y: number } }
+/** Une note du schéma (annotation visuelle, jamais exécutée) : sa position, sa taille (absente : automatique), sa couleur (#rrggbb) et l'opacité de son fond (0,1 à 1). */
+export interface Note { id: string; text: string; ui: { x: number; y: number; w?: number; h?: number }; color?: string; opacity?: number }
+
+/** Un point de jonction : l'endroit où les liens qui partagent un point de connexion d'une étape (`node`, `face`) se séparent (`role: "out"`, ils partent du même point) ou
+ *  se rejoignent (`role: "in"`, ils arrivent au même point). Il se déplace comme une étape, `x` et `y` étant son centre, et tous ses liens le suivent ; `flip` l'inverse (double-clic : l'entrée verte passe à droite, les sorties rouges à gauche). Purement visuel :
+ *  le workflow lui-même n'en sait rien (les liens vont toujours d'une étape à une autre). */
+export interface Junction { id: string; node: string; role: "in" | "out"; face: "t" | "r" | "b" | "l"; x: number; y: number; flip?: boolean }
 
 export interface Graph {
+  junctions?: Junction[];
   variables?: Variable[];
   form?: FormDef | null;
   /** designed input form (sections, rules, dynamic lists); takes precedence over `form` */
@@ -193,6 +217,9 @@ export const NODE_LABELS: Record<NodeType, string> = {
   smtp: "Envoyer un e-mail",
   transform: "Transformer les données",
   cache: "Cache",
+  schedule: "Programmer un lancement",
+  file: "Créer un fichier",
+  model: "Modèle de document",
 };
 
 const FIXED_LABELS: Record<string, string> = { next: "Ensuite", true: "Si oui", false: "Si non", error: "En cas d'erreur", default: "Sinon" };

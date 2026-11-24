@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.19.0 — 2026-11-25
+
+**Pause jusqu'a une date, fichiers generes telechargeables, modele de document, connexions orthogonales et notes redimensionnables**
+
+- Pause jusqu'a une date, fichiers generes telechargeables, modele de document Markdown, connexions orthogonales et notes redimensionnables
+
 ## v0.18.0 — 2026-11-23
 
 **Image de marque de la plate-forme : nom, logos, couleur d'accent contrôlée, fonds de la barre du haut et du menu de gauche, page de connexion personnalisable**

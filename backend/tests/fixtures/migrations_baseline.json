@@ -49,6 +49,7 @@
   "runs/0019_run_queued_status",
   "runs/0020_cache_entry",
   "runs/0021_cache_build_sensitive",
+  "runs/0022_scheduled_launch",
   "tenancy/0001_initial",
   "tenancy/0002_policyversion_promotion_serviceaccount_apitoken_and_more",
   "tenancy/0003_oidcidentity",
@@ -107,6 +108,7 @@
   "workflows/0015_runner_pin",
   "workflows/0016_run_mode",
   "workflows/0017_cache_publish",
-  "workflows/0018_cache_sensitive"
+  "workflows/0018_cache_sensitive",
+  "workflows/0019_document_image"
  ]
 }

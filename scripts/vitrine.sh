@@ -38,3 +38,5 @@ load_env
 (cd backend && "$ROOT/.venv/bin/python" manage.py seed_showcase --reset "${ARGS[@]}")
 echo "→ Ouvrez http://127.0.0.1:${ORCH_WEB_PORT:-5173}, choisissez l'espace « Vitrine — Exploitation » (alice / demo-fluxonata), puis"
 echo "  Workflows → « Gestion d'un incident d'infrastructure » → Lancer. L'approbation se décide avec claire / demo-fluxonata."
+echo "  Second exemple : « Demander l'ajout d'un membre à un groupe d'accès » (listes en cascade). Ses listes lisent scripts/demo-api.py :"
+echo "  un administrateur doit autoriser 127.0.0.1 dans Plate-forme → Réseau (voir docs/VITRINE.md)."

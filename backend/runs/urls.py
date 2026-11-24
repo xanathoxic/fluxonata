@@ -1,10 +1,12 @@
 from django.urls import path
 
-from . import cache_views, catalog_views, ops_views, run_views, runner_api, views
+from . import cache_views, catalog_views, launch_views, ops_views, run_views, runner_api, views
 from . import platform_views as pf
 from . import runner_admin as ra
 
 urlpatterns = [
+    path("workspaces/<slug:workspace>/scheduled-launches/", launch_views.ScheduledLaunchListView.as_view()),
+    path("workspaces/<slug:workspace>/scheduled-launches/<uuid:pk>/", launch_views.ScheduledLaunchDetailView.as_view()),
     path("workspaces/<slug:workspace>/caches/", cache_views.CacheListView.as_view()),
     path("workspaces/<slug:workspace>/caches/<int:pk>/", cache_views.CacheDetailView.as_view()),
     path("platform/workers/", pf.WorkersView.as_view()),
@@ -30,6 +32,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/artifacts/", views.RunArtifactsView.as_view()),
     path("workspaces/<slug:workspace>/artifacts/<uuid:pk>/download/", views.ArtifactDownloadView.as_view()),
     path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/files/", views.RunFilesView.as_view()),
+    path("workspaces/<slug:workspace>/workflow-runs/<uuid:pk>/files/archive/", views.RunFilesArchiveView.as_view()),
     path("workspaces/<slug:workspace>/run-files/<uuid:pk>/download/", views.RunFileDownloadView.as_view()),
     path("workspaces/<slug:workspace>/executions/", views.ExecutionListCreateView.as_view()),
     path("workspaces/<slug:workspace>/executions/<uuid:pk>/", views.ExecutionDetailView.as_view()),

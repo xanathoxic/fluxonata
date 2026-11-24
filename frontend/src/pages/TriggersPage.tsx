@@ -12,6 +12,7 @@ import { useApp } from "../context";
 import { formatDate } from "../i18n";
 import { PollsTab } from "./triggers/PollsTab";
 import { FormsTab } from "./triggers/FormsTab";
+import { LaunchesTab } from "./triggers/LaunchesTab";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { HelpTip } from "../components/HelpTip";
 
@@ -84,6 +85,7 @@ export function TriggersPage() {
             {hookPaged.pager("Pagination des webhooks")}
             </Section>
           </>) },
+        { id: "launches", label: "Lancements programmés", content: <LaunchesTab /> },
         { id: "forms", label: "Formulaires publics", content: <FormsTab /> },
         { id: "polls", label: "Interrogation (service, e-mail)", content: <PollsTab /> },
       ]} />

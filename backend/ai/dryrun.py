@@ -288,8 +288,54 @@ def _cache_output(node: dict) -> dict:
     return outputs.get(str(node.get("operation")), {})
 
 
+def _schedule_output(node: dict) -> dict:
+    """Étape « Programmer » simulée : aucun lancement n'est programmé dans un essai à blanc."""
+    at = str(node.get("at") or "")
+    return {
+        "id": "00000000-0000-0000-0000-000000000000",
+        "workflow": str(node.get("workflow") or ""),
+        "version": str(node.get("version") or "latest"),
+        "run_at": at,
+        "run_at_local": at,
+        "immediate": False,
+    }
+
+
+def _file_output(node: dict) -> dict:
+    """Étape « Créer un fichier » simulée : aucun fichier n'est créé dans un essai à blanc."""
+    name = str(node.get("filename") or "fichier")
+    return {
+        "file": {
+            "file_id": "00000000-0000-0000-0000-000000000000",
+            "name": name,
+            "size": 0,
+            "content_type": "",
+            "sha256": "",
+        },
+        "name": name,
+        "size": 0,
+    }
+
+
+def _model_output(node: dict) -> dict:
+    """Étape « Modèle » simulée : rendue sans évaluer les expressions (elles restent telles quelles)."""
+    from workflows import model_md
+
+    source = str(node.get("markdown") or "")
+    return {
+        "title": str(node.get("title") or ""),
+        "markdown": source,
+        "html": model_md.to_html(source, model_md.placeholder_url),
+        "text": model_md.to_text(source),
+        "images": model_md.image_ids(source),
+    }
+
+
 # kinds that are only simulated: (output, message) — the output may depend on the step
 _FIXED_STEPS = {
+    "model": (_model_output, "Modèle simulé : les expressions ne sont pas remplies."),
+    "file": (_file_output, "Fichier simulé : rien n'est créé."),
+    "schedule": (_schedule_output, "Programmation simulée : aucun lancement n'est réellement programmé."),
     "cache": (_cache_output, "Cache simulé : rien n'est lu, écrit ni supprimé dans le cache réel."),
     "smtp": (
         {"sent": False, "simulated": True, "recipients": 1, "message_id": None},

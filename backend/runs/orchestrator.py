@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from core.logging import bind
 
-from . import engine, queueing, registry, services
+from . import engine, queueing, registry, scheduled_launch, services
 from .models import ServiceInstance, WorkflowRun
 
 log = logging.getLogger("fluxonata.orchestrator")
@@ -30,6 +30,7 @@ def tick() -> int:
     from triggers import scheduler
 
     scheduler.fire_due()
+    scheduled_launch.fire_due()  # lancements programmés par le nœud « Programmer »
     queueing.promote_waiting()  # workflows séquentiels : le plus ancien lancement en attente démarre quand le précédent est fini
     now = timezone.now()
     ids = list(  # seulement les runs « à repasser » (AR4.4) : un run qui attend une minuterie ou une décision n'est pas touché à chaque tour

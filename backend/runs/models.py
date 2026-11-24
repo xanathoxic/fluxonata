@@ -398,3 +398,45 @@ class CacheBuild(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["workspace", "environment", "key"], name="uniq_cache_build_key")]
+
+
+class ScheduledLaunch(models.Model):
+    """Lancement d'un workflow **programmé** à une date et une heure (nœud « Programmer », ADR 0034). Créé par une étape, exécuté plus tard par
+    l'orchestrateur (`runs.scheduled_launch.fire_due`) ; indépendant du run qui l'a programmé, qui peut déjà être terminé."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Programmé"
+        FIRED = "fired", "Lancé"
+        CANCELLED = "cancelled", "Annulé"
+        REFUSED = "refused", "Refusé"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="scheduled_launches")
+    environment = models.ForeignKey("tenancy.Environment", on_delete=models.CASCADE, related_name="+")
+    workflow = models.ForeignKey("workflows.Workflow", on_delete=models.CASCADE, related_name="scheduled_launches")
+    version = models.CharField(
+        max_length=40, default="latest"
+    )  # « latest » : la version publiée la plus récente à l'heure dite
+    inputs = models.JSONField(default=dict)
+    run_at = models.DateTimeField(db_index=True)
+    timezone = models.CharField(max_length=64, default="Europe/Paris")  # pour l'affichage seulement : run_at est en UTC
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    note = models.CharField(max_length=300, blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    source_run = models.ForeignKey(WorkflowRun, null=True, on_delete=models.SET_NULL, related_name="scheduled_launches")
+    source_node = models.CharField(max_length=64, blank=True)
+    fired_run = models.ForeignKey(WorkflowRun, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    fired_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["run_at", "created_at"]
+        constraints = [
+            # une étape rejouée (reprise après une panne entre la création et la fin de l'étape) ne programme jamais deux fois
+            models.UniqueConstraint(
+                fields=["source_run", "source_node"],
+                name="uniq_launch_per_step",
+                condition=models.Q(source_run__isnull=False),
+            )
+        ]
+        indexes = [models.Index(fields=["status", "run_at"], name="launch_due_idx")]

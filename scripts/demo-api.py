@@ -3,6 +3,8 @@
 
     GET /marques?q=<texte>   les marques (groupe « US Brands », options désactivées), filtrées par `q`
     GET /selection           une présélection : {"selection": ["saab", "ford"]}
+    GET /politique           une politique d'accès fictive : les groupes sont les CLÉS d'un objet (un groupe est vide),
+                             la forme que prennent certaines API réelles (voir docs/DECISIONS/0026)
 
 Lancée par scripts/dev-up.sh sur 127.0.0.1:8765. Le serveur de la plateforme ne l'appelle que si cette adresse figure dans
 ORCH_EGRESS_ALLOWLIST (environnement de développement : à décider par l'opérateur)."""
@@ -24,6 +26,18 @@ BRANDS = [
 ]
 
 
+POLICY = {
+    "groups": {
+        "group:exploitation": ["alice@exemple.fr", "bob@exemple.fr", "claire@exemple.fr"],
+        "group:developpement": ["dave@exemple.fr", "emma@exemple.fr"],
+        "group:support": ["farid@exemple.fr"],
+        "group:archives": [],
+    },
+    "hosts": {"serveur-prod": "100.64.0.10"},
+    "acls": [{"action": "accept", "src": ["group:exploitation"], "dst": ["serveur-prod:*"]}],
+}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         url = urlsplit(self.path)
@@ -32,6 +46,8 @@ class Handler(BaseHTTPRequestHandler):
             body = {"data": {"rows": [b for b in BRANDS if q in b["name"].lower() or q in b.get("region", "").lower()]}}
         elif url.path == "/selection":
             body = {"selection": ["saab", "ford"]}
+        elif url.path == "/politique":
+            body = POLICY
         else:
             self.send_response(404)
             self.end_headers()

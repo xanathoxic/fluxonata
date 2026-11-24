@@ -14,6 +14,7 @@ import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
 import { HelpTip } from "../components/HelpTip";
 import { ReadRegion } from "../components/ReadRegion";
+import { RunDeliverables, sizeLabel, type RunFileRow } from "./RunDeliverables";
 
 const ACTIVE = ["queued", "running", "compensating"];
 
@@ -108,9 +109,6 @@ export function RunDetailPage() {
 }
 
 
-interface RunFileRow { id: string; step_id: string; name: string; size: number; content_type: string; sha256: string }
-
-function sizeLabel(n: number): string { return n < 1024 ? `${n} o` : n < 1048576 ? `${(n / 1024).toFixed(1)} Ko` : `${(n / 1048576).toFixed(1)} Mo`; }
 
 function RunFiles({ rows, slug }: { rows: RunFileRow[]; slug: string }) {
   return (
@@ -226,7 +224,7 @@ function RunTabs({ run, explain }: { run: WorkflowRun; explain: ReactNode }) {
   const logs = steps.filter((s) => s.logs);
   return (
     <Tabs label="Détail de l'exécution" className="run-tabs" active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: "Résumé", content: <><RunFacts run={run} /><RunSummary run={run} />{explain}</> },
+      { id: "summary", label: "Résumé", content: <><RunFacts run={run} /><RunDeliverables rows={files.data ?? []} slug={workspace.slug} runId={run.id} /><RunSummary run={run} />{explain}</> },
       { id: "schema", label: "Graphe", content: <RunSchemaView run={run} fill /> },
       { id: "steps", label: `Étapes (${steps.length})`, content: <ScrollBlock label="Étapes de l'exécution"><RunSteps steps={steps} /></ScrollBlock> },
       ...((files.data?.length ?? 0) > 0 ? [{ id: "files", label: `Fichiers (${files.data?.length ?? 0})`, content: <RunFiles rows={files.data ?? []} slug={workspace.slug} /> }] : []),

@@ -113,7 +113,7 @@ img, pre { max-width: 100%; }
 .flow-badge.bad, .flow-badge.run-failed { color: var(--err); } .flow-badge.warn, .flow-badge.run-uncertain { color: #b07a00; } .flow-badge.run-succeeded { color: var(--ok); } .flow-badge.run-running, .flow-badge.run-waiting { color: var(--accent); }
 .flow-node.state-succeeded .flow-box { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, var(--bg)); } .flow-node.state-failed .flow-box { border-color: var(--err); background: color-mix(in srgb, var(--err) 10%, var(--bg)); }
 .flow-node.state-running .flow-box, .flow-node.state-waiting .flow-box { border-color: var(--accent); } .flow-node.state-skipped .flow-box, .flow-node.state-cancelled .flow-box { opacity: .55; border-style: dashed; }
-.flow-endpoint { width: 44px; height: 44px; } .flow-note { background: #fff3a8; color: #3b3200; border: 1px solid #d6c23a; padding: 6px 8px; max-width: 200px; font-size: var(--fs-xs); border-radius: 3px; } .flow-note.selected { outline: 2px solid var(--accent); }
+.flow-endpoint { width: 44px; height: 44px; } .flow-note { box-sizing: border-box; border: 1px solid #d6c23a; padding: 6px 8px; max-width: 200px; min-width: 90px; font-size: var(--fs-xs); border-radius: 3px; white-space: pre-wrap; overflow-wrap: anywhere; } .flow-note.sized { max-width: none; width: 100%; height: 100%; overflow: hidden; } .flow-note.selected { outline: 2px solid var(--accent); }
 .react-flow__edge.edge-error .react-flow__edge-path { stroke: var(--err); } .react-flow { background: transparent; } .react-flow__node-step, .react-flow__node-note { background: transparent; border: 0; padding: 0; }
 .np-title { display: flex; gap: 6px; align-items: center; font-size: var(--fs-md); margin: 0 0 6px; } .node-panel .tabs { gap: 2px; } .node-panel .tabs button { padding: 4px 8px; font-size: var(--fs-sm); }
 .script-preview { font-size: var(--fs-xs); max-height: 220px; } .field-inline.stretch { width: 100%; }
@@ -145,17 +145,19 @@ img, pre { max-width: 100%; }
 
 .tile-label { word-break: normal; overflow-wrap: break-word; hyphens: auto; }
 .schema-center, .schema-center .canvas, .schema-center .flow-drop { min-height: 62vh; }
-.react-flow__handle { width: 7px; height: 7px; opacity: .55; }
+.react-flow__handle { width: 9px; height: 9px; opacity: .55; } .react-flow__handle::before { content: ""; position: absolute; inset: -7px; } /* zone de prise élargie : on vise l'icône, pas un point de 9 pixels */
+.react-flow__handle:hover, .react-flow__handle.connectingfrom, .react-flow__handle.connectingto { opacity: 1; background: var(--accent); }
 .bind-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.7fr); } .bind-extra { grid-column: 1 / -1; display: flex; gap: 4px; } .bind-extra select { flex: 1; max-width: none; } .bind-row input { min-width: 0; } .bind-row.out select { max-width: none; }
 .canvas { position: relative; } .flow-drop { width: 100%; height: 100%; }
 .run-schema .canvas, .run-schema .flow-drop { height: 380px; min-height: 380px; }
 .edge-handle { position: absolute; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: #fff; pointer-events: all; touch-action: none; }
-.edge-point { width: 16px; height: 16px; background: var(--accent); border-color: #fff; box-shadow: 0 0 0 2px var(--accent); cursor: grab; }
-.edge-point:active { cursor: grabbing; }
-.edge-add { width: 14px; height: 14px; cursor: copy; opacity: .75; }
-.edge-add::before, .edge-add::after { content: ""; position: absolute; left: 50%; top: 50%; background: var(--accent); transform: translate(-50%, -50%); }
-.edge-add::before { width: 6px; height: 2px; } .edge-add::after { width: 2px; height: 6px; }
-.edge-add:hover, .edge-add:focus-visible { opacity: 1; }
+.edge-seg { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; } /* 24 px : cible tactile minimale ; seul un petit point se voit */
+.edge-seg::after { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--accent); }
+.edge-seg-v { cursor: ew-resize; } .edge-seg-h { cursor: ns-resize; }
+.edge-seg:hover::after, .edge-seg:focus-visible::after { width: 9px; height: 9px; }
+.edge-seg:active::after { filter: brightness(.9); }
+.edge-seg-hit { fill: none; stroke: transparent; stroke-width: 14px; pointer-events: stroke; }
+.react-flow .react-flow__edge.selected .react-flow__edge-path, .react-flow .react-flow__edge:hover .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
 .edge-handle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .gen-progress { display: flex; flex-direction: column; gap: 10px; }
 .gen-current { margin: 0; }
@@ -208,3 +210,57 @@ main:has(.run-graph-tab.fill) { max-width: none; }
 .insp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; }
 .run-inspector .inspector-block h4 { margin: 0 0 4px; }
 .run-inspector .field-error { margin: 0 0 6px; }
+/* Extrémités d'un lien sélectionné : des ronds qu'on saisit pour reprendre le lien sur une autre face (ou une autre étape) */
+.react-flow .react-flow__edge.selected .react-flow__edgeupdater { r: 6px; fill: #fff; stroke: var(--accent); stroke-width: 2px; cursor: crosshair; }
+.react-flow .react-flow__edge.selected .react-flow__edgeupdater:hover { fill: var(--accent); }
+/* Seuls l'icône et les libellés d'une étape prennent la souris : la marge transparente du bloc ne cache ni une ligne qui passe près, ni l'extrémité d'un lien sélectionné */
+.react-flow__node-step { pointer-events: none !important; }
+.react-flow__node-step .flow-box, .react-flow__node-step .flow-label, .react-flow__node-step .flow-type, .react-flow__node-step .flow-count { pointer-events: all; }
+/* L'aimant (caler sur la grille) : enfoncé, il est de la couleur d'accent */
+.react-flow__controls-button.snap-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg, #fff); }
+.react-flow__controls-button.snap-toggle svg { fill: none !important; stroke: currentColor; } /* la feuille de style de React Flow remplit les icônes des commandes : l'aimant est un tracé */
+/* Point de jonction : là où des liens qui partent du même point se séparent, ou qui arrivent au même point se rejoignent */
+/* Les notes sont toujours en arrière-plan : derrière les lignes et derrière les étapes, y compris sélectionnées (React Flow remonte sinon l'élément sélectionné) */
+.react-flow__node-note { z-index: -1 !important; }
+/* Panneau d'une note : trois parties (texte, apparence, taille), actions en bas */
+.note-panel { display: flex; flex-direction: column; gap: 14px; }
+.note-head { display: flex; align-items: center; gap: 10px; padding: 0 2px 8px; border-bottom: 1px solid var(--border); } .note-head .np-title { margin: 0; padding: 0; border: 0; }
+.note-dot { width: 18px; height: 18px; border-radius: 5px; border: 1px solid; flex: none; }
+.note-body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.note-panel section.np-section { margin: 0; }
+.np-section { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, #fff); }
+.np-section h3 { margin: 0; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.np-section .field { margin: 0; }
+.note-count { margin: 4px 0 0; text-align: right; }
+.note-colors { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.note-swatch { position: relative; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid var(--border-mid, #cbd5e1); cursor: pointer; display: grid; place-items: center; box-sizing: border-box; transition: transform .12s; }
+.note-swatch:hover { transform: scale(1.12); }
+.note-swatch.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+.note-custom { background: conic-gradient(#f87171, #fbbf24, #4ade80, #38bdf8, #a78bfa, #f472b6, #f87171); color: #fff; font-weight: 700; line-height: 1; }
+.note-custom span { text-shadow: 0 0 3px rgba(0, 0, 0, .55); font-size: 16px; }
+.note-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: 0; }
+.note-custom:focus-within { outline: 3px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.note-opacity label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; } .note-opacity strong { color: var(--fg); font-variant-numeric: tabular-nums; }
+.note-track { height: 14px; border-radius: 7px; border: 1px solid var(--border-mid, #cbd5e1); display: flex; align-items: center;
+  background: linear-gradient(to right, transparent, var(--note-color, #fff3a8)), repeating-conic-gradient(#e5e7eb 0 25%, #fff 0 50%) 0 0 / 10px 10px; } /* du transparent à la couleur, sur un quadrillage */
+.note-track input[type="range"] { width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: transparent !important; appearance: none; -webkit-appearance: none; }
+.note-track input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+.note-track input[type="range"]::-moz-range-track { background: transparent; }
+.note-track input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin-top: -4px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); cursor: grab; }
+.note-track input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); cursor: grab; }
+.note-track input[type="range"]:focus-visible { outline: 3px solid var(--focus, var(--accent)); outline-offset: 3px; border-radius: 7px; }
+.note-stage { padding: 14px; border-radius: 8px; background: repeating-conic-gradient(#eef0f3 0 25%, #fff 0 50%) 0 0 / 14px 14px; border: 1px solid var(--border); } /* quadrillage : on voit la transparence du fond */
+.note-preview { margin: 0; padding: 8px 10px; border: 1px solid; border-radius: 4px; font-weight: 600; font-size: var(--fs-sm); }
+.note-size { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; align-items: end; } .note-size .btn-s { grid-column: 1 / -1; justify-self: start; }
+.note-unit { display: flex; align-items: center; gap: 6px; } .note-unit input { min-width: 0; width: 100%; } .note-unit span { color: var(--muted); font-size: var(--fs-sm); }
+.note-panel > .np-actions { position: sticky; bottom: 0; z-index: 1; display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: auto; padding: 10px 0 4px; background: var(--surface, #fff); border-top: 1px solid var(--border); } /* toujours visibles, même quand le panneau défile */
+
+/* Point de jonction : un petit rond creux qui se déplace comme une étape ; entrée verte à gauche, sorties rouges (droite, haut, bas) ; les branches s'y rejoignent en croix */
+.flow-junction { box-sizing: border-box; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 1.7px solid var(--muted, #6b7280); cursor: grab; }
+.flow-junction:active { cursor: grabbing; }
+.flow-junction.selected, .flow-junction:hover { border-color: var(--accent); }
+.flow-junction .react-flow__handle.jh { width: 5px; height: 5px; min-width: 0; min-height: 0; opacity: 1; border: 1px solid #fff; }
+.flow-junction .react-flow__handle.jh::before { inset: -2px; }
+.flow-junction:hover .react-flow__handle.jh, .flow-junction.selected .react-flow__handle.jh { width: 7px; height: 7px; } /* au survol ou sélectionné : l'entrée verte et les sorties rouges se voient mieux */
+.flow-junction .react-flow__handle.jin { background: #16a34a; }
+.flow-junction .react-flow__handle.jout { background: #dc2626; }

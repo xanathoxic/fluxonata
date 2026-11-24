@@ -289,3 +289,39 @@ def test_validation_messages_never_echo_the_offending_value(ws, world):
     )
     assert api.status_code == 400 and "TOP-SECRET" not in api.content.decode()
     assert ActionVersion and v
+
+
+def test_the_visual_layout_of_the_schema_is_kept_as_drawn_by_the_editor_and_never_changes_what_runs(ws, world):
+    """Lignes (faces, tracé), points de jonction, notes (taille, couleur, opacité) et positions sont de la présentation : le brouillon et la version publiée les
+    conservent telles quelles, et elles n'ont aucun effet sur la validation."""
+    c = client_for(world["designer"])
+    base = "/api/v1/workspaces/team-a/workflows/"
+    c.post(base, {"slug": "visuel", "name": "Visuel"}, format="json")
+    graph = g(
+        [
+            node("a", action="echo", inputs={"value": "x"}, ui={"x": 0, "y": 0}),
+            node("b", action="echo", inputs={"value": "y"}, ui={"x": 300, "y": 120}),
+        ],
+        [{"from": "a", "to": "b", "ui": {"sf": "b", "tf": "t", "route": [140, 90, 60]}}],
+    )
+    graph["junctions"] = [{"id": "junction_1", "node": "a", "role": "out", "face": "r", "x": 160, "y": 40}]
+    graph["notes"] = [
+        {
+            "id": "note_1",
+            "text": "Zone",
+            "ui": {"x": -20, "y": -40, "w": 420, "h": 220},
+            "color": "#bfdbfe",
+            "opacity": 0.4,
+        }
+    ]
+    graph["layout"] = {"start": {"x": -120, "y": 10}}
+    saved = c.put(base + "visuel/draft/", {"graph": graph, "revision": 1}, format="json")
+    assert saved.status_code == 200 and not [i for i in saved.json()["issues"] if i["level"] == "error"]
+    for key in ("junctions", "notes", "layout"):
+        assert saved.json()["graph"][key] == graph[key]
+    assert saved.json()["graph"]["edges"][0]["ui"] == {"sf": "b", "tf": "t", "route": [140, 90, 60]}
+    published = c.post(base + "visuel/publish/", {}, format="json")
+    assert published.status_code == 201
+    version = WorkflowVersion.objects.get(workflow__slug="visuel")
+    assert version.graph["junctions"] == graph["junctions"] and version.graph["notes"] == graph["notes"]
+    assert version.graph["edges"][0]["ui"]["route"] == [140, 90, 60]

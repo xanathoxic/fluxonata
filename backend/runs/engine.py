@@ -51,6 +51,9 @@ from . import (
     sql_node,
     ssh_node,
     step_cache,
+    step_file,
+    step_model,
+    step_schedule,
 )
 from .models import Approval, CallbackDelivery, Execution, RunEvent, StepRun, WorkflowRun
 
@@ -606,8 +609,20 @@ def _start_race_step(run, node, sr, ctx, steps):
 
 
 def _start_wait(run, node, sr, ctx, steps):
-    sr.status, sr.available_at = S.WAITING, timezone.now() + timedelta(seconds=node["seconds"])
+    now = timezone.now()
+    if node.get("until") is None:
+        sr.status, sr.available_at = S.WAITING, now + timedelta(seconds=node["seconds"])
+        sr.save()
+        return
+    try:  # reprise à une date et une heure : la même minuterie durable, l'échéance est simplement calculée autrement
+        when, immediate = step_schedule.resume_at(node, ctx, now)
+    except step_schedule.ScheduleStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    sr.status, sr.available_at = S.WAITING, when
     sr.save()
+    local = when.astimezone(step_schedule.spec.zone(node.get("timezone"))).strftime("%d/%m/%Y à %H:%M")
+    note = "date déjà passée, reprise immédiate" if immediate else f"reprise le {local}"
+    add_event(run, "wait_until", f"Workflow en pause : {note}.", node["id"])
 
 
 MAX_APPROVAL_BODY = 20000  # characters of Markdown
@@ -647,6 +662,38 @@ def _start_cache(run, node, sr, ctx, steps):
         raise _StepError(exc.code, exc.message, exc.next_step) from None
     verb = {"read": "lu", "write": "écrit", "delete": "supprimé"}[node["operation"]]
     _succeed(run, sr, node, f"Cache « {_label(node)} » {verb} (clé « {out['key']} »).", out)
+
+
+def _start_schedule(run, node, sr, ctx, steps):
+    try:
+        out = step_schedule.apply(run, node, ctx)
+    except step_schedule.ScheduleStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    when = "tout de suite" if out["immediate"] else f"le {out['run_at_local'][:16].replace('T', ' à ')}"
+    add_event(run, "launch_scheduled", f"Lancement de « {out['workflow']} » programmé {when}.", node["id"])
+    _succeed(run, sr, node, f"Lancement de « {out['workflow']} » programmé {when}.", out)
+
+
+def _start_model(run, node, sr, ctx, steps):
+    try:
+        out = step_model.apply(run, node, ctx)
+    except step_model.ModelStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    _succeed(
+        run,
+        sr,
+        node,
+        f"Modèle « {_label(node)} » rempli ({len(out['markdown'])} caractères, {len(out['images'])} image(s)).",
+        out,
+    )
+
+
+def _start_file(run, node, sr, ctx, steps):
+    try:
+        out = step_file.apply(run, node, ctx)
+    except step_file.FileStepError as exc:
+        raise _StepError(exc.code, exc.message, exc.next_step) from None
+    _succeed(run, sr, node, f"Fichier « {out['name']} » créé ({out['size']} octets).", out)
 
 
 def _rebuild_cache(run, node, sr, ctx, key):
@@ -821,6 +868,9 @@ _STARTERS: dict[str, Callable[..., None]] = {
     "approval": _start_approval,
     "transform": _start_transform,
     "cache": _start_cache,
+    "schedule": _start_schedule,
+    "file": _start_file,
+    "model": _start_model,
     "agent": _start_agent,
     "ssh": _start_ssh,
     "subworkflow": _start_subworkflow,

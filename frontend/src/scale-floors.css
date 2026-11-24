@@ -1,9 +1,10 @@
 /* Planchers de l'échelle (WCAG 2.2 AA, cibles d'au moins 24 px) : ce que la mise à l'échelle de 0,8 ferait passer en dessous. Une ligne par écart constaté par axe en E2E. */
 
 /* Icônes : leur taille est un attribut (width/height), que la mise à l'échelle du CSS ne voit pas. Un zoom sur ces feuilles seules (aucune position n'en dépend) leur donne l'échelle de la page.
-   Exclus : graphiques (info-bulles positionnées à la souris) et canevas de l'éditeur (react-flow). */
+   Exclus : graphiques (info-bulles positionnées à la souris) et canevas de l'éditeur (react-flow), dont la ligne tracée pendant qu'on relie deux étapes :
+   son repère est celui du schéma, un zoom la décalait de 20 % par rapport à la poignée de départ. */
 @media (min-width: 901px) {
-  svg[width][height]:not(.viz-svg):not(.react-flow__edges):not(.react-flow__background):not(.react-flow__minimap) { zoom: var(--ui-s); }
+  svg[width][height]:not(.viz-svg):not(.react-flow__edges):not(.react-flow__background):not(.react-flow__minimap):not(.react-flow__connectionline) { zoom: var(--ui-s); }
 }
 
 /* Largeurs de texte : sans cela, le texte réduit à l'échelle 0,8 reçoit des largeurs de lettres arrondies au pixel (≈ 3 % d'écart de largeur avec le même texte vu à 80 % de zoom). */
@@ -26,7 +27,7 @@
      (onglets, boutons de groupe), qui se rétrécissent alors sous la largeur de leur texte et se chevauchent. */
   :where(button, [role="button"], [role="tab"], [role="menuitem"], [role="menuitemradio"], summary, a.icon-btn, .cs-opt, .linklike, .help-pill, .react-flow__controls-button) { min-height: 24px !important; box-sizing: border-box; }
   /* Largeur : seulement les boutons carrés d'icône, qui n'ont pas de texte à protéger. */
-  :where(.icon-btn, a.icon-btn, .cs-opt, .react-flow__controls-button) { min-width: 24px !important; }
+  :where(.icon-btn, a.icon-btn, .cs-opt, .help-btn, .react-flow__controls-button) { min-width: 24px !important; }
 }
 
 /* Palette de l'éditeur de workflow : trois onglets à parts égales. Avec le texte relevé à 11 px (la référence est à 10,4 px), « Actions 60 » dépasse de quelques pixels à 1280 px : marges internes réduites. */

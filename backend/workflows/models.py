@@ -1,5 +1,6 @@
 import hashlib
 import json
+import uuid
 
 from django.conf import settings
 from django.db import models
@@ -215,3 +216,25 @@ class Favorite(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "workspace", "kind", "slug"], name="uniq_favorite")]
+
+
+class DocumentImage(models.Model):
+    """Image d'un espace de travail, utilisable dans un « Modèle de document » (`![texte](image:<id>)`) : PNG, JPEG ou GIF, 1 Mo au plus.
+    Gardée en base avec le reste ; jamais servie sans session ; jamais d'image distante dans un modèle (ADR 0036)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="document_images")
+    name = models.CharField(max_length=120)
+    content_type = models.CharField(max_length=30)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    data = models.BinaryField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["workspace", "sha256"], name="uniq_document_image_per_workspace")
+        ]

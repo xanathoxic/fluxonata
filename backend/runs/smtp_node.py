@@ -7,6 +7,7 @@ checked against line breaks (header injection), a message has 20 recipients at m
 password is read from the vault by the worker at send time and never stored on the step. Sending is an effect that cannot be
 undone: the step is never retried automatically, and `mode: test` (the default) sends nothing."""
 
+import base64
 import contextlib
 import logging
 import re
@@ -81,6 +82,19 @@ def _recipients(raw, what: str) -> list[str]:
     return [clean_address(i, what) for i in items if str(i).strip()]
 
 
+def _model_parts(node: dict, resolve, ctx: dict, workspace_id) -> dict | None:
+    """Corps venu d'un modèle de document (ADR 0036) : texte brut + HTML, images intégrées au message."""
+    if not node.get("body_model"):
+        return None
+    from . import model_docs
+
+    try:
+        source = model_docs.markdown_of(resolve(node["body_model"], ctx))
+        return model_docs.mail_parts(source, model_docs.load_images(workspace_id, source))
+    except model_docs.ModelError as exc:
+        raise SmtpStepError(exc.code, exc.message, exc.next_step) from None
+
+
 def prepare(node: dict, resolve, ctx: dict, workspace_id, environment_id) -> dict:
     conn = find_connection(workspace_id, environment_id, node.get("connection", ""))
     if conn is None:
@@ -98,11 +112,13 @@ def prepare(node: dict, resolve, ctx: dict, workspace_id, environment_id) -> dic
     subject = str(resolve(node.get("subject", ""), ctx) or "").strip()
     if not subject or len(subject) > MAX_SUBJECT or any(c in subject for c in "\r\n\x00"):
         raise SmtpStepError("SMTP_CONFIG", f"Objet requis ({MAX_SUBJECT} caractères au plus, sur une seule ligne).")
-    body = resolve(node.get("body", ""), ctx)
+    rich = _model_parts(node, resolve, ctx, workspace_id)
+    body = rich["text"] if rich else resolve(node.get("body", ""), ctx)
     body = body if isinstance(body, str) else ("" if body is None else str(body))
     if not body.strip() or len(body.encode()) > MAX_BODY:
         raise SmtpStepError("SMTP_CONFIG", "Corps du message requis (100 Ko au plus).")
     return {
+        **({"html": rich["html"], "images": rich["images"]} if rich else {}),
         "mode": "reel" if node.get("mode") == "reel" else "test",
         "connection": conn.name,
         "to": to,
@@ -127,6 +143,14 @@ def build_message(cfg: dict, spec: dict) -> EmailMessage:
     msg["Subject"] = spec["subject"]
     msg["Message-ID"] = make_msgid(domain=sender.rsplit("@", 1)[1])
     msg.set_content(spec["body"])
+    if spec.get("html"):  # texte brut + HTML ; les images sont jointes au HTML (cid:), jamais chargées depuis un site
+        msg.add_alternative(spec["html"], subtype="html")
+        html_part = msg.get_body(("html",))
+        if html_part is None:
+            raise SmtpStepError("SMTP_CONFIG", "Corps HTML illisible.")
+        for img in spec.get("images") or []:
+            kind, _, sub = str(img["content_type"]).partition("/")
+            html_part.add_related(base64.b64decode(img["data"]), maintype=kind, subtype=sub, cid=f"<{img['cid']}>")
     return msg
 
 

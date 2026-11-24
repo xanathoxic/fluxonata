@@ -412,11 +412,11 @@ test("déplacer un nœud : il suit la souris pendant le glissement, la position 
   expect(Math.abs(undone.y - start.y)).toBeLessThan(6);
 });
 
-test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; « Organiser automatiquement » remet les lignes en automatique", async ({ page }) => {
+test("début et fin déplaçables, lignes orthogonales dont on glisse les segments (souris et clavier), enregistrées ; « Organiser automatiquement » remet les lignes en automatique", async ({ page }) => {
   await login(page);
   const slug = `route-${uniq()}`;
   await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
-    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 0, y: 0 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 400, y: 0 } }] });
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 0, y: 0 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 400, y: -150 } }] });
   await page.goto(`/workflows/${slug}/schema`);
   const start = page.getByRole("img", { name: "Début du workflow" });
   await expect(start).toBeVisible();
@@ -428,50 +428,473 @@ test("début et fin déplaçables, lignes ajustables au clavier, enregistrés ; 
   const after = (await boxOf(start));
   expect(after.y - before.y).toBeGreaterThan(100);
 
-  // la ligne A → B : sélection, puis tracé libre (points de passage)
-  const add = page.getByRole("button", { name: /Ajouter un point de passage à la ligne vers « Pause B »/ });
+  // la ligne A → B : sélection, puis une poignée sur chacun de ses segments (vertical au milieu, horizontaux de départ et d'arrivée)
+  const vertical = page.getByRole("button", { name: /Déplacer le segment vertical \d+ de la ligne vers « Pause B »/ });
+  const horizontal = page.getByRole("button", { name: /Déplacer le segment horizontal \d+ de la ligne vers « Pause B »/ });
   await expect(async () => { // la sélection d'une ligne peut perdre la course avec l'ajustement de la vue : on réessaie
     await page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-interaction').dispatchEvent("click");
-    await expect(add).toBeVisible({ timeout: 2_000 });
+    await expect(vertical).toHaveCount(1, { timeout: 2_000 });
   }).toPass({ timeout: 15_000 });
+  await expect(horizontal).toHaveCount(2); // départ et arrivée : tous les segments se déplacent
   const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const route = async () => (await read()).edges[0].ui?.route as number[] | undefined;
 
-  // clavier : Entrée pose un point au milieu, les flèches le déplacent dans les deux axes (Maj : 1 pixel)
-  await add.focus();
-  await page.keyboard.press("Enter");
-  const point = page.getByRole("button", { name: /Point de passage 1 sur 1 de la ligne vers « Pause B »/ });
-  await expect(point).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
+  // clavier, segment vertical : flèches gauche/droite (Maj : 1 pixel), le focus reste sur la poignée
+  await vertical.focus();
+  const x0 = (await boxOf(vertical)).x;
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Shift+ArrowRight");
+  await expect(vertical).toBeFocused();
   await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
-  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(1);
-  const first = (await read()).edges[0].ui.points[0];
+  await expect.poll(async () => (await route())?.length).toBe(1);
+  const keyed = (await route())?.[0] as number;
+  expect((await boxOf(vertical)).x - x0).toBeGreaterThan(10); // le segment a bougé de 8 + 8 + 1 unités du schéma, à l'écran aussi
   expect((await read()).layout.start.y).toBeGreaterThan(100);
 
-  // souris : glisser la poignée « + » d'un segment crée un point où on la dépose, y compris en diagonale
-  const seg = page.getByRole("button", { name: /Ajouter un point de passage à la ligne vers « Pause B »/ }).first();
-  const box = (await boxOf(seg));
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // souris, segment vertical : glisser la poignée vers la gauche
+  const vb = await boxOf(vertical);
+  await page.mouse.move(vb.x + vb.width / 2, vb.y + vb.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + 40, box.y - 90, { steps: 8 });
+  await page.mouse.move(vb.x - 60, vb.y + 20, { steps: 8 });
   await page.mouse.up();
-  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(2);
-  const pts = (await read()).edges[0].ui.points;
-  expect(pts.some((q: { x: number; y: number }) => q.x !== first.x || q.y !== first.y)).toBe(true);
+  await expect.poll(async () => (await route())?.[0]).toBeLessThan(keyed);
+  expect((await read()).edges[0].ui.points).toBeUndefined();
+  expect((await route())?.length).toBe(1); // le segment vertical seul : la ligne garde sa forme en Z
 
-  await expectNoA11yViolations(page); // poignées visibles : nom accessible, contraste, ordre de tabulation
+  // souris, segment horizontal d'arrivée : glisser vers le haut ajoute deux coudes et donne un détour [x, y, x]
+  const hit = page.locator('.react-flow__edge[data-id="a->b"] .edge-seg-hit');
+  await expect(hit).toHaveCount(3); // départ, vertical, arrivée : tous se prennent à la souris
+  const arrival = hit.nth(2);
+  await expect(arrival).toHaveCSS("cursor", "ns-resize");
+  const ab = await boxOf(arrival);
+  await page.mouse.move(ab.x + ab.width * 0.75, ab.y + ab.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(ab.x + ab.width * 0.75, ab.y - 70, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await route())?.length).toBe(3);
+  const detour = (await route()) as number[];
+  const targetY = (await read()).nodes.find((n: { id: string }) => n.id === "b").ui.y + 28; // l'icône est à mi-hauteur de l'étape
+  expect(detour[1]).toBeLessThan(targetY - 40); // le segment horizontal du milieu est monté au-dessus de l'arrivée
+  // souris, segment horizontal de départ : glisser vers le bas ajoute des coudes du côté de la source
+  const departure = page.locator('.react-flow__edge[data-id="a->b"] .edge-seg-hit').first();
+  await expect(departure).toHaveCSS("cursor", "ns-resize");
 
-  // Suppr retire le point ; Échap remet le tracé automatique
-  await page.getByRole("button", { name: /Point de passage 1 sur 2/ }).focus();
-  await page.keyboard.press("Delete");
-  await expect.poll(async () => (await read()).edges[0].ui?.points?.length).toBe(1);
-  await page.getByRole("button", { name: /Point de passage 1 sur 1/ }).focus();
+  await expectNoA11yViolations(page); // poignée visible : nom accessible, contraste, ordre de tabulation
+
+  // Échap remet le tracé automatique
+  await vertical.first().focus();
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await read()).edges[0].ui).toBeUndefined();
   await menuClick(page, "Affichage", "Organiser automatiquement");
   await expect.poll(async () => (await read()).layout).toBeUndefined();
   await expectNoA11yViolations(page);
+});
+
+test("liens : les lignes partent et arrivent sur l'icône de l'étape (pas sur le bord de son libellé), et un lien se crée en glissant d'une sortie à une entrée", async ({ page }) => {
+  await login(page);
+  const slug = `liens-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 0, y: 0 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 360, y: 0 } }, { id: "c", type: "wait", name: "Pause C", seconds: 1, ui: { x: 360, y: 200 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+
+  // alignement : les points de connexion sont sur les bords de l'icône (carré de 56 px), à gauche et à droite, pas au bord du bloc icône + libellés ;
+  // l'entrée et la sortie d'une même face sont légèrement écartées : face gauche, entrée en haut et sortie en bas ; face droite, l'inverse ; faces haut et bas, entrée à gauche et sortie à droite
+  for (const id of ["a", "b"]) {
+    const icon = await boxOf(page.locator(`.react-flow__node[data-id="${id}"] .flow-box`));
+    const handle = (hid: string) => boxOf(page.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle[data-handleid="${hid}"]`));
+    const [inLeft, outLeft, inRight, outRight] = [await handle("i:l"), await handle("o:l"), await handle("i:r"), await handle("o:r")];
+    const cy = icon.y + icon.height / 2;
+    for (const h of [inLeft, outLeft, inRight, outRight]) expect(Math.abs(h.y + h.height / 2 - cy)).toBeLessThan(icon.height / 4); // dans la moitié centrale de la face
+    expect(Math.abs(inLeft.x + inLeft.width / 2 - icon.x)).toBeLessThan(3); // le bord gauche de l'icône
+    expect(Math.abs(outRight.x + outRight.width / 2 - (icon.x + icon.width))).toBeLessThan(3); // son bord droit
+    expect(Math.abs(outLeft.y - inLeft.y)).toBeGreaterThan(5); // écartées, pas confondues
+    expect(Math.abs(outRight.y - inRight.y)).toBeGreaterThan(5);
+    expect(inLeft.y).toBeLessThan(outLeft.y); // face gauche : entrée (vert) au-dessus de la sortie (rouge)
+    expect(outRight.y).toBeLessThan(inRight.y); // face droite : l'inverse, sortie au-dessus de l'entrée
+    expect(Math.abs(outRight.y - inLeft.y)).toBeLessThan(2); // la sortie à droite et l'entrée à gauche de l'étape suivante sont à la même hauteur
+  }
+
+  // la ligne A → B touche vraiment l'icône de A (sortie) et celle de B (entrée)
+  const pathBox = await boxOf(page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-path'));
+  const iconA = await boxOf(page.locator('.react-flow__node[data-id="a"] .flow-box'));
+  const iconB = await boxOf(page.locator('.react-flow__node[data-id="b"] .flow-box'));
+  expect(Math.abs(pathBox.x - (iconA.x + iconA.width))).toBeLessThan(6);
+  expect(Math.abs(pathBox.x + pathBox.width - iconB.x)).toBeLessThan(10); // la flèche s'arrête au bord de l'icône d'arrivée
+
+  // créer un lien A → C : glisser de la sortie de A jusqu'à l'icône de C ; la prévisualisation part bien de la poignée
+  const out = await boxOf(page.locator('.react-flow__node[data-id="a"] .react-flow__handle[data-handleid="o:r"]'));
+  const target = await boxOf(page.locator('.react-flow__node[data-id="c"] .react-flow__handle[data-handleid="i:l"]'));
+  await page.mouse.move(out.x + out.width / 2, out.y + out.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x - 30, target.y + 10, { steps: 10 });
+  const start = await page.locator(".react-flow__connection-path").evaluate((el) => { // premier point de la ligne tracée pendant le glisser, en pixels d'écran
+    const path = el as unknown as SVGPathElement;
+    const p = path.getPointAtLength(0);
+    const m = path.getScreenCTM() as DOMMatrix;
+    return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+  });
+  expect(Math.abs(start.x - (out.x + out.width / 2))).toBeLessThan(3); // elle commence à la poignée (elle était décalée de 20 % par le zoom de l'interface)
+  expect(Math.abs(start.y - (out.y + out.height / 2))).toBeLessThan(3);
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).edges.some((e: { from: string; to: string }) => e.from === "a" && e.to === "c")).toBe(true);
+  await expect(page.locator('.react-flow__edge[data-id="a->c"]')).toBeVisible();
+  await expectNoA11yViolations(page);
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("liens : quatre points de connexion par étape, faces choisies automatiquement et qui suivent les étapes, faces fixées en reliant, extrémité reprise", async ({ page }) => {
+  await login(page);
+  const slug = `faces-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 100, y: 0 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 500, y: 0 } }, { id: "c", type: "wait", name: "Pause C", seconds: 1, ui: { x: 100, y: 260 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const handle = (id: string, hid: string) => page.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle[data-handleid="${hid}"]`);
+  const centre = async (loc: ReturnType<typeof handle>) => { const b = await boxOf(loc); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  // la face la plus proche du premier point de la ligne : celle d'où elle part (ou, pour la fin, celle où elle arrive)
+  const faceOf = async (edge: string, node: string, end: "start" | "end") => {
+    const p = await page.locator(`.react-flow__edge[data-id="${edge}"] .react-flow__edge-path`).evaluate((el, which) => {
+      const path = el as unknown as SVGPathElement;
+      const pt = path.getPointAtLength(which === "start" ? 0 : path.getTotalLength());
+      const m = path.getScreenCTM() as DOMMatrix;
+      return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+    }, end);
+    let best = "";
+    let dist = Number.POSITIVE_INFINITY;
+    for (const f of ["t", "r", "b", "l"]) {
+      const c = await centre(handle(node, `${end === "start" ? "o" : "i"}:${f}`));
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
+      if (d < dist) { dist = d; best = f; }
+    }
+    return best;
+  };
+
+  // chaque étape a, par face, un point d'entrée et un point de sortie légèrement écartés, posés sur l'icône
+  for (const id of ["a", "b", "c"]) {
+    await expect(page.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle`)).toHaveCount(8);
+    const icon = await boxOf(page.locator(`.react-flow__node[data-id="${id}"] .flow-box`));
+    const ti = await centre(handle(id, "i:t"));
+    const to = await centre(handle(id, "o:t"));
+    const bo = await centre(handle(id, "o:b"));
+    expect(Math.abs(ti.y - icon.y)).toBeLessThan(3);
+    expect(Math.abs(bo.y - (icon.y + icon.height))).toBeLessThan(3);
+    expect(Math.abs((ti.x + to.x) / 2 - (icon.x + icon.width / 2))).toBeLessThan(3); // de part et d'autre du centre de la face
+    expect(to.x - ti.x).toBeGreaterThan(5); // face du haut : entrée à gauche, sortie à droite
+    const bi = await centre(handle(id, "i:b"));
+    expect(bo.x - bi.x).toBeGreaterThan(5); // face du bas : de même
+  }
+
+  // automatique : B est à droite de A, la ligne part de la droite de A et arrive à gauche de B
+  expect(await faceOf("a->b", "a", "start")).toBe("r");
+  expect(await faceOf("a->b", "b", "end")).toBe("l");
+
+  // elle suit l'étape quand on la déplace : B passe sous A, la ligne part du bas de A et arrive par le haut de B
+  const na = await boxOf(page.locator('.react-flow__node[data-id="a"] .flow-box'));
+  const nb = await boxOf(page.locator('.react-flow__node[data-id="b"] .flow-box'));
+  await page.mouse.move(nb.x + nb.width / 2, nb.y + nb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(na.x + na.width / 2, nb.y + 120, { steps: 14 }); // à la verticale de A, plus bas
+  await page.mouse.up();
+  await expect.poll(() => faceOf("a->b", "a", "start")).toBe("b");
+  expect(await faceOf("a->b", "b", "end")).toBe("t");
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  expect((await read()).edges[0].ui).toBeUndefined(); // faces automatiques : rien n'est enregistré, elles se recalculent
+
+  // relier en choisissant les faces : de la gauche de A à la droite de C ; elles sont gardées (le lien ne bouge plus de face)
+  const from = await centre(handle("a", "o:l"));
+  const to = await centre(handle("c", "i:r"));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 30, to.y, { steps: 12 });
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).edges.find((e: { from: string; to: string }) => e.from === "a" && e.to === "c")?.ui).toEqual({ sf: "l", tf: "r" });
+
+  // reprendre une extrémité : on saisit le rond d'arrivée du lien sélectionné et on le dépose sur une autre face de la même étape
+  await expect(async () => {
+    await page.locator('.react-flow__edge[data-id="a->c"] .react-flow__edge-interaction').dispatchEvent("click");
+    await expect(page.locator('.react-flow__edge[data-id="a->c"] .react-flow__edgeupdater-target')).toHaveCount(1, { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  const anchor = await boxOf(page.locator('.react-flow__edge[data-id="a->c"] .react-flow__edgeupdater-target'));
+  const top = await centre(handle("c", "i:t"));
+  await page.mouse.move(anchor.x + anchor.width / 2, anchor.y + anchor.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(top.x, top.y - 12, { steps: 12 });
+  await page.mouse.move(top.x, top.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).edges.find((e: { from: string; to: string }) => e.from === "a" && e.to === "c")?.ui?.tf).toBe("t");
+  expect(await faceOf("a->c", "c", "end")).toBe("t");
+  await expectNoA11yViolations(page);
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("liens : des étapes alignées (même à une fraction de pixel près) sont reliées par une ligne droite, sans arche ni bosse", async ({ page }) => {
+  await login(page);
+  const slug = `droit-${uniq()}`;
+  const w = (id: string, x: number, y: number) => ({ id, type: "wait", name: `Pause ${id}`, seconds: 1, ui: { x, y } });
+  // disposition réelle d'un workflow de la vitrine : la dernière étape et « Fin » sont alignées par leurs centres, à 0,2 pixel près
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, layout: { end: { x: 1292, y: 124 }, start: { x: -308, y: 123 } },
+    nodes: [w("a", -29, 118), w("b", 610, 108), w("c", 856, 119)], edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const height = (edge: string) => page.locator(`.react-flow__edge[data-id="${edge}"] .react-flow__edge-path`).evaluate((el) => {
+    const path = el as unknown as SVGPathElement;
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (let l = 0; l <= path.getTotalLength(); l += 1) { const p = path.getPointAtLength(l); lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); }
+    return hi - lo;
+  });
+  await expect.poll(() => height("c->e")).toBeLessThan(2); // la dernière étape vers « Fin » : droite
+  await expect.poll(() => height("__start__->a".replace("__start__", "s"))).toBeLessThan(40); // le départ n'est pas une arche non plus
+  expect(await height("b->c")).toBeLessThan(40);
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("liens multiples : le point de jonction se déplace comme une étape, ses liens le suivent, on y relie de nouvelles sorties, on le supprime", async ({ page }) => {
+  await login(page);
+  const slug = `jonction-${uniq()}`;
+  const w = (id: string, x: number, y: number) => ({ id, type: "wait", name: `Pause ${id}`, seconds: 1, ui: { x, y } });
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {},
+    nodes: [w("m", 0, 160), w("a", 330, 0), w("b", 330, 160), w("c", 340, 330), w("d", 900, 170), { id: "j", type: "join", name: "Fichiers prêts", ui: { x: 650, y: 170 } }],
+    edges: [{ from: "m", to: "a" }, { from: "m", to: "b" }, { from: "m", to: "c" }, { from: "a", to: "j" }, { from: "b", to: "j" }, { from: "c", to: "j" }, { from: "j", to: "d" }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const rings = page.locator(".react-flow__node-junction");
+
+  // deux points de jonction apparaissent seuls : où les trois liens partent de la même étape, et où ils arrivent à la même jonction
+  await expect(rings).toHaveCount(2);
+  await expect(page.getByRole("img", { name: "Point de jonction : les liens partent d'ici" })).toHaveCount(1);
+  await expect(page.getByRole("img", { name: "Point de jonction : les liens arrivent ici" })).toHaveCount(1);
+  await expect(page.locator(".react-flow__node-junction .jin")).toHaveCount(2); // une entrée verte par point
+  await expect(page.locator(".react-flow__node-junction .jout")).toHaveCount(6); // et trois sorties rouges, par point
+
+  // la distance minimale entre un lien et le centre d'un point de jonction (en pixels d'écran) : un lien qui le traverse passe à l'entrée ou à une sortie du rond
+  const distance = (edge: string, c: { x: number; y: number }) => page.locator(`.react-flow__edge[data-id="${edge}"] .react-flow__edge-path`).evaluate((el, ctr) => {
+    const path = el as unknown as SVGPathElement;
+    const m = path.getScreenCTM() as DOMMatrix;
+    let best = Number.POSITIVE_INFINITY;
+    for (let l = 0; l <= path.getTotalLength(); l += 1) { const p = path.getPointAtLength(l); best = Math.min(best, Math.hypot(m.a * p.x + m.c * p.y + m.e - ctr.x, m.b * p.x + m.d * p.y + m.f - ctr.y)); }
+    return best;
+  }, c);
+  const centre = async (loc: ReturnType<typeof page.locator>) => { const b = await boxOf(loc); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  const split = rings.filter({ has: page.locator(".jout") }).first();
+  const before = await centre(split);
+
+  // le déplacer : tous les liens qui partent de l'étape le suivent, et il devient un point posé (enregistré)
+  await page.mouse.move(before.x, before.y);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 70, before.y - 50, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).junctions?.length).toBe(1);
+  const j = (await read()).junctions[0];
+  expect(j).toMatchObject({ node: "m", role: "out", face: "r" });
+  expect(j.x).toBeGreaterThan(60); // il a quitté sa place automatique
+  const after = await centre(page.locator(".react-flow__node-junction").first());
+  expect(after.x - before.x).toBeGreaterThan(40);
+  for (const e of ["m->a", "m->b", "m->c"]) expect(await distance(e, after), e).toBeLessThan(12); // les trois liens passent par le point déplacé
+  await expectNoA11yViolations(page);
+
+  // on y relie une nouvelle sortie, comme on le ferait sur une étape : depuis la sortie rouge de droite vers l'entrée de l'étape d
+  const out = await centre(page.locator(".react-flow__node-junction .jout[data-handleid=\"o:r\"]").first());
+  const into = await centre(page.locator('.react-flow__node[data-id="d"] .react-flow__handle[data-handleid="i:l"]'));
+  await page.mouse.move(out.x, out.y);
+  await page.mouse.down();
+  await page.mouse.move(into.x - 30, into.y, { steps: 12 });
+  await page.mouse.move(into.x, into.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).edges.find((e: { from: string; to: string }) => e.from === "m" && e.to === "d")?.ui).toEqual({ sf: "r", tf: "l" }); // même étape, même point de connexion
+  await expect.poll(async () => await distance("m->d", await centre(page.locator(".react-flow__node-junction").first()))).toBeLessThan(12); // il passe par le point de jonction
+
+  // le supprimer : on le sélectionne, Suppr ; les liens reprennent leur tracé automatique et le point automatique revient
+  await page.locator(".react-flow__node-junction").first().click({ force: true });
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => (await read()).junctions).toBeUndefined();
+  expect((await read()).edges.length).toBe(8); // les liens, eux, sont intacts (les sept d'origine et le nouveau)
+  await expect(page.locator(".react-flow__node-junction")).toHaveCount(1); // seul reste celui des trois liens qui arrivent à la jonction : le lien m → d a ses deux extrémités partagées, donc pas de tronc commun côté étape m
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("point de jonction : le double-clic l'inverse (entrées vertes à gauche, en haut et en bas ; sortie rouge à droite), et un second double-clic le remet", async ({ page }) => {
+  await login(page);
+  const slug = `inverse-${uniq()}`;
+  const w = (id: string, x: number, y: number) => ({ id, type: "wait", name: `Pause ${id}`, seconds: 1, ui: { x, y } });
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {},
+    nodes: [w("m", 0, 160), w("a", 330, 0), w("b", 330, 160), w("c", 340, 330)],
+    edges: [{ from: "m", to: "a" }, { from: "m", to: "b" }, { from: "m", to: "c" }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const ring = page.locator(".react-flow__node-junction").first();
+  const handle = (id: string) => ring.locator(`.react-flow__handle[data-handleid="${id}"]`);
+  const where = async (id: string) => { const r = await boxOf(ring); const h = await boxOf(handle(id)); return { dx: Math.round(h.x + h.width / 2 - (r.x + r.width / 2)), dy: Math.round(h.y + h.height / 2 - (r.y + r.height / 2)) }; };
+
+  // au départ : une entrée verte à gauche, trois sorties rouges (droite, haut, bas)
+  expect(Math.sign((await where("i:l")).dx)).toBe(-1);
+  await expect(ring.locator(".jin")).toHaveCount(1);
+  await expect(ring.locator(".jout")).toHaveCount(3);
+  for (const id of ["o:r", "o:t", "o:b"]) await expect(handle(id)).toHaveCount(1);
+
+  // double-clic : le point automatique est posé là où il est, inversé : trois entrées vertes (gauche, haut, bas), une sortie rouge (droite)
+  await ring.dblclick({ force: true });
+  await expect.poll(async () => (await read()).junctions?.[0]?.flip).toBe(true);
+  expect((await read()).junctions[0]).toMatchObject({ node: "m", role: "out", face: "r" });
+  await expect(ring.locator(".jin")).toHaveCount(3);
+  await expect(ring.locator(".jout")).toHaveCount(1);
+  for (const id of ["i:l", "i:t", "i:b", "o:r"]) await expect(handle(id)).toHaveCount(1);
+  expect(Math.sign((await where("i:l")).dx)).toBe(-1); // la gauche reste verte
+  expect(Math.sign((await where("o:r")).dx)).toBe(1); // la droite reste rouge
+  expect(Math.sign((await where("i:t")).dy)).toBe(-1); // le haut est devenu une entrée
+  expect(Math.sign((await where("i:b")).dy)).toBe(1); // et le bas aussi
+  await expect(handle("i:t")).toHaveClass(/jin/);
+  await expect(handle("i:b")).toHaveClass(/jin/);
+  await expect(handle("o:r")).toHaveClass(/jout/);
+  await expect(page.getByRole("img", { name: /inversé : entrées à gauche, en haut et en bas, sortie à droite/ })).toHaveCount(1);
+  // ses liens le traversent toujours : ils sont dessinés
+  const reach = await page.locator('.react-flow__edge[data-id="m->a"] .react-flow__edge-path').evaluate((el) => (el as unknown as SVGPathElement).getTotalLength());
+  expect(reach).toBeGreaterThan(50);
+  await expectNoA11yViolations(page);
+
+  // second double-clic : retour à la normale (la clé disparaît du graphe)
+  await ring.dblclick({ force: true });
+  await expect.poll(async () => (await read()).junctions?.[0]?.flip).toBeUndefined();
+  await expect(ring.locator(".jin")).toHaveCount(1);
+  await expect(ring.locator(".jout")).toHaveCount(3);
+
+  // au clavier : le point sélectionné s'inverse avec Entrée
+  await ring.click({ force: true });
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await read()).junctions?.[0]?.flip).toBe(true);
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("notes : toujours en arrière-plan, redimensionnables à la souris, couleur et opacité réglables", async ({ page }) => {
+  await login(page);
+  const slug = `notes-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 100, y: 100 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 420, y: 100 } }],
+    notes: [{ id: "note_1", text: "Zone importante", ui: { x: 60, y: 60, w: 420, h: 150 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const note = page.locator('.react-flow__node[data-id="note_1"]');
+
+  // arrière-plan : la note recouvre les deux étapes et la ligne, mais c'est l'étape (et la ligne) qui prend le clic, jamais la note
+  const topAt = (x: number, y: number) => page.evaluate(([px, py]) => { const e = document.elementFromPoint(px as number, py as number); return e?.closest(".react-flow__node")?.getAttribute("data-id") ?? (e?.closest(".react-flow__edge") ? "edge" : e?.className?.toString() ?? ""); }, [x, y]);
+  const iconA = await boxOf(page.locator('.react-flow__node[data-id="a"] .flow-box'));
+  expect(await topAt(iconA.x + iconA.width / 2, iconA.y + iconA.height / 2)).toBe("a");
+  await expect(note).toHaveCSS("z-index", "-1");
+  await note.getByText("Zone importante").click(); // la sélectionner ne la fait pas passer devant
+  await expect(note).toHaveClass(/selected/);
+  await expect(note).toHaveCSS("z-index", "-1");
+  expect(await topAt(iconA.x + iconA.width / 2, iconA.y + iconA.height / 2)).toBe("a");
+  const line = await boxOf(page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-path'));
+  expect(await topAt(line.x + line.width / 2, line.y + line.height / 2)).toBe("edge");
+
+  // redimensionnement à la souris : on tire la poignée du coin haut gauche (le coin bas droit peut passer sous le panneau des propriétés qui s'ouvre)
+  const before = await boxOf(note);
+  const grip = await boxOf(note.locator(".react-flow__resize-control.handle.top.left"));
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x - 70, grip.y - 50, { steps: 10 });
+  await page.mouse.up();
+  const after = await boxOf(note);
+  expect(after.width).toBeGreaterThan(before.width + 40);
+  expect(after.height).toBeGreaterThan(before.height + 25);
+  await expect.poll(async () => (await read()).notes[0].ui.w).toBeGreaterThan(420);
+  const resized = (await read()).notes[0].ui;
+  expect(resized.h).toBeGreaterThan(150);
+  expect(resized.x).toBeLessThan(60); // la note a grandi vers le haut et la gauche : son coin haut gauche a bougé
+  expect(resized.y).toBeLessThan(60);
+
+  // couleur et opacité depuis les propriétés de la note
+  const panel = page.getByRole("region", { name: "Note" });
+  await panel.getByRole("radio", { name: "Bleu" }).click();
+  await expect.poll(async () => (await read()).notes[0].color).toBe("#bfdbfe");
+  await expect(note.locator(".flow-note")).toHaveCSS("background-color", "rgb(191, 219, 254)");
+  await panel.getByLabel(/Opacité du fond/).fill("40");
+  await expect.poll(async () => (await read()).notes[0].opacity).toBe(0.4);
+  await expect(note.locator(".flow-note")).toHaveCSS("background-color", "rgba(191, 219, 254, 0.4)");
+
+  // taille au clavier (équivalent des poignées) ; la position et le style sont gardés
+  await panel.getByLabel("Largeur").fill("300");
+  await expect.poll(async () => (await read()).notes[0].ui.w).toBe(300);
+  expect((await read()).notes[0].color).toBe("#bfdbfe");
+  expect((await read()).notes[0].ui.x).toBe(resized.x); // la position est gardée
+
+  // déplacer la note garde sa taille
+  const nb = await boxOf(note);
+  await page.mouse.move(nb.x + 40, nb.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(nb.x + 40, nb.y - 60, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await read()).notes[0].ui.y).toBeLessThan(resized.y);
+  expect((await read()).notes[0].ui.w).toBe(300);
+  await expectNoA11yViolations(page);
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
+});
+
+test("aimant : l'icône sous les commandes de zoom cale les étapes et les segments des lignes sur la grille, et la préférence est gardée", async ({ page }) => {
+  await login(page);
+  const slug = `aimant-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 3, y: 5 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 411, y: 203 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const magnet = page.getByRole("button", { name: "Aimanter à la grille" });
+
+  // l'icône est dans les commandes du schéma, éteinte au départ
+  await expect(magnet).toBeVisible();
+  await expect(magnet).toHaveAttribute("aria-pressed", "false");
+  expect((await boxOf(magnet)).y).toBeGreaterThan((await boxOf(page.locator(".react-flow__controls-zoomin"))).y); // sous le zoom
+  await expectNoA11yViolations(page);
+
+  // éteint : une étape se pose où on la dépose (position libre)
+  const nodeA = page.locator('.react-flow__node[data-id="a"] .flow-box');
+  const drag = async (dx: number, dy: number) => {
+    const b = await boxOf(nodeA);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 8 });
+    await page.mouse.up();
+  };
+  await drag(53, 37);
+  await expect(page.getByText("Brouillon enregistré")).toBeVisible({ timeout: 15_000 });
+  const free = (await read()).nodes.find((n: { id: string }) => n.id === "a").ui;
+  expect(free.x % 16 !== 0 || free.y % 16 !== 0).toBe(true);
+
+  // allumé : l'étape se cale sur la grille de 16 pixels
+  await magnet.click();
+  await expect(magnet).toHaveAttribute("aria-pressed", "true");
+  await drag(41, 29);
+  await expect.poll(async () => { const u = (await read()).nodes.find((n: { id: string }) => n.id === "a").ui; return [u.x % 16, u.y % 16]; }).toEqual([0, 0]);
+
+  // allumé : un segment de ligne se cale aussi
+  await expect(async () => {
+    await page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-interaction').dispatchEvent("click");
+    await expect(page.getByRole("button", { name: /Déplacer le segment vertical \d+ de la ligne vers « Pause B »/ })).toHaveCount(1, { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  const vertical = page.getByRole("button", { name: /Déplacer le segment vertical \d+ de la ligne vers « Pause B »/ });
+  const vb = await boxOf(vertical);
+  await page.mouse.move(vb.x + vb.width / 2, vb.y + vb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(vb.x + vb.width / 2 + 37, vb.y + vb.height / 2 + 5, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => { const r = (await read()).edges[0].ui?.route; return r ? r[0] % 16 : -1; }).toBe(0);
+
+  // la préférence est gardée au rechargement ; la vue d'une exécution n'a pas d'aimant (rien à déplacer)
+  await page.reload();
+  await page.waitForSelector(".react-flow__edge");
+  await expect(page.getByRole("button", { name: "Aimanter à la grille" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Aimanter à la grille" }).click();
+  await expect(page.getByRole("button", { name: "Aimanter à la grille" })).toHaveAttribute("aria-pressed", "false");
+  await page.evaluate(async (s) => { const csrf = document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? ""; await fetch(`/api/v1/workspaces/demo/workflows/${s}/delete/`, { method: "POST", headers: { "X-CSRFToken": csrf } }); }, slug);
 });
 
 test("brouillon sans positions : déplacer un nœud ne réorganise pas les autres, et la disposition est conservée au retour", async ({ page }) => {

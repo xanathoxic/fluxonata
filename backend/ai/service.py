@@ -1936,6 +1936,14 @@ def _approval_fields(n: dict) -> dict:
     return out
 
 
+def _wait_fields(n: dict) -> dict:
+    out = {"seconds": _int_between(n.get("seconds"), 1, 30 * 86400) or 60}
+    if isinstance(n.get("until"), str) and n["until"].strip():  # reprise à une date : la durée n'est plus qu'un repli
+        out |= {"until": _text(n["until"], 100), "timezone": _text(n.get("timezone"), 40) or "Europe/Paris"}
+        out["on_past"] = "now" if n.get("on_past") == "now" else "fail"
+    return out
+
+
 def _clean_step(n: dict) -> dict:
     """Wait, approval, exception, sub-workflow, loop and AI steps: only known fields, bounded. Whether the referenced
     workflow, skill or provider exists is left to the validator every human goes through."""
@@ -1943,7 +1951,7 @@ def _clean_step(n: dict) -> dict:
     out: dict = {}
     inputs = _dict_of(n, "inputs")
     if t == "wait":
-        out["seconds"] = _int_between(n.get("seconds"), 1, 30 * 86400) or 60
+        out.update(_wait_fields(n))
     elif t == "approval":
         out.update(_approval_fields(n))
     elif t == "throw":

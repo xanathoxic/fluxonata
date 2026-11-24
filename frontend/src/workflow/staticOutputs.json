@@ -26,6 +26,11 @@
   "condition": {
     "result": "boolean"
   },
+  "file": {
+    "file": "object",
+    "name": "string",
+    "size": "integer"
+  },
   "foreach": {
     "count": "integer",
     "results": "array"
@@ -45,10 +50,25 @@
     "simulated": "boolean",
     "truncated": "boolean"
   },
+  "model": {
+    "html": "string",
+    "images": "array",
+    "markdown": "string",
+    "text": "string",
+    "title": "string"
+  },
   "race": {
     "value": null,
     "winner": "string",
     "winner_name": "string"
+  },
+  "schedule": {
+    "id": "string",
+    "immediate": "boolean",
+    "run_at": "string",
+    "run_at_local": "string",
+    "version": "string",
+    "workflow": "string"
   },
   "sftp": {
     "content": null,

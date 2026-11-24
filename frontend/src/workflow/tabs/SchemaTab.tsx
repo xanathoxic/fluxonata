@@ -5,7 +5,7 @@ import { useAiMode } from "../../components/AiBox";
 import { AiChat } from "../AiChat";
 import { CanvasView } from "../CanvasView";
 import { useDraft } from "../DraftContext";
-import { addNode, autoLayout, setEdgePoints, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
+import { addJunction, addNode, autoLayout, flipJunction, isJunctionId, moveJunction, removeJunctions, setEdgePorts, setEdgeRoute, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
 import { ListView } from "../ListView";
 import { NodePanel } from "../NodePanel";
 import { PaneResizer } from "../PaneResizer";
@@ -15,7 +15,7 @@ import { ScriptEditorDialog } from "../ScriptEditorDialog";
 import type { Integration } from "../../api";
 import { useWsQuery } from "../../lib";
 import type { Graph, GraphNode, Note } from "../types";
-import { HelpTip } from "../../components/HelpTip";
+import { NoteConfig } from "../NoteConfig";
 import { Menu } from "../../components/Menu";
 import { Overlay } from "../../components/Overlay";
 import { StepFinder } from "../StepFinder";
@@ -98,7 +98,9 @@ export function SchemaTab() {
   };
   const del = (ids: string[]) => {
     const noteIds = new Set(ids.filter((i) => i.startsWith("note_")));
-    let g = ids.filter((i) => !noteIds.has(i)).reduce((acc, id) => removeNode(acc, id), graph);
+    const junctionIds = ids.filter(isJunctionId); // un point de jonction supprimé : ses liens reprennent le tracé automatique
+    let g = ids.filter((i) => !noteIds.has(i) && !isJunctionId(i)).reduce((acc, id) => removeNode(acc, id), graph);
+    if (junctionIds.length) g = removeJunctions(g, junctionIds);
     if (noteIds.size) g = { ...g, notes: (g.notes ?? []).filter((n) => !noteIds.has(n.id)) };
     setGraph(g);
     setSelectedId(null);
@@ -111,7 +113,7 @@ export function SchemaTab() {
     }
     const notes = new Map(moves.filter((m) => m.id.startsWith("note_")).map((m) => [m.id, m]));
     for (const m of moves) if (!m.id.startsWith("note_") && !m.id.startsWith("__")) g = moveNode(g, m.id, m.x, m.y);
-    if (notes.size) g = { ...g, notes: (g.notes ?? []).map((n) => (notes.has(n.id) ? { ...n, ui: { x: (notes.get(n.id) as { x: number }).x, y: (notes.get(n.id) as { y: number }).y } } : n)) };
+    if (notes.size) g = { ...g, notes: (g.notes ?? []).map((n) => (notes.has(n.id) ? { ...n, ui: { ...n.ui, x: (notes.get(n.id) as { x: number }).x, y: (notes.get(n.id) as { y: number }).y } } : n)) };
     setGraph(g);
   };
   const scriptNode = graph.nodes.find((n) => n.id === scriptOpen) ?? null;
@@ -162,8 +164,24 @@ export function SchemaTab() {
                 else if (n?.type === "subworkflow" && n.workflow) setPreviewSlug(n.workflow);
               }}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
-              onRouteEdge={(f, t, points) => editable && setGraph(setEdgePoints(graph, f, t, points))}
-              onConnect={(f, t) => editable && setGraph(connect(graph, f, t, (() => { const src = graph.nodes.find((n) => n.id === f); return src ? defaultLabel(graph, src) : "next"; })()))}
+              onRouteEdge={(f, t, route) => editable && setGraph(setEdgeRoute(graph, f, t, route))}
+              onJunctionMove={(id, x, y) => editable && setGraph(moveJunction(graph, id, x, y))}
+              onJunctionCreate={(spec) => editable && setGraph(addJunction(graph, spec))}
+              onJunctionFlip={(id) => editable && setGraph(flipJunction(graph, id))}
+              onNoteResize={(nid, r) => editable && setGraph({ ...graph, notes: (graph.notes ?? []).map((n) => (n.id === nid ? { ...n, ui: { x: r.x, y: r.y, w: r.w, h: r.h } } : n)) })}
+              onConnect={(f, t, sf, tf) => {
+                if (!editable) return;
+                const src = graph.nodes.find((n) => n.id === f);
+                const linked = connect(graph, f, t, src ? defaultLabel(graph, src) : "next");
+                setGraph(sf && tf ? setEdgePorts(linked, f, t, sf, tf) : linked); // les faces choisies en glissant sont gardées ; sinon elles suivent les étapes
+              }}
+              onReconnectEdge={(old, next) => {
+                if (!editable) return;
+                if (old.from === next.from && old.to === next.to) { setGraph(setEdgePorts(graph, old.from, old.to, next.sf ?? null, next.tf ?? null)); return; }
+                const label = graph.edges.find((e) => e.from === old.from && e.to === old.to)?.label ?? "next";
+                const moved = connect(disconnect(graph, old.from, old.to), next.from, next.to, label);
+                setGraph(next.sf && next.tf ? setEdgePorts(moved, next.from, next.to, next.sf, next.tf) : moved);
+              }}
               onDeleteNodes={(ids) => editable && del(ids)} onDeleteEdges={(es) => editable && setGraph(es.reduce((g, e) => disconnect(g, e.from, e.to), graph))}
               onDropItem={(item, pos) => add(item, pos)} />
           ) : (
@@ -193,15 +211,7 @@ export function SchemaTab() {
         )}
         {selectedNote && layout.panOpen && (
           <aside className="schema-panel" aria-label="Propriétés de la note">
-            <section aria-label="Note" className="node-panel">
-              <h2 className="np-title">Note</h2>
-              <fieldset disabled={!editable} className="bare">
-                <div className="field">
-<HelpTip>Les notes sont des annotations visuelles : elles ne sont jamais exécutées.</HelpTip><label htmlFor="note-text">Texte de la note</label><textarea id="note-text" rows={4} value={selectedNote.text} onChange={(e) => setGraph({ ...graph, notes: (graph.notes ?? []).map((n) => (n.id === selectedNote.id ? { ...n, text: e.target.value } : n)) })} /></div>
-                <button type="button" className="danger" onClick={() => del([selectedNote.id])}>Supprimer la note</button>
-              </fieldset>
-              <button type="button" onClick={() => setSelectedId(null)}>Fermer</button>
-            </section>
+            <NoteConfig note={selectedNote} editable={editable} onChange={(patch) => setGraph({ ...graph, notes: (graph.notes ?? []).map((n) => (n.id === selectedNote.id ? { ...n, ...patch } : n)) })} onDelete={() => del([selectedNote.id])} onClose={() => setSelectedId(null)} />
           </aside>
         )}
         {showChat && (<><div aria-hidden="true" /><AiChat initialMessage={assist || undefined} onClose={() => { setChatOpen(false); if (assist) setSearchParams({}, { replace: true }); }} /></>)}

@@ -1,3 +1,6 @@
+import io
+import zipfile
+
 from django.http import Http404, HttpResponse
 from rest_framework import serializers
 from rest_framework.generics import ListAPIView, RetrieveAPIView
@@ -160,6 +163,32 @@ class RunFileDownloadView(APIView):
         access.require_run(request.user, ws, f.run)
         resp = HttpResponse(bytes(f.data), content_type="application/octet-stream")
         resp["Content-Disposition"] = f'attachment; filename="{f.name}"'
+        resp["X-Content-Type-Options"] = "nosniff"
+        resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        return resp
+
+
+class RunFilesArchiveView(APIView):
+    """All the files of a run in one ZIP (stored, not compressed: cheap for the web process; 50 MB at most, like the run itself)."""
+
+    def get(self, request, workspace, pk):
+        ws = get_workspace(request.user, workspace, VIEW)
+        run = access.run_or_404(request.user, ws, WorkflowRun.objects.filter(workspace=ws, pk=pk))
+        rows = list(RunFile.objects.filter(workspace=ws, run_id=pk))
+        if not rows:
+            raise Http404()
+        buf, seen = io.BytesIO(), set()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+            for f in rows:
+                name, n = f.name, 1
+                while name in seen:
+                    n += 1
+                    stem, dot, ext = f.name.rpartition(".")
+                    name = f"{stem}-{n}.{ext}" if dot else f"{f.name}-{n}"
+                seen.add(name)
+                z.writestr(name, bytes(f.data))
+        resp = HttpResponse(buf.getvalue(), content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="fichiers-{str(run.pk)[:8]}.zip"'
         resp["X-Content-Type-Options"] = "nosniff"
         resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return resp

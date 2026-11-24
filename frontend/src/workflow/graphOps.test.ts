@@ -6,7 +6,7 @@ function must<T>(v: T | null | undefined): T {
   return v;
 }
 import type { Action } from "../api";
-import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, setEdgePoints, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, addJunction, flipJunction, isJunctionId, moveJunction, nextJunctionId, removeJunctions, setEdgePorts, setEdgeRoute, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -80,27 +80,42 @@ describe("graph operations", () => {
     expect(g.nodes.map((n) => n.ui?.y)).toEqual([0, 0, 0]);
   });
 
-  it("remembers the hand-placed endpoints and the points of a line, and a fresh layout forgets them", () => {
+  it("remembers the hand-placed endpoints and the route of a line, and a fresh layout forgets them", () => {
     let g = chain();
     const e = g.edges[0] as { from: string; to: string };
-    g = setEdgePoints(moveEndpoint(moveEndpoint(g, "start", -50.4, 12), "end", 900, 3), e.from, e.to, [{ x: 100.4, y: 80.6 }, { x: 150, y: -40 }]);
+    g = setEdgeRoute(moveEndpoint(moveEndpoint(g, "start", -50.4, 12), "end", 900, 3), e.from, e.to, [100.4, 80.6, 150]);
     expect(g.layout).toEqual({ start: { x: -50, y: 12 }, end: { x: 900, y: 3 } });
-    expect(g.edges[0]?.ui).toEqual({ points: [{ x: 100, y: 81 }, { x: 150, y: -40 }] });
-    expect(relabel(g, e.from, e.to, "error").edges[0]).toEqual({ from: e.from, to: e.to, label: "error", ui: { points: [{ x: 100, y: 81 }, { x: 150, y: -40 }] } });
+    expect(g.edges[0]?.ui).toEqual({ route: [100, 81, 150] });
+    expect(relabel(g, e.from, e.to, "error").edges[0]).toEqual({ from: e.from, to: e.to, label: "error", ui: { route: [100, 81, 150] } });
     expect(g.edges.slice(1).every((x) => x.ui === undefined)).toBe(true); // only the chosen line changes
-    expect(setEdgePoints(g, e.from, e.to, null).edges[0]?.ui).toBeUndefined();
-    expect(setEdgePoints(g, e.from, e.to, []).edges[0]?.ui).toBeUndefined();
+    expect(setEdgeRoute(g, e.from, e.to, null).edges[0]?.ui).toBeUndefined();
+    expect(setEdgeRoute(g, e.from, e.to, [Number.NaN]).edges[0]?.ui).toBeUndefined(); // valeur invalide
+    expect(setEdgeRoute(g, e.from, e.to, []).edges[0]?.ui).toEqual({ route: [] }); // un coude : aucune coordonnée intérieure, mais un tracé réglé
     const fresh = autoLayout(g);
     expect(fresh.layout).toBeUndefined();
     expect(fresh.edges.every((x) => x.ui === undefined)).toBe(true);
   });
 
-  it("replaces the older horizontal setting (cx) once points are placed, and keeps it until then", () => {
+  it("pins the faces of a line, keeps them when the route changes, drops the hand-made route when they change, and unpins", () => {
     const g = chain();
     const e = g.edges[0] as { from: string; to: string };
-    const old = { ...g, edges: g.edges.map((x, i) => (i === 0 ? { ...x, ui: { cx: 120 } } : x)) };
-    expect(relabel(old, e.from, e.to, "error").edges[0]?.ui).toEqual({ cx: 120 });
-    expect(setEdgePoints(old, e.from, e.to, [{ x: 10, y: 10 }]).edges[0]?.ui).toEqual({ points: [{ x: 10, y: 10 }] });
+    let next = setEdgeRoute(setEdgePorts(g, e.from, e.to, "b", "t"), e.from, e.to, [140]);
+    expect(next.edges[0]?.ui).toEqual({ route: [140], sf: "b", tf: "t" });
+    expect(setEdgeRoute(next, e.from, e.to, null).edges[0]?.ui).toEqual({ sf: "b", tf: "t" }); // le tracé automatique garde les faces choisies
+    next = setEdgePorts(next, e.from, e.to, "l", "r");
+    expect(next.edges[0]?.ui).toEqual({ sf: "l", tf: "r" });
+    expect(setEdgePorts(next, e.from, e.to, null, null).edges[0]?.ui).toBeUndefined();
+    expect(setEdgePorts(next, e.from, e.to, "l", null).edges[0]?.ui).toBeUndefined(); // les deux faces ou aucune
+    expect(next.edges.slice(1).every((x) => x.ui === undefined)).toBe(true);
+    expect(autoLayout(next).edges.every((x) => x.ui === undefined)).toBe(true);
+  });
+
+  it("drops the older settings (cx, free-form points) as soon as a route is set, and keeps them untouched until then", () => {
+    const g = chain();
+    const e = g.edges[0] as { from: string; to: string };
+    const old = { ...g, edges: g.edges.map((x, i) => (i === 0 ? { ...x, ui: { cx: 120, points: [{ x: 5, y: 5 }] } } : x)) };
+    expect(relabel(old, e.from, e.to, "error").edges[0]?.ui).toEqual({ cx: 120, points: [{ x: 5, y: 5 }] });
+    expect(setEdgeRoute(old, e.from, e.to, [300]).edges[0]?.ui).toEqual({ route: [300] });
   });
 
   it("checks type compatibility (integer fits number)", () => {
@@ -382,5 +397,37 @@ describe("suppression d'un élément dans une ligne", () => {
     g = { ...g, nodes: [...g.nodes, { ...defaultNode(g, "wait"), id: "autre" }] };
     g = connect(g, "echo_2", "autre");
     expect(pairs(removeNode(g, "echo_2"))).toEqual([]);
+  });
+
+  it("junction points: added, moved, replaced for the same connection point, removed, and forgotten by a fresh layout or by removing their step", () => {
+    const g = chain();
+    const a = g.nodes[0]?.id as string;
+    let next = addJunction(g, { node: a, role: "out", face: "r", x: 120.4, y: 60.6 });
+    expect(next.junctions).toEqual([{ id: "junction_1", node: a, role: "out", face: "r", x: 120, y: 61 }]);
+    next = moveJunction(next, "junction_1", 200.2, 80.7);
+    expect(next.junctions?.[0]).toMatchObject({ x: 200, y: 81 });
+    next = addJunction(next, { node: a, role: "out", face: "r", x: 10, y: 10 }); // même point de connexion : remplacé, pas doublé
+    expect(next.junctions).toHaveLength(1);
+    next = addJunction(next, { node: a, role: "in", face: "l", x: 0, y: 0 });
+    expect(next.junctions?.map((j) => j.id)).toEqual(["junction_1", "junction_2"]);
+    expect(nextJunctionId(next)).toBe("junction_3");
+    expect(removeJunctions(next, ["junction_1"]).junctions?.map((j) => j.id)).toEqual(["junction_2"]);
+    expect(removeJunctions(removeJunctions(next, ["junction_1"]), ["junction_2"]).junctions).toBeUndefined(); // plus aucun : la clé disparaît
+    expect(autoLayout(next).junctions).toBeUndefined();
+    expect(removeNode(next, a).junctions).toBeUndefined(); // les points de jonction d'une étape supprimée partent avec elle
+    expect(isJunctionId("junction_4") && isJunctionId("__auto:o:a:r") && !isJunctionId("note_1") && !isJunctionId("a")).toBe(true);
+  });
+
+  it("flips a junction point and flips it back, keeping everything else", () => {
+    const g = chain();
+    const a = g.nodes[0]?.id as string;
+    let next = addJunction(g, { node: a, role: "out", face: "r", x: 100, y: 50 });
+    expect(next.junctions?.[0]?.flip).toBeUndefined();
+    next = flipJunction(next, "junction_1");
+    expect(next.junctions?.[0]).toEqual({ id: "junction_1", node: a, role: "out", face: "r", x: 100, y: 50, flip: true });
+    next = flipJunction(next, "junction_1");
+    expect(next.junctions?.[0]).toEqual({ id: "junction_1", node: a, role: "out", face: "r", x: 100, y: 50 }); // revenu au départ : la clé disparaît
+    expect(flipJunction(next, "inconnu")).toEqual(next);
+    expect(addJunction(g, { node: a, role: "in", face: "l", x: 0, y: 0, flip: true }).junctions?.[0]?.flip).toBe(true); // un point automatique inversé est posé déjà inversé
   });
 });

@@ -1,8 +1,9 @@
 import type { Action, JsonSchema } from "../api";
-import type { EdgeLabel, Graph, GraphEdge, GraphNode, Issue, NodeType } from "./types";
+import type { EdgeLabel, Graph, GraphEdge, GraphNode, Issue, Junction, NodeType } from "./types";
 import { NODE_LABELS } from "./types";
-import { cleanPoints, type Pt } from "./edgeRoute";
+import { cleanRoute, type Face } from "./edgeRoute";
 import staticOutputs from "./staticOutputs.json";
+import { tomorrowAt8 } from "./scheduleTime";
 
 export const emptyGraph = (): Graph => ({ inputs: { type: "object", properties: {}, required: [] }, variables: [], form: null, notes: [], nodes: [], edges: [], outputs: {} });
 
@@ -32,7 +33,10 @@ export function defaultNode(graph: Graph, type: NodeType, action?: Action): Grap
   if (type === "switch") node.cases = [{ id: "cas_1", expr: "" }, { id: "cas_2", expr: "" }];
   if (type === "wait") node.seconds = 60;
   if (type === "transform") Object.assign(node, { op: "filter", items: "", where: "" });
+  if (type === "model") Object.assign(node, { title: "", markdown: "# Titre du document\n\nBonjour **{{ inputs.nom }}**,\n\n- premier point\n- second point\n" });
+  if (type === "file") Object.assign(node, { format: "pdf", filename: "rapport", title: "Rapport", content: "" });
   if (type === "cache") Object.assign(node, { operation: "read", key: "", on_missing: "empty" });
+  if (type === "schedule") Object.assign(node, { workflow: "", when: "at", at: tomorrowAt8(), timezone: "Europe/Paris", on_past: "fail", inputs: {} });
   if (type === "agent") Object.assign(node, { goal: "", tools: [], provider: "", mode: "test", approval: "effectful", max_steps: 5 });
   if (type === "smtp") Object.assign(node, { connection: "", mode: "test", to: "", cc: "", subject: "", body: "" });
   if (type === "sftp") Object.assign(node, { connection: "", mode: "test", operation: "list", path: "/" });
@@ -130,18 +134,74 @@ export function relabel(graph: Graph, from: string, to: string, label: EdgeLabel
   };
 }
 
-/** Sets the points a line goes through (free routing), or restores the automatic routing (null or no point). The older `cx` is dropped. */
-export function setEdgePoints(graph: Graph, from: string, to: string, points: Pt[] | null): Graph {
-  const kept = points ? cleanPoints(points) : [];
+/** Règle le tracé orthogonal d'un lien (ses coordonnées : voir `edgeRoute.ts`), ou le remet en automatique (null, ou rien de valide). Les anciens
+ *  réglages (`cx`, tracé libre) disparaissent ; les faces choisies pour le lien sont gardées. */
+export function setEdgeRoute(graph: Graph, from: string, to: string, route: number[] | null): Graph {
+  const kept = route ? cleanRoute(route) : undefined;
+  return {
+    ...graph,
+    edges: graph.edges.map((e) => {
+      if (e.from !== from || e.to !== to) return e;
+      const { ui, ...rest } = e;
+      const next = { ...(kept ? { route: kept } : {}), ...(ui?.sf && ui.tf ? { sf: ui.sf, tf: ui.tf } : {}) };
+      return Object.keys(next).length ? { ...rest, ui: next } : rest;
+    }),
+  };
+}
+
+/** Fixe la face de départ et d'arrivée d'un lien (haut, droite, bas, gauche), ou les remet en choix automatique (null). Le tracé réglé à la main
+ *  est abandonné : il ne correspond plus aux nouvelles faces. */
+export function setEdgePorts(graph: Graph, from: string, to: string, sf: Face | null, tf: Face | null): Graph {
   return {
     ...graph,
     edges: graph.edges.map((e) => {
       if (e.from !== from || e.to !== to) return e;
       const { ui: _ui, ...rest } = e;
       void _ui;
-      return kept.length === 0 ? rest : { ...rest, ui: { points: kept } };
+      return sf && tf ? { ...rest, ui: { sf, tf } } : rest;
     }),
   };
+}
+
+/** Les points de jonction d'un schéma : posés à la main (déplacés), ils vivent dans `junctions` ; `x` et `y` sont leur centre. */
+export const isJunctionId = (id: string): boolean => id.startsWith("junction_") || id.startsWith("__auto:");
+
+export function nextJunctionId(graph: Graph): string {
+  const used = new Set((graph.junctions ?? []).map((j) => j.id));
+  let i = 1;
+  while (used.has(`junction_${i}`)) i++;
+  return `junction_${i}`;
+}
+
+/** Pose un point de jonction (le premier déplacement d'un point automatique) ; un seul par point de connexion : un autre pour le même est remplacé. */
+export function addJunction(graph: Graph, spec: Omit<Junction, "id">): Graph {
+  const others = (graph.junctions ?? []).filter((j) => !(j.node === spec.node && j.role === spec.role && j.face === spec.face));
+  return { ...graph, junctions: [...others, { ...spec, id: nextJunctionId({ ...graph, junctions: others }), x: Math.round(spec.x), y: Math.round(spec.y) }] };
+}
+
+export function moveJunction(graph: Graph, id: string, x: number, y: number): Graph {
+  return { ...graph, junctions: (graph.junctions ?? []).map((j) => (j.id === id ? { ...j, x: Math.round(x), y: Math.round(y) } : j)) };
+}
+
+/** Inverse un point de jonction (double-clic) : l'entrée verte passe de gauche à droite et les sorties rouges de droite à gauche, et inversement. */
+export function flipJunction(graph: Graph, id: string): Graph {
+  return {
+    ...graph,
+    junctions: (graph.junctions ?? []).map((j) => {
+      if (j.id !== id) return j;
+      const { flip, ...rest } = j;
+      return flip ? rest : { ...rest, flip: true };
+    }),
+  };
+}
+
+/** Retire des points de jonction : leurs liens reprennent le tracé automatique. */
+export function removeJunctions(graph: Graph, ids: string[]): Graph {
+  const drop = new Set(ids);
+  const kept = (graph.junctions ?? []).filter((j) => !drop.has(j.id));
+  const { junctions: _j, ...rest } = graph;
+  void _j;
+  return kept.length ? { ...rest, junctions: kept } : rest;
 }
 
 /** Remembers where the person put the virtual « Début » or « Fin » node. */
@@ -156,6 +216,7 @@ export function removeNode(graph: Graph, id: string): Graph {
   const incoming = graph.edges.filter((e) => e.to === id && e.from !== id);
   const outgoing = graph.edges.filter((e) => e.from === id && e.to !== id);
   let next: Graph = { ...graph, nodes: graph.nodes.filter((n) => n.id !== id), edges: graph.edges.filter((e) => e.from !== id && e.to !== id) };
+  if (graph.junctions?.some((j) => j.node === id)) next = removeJunctions(next, graph.junctions.filter((j) => j.node === id).map((j) => j.id));
   const target = outgoing.length === 1 ? outgoing[0] : undefined;
   if (target) for (const e of incoming) next = connect(next, e.from, target.to, e.label ?? "next");
   return next;
@@ -280,8 +341,9 @@ export function layeredPositions(graph: Graph, bandLayers = BAND_LAYERS): Map<st
 /** « Organiser automatiquement »: a fresh layout (forgets the hand-placed endpoints and bent lines). */
 export function autoLayout(graph: Graph): Graph {
   const pos = layeredPositions(graph);
-  const { layout: _layout, ...rest } = graph;
+  const { layout: _layout, junctions: _junctions, ...rest } = graph;
   void _layout;
+  void _junctions; // les points de jonction posés à la main reviennent à leur place automatique
   return {
     ...rest,
     edges: graph.edges.map(({ ui: _ui, ...e }) => { void _ui; return e; }),
@@ -299,6 +361,9 @@ const OUTPUT_LABELS: Record<string, Record<string, string>> = {
   foreach: { results: "résultats", count: "nombre d'éléments" },
   race: { winner: "branche gagnante (identifiant)", winner_name: "branche gagnante (nom)", value: "valeur de la branche gagnante" },
   wait_resume: { resumed: "reprise effectuée", payload: "données reçues à la reprise" },
+  schedule: { id: "identifiant du lancement programmé", workflow: "workflow programmé", version: "version", run_at: "date de lancement (UTC)", run_at_local: "date de lancement (fuseau du nœud)", immediate: "lancé tout de suite (date déjà passée)" },
+  model: { title: "titre", markdown: "texte Markdown rempli", html: "HTML du modèle", text: "texte brut", images: "images utilisées (identifiants)" },
+  file: { file: "fichier (référence)", name: "nom du fichier", size: "taille (octets)" },
   cache: { found: "valeur trouvée", value: "valeur", version: "version", age_seconds: "âge (secondes)", key: "clé", rebuilt: "reconstruit par le workflow producteur", written: "écrit", size_bytes: "taille (octets)", expires_at: "expire le", deleted: "supprimé" },
   smtp: { sent: "envoyé", simulated: "simulé (mode test)", recipients: "nombre de destinataires", message_id: "identifiant du message" },
   sftp: { operation: "opération", path: "chemin", content: "contenu", file: "fichier", entries: "fichiers", count: "nombre", simulated: "simulé (mode test)" },
@@ -410,7 +475,7 @@ export function clientValidate(graph: Graph, actions: Action[]): Issue[] {
     }
     if (n.type === "agent" && (!(n.goal ?? "").trim() || (n.tools ?? []).length === 0)) issues.push({ node: n.id, level: "error", code: "bad_agent", message: "Décrivez l'objectif de l'agent et choisissez au moins un outil." });
     if (n.type === "smtp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SMTP »)." });
-    if (n.type === "smtp" && (!(n.to ?? "").trim() || !(n.subject ?? "").trim() || !String(n.body ?? "").trim())) issues.push({ node: n.id, level: "error", code: "bad_smtp", message: "Indiquez le destinataire, l'objet et le corps du message." });
+    if (n.type === "smtp" && (!(n.to ?? "").trim() || !(n.subject ?? "").trim() || !(String(n.body ?? "").trim() || (n.body_model ?? "").trim()))) issues.push({ node: n.id, level: "error", code: "bad_smtp", message: "Indiquez le destinataire, l'objet et le corps du message (ou un modèle de document)." });
     if (n.type === "sftp" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion (type « Serveur SFTP »)." });
     if (n.type === "ssh" && !n.connection) issues.push({ node: n.id, level: "error", code: "missing_connection", message: "Choisissez la connexion cible (type « Serveur SSH »)." });
     if (n.type === "ssh" && (n.session ?? "exec") === "exec" && typeof n.commands !== "string" && !(Array.isArray(n.commands) ? n.commands : []).some((c) => (typeof c === "string" ? c : (c?.run ?? "")).trim())) issues.push({ node: n.id, level: "error", code: "bad_ssh", message: "Indiquez au moins une commande." });
@@ -456,8 +521,14 @@ export function summarize(n: GraphNode, actions: Action[]): string {
     case "sql": return `${n.mode === "reel" ? "" : "[test] "}${(n.statement ?? "").replace(/\s+/g, " ").slice(0, 50) || "requête à saisir"}`;
     case "http": if (n.integration) return `${n.mode === "reel" ? "" : "[test] "}${n.integration} · ${n.operation ?? "?"}`; return `${n.mode === "reel" ? "" : "[test] "}${n.method ?? "GET"} ${n.connection || "?"}${n.path ?? ""}`.slice(0, 70);
     case "transform": return `${({ filter: "Filtrer", map: "Transformer", sort: "Trier", group: "Regrouper", unique: "Dédoublonner", merge: "Fusionner", limit: "Limiter", set: "Définir", split: "Scinder", chunk: "Lots" } as Record<string, string>)[n.op ?? ""] ?? "Transformer"} ${n.items ?? ""}`.trim().slice(0, 70);
+    case "model": return `Modèle · ${(n.title || (n.markdown ?? "").split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "") || "vide").slice(0, 60)}`;
+    case "file": return `Fichier ${(n.format ?? "text").toUpperCase()} · ${n.filename ?? "?"}`;
     case "cache": return `Cache · ${({ read: "lire", write: "écrire", delete: "supprimer" } as Record<string, string>)[n.operation ?? "read"] ?? "lire"} ${n.key ?? ""}`.trim().slice(0, 70);
-    case "wait": return n.resume === "webhook" ? `Attendre un appel HTTP (max ${n.seconds ?? "?"} s)` : `Attendre ${n.seconds ?? "?"} s`;
+    case "schedule": return n.when === "in" ? `Programmer ${n.workflow ?? "?"} dans ${n.delay_seconds ?? "?"} s` : `Programmer ${n.workflow ?? "?"} le ${(n.at ?? "?").replace("T", " à ").slice(0, 40)}`;
+    case "wait": {
+      const lim = n.until !== undefined ? `jusqu'au ${n.until.replace("T", " à ").slice(0, 40)}` : `${n.seconds ?? "?"} s`;
+      return n.resume === "webhook" ? `Attendre un appel HTTP (max ${lim})` : n.until !== undefined ? `Pause ${lim}` : `Attendre ${lim}`;
+    }
     case "approval": return n.title ? `Demander : ${n.title}` : "Approbation à définir";
     case "foreach": return `Pour chaque élément (max ${n.max_iterations ?? "?"})`;
     case "ai": return n.skill ? `Skill IA : ${n.skill} (${n.provider || "fournisseur par défaut"})` : n.prompt ? `IA (${n.provider || "fournisseur ?"}) : ${n.prompt.slice(0, 40)}` : "Étape IA à définir";

@@ -9,13 +9,14 @@ import itertools
 import keyword
 import re
 from collections import defaultdict, deque
+from datetime import UTC, datetime
 
 import jsonschema
 
 from catalog.models import Action
 from vault.models import Connection
 
-from . import cache_spec, debug, transforms
+from . import cache_spec, debug, file_spec, model_md, model_spec, schedule_spec, transforms
 from .expressions import WHOLE_RE, ExpressionError, coerce_structured, parse, paths_in, template_expressions
 
 MAX_NODES = 200
@@ -94,10 +95,16 @@ NODE_TYPES = {
     "ssh",
     "transform",
     "cache",
+    "schedule",
+    "file",
+    "model",
 }
 HTTP_CONNECTION_KINDS = ("http_bearer", "api_key", "basic", "oauth2_client", "oauth2_code", "aws_sigv4")
 HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 STATIC_OUTPUTS = {
+    "schedule": schedule_spec.STATIC_OUTPUTS,
+    "file": file_spec.STATIC_OUTPUTS,
+    "model": model_spec.STATIC_OUTPUTS,
     "cache": {k: v for fields in cache_spec.STATIC_OUTPUTS.values() for k, v in fields.items()},
     "condition": {"result": {"type": "boolean"}},
     "switch": {"result": {"type": "string"}},
@@ -178,6 +185,9 @@ STATIC_OUTPUTS = {
 WEBHOOK_WAIT_OUTPUTS = {"resumed": {"type": "boolean"}, "payload": {"type": "object"}}
 ERROR_CAPABLE = {
     "cache",
+    "schedule",
+    "file",
+    "model",
     "action",
     "subworkflow",
     "foreach",
@@ -554,10 +564,32 @@ def _cfg_switch(s: _Scan, n: dict) -> None:
     s.out_types[n["id"]] = STATIC_OUTPUTS["switch"]
 
 
+def _validate_wait_until(n: dict, issues: list) -> None:
+    """Attente jusqu'à une date : `until` (date et heure ou expression), `timezone`, `on_past`."""
+    nid, until = n["id"], n.get("until")
+    tz = n.get("timezone") or schedule_spec.DEFAULT_TIMEZONE
+    try:
+        schedule_spec.zone(tz)
+    except schedule_spec.WhenError as exc:
+        issues.append(issue(nid, "bad_wait", str(exc)))
+    if not isinstance(until, str) or not until.strip():
+        issues.append(issue(nid, "bad_wait", "Indiquez la date et l'heure de reprise (ex. 2026-12-01T08:30)."))
+    elif "{{" not in until:
+        try:
+            schedule_spec.parse_when(until, tz)
+        except schedule_spec.WhenError as exc:
+            issues.append(issue(nid, "bad_wait", str(exc)))
+    if n.get("on_past", "fail") not in schedule_spec.ON_PAST:
+        issues.append(issue(nid, "bad_wait", "Si la date est passée : « fail » (échouer) ou « now » (continuer)."))
+
+
 def _cfg_wait(s: _Scan, n: dict) -> None:
     nid = n["id"]
     seconds = n.get("seconds")
-    if not isinstance(seconds, int) or not 1 <= seconds <= 30 * 86400:
+    if n.get("until") is not None:
+        _validate_wait_until(n, s.issues)
+        s.check(nid, _node_expressions(n))
+    elif not isinstance(seconds, int) or not 1 <= seconds <= 30 * 86400:
         s.issues.append(issue(nid, "bad_wait", "Délai d'attente : entre 1 seconde et 30 jours."))
     if n.get("resume") not in (None, "timer", "webhook", "form"):
         s.issues.append(
@@ -667,7 +699,7 @@ def _scan_steps(s: _Scan, nodes: list, incoming: dict, outgoing: dict) -> None:
         check = _NODE_CHECKS.get(ntype)
         if check:
             check(s, n)
-        if ntype in ("action", "subworkflow", "foreach"):  # template references in the inputs
+        if ntype in ("action", "subworkflow", "foreach", "schedule"):  # template references in the inputs
             s.check(nid, template_expressions(n.get("inputs", {})))
 
 
@@ -809,9 +841,18 @@ def _validate_http(n: dict, workspace, issues: list) -> None:
 
 def _validate_smtp(n: dict, workspace, issues: list) -> None:
     nid = n["id"]
-    for field, label in (("to", "un destinataire"), ("subject", "l'objet"), ("body", "le corps du message")):
+    fields = (
+        ("to", "un destinataire"),
+        ("subject", "l'objet"),
+        ("body", "le corps du message (ou un modèle de document)"),
+    )
+    for field, label in fields:
+        if field == "body" and str(n.get("body_model") or "").strip():
+            continue  # le corps vient d'un modèle de document
         if not str(n.get(field) or "").strip():
             issues.append(issue(nid, "bad_smtp", f"Indiquez {label}."))
+    if n.get("body_model") is not None and "{{" not in str(n.get("body_model")):
+        issues.append(issue(nid, "bad_smtp", "Modèle de document : une expression, ex. {{ steps.modele.output }}."))
     cname = n.get("connection")
     if not isinstance(cname, str) or not cname:
         issues.append(issue(nid, "missing_connection", "Choisissez la connexion (type « Serveur SMTP »)."))
@@ -1020,6 +1061,139 @@ def _validate_cache(n: dict, issues: list) -> None:
     _validate_cache_options(n, issues)
 
 
+def _validate_schedule(n: dict, issues: list) -> None:
+    nid = n["id"]
+    mode = n.get("when", "at")
+    if mode not in schedule_spec.MODES:
+        issues.append(
+            issue(nid, "bad_schedule", "Quand : « at » (à une date et une heure) ou « in » (après un délai).")
+        )
+        return
+    tz = n.get("timezone") or schedule_spec.DEFAULT_TIMEZONE
+    try:
+        schedule_spec.zone(tz)
+    except schedule_spec.WhenError as exc:
+        issues.append(issue(nid, "bad_schedule", str(exc)))
+    if mode == "in":
+        try:
+            schedule_spec.in_delay(datetime.now(UTC), n.get("delay_seconds"))
+        except schedule_spec.WhenError as exc:
+            issues.append(issue(nid, "bad_schedule", str(exc)))
+    else:
+        at = n.get("at")
+        if not isinstance(at, str) or not at.strip():
+            issues.append(
+                issue(nid, "bad_schedule", "Indiquez la date et l'heure du lancement (ex. 2026-12-01T08:30).")
+            )
+        elif "{{" not in at:
+            try:
+                schedule_spec.parse_when(at, tz)
+            except schedule_spec.WhenError as exc:
+                issues.append(issue(nid, "bad_schedule", str(exc)))
+    if n.get("on_past", "fail") not in schedule_spec.ON_PAST:
+        issues.append(
+            issue(nid, "bad_schedule", "Si la date est passée : « fail » (échouer) ou « now » (lancer tout de suite).")
+        )
+
+
+def _cfg_schedule(s: _Scan, n: dict) -> None:
+    _validate_subworkflow(n, s.workspace, s.slug, s.issues, s.out_types, s.declared_inputs)
+    _validate_schedule(n, s.issues)
+    s.out_types[n["id"]] = schedule_spec.STATIC_OUTPUTS
+
+
+def _file_name_issue(n: dict) -> str | None:
+    name = n.get("filename")
+    if not isinstance(name, str) or not name.strip():
+        return "Indiquez le nom du fichier (ex. rapport ou rapport.pdf)."
+    if "{{" not in name and not file_spec.NAME_RE.match(name.strip()):
+        return "Nom de fichier invalide : ni dossier, ni caractère de contrôle, 100 caractères au plus."
+    return None
+
+
+def _file_table_issue(n: dict) -> str | None:
+    rows, cols = n.get("rows"), n.get("columns")
+    if not isinstance(rows, str) or "{{" not in rows:
+        return "Lignes du tableau : une expression qui donne une liste d'objets, ex. {{ steps.lire.output.rows }}."
+    if cols is not None and not (isinstance(cols, list) and cols and all(isinstance(c, str) and c for c in cols)):
+        return "Colonnes : une liste de noms, ou rien pour prendre toutes les colonnes."
+    return None
+
+
+def _file_zip_issue(n: dict) -> str | None:
+    refs = n.get("sources")
+    if (
+        isinstance(refs, list)
+        and refs
+        and len(refs) <= file_spec.MAX_ZIP_FILES
+        and all(isinstance(r, str) and r.strip() for r in refs)
+    ):
+        return None
+    return f"Archive : de 1 à {file_spec.MAX_ZIP_FILES} fichiers, chacun donné par une expression (ex. {{{{ steps.pdf.output.file }}}})."
+
+
+def _validate_file(n: dict, issues: list) -> None:
+    nid, kind = n["id"], n.get("format")
+    if kind not in file_spec.OPS:
+        issues.append(
+            issue(
+                nid,
+                "bad_file",
+                "Format du fichier : texte, CSV, tableur (xlsx), PDF, Word (docx), PowerPoint (pptx) ou archive ZIP.",
+            )
+        )
+        return
+    found = [_file_name_issue(n)]
+    has_model = isinstance(n.get("model"), str) and "{{" in n["model"]
+    if n.get("model") is not None and not has_model:
+        found.append("Modèle de document : une expression, ex. {{ steps.modele.output }}.")
+    if kind in file_spec.TEXT_FORMATS and not has_model and not isinstance(n.get("content"), str):
+        found.append("Indiquez le contenu du fichier (texte, expressions permises) ou un modèle de document.")
+    if kind in file_spec.TABLE_FORMATS:
+        found.append(_file_table_issue(n))
+    if kind == "zip":
+        found.append(_file_zip_issue(n))
+    issues += [issue(nid, "bad_file", m) for m in found if m]
+
+
+def _validate_model(n: dict, workspace, issues: list) -> None:
+    nid, source, title = n["id"], n.get("markdown"), n.get("title")
+    if not isinstance(source, str) or not source.strip():
+        issues.append(issue(nid, "bad_model", "Écrivez le modèle (texte au format Markdown)."))
+        return
+    if len(source) > model_md.MAX_MARKDOWN:
+        issues.append(issue(nid, "bad_model", f"Le modèle dépasse {model_md.MAX_MARKDOWN // 1000} 000 caractères."))
+    if title is not None and (not isinstance(title, str) or len(title) > model_spec.MAX_TITLE):
+        issues.append(issue(nid, "bad_model", f"Titre : {model_spec.MAX_TITLE} caractères au plus."))
+    ids = model_md.image_ids(source)
+    if ids and workspace is not None:
+        from .models import DocumentImage
+
+        found = {
+            str(i) for i in DocumentImage.objects.filter(workspace=workspace, pk__in=ids).values_list("pk", flat=True)
+        }
+        if len(found) < len(ids):
+            issues.append(
+                issue(
+                    nid,
+                    "bad_model",
+                    f"{len(ids) - len(found)} image(s) du modèle n'existe(nt) plus dans cet espace : réinsérez-les.",
+                )
+            )
+
+
+def _cfg_model(s: _Scan, n: dict) -> None:
+    _validate_model(n, s.workspace, s.issues)
+    s.check(n["id"], _node_expressions(n))
+    s.out_types[n["id"]] = model_spec.STATIC_OUTPUTS
+
+
+def _cfg_file(s: _Scan, n: dict) -> None:
+    _validate_file(n, s.issues)
+    s.check(n["id"], _node_expressions(n))
+    s.out_types[n["id"]] = file_spec.STATIC_OUTPUTS
+
+
 def _cfg_cache(s: _Scan, n: dict) -> None:
     _validate_cache(n, s.issues)
     s.check(n["id"], _node_expressions(n))
@@ -1085,8 +1259,21 @@ _EXPRESSIONS_BEFORE_INPUTS = {
 _EXPRESSIONS_AFTER_INPUTS = {
     "transform": _transform_sources,
     "cache": lambda n: template_expressions([n.get("key", ""), n.get("value", ""), n.get("rebuild_inputs") or {}]),
+    "schedule": lambda n: template_expressions([n.get("at", ""), n.get("inputs") or {}]),
+    "model": lambda n: template_expressions([n.get("markdown", ""), n.get("title", "")]),
+    "file": lambda n: template_expressions(
+        [
+            n.get("filename", ""),
+            n.get("content", ""),
+            n.get("title", ""),
+            n.get("rows", ""),
+            n.get("sheet", ""),
+            n.get("sources") or [],
+        ]
+    ),
+    "wait": lambda n: template_expressions([n.get("until") or ""]),
     "while": lambda n: [str(n.get("condition") or "")],
-    "smtp": _t("to", "cc", "subject", "body"),
+    "smtp": _t("to", "cc", "subject", "body", "body_model"),
     "approval": _t("title", "subject", "body", "instructions"),
     "sftp": _t("path", "content"),
     "ssh": lambda n: template_expressions([n.get("commands", ""), n.get("steps", [])]),
@@ -1922,6 +2109,9 @@ _NODE_CHECKS = {
     "sql": _cfg_with_connection(_validate_sql, "sql"),
     "transform": _cfg_transform,
     "cache": _cfg_cache,
+    "schedule": _cfg_schedule,
+    "file": _cfg_file,
+    "model": _cfg_model,
     "approval": _cfg_approval,
     "script": _cfg_script,
     "throw": _cfg_throw,

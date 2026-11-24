@@ -11,6 +11,9 @@ import { ExprPreview } from "./ExprPreview";
 import { HttpConfig } from "./HttpConfig";
 import { LdapConfig } from "./LdapConfig";
 import { CacheConfig } from "./CacheConfig";
+import { FileConfig } from "./FileConfig";
+import { ModelConfig } from "./ModelEditor";
+import { ScheduleNote, ScheduleWhen, WaitUntil } from "./ScheduleConfig";
 import { SftpConfig } from "./SftpConfig";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { SshConfig } from "./SshConfig";
@@ -54,8 +57,9 @@ export function NodePanel(p: Props) {
   const { graph, node, actions, workflows, issues, editable, onUpdate } = p;
   const [tab, setTab] = useState("general");
   const variables = availableVariables(graph, node.id, actions);
+  const modelNodes = graph.nodes.filter((n) => n.type === "model" && n.id !== node.id);
   const action = actions.find((a) => a.slug === node.action);
-  const callsWorkflow = node.type === "subworkflow" || node.type === "foreach" || node.type === "while";
+  const callsWorkflow = node.type === "subworkflow" || node.type === "foreach" || node.type === "while" || node.type === "schedule";
   const childVersions = useChildVersions(callsWorkflow ? node.workflow : undefined).versions; // les entrées proposées sont celles de la version ÉPINGLÉE, pas de la dernière
   const schema = action?.latest_version?.input_schema;
   const outgoing = graph.edges.filter((e) => e.from === node.id);
@@ -422,11 +426,7 @@ export function NodePanel(p: Props) {
               <option value="form">Sur formulaire rempli par une personne (ou à l'échéance)</option>
             </select>
           </div>
-          <div className="field">
-            <HelpTip>L'attente est durable : elle survit à un redémarrage et ne mobilise aucun worker.</HelpTip>
-            <label htmlFor="wait-s">{node.resume === "webhook" || node.resume === "form" ? "Délai maximum (secondes)" : "Durée d'attente (secondes)"}</label>
-            <input id="wait-s" type="number" min={1} value={node.seconds ?? 60} onChange={(e) => onUpdate({ seconds: Number(e.target.value) })} />
-          </div>
+          <WaitUntil node={node} onUpdate={onUpdate} deadline={node.resume === "webhook" || node.resume === "form"} />
           {node.resume === "form" && (
             <>
               <WaitFormFields node={node} onUpdate={onUpdate} />
@@ -446,6 +446,10 @@ export function NodePanel(p: Props) {
         </>
       ),
     });
+  } else if (node.type === "model") {
+    tabs.push({ id: "config", label: "Modèle", content: <ModelConfig node={node} variables={variables} editable={editable} onUpdate={onUpdate} /> });
+  } else if (node.type === "file") {
+    tabs.push({ id: "config", label: "Fichier", content: <FileConfig node={node} onUpdate={onUpdate} models={modelNodes} /> });
   } else if (node.type === "cache") {
     tabs.push({ id: "config", label: "Cache", content: <CacheConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "transform") {
@@ -453,7 +457,7 @@ export function NodePanel(p: Props) {
   } else if (node.type === "agent") {
     tabs.push({ id: "config", label: "Agent", content: <AgentConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "smtp") {
-    tabs.push({ id: "config", label: "E-mail", content: <SmtpConfig node={node} onUpdate={onUpdate} /> });
+    tabs.push({ id: "config", label: "E-mail", content: <SmtpConfig node={node} onUpdate={onUpdate} models={modelNodes} /> });
   } else if (node.type === "sftp") {
     tabs.push({ id: "config", label: "Fichier SFTP", content: <SftpConfig node={node} onUpdate={onUpdate} /> });
   } else if (node.type === "ssh") {
@@ -548,12 +552,13 @@ export function NodePanel(p: Props) {
         </>
       ),
     });
-  } else if (node.type === "subworkflow" || node.type === "foreach" || node.type === "while") {
+  } else if (node.type === "subworkflow" || node.type === "foreach" || node.type === "while" || node.type === "schedule") {
     tabs.push({
       id: "config",
-      label: node.type === "foreach" || node.type === "while" ? "Boucle" : "Workflow",
+      label: node.type === "foreach" || node.type === "while" ? "Boucle" : node.type === "schedule" ? "Programmation" : "Workflow",
       content: (
         <>
+          {node.type === "schedule" && <ScheduleWhen node={node} onUpdate={onUpdate} />}
           <div className="field">
             <label htmlFor="sub-wf">Workflow appelé</label>
             <select id="sub-wf" value={node.workflow ?? ""} onChange={(e) => onUpdate({ workflow: e.target.value, version: undefined })}>
@@ -568,6 +573,7 @@ export function NodePanel(p: Props) {
             </select>
           </div>
           <ChildVersionField node={node} child={workflows.find((w) => w.slug === node.workflow)} editable={editable} onUpdate={onUpdate} />
+          {node.type === "schedule" && <ScheduleNote node={node} />}
           {(() => {
             const wf = workflows.find((w) => w.slug === node.workflow);
             const inputSchema =

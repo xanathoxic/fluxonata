@@ -3,6 +3,7 @@ from django.urls import path, re_path
 from . import catalog_views as cat
 from . import group_views as gv
 from . import mcp, mcp_design, views
+from . import model_views as mv
 from . import promotion_views as pr
 from . import views_comments as com
 from . import views_debug as dbg
@@ -41,6 +42,9 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/dependencies/", x.DependenciesView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/audit/", x.WorkflowAuditView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/test-script/", x.ScriptTestView.as_view()),
+    path("workspaces/<slug:workspace>/model-images/", mv.ModelImagesView.as_view()),
+    path("workspaces/<slug:workspace>/model-images/<uuid:pk>/", mv.ModelImageView.as_view()),
+    path("workspaces/<slug:workspace>/model-preview/", mv.ModelPreviewView.as_view()),
     path("workspaces/<slug:workspace>/catalog/", cat.CatalogListView.as_view()),
     path("workspaces/<slug:workspace>/catalog/<slug:slug>/", cat.CatalogDetailView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/catalog/", cat.CatalogPublishView.as_view()),

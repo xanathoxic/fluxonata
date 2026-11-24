@@ -1,10 +1,11 @@
 import { useWsQuery } from "../lib";
+import { ModelPicker } from "./ModelPicker";
 import type { GraphNode } from "./types";
 
 interface Conn { name: string; label: string; kind: string; config: { host?: string; from_address?: string } }
 
 /** Send one text e-mail through an SMTP connection. Sending cannot be undone: test mode by default, never retried. */
-export function SmtpConfig({ node, onUpdate }: { node: GraphNode; onUpdate: (patch: Partial<GraphNode>) => void }) {
+export function SmtpConfig({ node, onUpdate, models = [] }: { node: GraphNode; onUpdate: (patch: Partial<GraphNode>) => void; models?: Pick<GraphNode, "id" | "name">[] }) {
   const conns = (useWsQuery<{ results: Conn[] }>("connections", "/connections/").data?.results ?? []).filter((c) => c.kind === "smtp");
   const cur = conns.find((c) => c.name === node.connection);
   return (
@@ -17,8 +18,11 @@ export function SmtpConfig({ node, onUpdate }: { node: GraphNode; onUpdate: (pat
         <p className="hint">Séparés par des virgules ; 20 destinataires au plus (avec la copie).</p></div>
       <div className="field"><label htmlFor="sm-cc">Copie (facultatif)</label><input id="sm-cc" value={node.cc ?? ""} onChange={(e) => onUpdate({ cc: e.target.value })} /></div>
       <div className="field"><label htmlFor="sm-subj">Objet</label><input id="sm-subj" value={node.subject ?? ""} maxLength={200} placeholder="Réclamation reçue : {{ inputs.item.subject }}" onChange={(e) => onUpdate({ subject: e.target.value })} /></div>
-      <div className="field"><label htmlFor="sm-body">Message (texte)</label><textarea id="sm-body" rows={6} value={typeof node.body === "string" ? node.body : ""} onChange={(e) => onUpdate({ body: e.target.value })} />
+      <ModelPicker value={node.body_model} models={models} onChange={(body_model) => onUpdate({ body_model })} hint="Le message part en texte et en HTML mis en forme, images incluses (10 images et 5 Mo au plus) ; les images ne sont jamais chargées depuis un site." />
+      {!node.body_model && (
+        <div className="field"><label htmlFor="sm-body">Message (texte)</label><textarea id="sm-body" rows={6} value={typeof node.body === "string" ? node.body : ""} onChange={(e) => onUpdate({ body: e.target.value })} />
         <p className="hint">Texte brut (100 Ko au plus), avec {"{{ expressions }}"}.</p></div>
+      )}
       <div className="field"><label htmlFor="sm-mode">Mode</label>
         <select id="sm-mode" value={node.mode ?? "test"} onChange={(e) => onUpdate({ mode: e.target.value as "test" | "reel" })}>
           <option value="test">Test : aucun e-mail n'est envoyé (sortie simulée)</option><option value="reel">Réel : l'e-mail est envoyé</option></select>

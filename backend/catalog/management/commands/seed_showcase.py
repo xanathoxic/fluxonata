@@ -6,12 +6,18 @@ machines par un workflow imbriqué à trois niveaux : boucle de diagnostics, app
 analyse de cause racine par un 3e skill IA, rapport (artefact) et notification. Données fictives ; idempotent.
 """
 
+import secrets
+import struct
+import uuid
+import zlib
+
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from ai.models import AiPolicy, AiProvider, AiSkill, AiSkillVersion
 from catalog.seed_helpers import install_demo_actions, layout, publish_workflow
 from tenancy.models import Environment, Folder, Membership, Organization, Role, Workspace
+from vault.models import Connection, Secret
 from workflows.models import Workflow
 from workflows.validation import validate
 
@@ -37,6 +43,7 @@ TAGS = {
     "qualifier-incident": ["incident", "ia", "qualification"],
     "rediger-communication": ["incident", "ia", "communication"],
     "analyser-cause-racine": ["incident", "ia", "analyse"],
+    "ajouter-membre-groupe": ["acces", "formulaire", "listes dynamiques", "démo"],
 }
 
 
@@ -481,6 +488,237 @@ def graph_incident():
     }
 
 
+DEMO_API = "demo-api"  # connexion de l'espace vers scripts/demo-api.py (données fictives)
+
+
+ACCES_FORM = "acces-groupe"
+ACCES_DEFINITION = {
+    "version": 1,
+    "sections": [
+        {
+            "id": "acces",
+            "title": "Demande d'accès",
+            "fields": [
+                {
+                    "key": "groupe",
+                    "type": "select",
+                    "label": "Groupe",
+                    "required": True,
+                    "source": {
+                        "connection": DEMO_API,
+                        "path": "/politique",
+                        "items_path": "groups",
+                        "items_as": "entries",
+                        "where": "len(item.value) > 0",
+                        "label_expr": "item.key + ' (' + str(len(item.value)) + ')'",
+                        "sort": "label",
+                    },
+                },
+                {
+                    "key": "membre",
+                    "type": "select",
+                    "label": "Membre du groupe",
+                    "required": True,
+                    "source": {
+                        "connection": DEMO_API,
+                        "path": "/politique",
+                        "params": ["groupe"],
+                        "items_path": "groups.{groupe}",
+                        "sort": "label",
+                    },
+                },
+            ],
+        }
+    ],
+}
+
+
+def graph_acces():
+    """Deux listes lues dans un service, en cascade : les groupes (CLÉS d'un objet), puis les membres du groupe choisi (ADR 0026)."""
+    nodes = [
+        script(
+            "preparer",
+            "Préparer la demande",
+            'System.log("demande d\'accès", groupe, membre)\n'
+            'resume = f"Demande : ajouter {membre} au groupe {groupe} (simulation : rien n\'est modifié)"',
+            {"groupe": "{{ inputs.groupe }}", "membre": "{{ inputs.membre }}"},
+            [("resume", "string")],
+        )
+    ]
+    layout(nodes, [])
+    return {
+        "inputs": {
+            "type": "object",
+            "required": ["groupe", "membre"],
+            "properties": {
+                "groupe": {"type": "string", "title": "Groupe d'accès"},
+                "membre": {"type": "string", "title": "Membre à ajouter"},
+            },
+        },
+        "input_form": {
+            "ref": {"form": ACCES_FORM, "version": None}
+        },  # formulaire de la bibliothèque, figé à la publication
+        "nodes": nodes,
+        "edges": [],
+        "outputs": {"resume": "{{ steps.preparer.output.resume }}"},
+        "notes": [
+            {
+                "id": "note_1",
+                "text": "Les deux listes du formulaire sont lues dans l'API de démonstration (connexion « demo-api ») : la première lit les CLÉS d'un objet (groupes non vides, triés), la seconde les membres du groupe choisi (« groups.{groupe} »). Le fichier n'est téléchargé qu'une fois.",
+                "ui": {"x": 0, "y": -190},
+            }
+        ],
+    }
+
+
+RAPPORT_LOGO_ID = uuid.uuid5(
+    uuid.NAMESPACE_URL, "fluxonata:vitrine:logo-exploitation"
+)  # identifiant fixe : le modèle y fait référence
+MAIL_DEMO = "courrier-demo"  # connexion SMTP de démonstration : l'étape d'envoi reste en mode test (rien n'est envoyé)
+
+
+def logo_png(width: int = 360, height: int = 72) -> bytes:
+    """Une bannière PNG (bleu, bande claire, pastilles) fabriquée sans bibliothèque : l'image du modèle de la vitrine."""
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            band = height // 2 - 3 <= y <= height // 2 + 3
+            dot = (x - 36) ** 2 + (y - height // 2) ** 2 <= 196
+            row += bytes((255, 255, 255)) if dot else bytes((147, 197, 253)) if band else bytes((29, 78, 216))
+        rows.append(bytes(row))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(b"".join(rows)))
+        + chunk(b"IEND", b"")
+    )
+
+
+RAPPORT_MODELE = """![Exploitation](image:{LOGO})
+
+# Rapport d'exploitation : {{ inputs.mois }}
+
+Bonjour,
+
+Voici le **bilan du mois** : **{{ steps.chiffres.output.incidents }} incidents**, disponibilité moyenne de **{{ steps.chiffres.output.disponibilite }} %**. Le service le plus fiable est *{{ steps.chiffres.output.meilleur }}*.
+
+## Détail par service
+
+| Service | Incidents | Disponibilité |
+|---|--:|--:|
+| Base de données | 3 | 99,95 % |
+| Réseau | 1 | 99,99 % |
+| Applications | 3 | 99,84 % |
+
+> Données fictives, produites par la vitrine.
+
+## À suivre
+
+- Revoir l'astreinte du cluster prod-db
+- Planifier la bascule du réseau
+- Lire le [guide de la plate-forme](https://example.org/guide)
+""".replace("{LOGO}", str(RAPPORT_LOGO_ID))
+
+
+def graph_rapport():
+    """Un modèle de document (Markdown, image, tableau, variables) réutilisé par quatre fichiers (Word, PDF, page web, archive ZIP) et un e-mail."""
+    from_model = "{{ steps.modele.output }}"
+    nodes = [
+        script(
+            "chiffres",
+            "Chiffres du mois",
+            'System.log("mois", mois)\nincidents = 7\ndisponibilite = "99,93"\nmeilleur = "Réseau"',
+            {"mois": "{{ inputs.mois }}"},
+            [("incidents", "integer"), ("disponibilite", "string"), ("meilleur", "string")],
+        ),
+        {
+            "id": "modele",
+            "type": "model",
+            "name": "Modèle du rapport",
+            "title": "Rapport d'exploitation : {{ inputs.mois }}",
+            "markdown": RAPPORT_MODELE,
+        },
+        {
+            "id": "word",
+            "type": "file",
+            "name": "Document Word",
+            "format": "docx",
+            "filename": "rapport",
+            "model": from_model,
+        },
+        {
+            "id": "pdf",
+            "type": "file",
+            "name": "Document PDF",
+            "format": "pdf",
+            "filename": "rapport",
+            "model": from_model,
+        },
+        {"id": "web", "type": "file", "name": "Page web", "format": "html", "filename": "rapport", "model": from_model},
+        {"id": "pret", "type": "join", "name": "Fichiers prêts"},
+        {
+            "id": "archive",
+            "type": "file",
+            "name": "Archive du rapport",
+            "format": "zip",
+            "filename": "rapport-complet",
+            "sources": ["{{ steps.word.output.file }}", "{{ steps.pdf.output.file }}", "{{ steps.web.output.file }}"],
+        },
+        {
+            "id": "courriel",
+            "type": "smtp",
+            "name": "Envoyer le rapport",
+            "connection": MAIL_DEMO,
+            "to": "{{ inputs.destinataire }}",
+            "subject": "Rapport d'exploitation : {{ inputs.mois }}",
+            "body_model": from_model,
+            "mode": "test",
+        },
+    ]
+    edges = [
+        {"from": "chiffres", "to": "modele"},
+        {"from": "modele", "to": "word"},
+        {"from": "modele", "to": "pdf"},
+        {"from": "modele", "to": "web"},
+        {"from": "word", "to": "pret"},
+        {"from": "pdf", "to": "pret"},
+        {"from": "web", "to": "pret"},
+        {"from": "pret", "to": "archive"},
+        {"from": "archive", "to": "courriel"},
+    ]
+    layout(nodes, edges)
+    return {
+        "inputs": {
+            "type": "object",
+            "required": ["mois", "destinataire"],
+            "properties": {
+                "mois": {"type": "string", "title": "Mois du rapport", "default": "novembre 2026"},
+                "destinataire": {
+                    "type": "string",
+                    "title": "Destinataire du rapport",
+                    "default": "direction@exemple.org",
+                },
+            },
+        },
+        "nodes": nodes,
+        "edges": edges,
+        "outputs": {"archive": "{{ steps.archive.output.file }}", "envoye": "{{ steps.courriel.output.sent }}"},
+        "notes": [
+            {
+                "id": "note_1",
+                "text": "Le texte du rapport est écrit une seule fois dans le modèle (double-cliquez l'étape « Modèle du rapport » puis « Ouvrir l'éditeur »). Il devient un fichier Word, un PDF, une page web, une archive ZIP et le corps de l'e-mail. À la fin, les fichiers se téléchargent depuis la page de l'exécution.",
+                "ui": {"x": 0, "y": -190},
+            }
+        ],
+    }
+
+
 WORKFLOWS = [  # bottom-up: a workflow must exist before it is called
     (
         "redemarrer-vm",
@@ -510,9 +748,28 @@ WORKFLOWS = [  # bottom-up: a workflow must exist before it is called
         "Scénario complet : skills IA, décision, alerte avec compensation, branches parallèles, workflows imbriqués, approbation, rapport.",
         graph_incident,
     ),
+    (
+        "ajouter-membre-groupe",
+        "Demander l'ajout d'un membre à un groupe d'accès",
+        "Exploitation/Accès",
+        "Formulaire à deux listes en cascade lues dans un service : les groupes (clés d'un objet), puis les membres du groupe choisi.",
+        graph_acces,
+    ),
+    (
+        "rapport-mensuel",
+        "Produire et envoyer le rapport du mois",
+        "Exploitation/Rapports",
+        "Un modèle de document (Markdown, image, tableau) devient un fichier Word, un PDF, une page web, une archive ZIP et un e-mail.",
+        graph_rapport,
+    ),
 ]
 
-CATALOG = {"traiter-lot-vms", "gestion-incident"}  # offered in « Catalogue d'automatisations »; the bricks are not
+CATALOG = {
+    "traiter-lot-vms",
+    "gestion-incident",
+    "ajouter-membre-groupe",
+    "rapport-mensuel",
+}  # offered in « Catalogue d'automatisations »; the bricks are not
 
 
 class Command(BaseCommand):
@@ -536,13 +793,20 @@ class Command(BaseCommand):
         )
         parser.add_argument("--model", default="qwen3-coder:30b")
         parser.add_argument(
+            "--demo-api-url",
+            default="http://127.0.0.1:8765",
+            help="API de démonstration (scripts/demo-api.py) lue par les listes du formulaire d'accès",
+        )
+        parser.add_argument(
             "--reset",
             action="store_true",
             help="Supprime les workflows et skills de la vitrine avant de les recréer (développement)",
         )
         parser.add_argument("--timeout", type=int, default=280, help="Délai du fournisseur d'IA (secondes)")
 
-    def handle(self, password, ollama_url, fake_ai, model, timeout, reset=False, **opts):
+    def handle(
+        self, password, ollama_url, fake_ai, model, timeout, reset=False, demo_api_url="http://127.0.0.1:8765", **opts
+    ):
         User = get_user_model()
         org = Organization.objects.order_by("id").first() or Organization.objects.create(
             name="Mon organisation", slug="main"
@@ -601,7 +865,16 @@ class Command(BaseCommand):
             Workflow.objects.filter(workspace=ws, slug__in=[w[0] for w in WORKFLOWS]).delete()
             AiSkill.objects.filter(workspace=ws, slug__in=[k["slug"] for k in SKILLS]).delete()
         install_demo_actions(ws, owner)
-        for path in ("Exploitation/Incidents", "Exploitation/Infrastructure/Briques", "Exploitation/À classer"):
+        self._demo_api(ws, demo_api_url)
+        self._acces_form(ws, owner)
+        self._rapport(ws, owner)
+        for path in (
+            "Exploitation/Incidents",
+            "Exploitation/Infrastructure/Briques",
+            "Exploitation/Accès",
+            "Exploitation/Rapports",
+            "Exploitation/À classer",
+        ):
             for kind in ("workflow", "ai_skill"):
                 for i in range(len(path.split("/"))):
                     Folder.objects.get_or_create(workspace=ws, kind=kind, path="/".join(path.split("/")[: i + 1]))
@@ -644,6 +917,91 @@ class Command(BaseCommand):
                 wf.save(update_fields=["tags"])
         self.stdout.write(
             self.style.SUCCESS(
-                f"Espace « {SLUG} » prêt : 4 workflows (3 niveaux d'imbrication), 3 skills IA, mêmes comptes (alice, bob, claire, admin)."
+                f"Espace « {SLUG} » prêt : 6 workflows (3 niveaux d'imbrication), 3 skills IA, mêmes comptes (alice, bob, claire, admin). "
+                f"Les listes du formulaire d'accès lisent {demo_api_url} : lancez scripts/dev-up.sh et autorisez 127.0.0.1 (Plate-forme → Réseau)."
             )
         )
+
+    def _demo_api(self, ws, base_url: str) -> None:
+        """La connexion « demo-api » vers scripts/demo-api.py (données fictives). Le jeton est tiré au hasard à la création et reste dans le
+        coffre : il n'est jamais écrit ici. Idempotent : un jeton existant est conservé, l'adresse est remise à jour."""
+        secret = Secret.objects.filter(workspace=ws, name="demo-api-jeton").first()
+        if secret is None:
+            secret = Secret(workspace=ws, name="demo-api-jeton")
+            secret.set_value(secrets.token_urlsafe(24))
+            secret.save()
+        Connection.objects.update_or_create(
+            workspace=ws,
+            name=DEMO_API,
+            defaults={
+                "label": "API de démonstration (annuaire fictif)",
+                "kind": Connection.Kind.HTTP_BEARER,
+                "config": {"base_url": base_url.rstrip("/")},
+                "secret": secret,
+            },
+        )
+
+    def _rapport(self, ws, owner) -> None:
+        """L'image du modèle du rapport et la connexion SMTP de démonstration (jamais contactée : l'étape d'envoi est en mode test).
+        Idempotent : l'image garde son identifiant ; un mot de passe existant est conservé."""
+        import hashlib
+
+        from workflows.models import DocumentImage
+
+        data = logo_png()
+        DocumentImage.objects.get_or_create(
+            pk=RAPPORT_LOGO_ID,
+            defaults={
+                "workspace": ws,
+                "name": "logo-exploitation.png",
+                "content_type": "image/png",
+                "width": 360,
+                "height": 72,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "data": data,
+                "created_by": owner,
+            },
+        )
+        secret = Secret.objects.filter(workspace=ws, name="courrier-demo-mdp").first()
+        if secret is None:
+            secret = Secret(workspace=ws, name="courrier-demo-mdp")
+            secret.set_value(secrets.token_urlsafe(18))
+            secret.save()
+        Connection.objects.get_or_create(
+            workspace=ws,
+            name=MAIL_DEMO,
+            defaults={
+                "label": "Courrier de démonstration (rien n'est envoyé)",
+                "kind": Connection.Kind.SMTP,
+                "config": {
+                    "host": "smtp.exemple.org",
+                    "port": "465",
+                    "tls": "ssl",
+                    "username": "exploitation@exemple.org",
+                    "from_address": "exploitation@exemple.org",
+                    "from_name": "Exploitation",
+                },
+                "secret": secret,
+            },
+        )
+
+    def _acces_form(self, ws, owner) -> None:
+        """Le formulaire de la bibliothèque du workflow « ajouter-membre-groupe » (ses deux listes lisent la connexion « demo-api »).
+        Idempotent : un formulaire existant, publié ou modifié depuis, n'est pas touché."""
+        from formbuilder import service as formservice
+        from formbuilder.models import Form
+
+        form, _ = Form.objects.get_or_create(
+            workspace=ws,
+            slug=ACCES_FORM,
+            defaults={
+                "name": "Demande d'accès à un groupe",
+                "description": "Deux listes en cascade lues dans un service : les groupes (clés d'un objet), puis les membres du groupe choisi.",
+                "folder": "Exploitation/Accès",
+                "owner": owner,
+                "draft_definition": ACCES_DEFINITION,
+                "tags": ["acces", "listes dynamiques", "démo"],
+            },
+        )
+        if not form.versions.exists():
+            formservice.publish(form, owner, changelog="Version de la vitrine")
