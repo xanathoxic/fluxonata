@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## 2026-11-25
+
+**Test du catalogue : la date relative accepte « le mois dernier »**
+
+- Test E2E du catalogue : la date relative accepte « le mois dernier » et les formes voisines
+
 ## v0.19.0 — 2026-11-25
 
 **Pause jusqu'a une date, fichiers generes telechargeables, modele de document, connexions orthogonales et notes redimensionnables**

@@ -64,7 +64,7 @@ test("catalogue : cartes de même hauteur, « champs à renseigner », date rela
   const heights = await cards.evaluateAll((els) => els.slice(0, 6).map((e) => Math.round(e.getBoundingClientRect().height)));
   expect(new Set(heights.filter((_, i) => i < 3)).size).toBe(1); // une même rangée : une même hauteur
   await expect(cards.first()).toContainText(/(\d+ champs? à renseigner|aucun champ à renseigner)/);
-  await expect(cards.first().locator("time")).toHaveText(/il y a|hier|aujourd|ce|dans/);
+  await expect(cards.first().locator("time")).toHaveText(/il y a|hier|aujourd|ce|dans|dernier|dernière|avant-hier|demain/); // formes de Intl.RelativeTimeFormat (numeric: auto) : « le mois dernier » dès que la donnée de démo a plus de 30 jours
 });
 
 test("éditeur de formulaire : l'aperçu se règle en largeur (bureau, tablette, mobile)", async ({ page }) => {
