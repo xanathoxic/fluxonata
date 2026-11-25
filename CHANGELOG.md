@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.19.2 — 2026-11-25
+
+**Editeur : deplacer plusieurs etapes ensemble (Maj + clic, rectangle de selection)**
+
+- Editeur : deplacer plusieurs etapes ensemble (Maj + clic, rectangle de selection)
+
 ## v0.19.1 — 2026-11-25
 
 **Editeur : liens avec Debut et Fin, liens supprimes sans effet sur les etapes, points de connexion vert et rouge, calage des liens presque droits**

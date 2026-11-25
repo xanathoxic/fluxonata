@@ -1277,3 +1277,43 @@ test("un lien presque droit devient droit : l'étape déplacée se cale sur l'al
   expect(cAfter.y - cBefore.y).toBeGreaterThan(30); // elle a suivi la souris (à la grille près) et n'a pas été attirée vers A
   expect(cAfter.y - (await icon("a")).y).toBeGreaterThan(150);
 });
+
+test("plusieurs étapes se déplacent ensemble : Maj + clic ou Maj + glisser sur le fond, puis un seul glisser", async ({ page }) => {
+  await login(page);
+  const slug = `multi-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 100, y: 100 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 420, y: 100 } }, { id: "c", type: "wait", name: "Pause C", seconds: 1, ui: { x: 740, y: 340 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const ui = async () => page.evaluate(async (s) => Object.fromEntries((await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph.nodes.map((n: { id: string; ui: { x: number; y: number } }) => [n.id, n.ui])), slug);
+  const icon = (id: string) => page.locator(`.react-flow__node[data-id="${id}"] .flow-box`);
+  const center = async (id: string) => { const b = await boxOf(icon(id)); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+
+  // Maj + clic : A puis B sont sélectionnées (sans panneau de propriétés), on tire A : B suit avec le même décalage
+  await icon("a").click();
+  await icon("b").click({ modifiers: ["Shift"] });
+  await expect(page.locator('.react-flow__node[data-id="a"] .flow-node.selected')).toHaveCount(1);
+  await expect(page.locator(".react-flow__node .flow-node.selected")).toHaveCount(2);
+  const before = await ui();
+  const a = await center("a");
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x + 60, a.y + 112, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await ui()).b.y - before.b.y).toBeGreaterThan(80);
+  const after = await ui();
+  expect(Math.abs((after.a.x - before.a.x) - (after.b.x - before.b.x))).toBeLessThan(2); // même déplacement
+  expect(Math.abs((after.a.y - before.a.y) - (after.b.y - before.b.y))).toBeLessThan(2);
+  expect(after.c).toEqual(before.c); // C n'était pas sélectionnée
+
+  // Maj + glisser sur le fond : un rectangle sélectionne toutes les étapes qu'il touche
+  await page.mouse.click(5, 5); // (clic hors du canevas : rien)
+  const box = await boxOf(page.locator(".react-flow__pane"));
+  await page.keyboard.down("Shift");
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 10, box.y + box.height - 10, { steps: 10 });
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  await expect(page.locator(".react-flow__node .flow-node.selected")).toHaveCount(3);
+});

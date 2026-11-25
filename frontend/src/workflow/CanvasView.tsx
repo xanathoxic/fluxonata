@@ -443,6 +443,8 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
   // React Flow works on a local copy of the nodes: positions follow the pointer WHILE dragging; the graph (draft, undo
   // history, autosave) is updated once, when the node is dropped.
   const [nodes, setNodes] = useState<Node[]>(graphNodes);
+  const prevSelected = useRef(selectedId);
+  const keepSel = useRef(false); // la sélection multiple vient de se former : le retrait de l'étape ouverte dans le panneau ne doit pas la défaire
   const linksRef = useRef<{ source: string; target: string }[]>([]);
   const scaleRef = useRef(1);
   const dragging = useRef(false); // a re-render of the page must never snap a node back while it is being dragged
@@ -450,8 +452,12 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
   // the connection points are, takes the lines off and puts them back after measuring again (which also recreates their handles).
   useEffect(() => {
     if (dragging.current) return;
-    setNodes((prev) => graphNodes.map((n) => { const old = prev.find((p) => p.id === n.id); return old?.measured ? { ...n, measured: old.measured } : n; }));
-  }, [graphNodes]);
+    // La sélection multiple (Maj + clic, ou Maj + glisser sur le fond) vit dans React Flow : on la garde tant que l'étape sélectionnée par la page ne change pas.
+    const keep = prevSelected.current === selectedId || keepSel.current;
+    keepSel.current = false;
+    prevSelected.current = selectedId;
+    setNodes((prev) => graphNodes.map((n) => { const old = prev.find((p) => p.id === n.id); const m = old?.measured ? { ...n, measured: old.measured } : n; return keep && old ? { ...m, selected: old.selected } : m; }));
+  }, [graphNodes, selectedId]);
   // Les points de jonction ne sont pas dans l'état des étapes : ils se déduisent du graphe et des liens (voir `withPorts`). On ne garde ici que la position de ceux
   // qu'on est en train de déplacer, pour que leurs liens les suivent en direct.
   const [jPos, setJPos] = useState<Record<string, Pt>>({});
@@ -465,7 +471,7 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
     if (Object.keys(live).length) setJPos((p) => ({ ...p, ...live }));
     if (rest.length) {
       const moving = new Set(rest.flatMap((c) => (c.type === "position" && c.dragging ? [c.id] : [])));
-      setNodes((ns) => applyNodeChanges(rest.map((c) => (c.type === "position" && c.dragging && c.position ? { ...c, position: alignedAt(c.id, c.position, ns, linksRef.current, scaleRef.current, moving) } : c)), ns));
+      setNodes((ns) => applyNodeChanges(rest.map((c) => (c.type === "position" && c.dragging && c.position && moving.size === 1 ? { ...c, position: alignedAt(c.id, c.position, ns, linksRef.current, scaleRef.current, moving) } : c)), ns));
     }
   }, []);
   const scale = useMemo(() => scaleFactor(), []);
@@ -517,7 +523,7 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
         nodes={allNodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1, ...(readOnly ? { minZoom: 0.02 } : {}) }} minZoom={readOnly ? 0.02 : 0.2} maxZoom={2}
         onMoveStart={(e) => { if (e) userMoved.current = true; }}
         snapToGrid={snap} snapGrid={[GRID, GRID]} nodesConnectable={!readOnly} edgesReconnectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep} connectionRadius={28} elementsSelectable zoomOnDoubleClick={false}
-        onNodeClick={(_, n) => { setEdgeId(null); if (!n.id.startsWith("__") || readOnly) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => { onSelect(null); setEdgeId(e.id); }}
+        multiSelectionKeyCode={["Shift", "Control", "Meta"]} onSelectionChange={({ nodes: sel }) => { if (sel.length > 1 && selectedId !== null) { keepSel.current = true; onSelect(null); } }} onNodeClick={(ev, n) => { setEdgeId(null); if (ev.shiftKey || ev.metaKey || ev.ctrlKey) return; /* ajout à la sélection : pas de panneau */ if (!n.id.startsWith("__") || readOnly) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => { onSelect(null); setEdgeId(e.id); }}
         onNodeDoubleClick={(_, n) => { if (isJunctionId(n.id)) flipJunctionNode(n.id); else if (!n.id.startsWith("__")) onOpen?.(n.id); }}
         onNodeDragStart={() => { dragging.current = true; }}
         onNodeDragStop={(_, n, dragged) => {
