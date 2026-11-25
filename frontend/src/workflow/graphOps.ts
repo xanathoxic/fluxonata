@@ -116,15 +116,54 @@ export function defaultLabel(graph: Graph, src: GraphNode): EdgeLabel {
   return used.includes("true") ? "false" : "true";
 }
 
+/** Les identifiants des points « Début » et « Fin » affichés sur le canevas (ils ne sont pas des étapes). */
+export const START_ID = "__start__";
+export const END_ID = "__end__";
+
+/** Relie « Début » à une étape : possible seulement si l'étape n'a aucun lien d'entrée (c'est ce qui en fait une étape de départ). */
+export function canLinkStart(graph: Graph, id: string): boolean {
+  return graph.nodes.some((n) => n.id === id) && !graph.edges.some((e) => e.to === id);
+}
+export function linkStart(graph: Graph, id: string): Graph {
+  return canLinkStart(graph, id) ? setDetached(graph, "start", id, false) : graph;
+}
+/** Relie une étape à « Fin » : possible seulement si l'étape n'a aucun lien de sortie. */
+export function canLinkEnd(graph: Graph, id: string): boolean {
+  return graph.nodes.some((n) => n.id === id) && !graph.edges.some((e) => e.from === id);
+}
+export function linkEnd(graph: Graph, id: string): Graph {
+  return canLinkEnd(graph, id) ? setDetached(graph, "end", id, false) : graph;
+}
+
+/** Marque (ou démarque) une étape comme volontairement sans lien d'entrée (`start`) ou de sortie (`end`). */
+function setDetached(graph: Graph, side: "start" | "end", id: string, on: boolean): Graph {
+  const cur = graph.detached?.[side] ?? [];
+  if (cur.includes(id) === on) return graph;
+  const list = on ? [...cur, id] : cur.filter((i) => i !== id);
+  const { detached: _d, ...rest } = graph;
+  void _d;
+  const merged = { ...graph.detached, [side]: list };
+  if (!list.length) delete merged[side];
+  return Object.keys(merged).length ? { ...rest, detached: merged } : rest;
+}
+
 export function connect(graph: Graph, from: string, to: string, label: EdgeLabel = "next"): Graph {
   if (from === to) return graph;
   if (graph.edges.some((e) => e.from === from && e.to === to)) return graph;
   const edge: GraphEdge = label === "next" ? { from, to } : { from, to, label };
-  return { ...graph, edges: [...graph.edges, edge] };
+  return setDetached(setDetached({ ...graph, edges: [...graph.edges, edge] }, "start", to, false), "end", from, false);
 }
 
+/** Supprime un lien. Une étape qui perd ainsi sa dernière entrée (ou sortie) reste sans lien : elle n'est pas rattachée d'office à « Début » (ou « Fin »). */
 export function disconnect(graph: Graph, from: string, to: string): Graph {
-  return { ...graph, edges: graph.edges.filter((e) => !(e.from === from && e.to === to)) };
+  if (from === START_ID) return setDetached(graph, "start", to, true); // le lien « Début → étape »
+  if (to === END_ID) return setDetached(graph, "end", from, true); // le lien « étape → Fin »
+  const edges = graph.edges.filter((e) => !(e.from === from && e.to === to));
+  if (edges.length === graph.edges.length) return graph;
+  let next: Graph = { ...graph, edges };
+  if (!edges.some((e) => e.to === to)) next = setDetached(next, "start", to, true);
+  if (!edges.some((e) => e.from === from)) next = setDetached(next, "end", from, true);
+  return next;
 }
 
 export function relabel(graph: Graph, from: string, to: string, label: EdgeLabel): Graph {
@@ -216,6 +255,7 @@ export function removeNode(graph: Graph, id: string): Graph {
   const incoming = graph.edges.filter((e) => e.to === id && e.from !== id);
   const outgoing = graph.edges.filter((e) => e.from === id && e.to !== id);
   let next: Graph = { ...graph, nodes: graph.nodes.filter((n) => n.id !== id), edges: graph.edges.filter((e) => e.from !== id && e.to !== id) };
+  next = setDetached(setDetached(next, "start", id, false), "end", id, false);
   if (graph.junctions?.some((j) => j.node === id)) next = removeJunctions(next, graph.junctions.filter((j) => j.node === id).map((j) => j.id));
   const target = outgoing.length === 1 ? outgoing[0] : undefined;
   if (target) for (const e of incoming) next = connect(next, e.from, target.to, e.label ?? "next");

@@ -5,7 +5,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Action } from "../api";
-import { placeNewNodes, wouldCreateCycle } from "./graphOps";
+import { canLinkEnd, canLinkStart, END_ID, placeNewNodes, START_ID, wouldCreateCycle } from "./graphOps";
 import { applyDrag, autoPorts, dragValue, facePoint, GRID, junctionCoords, junctionFaces, trunkPoint, viaRoute, labelPoint, orthogonalRoute, portOffset, roundedPath, simplifyRoute, type Coords, type Face, type Ports, type Pt, type Rect, type Segment, type Via } from "./edgeRoute";
 import { px, scaleFactor } from "../scale";
 import { NOTE_MIN_H, NOTE_MIN_W, noteSide, noteStyle } from "./noteStyle";
@@ -251,6 +251,34 @@ interface Props {
 }
 
 /** Le rectangle de l'icône d'une étape (ou du rond Début / Fin) dans le repère du schéma : c'est là que sont posés les points de connexion. */
+/** L'écart (en unités du canevas) en dessous duquel une étape déplacée « tombe » à l'alignement de l'étape à laquelle elle est reliée : un lien presque droit devient droit. */
+const ALIGN_PX = 14;
+/** La position corrigée d'une étape qu'on déplace en `at` : si le centre de son icône n'est qu'à quelques pixels de celui d'une étape reliée (en hauteur, ou en largeur pour un lien vertical),
+ *  elle se cale dessus pour que le lien soit droit, sans le petit décrochage. Un écart nul, ou plus grand que le seuil, ne change rien. `moving` : les étapes déplacées en même temps (elles gardent leurs écarts). */
+function alignedAt(id: string, at: Pt, nodes: Node[], links: { source: string; target: string }[], scale: number, moving: Set<string>): Pt {
+  const me = nodes.find((n) => n.id === id);
+  if (!me || (me.type !== "step" && me.type !== "start" && me.type !== "end")) return at;
+  const mine = iconRect({ ...me, position: at }, scale);
+  const cx = mine.x + mine.w / 2;
+  const cy = mine.y + mine.h / 2;
+  const limit = ALIGN_PX * scale;
+  let dx = 0;
+  let dy = 0;
+  let bestX = limit + 1;
+  let bestY = limit + 1;
+  for (const l of links) {
+    const other = l.source === id ? l.target : l.target === id ? l.source : null;
+    const node = other ? nodes.find((n) => n.id === other) : undefined;
+    if (!node || moving.has(node.id) || (node.type !== "step" && node.type !== "start" && node.type !== "end")) continue;
+    const r = iconRect(node, scale);
+    const ex = r.x + r.w / 2 - cx;
+    const ey = r.y + r.h / 2 - cy;
+    if (Math.abs(ey) < bestY) { bestY = Math.abs(ey); dy = ey; }
+    if (Math.abs(ex) < bestX) { bestX = Math.abs(ex); dx = ex; }
+  }
+  return { x: bestX <= limit ? at.x + dx : at.x, y: bestY <= limit ? at.y + dy : at.y };
+}
+
 function iconRect(n: Node, scale: number): Rect {
   if (n.type === "step") {
     const icon = 56 * scale;
@@ -378,8 +406,8 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
     const maxX = Math.max(0, ...ui.map((p) => p.x));
     const hasIn = new Set(graph.edges.map((e) => e.to));
     const hasOut = new Set(graph.edges.map((e) => e.from));
-    const entries = graph.nodes.filter((n) => !hasIn.has(n.id));
-    const sinks = graph.nodes.filter((n) => !hasOut.has(n.id));
+    const entries = graph.nodes.filter((n) => !hasIn.has(n.id) && !graph.detached?.start?.includes(n.id));
+    const sinks = graph.nodes.filter((n) => !hasOut.has(n.id) && !graph.detached?.end?.includes(n.id));
     const startY = shown.nodes.find((n) => n.id === entries[0]?.id)?.ui?.y ?? 0;
     const rfNodes: Node[] = [
       { id: "__start__", type: "start", position: graph.layout?.start ?? { x: minX - 120, y: startY + 6 }, draggable: !readOnly, selectable: false, data: {} },
@@ -400,14 +428,14 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
     ];
     const mark = { type: MarkerType.ArrowClosed };
     const rfEdges: Edge[] = [
-      ...entries.map((n) => ({ id: `s->${n.id}`, source: "__start__", target: n.id, markerEnd: mark, type: "routed", selectable: false, deletable: false, reconnectable: false, data: { boxes: [], editable: false, name: n.name, onRoute: () => {} } as RoutedData })),
+      ...entries.map((n) => ({ id: `s->${n.id}`, source: START_ID, target: n.id, markerEnd: mark, type: "routed", selectable: !readOnly, deletable: !readOnly, reconnectable: false, selected: edgeId === `s->${n.id}`, data: { boxes: [], editable: false, name: n.name, onRoute: () => {} } as RoutedData })),
       ...graph.edges.map((e) => ({
         id: `${e.from}->${e.to}`, source: e.from, target: e.to, markerEnd: mark, type: "routed", reconnectable: !readOnly, selected: edgeId === `${e.from}->${e.to}`,
         data: { route: e.ui?.route ?? (e.ui?.cx !== undefined ? [e.ui.cx] : undefined), pinned: e.ui?.sf && e.ui?.tf ? { sf: e.ui.sf, tf: e.ui.tf } : undefined, boxes: [], editable: !readOnly, name: graph.nodes.find((n) => n.id === e.to)?.name ?? e.to, onRoute: (route: Coords | null) => onRouteEdge?.(e.from, e.to, route) } as RoutedData,
         label: e.label ? edgeText(e.label) : undefined, className: e.label === "error" ? "edge-error" : undefined,
         style: e.label === "error" ? { strokeDasharray: "6 4" } : undefined,
       })),
-      ...sinks.map((n) => ({ id: `${n.id}->e`, source: n.id, target: "__end__", markerEnd: mark, type: "routed", selectable: false, deletable: false, reconnectable: false, data: { boxes: [], editable: false, name: "Fin", onRoute: () => {} } as RoutedData })),
+      ...sinks.map((n) => ({ id: `${n.id}->e`, source: n.id, target: END_ID, markerEnd: mark, type: "routed", selectable: !readOnly, deletable: !readOnly, reconnectable: false, selected: edgeId === `${n.id}->e`, data: { boxes: [], editable: false, name: "Fin", onRoute: () => {} } as RoutedData })),
     ];
     return { nodes: rfNodes, edges: rfEdges };
   }, [graph, issues, selectedId, readOnly, statuses, counts, onRouteEdge, edgeId]);
@@ -415,6 +443,8 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
   // React Flow works on a local copy of the nodes: positions follow the pointer WHILE dragging; the graph (draft, undo
   // history, autosave) is updated once, when the node is dropped.
   const [nodes, setNodes] = useState<Node[]>(graphNodes);
+  const linksRef = useRef<{ source: string; target: string }[]>([]);
+  const scaleRef = useRef(1);
   const dragging = useRef(false); // a re-render of the page must never snap a node back while it is being dragged
   // The nodes are rebuilt at every render of the page (autosave, validation…): keep the sizes already measured, otherwise React Flow forgets where
   // the connection points are, takes the lines off and puts them back after measuring again (which also recreates their handles).
@@ -433,9 +463,14 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
       else if (c.type === "position" && c.position) live[c.id] = c.position;
     }
     if (Object.keys(live).length) setJPos((p) => ({ ...p, ...live }));
-    if (rest.length) setNodes((ns) => applyNodeChanges(rest, ns));
+    if (rest.length) {
+      const moving = new Set(rest.flatMap((c) => (c.type === "position" && c.dragging ? [c.id] : [])));
+      setNodes((ns) => applyNodeChanges(rest.map((c) => (c.type === "position" && c.dragging && c.position ? { ...c, position: alignedAt(c.id, c.position, ns, linksRef.current, scaleRef.current, moving) } : c)), ns));
+    }
   }, []);
   const scale = useMemo(() => scaleFactor(), []);
+  scaleRef.current = scale;
+  linksRef.current = baseEdges;
   const { edges, junctions } = useMemo(() => withPorts(baseEdges, nodes, scale, snap, graph.junctions ?? [], jPos), [baseEdges, nodes, scale, snap, graph.junctions, jPos]);
   const junctionInfo = useMemo(() => new Map(junctions.map((j) => [j.id, j])), [junctions]);
   const D = 2 * JUNCTION_PX * scale;
@@ -458,13 +493,15 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
    *  entrée verte d'un point « arrivée » ajoute un lien qui arrive à la même étape par le même point de connexion. Toute autre combinaison est refusée. */
   const resolveConnection = useCallback((c: { source: string | null; target: string | null; sourceHandle?: string | null; targetHandle?: string | null }): { from: string; to: string; sf?: Face; tf?: Face } | null => {
     if (!c.source || !c.target || c.source === c.target) return null;
+    if (c.source === START_ID) return !c.target.startsWith("__") && !junctionInfo.has(c.target) && canLinkStart(graph, c.target) ? { from: START_ID, to: c.target } : null; // Début → une étape sans entrée
+    if (c.target === END_ID) return !c.source.startsWith("__") && !junctionInfo.has(c.source) && canLinkEnd(graph, c.source) ? { from: c.source, to: END_ID } : null; // une étape sans sortie → Fin
     const sj = junctionInfo.get(c.source);
     const tj = junctionInfo.get(c.target);
     if (sj && tj) return null;
     if (sj) return sj.role === "out" && !c.target.startsWith("__") ? { from: sj.node, to: c.target, sf: sj.face, tf: faceOfHandle(c.targetHandle) } : null;
     if (tj) return tj.role === "in" && !c.source.startsWith("__") ? { from: c.source, to: tj.node, sf: faceOfHandle(c.sourceHandle), tf: tj.face } : null;
     return c.source.startsWith("__") || c.target.startsWith("__") ? null : { from: c.source, to: c.target, sf: faceOfHandle(c.sourceHandle), tf: faceOfHandle(c.targetHandle) };
-  }, [junctionInfo]);
+  }, [junctionInfo, graph]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: zone de dépôt (glisser-déposer depuis la palette) ; au clavier, la palette ajoute les étapes sans glisser
@@ -480,7 +517,7 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
         nodes={allNodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1, ...(readOnly ? { minZoom: 0.02 } : {}) }} minZoom={readOnly ? 0.02 : 0.2} maxZoom={2}
         onMoveStart={(e) => { if (e) userMoved.current = true; }}
         snapToGrid={snap} snapGrid={[GRID, GRID]} nodesConnectable={!readOnly} edgesReconnectable={!readOnly} connectionLineType={ConnectionLineType.SmoothStep} connectionRadius={28} elementsSelectable zoomOnDoubleClick={false}
-        onNodeClick={(_, n) => { setEdgeId(null); if (!n.id.startsWith("__") || readOnly) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => setEdgeId(e.id)}
+        onNodeClick={(_, n) => { setEdgeId(null); if (!n.id.startsWith("__") || readOnly) onSelect(n.id); }} onPaneClick={() => { onSelect(null); setEdgeId(null); }} onEdgeClick={(_, e) => { onSelect(null); setEdgeId(e.id); }}
         onNodeDoubleClick={(_, n) => { if (isJunctionId(n.id)) flipJunctionNode(n.id); else if (!n.id.startsWith("__")) onOpen?.(n.id); }}
         onNodeDragStart={() => { dragging.current = true; }}
         onNodeDragStop={(_, n, dragged) => {
@@ -493,13 +530,15 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
             else onJunctionMove?.(d.id, at.x, at.y);
             setJPos((p) => { const { [d.id]: _gone, ...rest } = p; void _gone; return rest; });
           }
-          if (moved.length) onMove?.(moved.map((d) => ({ id: d.id, x: Math.round(d.position.x), y: Math.round(d.position.y) })));
+          const together = new Set(all.map((d) => d.id));
+          const place = (d: Node) => (all.length === 1 ? alignedAt(d.id, d.position, nodes, linksRef.current, scaleRef.current, together) : d.position); // une seule étape : elle se cale ; plusieurs : leurs écarts sont gardés
+          if (moved.length) onMove?.(moved.map((d) => { const at = place(d); return { id: d.id, x: Math.round(at.x), y: Math.round(at.y) }; }));
           dragging.current = false;
         }}
         isValidConnection={(c) => !!resolveConnection(c)}
         onConnect={(c: Connection) => {
           const r = resolveConnection(c);
-          if (r && !wouldCreateCycle(graph, r.from, r.to)) onConnect?.(r.from, r.to, r.sf, r.tf);
+          if (r && (r.from === START_ID || r.to === END_ID || !wouldCreateCycle(graph, r.from, r.to))) onConnect?.(r.from, r.to, r.sf, r.tf);
         }}
         onReconnect={(old: Edge, c: Connection) => {
           if (!c.source || !c.target || c.source.startsWith("__") || c.target.startsWith("__") || c.source === c.target) return;
@@ -508,7 +547,7 @@ function Inner({ graph, issues, selectedId, onSelect, focus, onOpen, readOnly, s
           onReconnectEdge?.({ from: old.source, to: old.target }, { from: c.source, to: c.target, sf: faceOfHandle(c.sourceHandle), tf: faceOfHandle(c.targetHandle) });
         }}
         onNodesDelete={(ns) => onDeleteNodes?.(ns.map((n) => n.id).filter((i) => !i.startsWith("__")))}
-        onEdgesDelete={(es) => onDeleteEdges?.(es.filter((e) => !e.source.startsWith("__") && !e.target.startsWith("__")).map((e) => ({ from: e.source, to: e.target })))}
+        onEdgesDelete={(es) => onDeleteEdges?.(es.filter((e) => e.source === START_ID || e.target === END_ID || (!e.source.startsWith("__") && !e.target.startsWith("__"))).map((e) => ({ from: e.source, to: e.target })))}
         deleteKeyCode={readOnly ? null : ["Delete", "Backspace"]} nodesFocusable edgesFocusable proOptions={{ hideAttribution: true }}
         aria-label="Schéma du workflow. Une vue en liste équivalente, entièrement utilisable au clavier, est disponible."
       >

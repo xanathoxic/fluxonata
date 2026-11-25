@@ -5,7 +5,7 @@ import { useAiMode } from "../../components/AiBox";
 import { AiChat } from "../AiChat";
 import { CanvasView } from "../CanvasView";
 import { useDraft } from "../DraftContext";
-import { addJunction, addNode, autoLayout, flipJunction, isJunctionId, moveJunction, removeJunctions, setEdgePorts, setEdgeRoute, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
+import { END_ID, START_ID, linkEnd, linkStart, addJunction, addNode, autoLayout, flipJunction, isJunctionId, moveJunction, removeJunctions, setEdgePorts, setEdgeRoute, connect, defaultNode, defaultLabel, disconnect, duplicateNode, moveEndpoint, moveNode, relabel, removeNode, updateNode } from "../graphOps";
 import { ListView } from "../ListView";
 import { NodePanel } from "../NodePanel";
 import { PaneResizer } from "../PaneResizer";
@@ -171,6 +171,8 @@ export function SchemaTab() {
               onNoteResize={(nid, r) => editable && setGraph({ ...graph, notes: (graph.notes ?? []).map((n) => (n.id === nid ? { ...n, ui: { x: r.x, y: r.y, w: r.w, h: r.h } } : n)) })}
               onConnect={(f, t, sf, tf) => {
                 if (!editable) return;
+                if (f === START_ID) { setGraph(linkStart(graph, t)); return; } // Début → étape
+                if (t === END_ID) { setGraph(linkEnd(graph, f)); return; } // étape → Fin
                 const src = graph.nodes.find((n) => n.id === f);
                 const linked = connect(graph, f, t, src ? defaultLabel(graph, src) : "next");
                 setGraph(sf && tf ? setEdgePorts(linked, f, t, sf, tf) : linked); // les faces choisies en glissant sont gardées ; sinon elles suivent les étapes

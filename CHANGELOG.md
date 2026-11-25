@@ -2,6 +2,14 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.19.1 — 2026-11-25
+
+**Editeur : liens avec Debut et Fin, liens supprimes sans effet sur les etapes, points de connexion vert et rouge, calage des liens presque droits**
+
+- Editeur : supprimer un lien ne supprime plus l'etape restee selectionnee
+- Editeur : un lien supprime n'est plus recree d'office vers Debut ou Fin
+- Editeur : liens avec Debut et Fin, points de connexion vert/rouge, calage des liens presque droits
+
 ## 2026-11-25
 
 **Test du catalogue : la date relative accepte « le mois dernier »**

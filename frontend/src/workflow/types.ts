@@ -172,6 +172,8 @@ export interface Junction { id: string; node: string; role: "in" | "out"; face: 
 
 export interface Graph {
   junctions?: Junction[];
+  /** Étapes dont l'utilisateur a supprimé le lien d'entrée (`start`) ou de sortie (`end`) : l'éditeur ne les relie pas d'office à « Début » ou « Fin », c'est à lui de refaire le lien. */
+  detached?: { start?: string[]; end?: string[] };
   variables?: Variable[];
   form?: FormDef | null;
   /** designed input form (sections, rules, dynamic lists); takes precedence over `form` */

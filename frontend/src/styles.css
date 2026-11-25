@@ -145,8 +145,12 @@ img, pre { max-width: 100%; }
 
 .tile-label { word-break: normal; overflow-wrap: break-word; hyphens: auto; }
 .schema-center, .schema-center .canvas, .schema-center .flow-drop { min-height: 62vh; }
-.react-flow__handle { width: 9px; height: 9px; opacity: .55; } .react-flow__handle::before { content: ""; position: absolute; inset: -7px; } /* zone de prise élargie : on vise l'icône, pas un point de 9 pixels */
+.react-flow__handle { width: 9px; height: 9px; opacity: .8; } .react-flow__handle::before { content: ""; position: absolute; inset: -7px; } /* zone de prise élargie : on vise l'icône, pas un point de 9 pixels */
 .react-flow__handle:hover, .react-flow__handle.connectingfrom, .react-flow__handle.connectingto { opacity: 1; background: var(--accent); }
+.react-flow__handle.target { background: #16a34a; border: 1px solid #fff; } /* entrée : vert */
+.react-flow__handle.source { background: #dc2626; border: 1px solid #fff; } /* sortie : rouge */
+.react-flow__handle.target:hover, .react-flow__handle.target.connectingto, .react-flow__handle.target.connectingfrom { background: #16a34a; box-shadow: 0 0 0 3px #16a34a55; }
+.react-flow__handle.source:hover, .react-flow__handle.source.connectingfrom, .react-flow__handle.source.connectingto { background: #dc2626; box-shadow: 0 0 0 3px #dc262655; }
 .bind-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.7fr); } .bind-extra { grid-column: 1 / -1; display: flex; gap: 4px; } .bind-extra select { flex: 1; max-width: none; } .bind-row input { min-width: 0; } .bind-row.out select { max-width: none; }
 .canvas { position: relative; } .flow-drop { width: 100%; height: 100%; }
 .run-schema .canvas, .run-schema .flow-drop { height: 380px; min-height: 380px; }

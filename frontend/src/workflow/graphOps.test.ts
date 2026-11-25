@@ -6,7 +6,7 @@ function must<T>(v: T | null | undefined): T {
   return v;
 }
 import type { Action } from "../api";
-import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, addJunction, flipJunction, isJunctionId, moveJunction, nextJunctionId, removeJunctions, setEdgePorts, setEdgeRoute, moveEndpoint, relabel, clientValidate, connect, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, addJunction, flipJunction, isJunctionId, moveJunction, nextJunctionId, removeJunctions, setEdgePorts, setEdgeRoute, moveEndpoint, relabel, clientValidate, connect, disconnect, START_ID, END_ID, canLinkStart, canLinkEnd, linkStart, linkEnd, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
 
 const echo: Action = {
   slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
@@ -429,5 +429,45 @@ describe("suppression d'un élément dans une ligne", () => {
     expect(next.junctions?.[0]).toEqual({ id: "junction_1", node: a, role: "out", face: "r", x: 100, y: 50 }); // revenu au départ : la clé disparaît
     expect(flipJunction(next, "inconnu")).toEqual(next);
     expect(addJunction(g, { node: a, role: "in", face: "l", x: 0, y: 0, flip: true }).junctions?.[0]?.flip).toBe(true); // un point automatique inversé est posé déjà inversé
+  });
+});
+
+describe("liens supprimés : pas de rattachement d'office à Début ou Fin", () => {
+  const chain = (): Graph => ({ inputs: { type: "object", properties: {} }, outputs: {}, nodes: [{ id: "a", type: "wait", name: "A" }, { id: "b", type: "wait", name: "B" }, { id: "c", type: "wait", name: "C" }] as GraphNode[], edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] });
+  it("retirer l'entrée d'une étape la marque sans lien d'entrée, sans rien d'autre", () => {
+    const g = disconnect(chain(), "a", "b");
+    expect(g.detached).toEqual({ start: ["b"], end: ["a"] });
+    expect(g.nodes).toHaveLength(3);
+    expect(g.edges).toEqual([{ from: "b", to: "c" }]);
+  });
+  it("garde l'étape rattachée quand il lui reste un lien", () => {
+    const g = connect(chain(), "a", "c");
+    expect(disconnect(g, "a", "c").detached).toBeUndefined();
+  });
+  it("refaire un lien retire la marque", () => {
+    const g = connect(disconnect(chain(), "a", "b"), "a", "b");
+    expect(g.detached).toBeUndefined();
+  });
+  it("supprimer l'étape efface sa marque ; un lien inexistant ne change rien", () => {
+    const g = disconnect(chain(), "a", "b");
+    expect(removeNode(g, "b").detached).toEqual({ end: ["a"] });
+    expect(disconnect(chain(), "c", "a")).toEqual(chain());
+  });
+});
+
+describe("liens « Début » et « Fin »", () => {
+  const two = (): Graph => ({ inputs: { type: "object", properties: {} }, outputs: {}, nodes: [{ id: "a", type: "wait", name: "A" }, { id: "b", type: "wait", name: "B" }] as GraphNode[], edges: [{ from: "a", to: "b" }] });
+  it("supprime puis refait le lien avec Début et avec Fin", () => {
+    const cut = disconnect(disconnect(two(), START_ID, "a"), "b", END_ID);
+    expect(cut.detached).toEqual({ start: ["a"], end: ["b"] });
+    expect(cut.edges).toEqual(two().edges);
+    expect(linkEnd(linkStart(cut, "a"), "b").detached).toBeUndefined();
+  });
+  it("refuse de relier Début à une étape qui a déjà une entrée, ou une étape qui a une sortie à Fin", () => {
+    expect(canLinkStart(two(), "b")).toBe(false);
+    expect(canLinkEnd(two(), "a")).toBe(false);
+    expect(linkStart(disconnect(two(), "a", "b"), "b").detached).toEqual({ end: ["a"] }); // B n'a plus d'entrée : « Début → B » est possible, et la marque de A reste
+    expect(canLinkStart(two(), "a")).toBe(true);
+    expect(canLinkStart(two(), "inconnue")).toBe(false);
   });
 });

@@ -1179,3 +1179,101 @@ test("concepteur : étape « Envoyer un e-mail » — connexion SMTP, mode test 
   await expect(page.getByLabel("Destinataire(s)")).toHaveValue("lea@exemple.test");
   await expectNoA11yViolations(page);
 });
+
+test("supprimer un lien ne supprime jamais les étapes qu'il relie", async ({ page }) => {
+  await login(page);
+  const slug = `lien-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 100, y: 100 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 420, y: 100 } }, { id: "c", type: "wait", name: "Pause C", seconds: 1, ui: { x: 740, y: 100 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  // une étape est sélectionnée, puis on clique un lien : Suppr ne retire que le lien
+  await page.locator('.react-flow__node[data-id="b"] .flow-box').click();
+  await page.locator('.react-flow__edge[data-id="a->b"] .react-flow__edge-path').click({ force: true });
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => (await read()).edges.length).toBe(1);
+  const g = await read();
+  expect(g.nodes.map((n: { id: string }) => n.id).sort()).toEqual(["a", "b", "c"]);
+  expect(g.edges).toEqual([expect.objectContaining({ from: "b", to: "c" })]);
+  // l'étape B n'a plus d'entrée : elle reste, et on peut la reconnecter à la main
+  await expect(page.locator('.react-flow__node[data-id="b"]')).toBeVisible();
+  // aucun lien n'est recréé d'office vers « Début » : c'est à la personne de refaire le lien (et ce choix survit au rechargement)
+  await expect(page.locator('.react-flow__edge[data-id="s->b"]')).toHaveCount(0);
+  await expect(page.locator('.react-flow__edge[data-id="s->a"]')).toHaveCount(1);
+  await expect.poll(async () => (await read()).detached?.start).toEqual(["b"]);
+  await page.reload();
+  await page.waitForSelector(".react-flow__edge");
+  await expect(page.locator('.react-flow__edge[data-id="s->b"]')).toHaveCount(0);
+});
+
+test("liens avec « Début » et « Fin » : supprimer, puis les refaire à la souris", async ({ page }) => {
+  await login(page);
+  const slug = `debutfin-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 300, y: 100 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 620, y: 100 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const edge = (id: string) => page.locator(`.react-flow__edge[data-id="${id}"]`);
+  const handle = (id: string, hid: string) => boxOf(page.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle[data-handleid="${hid}"]`));
+  const drag = async (from: { x: number; y: number; width: number; height: number }, to: { x: number; y: number; width: number; height: number }) => {
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    await page.mouse.up();
+  };
+  await expect(edge("s->a")).toHaveCount(1);
+  await expect(edge("b->e")).toHaveCount(1);
+
+  // les liens « Début → A » et « B → Fin » se sélectionnent et se suppriment ; les étapes restent
+  await edge("s->a").locator(".react-flow__edge-path").click({ force: true });
+  await page.keyboard.press("Delete");
+  await expect(edge("s->a")).toHaveCount(0);
+  await edge("b->e").locator(".react-flow__edge-path").click({ force: true });
+  await page.keyboard.press("Delete");
+  await expect(edge("b->e")).toHaveCount(0);
+  await expect.poll(async () => (await read()).detached).toEqual({ start: ["a"], end: ["b"] });
+  expect((await read()).nodes).toHaveLength(2);
+
+  // on les refait à la souris : de la sortie de « Début » vers l'entrée de A, de la sortie de B vers l'entrée de « Fin »
+  await drag(await handle("__start__", "o:r"), await handle("a", "i:l"));
+  await expect(edge("s->a")).toHaveCount(1);
+  await expect.poll(async () => (await read()).detached?.start).toBeUndefined();
+  await drag(await handle("b", "o:r"), await handle("__end__", "i:l"));
+  await expect(edge("b->e")).toHaveCount(1);
+  await expect.poll(async () => (await read()).detached).toBeUndefined();
+
+  // « Début → B » est refusé : B a déjà une entrée (A → B)
+  await drag(await handle("__start__", "o:r"), await handle("b", "i:l"));
+  await expect(edge("s->b")).toHaveCount(0);
+  expect((await read()).edges).toEqual([expect.objectContaining({ from: "a", to: "b" })]);
+});
+
+test("un lien presque droit devient droit : l'étape déplacée se cale sur l'alignement de celle à laquelle elle est reliée", async ({ page }) => {
+  await login(page);
+  const slug = `cale-${uniq()}`;
+  await publishViaApi(page, slug, { inputs: { type: "object", properties: {}, required: [] }, outputs: {}, edges: [{ from: "a", to: "b" }, { from: "a", to: "c" }],
+    nodes: [{ id: "a", type: "wait", name: "Pause A", seconds: 1, ui: { x: 100, y: 100 } }, { id: "b", type: "wait", name: "Pause B", seconds: 1, ui: { x: 420, y: 100 } }, { id: "c", type: "wait", name: "Pause C", seconds: 1, ui: { x: 420, y: 300 } }] });
+  await page.goto(`/workflows/${slug}/schema`);
+  await page.waitForSelector(".react-flow__edge");
+  const icon = (id: string) => boxOf(page.locator(`.react-flow__node[data-id="${id}"] .flow-box`));
+  const read = () => page.evaluate(async (s) => (await (await fetch(`/api/v1/workspaces/demo/workflows/${s}/`)).json()).draft_graph, slug);
+  const dragBy = async (id: string, dx: number, dy: number) => {
+    const b = await icon(id);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 8 });
+    await page.mouse.up();
+  };
+  // B est poussée de 6 pixels vers le bas : elle remonte se mettre à la hauteur de A, le lien est droit
+  await dragBy("b", 0, 6);
+  await expect.poll(async () => Math.abs((await icon("b")).y - (await icon("a")).y)).toBeLessThan(1);
+  await expect.poll(async () => (await read()).nodes.find((n: { id: string }) => n.id === "b").ui.y).toBe(100);
+  // C est tirée loin de l'alignement (200 pixels plus bas que A) : elle ne bouge pas toute seule
+  const cBefore = await icon("c");
+  await dragBy("c", 0, 40);
+  const cAfter = await icon("c");
+  expect(cAfter.y - cBefore.y).toBeGreaterThan(30); // elle a suivi la souris (à la grille près) et n'a pas été attirée vers A
+  expect(cAfter.y - (await icon("a")).y).toBeGreaterThan(150);
+});
