@@ -1,6 +1,6 @@
 import type { JsonSchema } from "../api";
 
-export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "transform" | "cache" | "schedule" | "file" | "model";
+export type NodeType = "action" | "condition" | "switch" | "join" | "race" | "wait" | "approval" | "subworkflow" | "foreach" | "ai" | "script" | "throw" | "http" | "sql" | "agent" | "while" | "ldap" | "sftp" | "smtp" | "ssh" | "ansible" | "transform" | "cache" | "schedule" | "file" | "model";
 export type ScriptLanguage = "python" | "javascript";
 export type VarType = "string" | "integer" | "number" | "boolean" | "array" | "object";
 export interface ScriptOutput { name: string; type: VarType }
@@ -135,6 +135,11 @@ export interface GraphNode {
   skill_version?: string; // pinned at publication
   output_schema?: JsonSchema;
   connections?: Record<string, string>;
+  playbook?: string; // « Playbook Ansible » : le playbook écrit dans le workflow
+  roles?: { role: string; version: string }[]; // ses rôles de la bibliothèque (versions figées à la publication ; « latest » avant)
+  required_tags?: string[]; // étiquettes de runner exigées
+  auth?: "key" | "password"; // connexion SSH par clé (défaut) ou mot de passe
+  idempotent?: boolean; // rejouable automatiquement
   description?: string;
   language?: ScriptLanguage;
   script?: string;
@@ -216,6 +221,7 @@ export const NODE_LABELS: Record<NodeType, string> = {
   ldap: "Annuaire LDAP",
   sftp: "Fichier SFTP",
   ssh: "Commandes SSH",
+  ansible: "Playbook Ansible",
   smtp: "Envoyer un e-mail",
   transform: "Transformer les données",
   cache: "Cache",

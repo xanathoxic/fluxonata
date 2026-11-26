@@ -59,6 +59,11 @@ READ_TOOLS = {
     "list_integrations",
     "list_triggers",
     "get_authoring_guide",
+    "list_ansible_roles",
+    "get_ansible_role",
+    "draft_role_contract",
+    "list_inventories",
+    "get_inventory",
 }
 
 
@@ -230,6 +235,11 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("list_controls", {}),
         ("list_folders", {"kind": "workflow"}),
         ("get_control", {"slug": "absent"}),
+        ("list_ansible_roles", {}),
+        ("get_ansible_role", {"name": "absent"}),
+        ("draft_role_contract", {"files": {}}),
+        ("list_inventories", {}),
+        ("get_inventory", {"slug": "absent"}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié
     for name, args in calls:

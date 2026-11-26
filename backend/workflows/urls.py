@@ -42,6 +42,8 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/dependencies/", x.DependenciesView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/audit/", x.WorkflowAuditView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/test-script/", x.ScriptTestView.as_view()),
+    path("workspaces/<slug:workspace>/workflows/<slug:slug>/test-ansible/", x.AnsibleTestView.as_view()),
+    path("workspaces/<slug:workspace>/ansible-step/", x.AnsibleStepSchemaView.as_view()),
     path("workspaces/<slug:workspace>/model-images/", mv.ModelImagesView.as_view()),
     path("workspaces/<slug:workspace>/model-images/<uuid:pk>/", mv.ModelImageView.as_view()),
     path("workspaces/<slug:workspace>/model-preview/", mv.ModelPreviewView.as_view()),

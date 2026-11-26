@@ -20,6 +20,7 @@ from vault.injection import InjectionError, resolve_env
 
 from . import services
 from .finalize import finalize_attempt
+from .inventory_inputs import InventoryError, effective_inputs, effective_support_files
 from .models import Execution, Runner
 from .runner_auth import IsRunner, RunnerAuthentication, RunnerThrottle
 from .runners import RunOutcome
@@ -84,7 +85,7 @@ class RunnerMeView(RunnerView):
         return Response(_config(Runner.objects.get(pk=request.auth.pk)))
 
 
-def _spec(execution: Execution, attempt: int, env: dict) -> dict:
+def _spec(execution: Execution, attempt: int, env: dict, inputs: dict, support_files: dict) -> dict:
     v = execution.action_version
     limits = {**v.limits, **(execution.limits or {})}  # per-execution override (script tasks); versions stay immutable
     return {
@@ -97,7 +98,8 @@ def _spec(execution: Execution, attempt: int, env: dict) -> dict:
         "network_policy": v.network_policy,
         "limits": limits,
         "timeout_seconds": int(limits.get("timeout_seconds", 30)),
-        "inputs": execution.inputs,
+        "inputs": inputs,
+        "support_files": support_files,  # rôles Ansible (chemin relatif -> texte) ; vide pour les autres langages
         "env": env,
         "lease_seconds": settings.ORCH_LEASE_SECONDS,
     }
@@ -123,7 +125,24 @@ def _claim_one(runner: Runner) -> dict | None:
                 },
             )
             continue  # that job is over; look for the next one
-        return _spec(execution, attempt, env)
+        try:
+            support = effective_support_files(execution)  # rôles Ansible figés de la version d'action
+            inputs = effective_inputs(
+                execution
+            )  # `inventory_ref` -> the rendered inventory, resolved here by the platform (never by the runner)
+        except InventoryError as exc:
+            services.complete_attempt(
+                execution.id,
+                attempt,
+                ok=False,
+                error={
+                    "code": exc.code,
+                    "message": exc.message,
+                    "next_step": "Vérifiez l'inventaire dans « Inventaires ».",
+                },
+            )
+            continue
+        return _spec(execution, attempt, env, inputs, support)
 
 
 class RequestIn(serializers.Serializer):

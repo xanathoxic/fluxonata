@@ -1,0 +1,10 @@
+# Machine de test « gérée » pour le laboratoire Ansible (scripts/ansible-lab.sh) : un serveur SSH minimal avec Python (requis par les modules d'Ansible) et sudo.
+# Les clés (hôte et autorisée) ne sont PAS dans l'image : le script les copie dans le conteneur avant de le démarrer. Aucun mot de passe, aucune connexion root.
+FROM alpine:3.20
+RUN apk add --no-cache openssh python3 sudo \
+    && adduser -D -s /bin/sh deploy && passwd -u deploy \
+    && echo "deploy ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/deploy && chmod 440 /etc/sudoers.d/deploy \
+    && mkdir -p /etc/ssh/lab
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D", "-e", "-o", "PasswordAuthentication=no", "-o", "PermitRootLogin=no", "-o", "StrictModes=no", \
+     "-o", "HostKey=/etc/ssh/lab/ssh_host_ed25519_key", "-o", "AuthorizedKeysFile=/etc/ssh/lab/authorized_keys", "-o", "AllowUsers=deploy"]

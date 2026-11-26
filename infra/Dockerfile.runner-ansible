@@ -1,0 +1,9 @@
+# Image du runtime « ansible » (ADR 0037) : ansible-core à version épinglée, client SSH, sshpass. Aucune collection : seul ansible.builtin est disponible.
+# Construction : scripts/build-ansible-runner.sh. En production, épingler l'image par digest (ORCH_REQUIRE_IMAGE_DIGEST).
+FROM python:3.13-slim
+ARG ANSIBLE_CORE_VERSION=2.18.1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-client sshpass \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir "ansible-core==${ANSIBLE_CORE_VERSION}"
+USER 65534:65534

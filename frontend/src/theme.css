@@ -1026,3 +1026,63 @@ main.login .login-sso-error { margin-top: 12px; }
 .md-images li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .md-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; } .md-summary p { margin: 0; }
 @media (max-width: 900px) { .md-panes { grid-template-columns: 1fr; } }
+
+/* Panneau de propriétés : tous les champs d'une entrée (texte, liste, éditeur de code, « Utiliser une variable… ») ont la même largeur */
+.node-panel .field { max-width: none; min-width: 0; }
+.node-panel .field > input:not([type=checkbox]), .node-panel .field > select, .node-panel .field > textarea, .node-panel .field > .code-editor, .node-panel .field > .json-field, .node-panel .field .var-row select { width: 100%; box-sizing: border-box; min-width: 0; }
+.node-panel .field .var-row { width: 100%; }
+.node-panel .field .var-row select { flex: 1 1 auto; }
+
+/* Nouvelle version d'une action : fenêtre centrale à onglets ; l'éditeur avancé occupe toute la hauteur */
+.overlay-modal.overlay-wide.overlay-version { padding: 12px; }
+.overlay-modal.overlay-wide.overlay-version .overlay-panel { width: 96vw; max-width: none; height: 94vh; max-height: none; } /* suit la fenêtre, sans plafond : sur un grand écran la fenêtre grandit avec lui */
+.overlay-version .overlay-body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.overlay-version .version-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.overlay-version .version-form > .tabpanel { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 2px; }
+.overlay-version .version-foot { flex: none; padding-top: 10px; border-top: 1px solid var(--border); }
+.overlay-version .sd2-embedded { flex: 1 1 auto; min-height: 0; box-shadow: none; }
+.overlay-version .sd2-embedded .sd2-head h3 { margin: 0; font-size: var(--fs-lg); }
+.sd2-split.panel-closed { grid-template-columns: minmax(0, 1fr); }
+.sd2-toggle { margin-left: auto; padding: 2px 10px; font-size: var(--fs-xs); background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; }
+.sd2-toggle:hover { background: #334155; }
+.sd2-right[hidden] { display: none; }
+.sd2-toggle + .sd2-pos { margin-left: 0; }
+.overlay-version .sd2-split:not(.panel-closed) { grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 1000px); }
+.overlay-version .sd-samples textarea, .overlay-version .schema-advanced textarea { min-height: 28vh; }
+
+/* Rôles d'une action Ansible : ceux qui sont choisis, puis une recherche pour en ajouter */
+.role-list, .role-matches { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.role-list li { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); align-items: center; }
+.role-list li strong { min-width: 8ch; }
+.role-matches { border: 1px solid var(--border); border-radius: 8px; max-height: 240px; overflow: auto; background: var(--surface); }
+.role-matches button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 0; }
+.role-matches button:hover, .role-matches button:focus-visible { background: var(--accent-soft); }
+.role-matches li.hint { padding: 8px 10px; }
+
+/* Nouvelle version, onglet Général : des cartes sur une grille qui suit la largeur de la fenêtre */
+.version-head { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 0 0 10px; }
+.version-head .hint { margin: 0; }
+.version-grid { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; padding: 2px; }
+.version-grid > .np-section { flex: 1 1 400px; }
+.version-grid > .version-wide { flex-basis: 100%; }
+.version-grid .np-section .field { max-width: none; }
+.ans-fields { display: flex; flex-wrap: wrap; gap: 6px 28px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.ans-fields > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* le titre de la carte tient lieu de légende */
+.ans-fields > .hint:first-of-type { flex-basis: 100%; margin: 0 0 6px; }
+.ans-fields .ans-col { flex: 1 1 340px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ans-fields .ans-col input, .ans-fields .ans-col select:not([aria-label]) { width: 100%; box-sizing: border-box; }
+.ans-fields .role-list li select { flex: 1 1 auto; min-width: 0; }
+.ver-pill { padding: 3px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: var(--fs-sm); }
+.ver-pill-soft { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.version-grid > .np-section { box-sizing: border-box; min-width: 0; max-width: none; }
+.np-section fieldset.ans-fields { border: 0; background: none; padding: 0; margin: 0; }
+.ans-fields .role-list li { flex-wrap: wrap; }
+.ans-fields { flex-direction: row; align-content: flex-start; align-items: flex-start; } /* les deux blocs gardent leur hauteur : sinon, une fois empilés, l'espace libre s'insère entre eux */
+.role-list li { gap: 10px; }
+/* Rôles choisis : une ligne alignée (nom et description, version, retrait) */
+.role-list li.role-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) 38px; gap: 12px; align-items: center; padding: 8px 6px 8px 12px; border-left: 3px solid var(--accent); }
+.role-row .role-id { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.role-row .role-id strong { min-width: 0; overflow-wrap: anywhere; }
+.role-row .role-id small { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.role-row select { width: 100%; box-sizing: border-box; }
+.ans-fields .role-list li.role-row { flex-wrap: nowrap; }

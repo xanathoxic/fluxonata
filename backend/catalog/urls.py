@@ -1,5 +1,7 @@
 from django.urls import path
 
+from . import ansible_role_views as roles
+from . import inventory_views as inv
 from . import library as lib
 from . import usage_views, views
 
@@ -7,6 +9,7 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/integrations/", views.IntegrationCatalogView.as_view()),
     path("workspaces/<slug:workspace>/library/actions/", lib.ActionCreateView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/versions/", lib.ActionVersionsView.as_view()),
+    path("workspaces/<slug:workspace>/actions/<slug:slug>/trial/", lib.ActionTrialView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/meta/", lib.ActionMetaView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/deprecate/", lib.ActionDeprecateView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/activate/", lib.ActionActivateView.as_view()),
@@ -22,6 +25,20 @@ urlpatterns = [
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/compare/", lib.WorkflowCompareView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/dependents/", lib.WorkflowDependentsView.as_view()),
     path("workspaces/<slug:workspace>/workflows/<slug:slug>/deprecate/", lib.WorkflowDeprecateView.as_view()),
+    path("workspaces/<slug:workspace>/inventories/", inv.InventoryListView.as_view()),
+    path("workspaces/<slug:workspace>/inventories/import/", inv.InventoryImportView.as_view()),
+    path("workspaces/<slug:workspace>/inventories/<slug:slug>/", inv.InventoryDetailView.as_view()),
+    path("workspaces/<slug:workspace>/inventories/<slug:slug>/rendered/", inv.InventoryRenderedView.as_view()),
+    path("workspaces/<slug:workspace>/ansible-roles/", roles.RoleListView.as_view()),
+    path(
+        "workspaces/<slug:workspace>/ansible-roles/contract-draft/", roles.RoleContractDraftView.as_view()
+    ),  # avant <name> : « contract-draft » n'est pas un rôle
+    path("workspaces/<slug:workspace>/ansible-roles/<str:name>/", roles.RoleDetailView.as_view()),
+    path("workspaces/<slug:workspace>/ansible-roles/<str:name>/versions/", roles.RoleVersionsView.as_view()),
+    path(
+        "workspaces/<slug:workspace>/ansible-roles/<str:name>/versions/<str:version>/",
+        roles.RoleVersionDetailView.as_view(),
+    ),
     path("workspaces/<slug:workspace>/actions/", views.ActionListView.as_view()),
     path("workspaces/<slug:workspace>/actions/<slug:slug>/", views.ActionDetailView.as_view()),
 ]

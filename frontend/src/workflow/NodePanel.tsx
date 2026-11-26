@@ -4,6 +4,7 @@ import { Tabs } from "../components/Tabs";
 import { AiConfig } from "./AiConfig";
 import { CommentsTab } from "./CommentsTab";
 import { AgentConfig } from "./AgentConfig";
+import { ParamsTab, PlaybookTab, TargetTab, useAnsibleSchema } from "./AnsibleStep";
 import { DataTab } from "./DataTab";
 import { InputsTab } from "./InputsTab";
 import { OutputsTab } from "./OutputsTab";
@@ -73,7 +74,8 @@ export function NodePanel(p: Props) {
           ? ["next"]
           : ["next", "error"];
   const mine = issues.filter((i) => i.node === node.id);
-  const retryable = ["action", "script", "ai"].includes(node.type);
+  const retryable = ["action", "script", "ai", "ansible"].includes(node.type);
+  const ansibleSchema = useAnsibleSchema().data;
 
   const general = (
     <>
@@ -278,6 +280,10 @@ export function NodePanel(p: Props) {
         </>
       ),
     });
+  } else if (node.type === "ansible") {
+    tabs.push({ id: "playbook", label: "Playbook", content: <PlaybookTab node={node} editable={editable} onUpdate={onUpdate} onOpen={p.onOpenScript} /> });
+    tabs.push({ id: "target", label: "Cible et accès", content: <TargetTab node={node} variables={variables} onUpdate={onUpdate} schema={ansibleSchema} /> });
+    tabs.push({ id: "params", label: "Paramètres", content: <ParamsTab node={node} variables={variables} onUpdate={onUpdate} schema={ansibleSchema} /> });
   } else if (node.type === "action") {
     tabs.push({
       id: "io",
@@ -756,7 +762,7 @@ export function NodePanel(p: Props) {
   } else if (retryable) {
     tabs.push({ id: "exceptions", label: "Exceptions", content: exceptions });
   }
-  if (node.type !== "join" && node.type !== "action" && node.type !== "script" && !(node.type === "ai" && node.skill !== undefined))
+  if (node.type !== "join" && node.type !== "action" && node.type !== "script" && node.type !== "ansible" && !(node.type === "ai" && node.skill !== undefined))
     tabs.push({ id: "inputs", label: "Entrées", content: <InputsTab node={node} /> });
   if (node.type !== "join") tabs.push({ id: "outputs", label: "Sorties", content: <OutputsTab node={node} /> });
   if (node.type !== "join" && !p.preview) tabs.push({ id: "data", label: "Données", content: <DataTab node={node} /> });

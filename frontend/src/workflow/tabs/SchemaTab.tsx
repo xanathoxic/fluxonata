@@ -12,6 +12,7 @@ import { PaneResizer } from "../PaneResizer";
 import { DEFAULT_LAYOUT, HANDLE, LIMITS, gridColumns, loadLayout, saveLayout } from "../paneLayout";
 import { Palette, type PaletteItem } from "../Palette";
 import { ScriptEditorDialog } from "../ScriptEditorDialog";
+import { AnsiblePlaybookDialog, useAnsibleSchema } from "../AnsibleStep";
 import type { Integration } from "../../api";
 import { useWsQuery } from "../../lib";
 import type { Graph, GraphNode, Note } from "../types";
@@ -39,6 +40,7 @@ export function SchemaTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<"canvas" | "list">(readView);
   const [scriptOpen, setScriptOpen] = useState<string | null>(null);
+  const ansibleSchema = useAnsibleSchema();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null); // the called workflow shown in an overlay
   const [showIssues, setShowIssues] = useState(false);
   const [finder, setFinder] = useState(false);
@@ -160,7 +162,7 @@ export function SchemaTab() {
             <CanvasView graph={graph} actions={actions} issues={issues} selectedId={selectedId} onSelect={pick} focus={focus} readOnly={!editable}
               onOpen={(id) => {
                 const n = graph.nodes.find((x) => x.id === id);
-                if (n?.type === "script") setScriptOpen(id);
+                if (n?.type === "script" || n?.type === "ansible") setScriptOpen(id);
                 else if (n?.type === "subworkflow" && n.workflow) setPreviewSlug(n.workflow);
               }}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
@@ -234,7 +236,8 @@ export function SchemaTab() {
       )}
       {previewSlug && <WorkflowPreview slug={previewSlug} onClose={() => setPreviewSlug(null)} />}
       {finder && <StepFinder graph={graph} onPick={(id) => { setSelectedId(id); setFocus({ id, seq: Date.now() }); setLayout((l) => ({ ...l, panOpen: true })); setFinder(false); }} onClose={() => setFinder(false)} />}
-      {scriptNode && <ScriptEditorDialog node={scriptNode} graph={graph} actions={actions} slug={d.slug} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}
+      {scriptNode?.type === "ansible" && <AnsiblePlaybookDialog node={scriptNode} slug={d.slug} schema={ansibleSchema.data} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}
+      {scriptNode?.type === "script" && <ScriptEditorDialog node={scriptNode} graph={graph} actions={actions} slug={d.slug} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}
     </div>
   );
 }

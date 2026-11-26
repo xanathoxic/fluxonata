@@ -6,6 +6,7 @@
 #   agent-ctl.sh rotate            nouveau jeton (entrée standard) : remplace le fichier puis recrée l'agent
 #   agent-ctl.sh update            reconstruit l'image de l'agent puis le recrée
 #   agent-ctl.sh revoke            arrête l'agent et supprime le jeton de cette machine (la révocation côté plate-forme : supprimer le runner dans l'interface)
+#   agent-ctl.sh targets-network  crée le réseau Docker des playbooks Ansible (ORCH_ANSIBLE_NETWORK, sous-réseau ANSIBLE_TARGETS_SUBNET facultatif) ; sans effet s'il existe
 #   agent-ctl.sh clean             arrête l'agent, supprime ses conteneurs d'action et ses répertoires de travail
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -35,9 +36,13 @@ case "${1:-}" in
   rotate) write_token; "${C[@]}" up -d --force-recreate agent ;;   # `restart` ne relirait pas le fichier
   update) "${C[@]}" build --pull agent; "${C[@]}" up -d --force-recreate agent ;;
   revoke) "${C[@]}" down; shred -u "$AGENT_TOKEN_FILE" 2>/dev/null || rm -f "$AGENT_TOKEN_FILE"; echo "Jeton supprimé de cette machine. Supprimez aussi le runner dans l'interface pour le révoquer." ;;
+  targets-network)
+    net="${ORCH_ANSIBLE_NETWORK:-fluxonata-ansible-targets}"
+    if docker network inspect "$net" >/dev/null 2>&1; then echo "Réseau $net déjà présent."
+    else docker network create --driver bridge ${ANSIBLE_TARGETS_SUBNET:+--subnet "$ANSIBLE_TARGETS_SUBNET"} "$net" >/dev/null && echo "Réseau $net créé. Limitez ce qu'il atteint avec le pare-feu de cette machine (voir docs/RUNNERS.md)."; fi ;;
   clean)
     "${C[@]}" down
     docker ps -aq --filter "label=fluxonata.sandbox" | xargs -r docker rm -f
     sudo find "$WORK" -mindepth 1 -maxdepth 1 \( -name 'orch-run-*' -o -name 'orch-env-*' \) -exec rm -rf {} + ;;
-  *) sed -n '2,10p' "$0"; exit 2 ;;
+  *) sed -n '2,11p' "$0"; exit 2 ;;
 esac

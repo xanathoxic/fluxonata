@@ -214,6 +214,9 @@ ORCH_MCP_ACTION_TEST_UNISOLATED = env("ORCH_MCP_ACTION_TEST_UNISOLATED", "0") ==
 ORCH_PYTHON_IMAGE = env("ORCH_PYTHON_IMAGE", "python:3.13-slim")
 ORCH_NODE_IMAGE = env("ORCH_NODE_IMAGE", "node:22-slim")
 ORCH_POWERSHELL_IMAGE = env("ORCH_POWERSHELL_IMAGE", "mcr.microsoft.com/powershell:lts-debian-12")
+# Runtime « ansible » (ADR 0037) : image construite depuis infra/Dockerfile.runner-ansible (scripts/build-ansible-runner.sh) et réseau Docker que l'exploitant ouvre vers les machines à gérer (politique « targets »).
+ORCH_ANSIBLE_IMAGE = env("ORCH_ANSIBLE_IMAGE", "fluxonata-runner-ansible:local")
+ORCH_ANSIBLE_NETWORK = env("ORCH_ANSIBLE_NETWORK", "fluxonata-ansible-targets")
 ORCH_LEASE_SECONDS = int(env("ORCH_LEASE_SECONDS", "30"))
 ORCH_MAX_ATTEMPTS = int(env("ORCH_MAX_ATTEMPTS", "3"))
 # Actions exécutées EN PARALLÈLE par un process worker (rôle exec). 1 = historique. Le démarrage d'un conteneur domine (≈ 5-8 s ici) : sur un hôte qui le permet,

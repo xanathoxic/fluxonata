@@ -67,6 +67,14 @@ Un espace peut déclarer **autant de runners dédiés que nécessaire** (Adminis
 - Une version d'action peut exiger des étiquettes (`required_tags`, à la création de la version) : elle ne part que sur un runner qui les porte toutes.
 - Un runner ne reçoit jamais plus de tâches que son parallélisme ; il peut être **mis en pause** (plus aucune nouvelle tâche, la tâche en cours se termine).
 
+## Runner dédié aux playbooks Ansible
+Pour que la plate-forme n'ait pas à joindre les machines gérées, installez un **agent dans leur réseau** (même procédure que tout agent, `infra/agent`) : il se connecte à la plate-forme en sortie seulement, et c'est lui qui ouvre les connexions SSH. Voir l'ADR 0037.
+1. Dans l'interface (Runners), créez le runner avec le langage **ansible** et des étiquettes (par exemple `ansible`, `site-paris`). Une action Ansible **doit** exiger au moins une étiquette (`required_tags`) : elle ne part que sur un runner qui les porte toutes.
+2. Sur la machine de l'agent : construisez l'image (`scripts/build-ansible-runner.sh`), poussez-la dans votre registre, épinglez-la (`scripts/pin-images.sh --write infra/agent/agent.env` renseigne `ORCH_ANSIBLE_IMAGE` par digest ; l'agent refuse de démarrer sans empreinte), puis créez le réseau des playbooks : `agent-ctl.sh targets-network` (sous-réseau facultatif : `ANSIBLE_TARGETS_SUBNET`).
+3. **Limitez ce que ce réseau atteint** avec le pare-feu de la machine (seulement les machines à gérer, seulement SSH) : c'est le contrôle réseau de ce chemin d'exécution.
+4. **Rôles Ansible** : un agent doit être en version **0.2.0 ou plus** (`runner/agent.py`) pour recevoir les fichiers des rôles avec la tâche ; un agent plus ancien ne reçoit pas les playbooks qui déclarent des rôles (ils restent en file) mais continue de recevoir les autres. Mettez-le à jour (`agent-ctl.sh update`) avant d'utiliser des rôles.
+5. Les actions Ansible utilisent la politique réseau `targets`, des connexions pour la clé (`FLX_SSH_KEY_B64`, base64 sur une ligne) et `known_hosts` en entrée. Un playbook d'un autre site (autre étiquette) n'est jamais attribué à ce runner.
+
 ## Sécurité
 - Jeton **par runner**, hachage SHA-256, régénérable (l'ancien cesse de fonctionner aussitôt) ; supprimer un runner révoque son accès immédiatement.
 - Un jeton de runner n'ouvre **rien d'autre** que le protocole du runner (ni l'API des espaces, ni l'administration) ; une session de personne n'ouvre pas non plus le protocole.

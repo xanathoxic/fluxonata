@@ -11,6 +11,7 @@ declare -A VARS=(
   ["${ORCH_PYTHON_IMAGE:-python:3.13-slim}"]=ORCH_PYTHON_IMAGE
   ["${ORCH_NODE_IMAGE:-node:22-slim}"]=ORCH_NODE_IMAGE
   ["${ORCH_POWERSHELL_IMAGE:-mcr.microsoft.com/powershell:lts-debian-12}"]=ORCH_POWERSHELL_IMAGE
+  ["${ORCH_ANSIBLE_IMAGE:-fluxonata-runner-ansible:local}"]=ORCH_ANSIBLE_IMAGE
   ["postgres:17-alpine"]=""
 )
 for img in "${!VARS[@]}"; do

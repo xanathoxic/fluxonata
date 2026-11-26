@@ -6,12 +6,63 @@ function must<T>(v: T | null | undefined): T {
   return v;
 }
 import type { Action } from "../api";
-import { BAND_LAYERS, GRID_X, GRID_Y, layeredPositions, addNode, allVariables, ancestors, autoLayout, availableVariables, addJunction, flipJunction, isJunctionId, moveJunction, nextJunctionId, removeJunctions, setEdgePorts, setEdgeRoute, moveEndpoint, relabel, clientValidate, connect, disconnect, START_ID, END_ID, canLinkStart, canLinkEnd, linkStart, linkEnd, defaultLabel, defaultNode, duplicateNode, emptyGraph, placeNewNodes, removeNode, summarize, topoOrder, typeCompatible, uniqueId, wouldCreateCycle } from "./graphOps";
+import {
+  BAND_LAYERS,
+  GRID_X,
+  GRID_Y,
+  layeredPositions,
+  addNode,
+  allVariables,
+  ancestors,
+  autoLayout,
+  availableVariables,
+  addJunction,
+  flipJunction,
+  isJunctionId,
+  moveJunction,
+  nextJunctionId,
+  removeJunctions,
+  setEdgePorts,
+  setEdgeRoute,
+  moveEndpoint,
+  relabel,
+  clientValidate,
+  connect,
+  disconnect,
+  START_ID,
+  END_ID,
+  canLinkStart,
+  canLinkEnd,
+  linkStart,
+  linkEnd,
+  defaultLabel,
+  defaultNode,
+  duplicateNode,
+  emptyGraph,
+  placeNewNodes,
+  removeNode,
+  summarize,
+  topoOrder,
+  typeCompatible,
+  uniqueId,
+  wouldCreateCycle,
+} from "./graphOps";
 
 const echo: Action = {
-  slug: "echo", name: "Écho", description: "", domain: "", folder: "", tags: [], owner: null, status: "active",
+  slug: "echo",
+  name: "Écho",
+  description: "",
+  domain: "",
+  folder: "",
+  tags: [],
+  owner: null,
+  status: "active",
   latest_version: {
-    version: "1.0.0", license: "Apache-2.0", side_effects: "none", idempotent: true, examples: [],
+    version: "1.0.0",
+    license: "Apache-2.0",
+    side_effects: "none",
+    idempotent: true,
+    examples: [],
     input_schema: { type: "object", required: ["value"], properties: { value: { type: "string", title: "Valeur" } } },
     output_schema: { type: "object", properties: { value: { type: "string", title: "Valeur" } } },
   },
@@ -29,7 +80,10 @@ describe("graph operations", () => {
   it("creates unique ids and connects after the selected node", () => {
     const g = chain();
     expect(g.nodes.map((n) => n.id)).toEqual(["echo", "echo_2", "condition"]);
-    expect(g.edges).toEqual([{ from: "echo", to: "echo_2" }, { from: "echo_2", to: "condition" }]);
+    expect(g.edges).toEqual([
+      { from: "echo", to: "echo_2" },
+      { from: "echo_2", to: "condition" },
+    ]);
     expect(uniqueId(g, "Écho 3!")).toBe("echo_3");
     expect(uniqueId(g, "Écho 2")).toBe("echo_2_2");
   });
@@ -150,7 +204,14 @@ describe("script tasks, variables and horizontal layout", () => {
     let g = emptyGraph();
     g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
     const before = must(g.nodes[0]).ui;
-    const proposed = { ...g, nodes: [...g.nodes, { id: "b", type: "wait" as const, name: "B" }, { id: "c", type: "wait" as const, name: "C" }], edges: [{ from: "a", to: "b" }, { from: "a", to: "c" }] };
+    const proposed = {
+      ...g,
+      nodes: [...g.nodes, { id: "b", type: "wait" as const, name: "B" }, { id: "c", type: "wait" as const, name: "C" }],
+      edges: [
+        { from: "a", to: "b" },
+        { from: "a", to: "c" },
+      ],
+    };
     const out = placeNewNodes(proposed);
     expect(must(out.nodes[0]).ui).toEqual(before);
     const [b, c] = [must(must(out.nodes[1]).ui), must(must(out.nodes[2]).ui)];
@@ -161,7 +222,10 @@ describe("script tasks, variables and horizontal layout", () => {
   it("places notes proposed without a position above the schema, side by side", () => {
     let g = emptyGraph();
     g = addNode(g, { ...defaultNode(g, "wait"), id: "a" });
-    const out = placeNewNodes({ ...g, notes: [{ id: "note_1", text: "a", ui: { x: 5, y: 5 } }, { id: "note_2", text: "b" } as never, { id: "note_3", text: "c" } as never] });
+    const out = placeNewNodes({
+      ...g,
+      notes: [{ id: "note_1", text: "a", ui: { x: 5, y: 5 } }, { id: "note_2", text: "b" } as never, { id: "note_3", text: "c" } as never],
+    });
     expect(must(must(out.notes)[0]).ui).toEqual({ x: 5, y: 5 }); // existing note untouched
     const notes = must(out.notes);
     const [n2, n3] = [must(must(notes[1]).ui), must(must(notes[2]).ui)];
@@ -210,7 +274,14 @@ describe("AI step using a library skill", () => {
 describe("choix multiple (switch)", () => {
   it("propose les cas dans l'ordre puis « default », et signale un cas sans condition", () => {
     let g = emptyGraph();
-    const sw = { ...defaultNode(g, "switch"), id: "choix", cases: [{ id: "prod", expr: "inputs.env == 'prod'" }, { id: "dev", expr: "" }] };
+    const sw = {
+      ...defaultNode(g, "switch"),
+      id: "choix",
+      cases: [
+        { id: "prod", expr: "inputs.env == 'prod'" },
+        { id: "dev", expr: "" },
+      ],
+    };
     g = addNode(g, sw);
     expect(defaultLabel(g, sw)).toBe("prod");
     g = addNode(g, { ...defaultNode(g, "wait"), id: "a" }, "choix");
@@ -240,7 +311,19 @@ describe("layered auto-layout", () => {
   const g = (ids: string[], edges: [string, string][]) => ({ ...emptyGraph(), nodes: ids.map(n), edges: edges.map(([from, to]) => ({ from, to })) });
 
   it("centres a fan-out on its source and a join on its branches", () => {
-    const pos = layeredPositions(g(["a", "b", "c", "d", "e"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "e"], ["c", "e"], ["d", "e"]]));
+    const pos = layeredPositions(
+      g(
+        ["a", "b", "c", "d", "e"],
+        [
+          ["a", "b"],
+          ["a", "c"],
+          ["a", "d"],
+          ["b", "e"],
+          ["c", "e"],
+          ["d", "e"],
+        ],
+      ),
+    );
     expect(pos.get("c")?.y).toBe(pos.get("a")?.y);
     expect(pos.get("e")?.y).toBe(pos.get("c")?.y);
     expect(pos.get("b")?.y).toBe((pos.get("c")?.y ?? 0) - GRID_Y);
@@ -250,19 +333,38 @@ describe("layered auto-layout", () => {
     const ids = Array.from({ length: 60 }, (_, i) => `n${i}`);
     const edges: [string, string][] = ids.slice(1).map((id, i) => [`n${Math.floor(i / 2)}`, id]);
     const seen = new Set<string>();
-    for (const p of layeredPositions(g(ids, edges)).values()) { const k = `${p.x}:${p.y}`; expect(seen.has(k)).toBe(false); seen.add(k); }
+    for (const p of layeredPositions(g(ids, edges)).values()) {
+      const k = `${p.x}:${p.y}`;
+      expect(seen.has(k)).toBe(false);
+      seen.add(k);
+    }
   });
 
   it("untangles crossing branches", () => {
     // declared a1,a2 / b1,b2 but wired a1->b2 and a2->b1: the order must follow the wiring
-    const pos = layeredPositions(g(["r", "a1", "a2", "b1", "b2"], [["r", "a1"], ["r", "a2"], ["a1", "b2"], ["a2", "b1"]]));
+    const pos = layeredPositions(
+      g(
+        ["r", "a1", "a2", "b1", "b2"],
+        [
+          ["r", "a1"],
+          ["r", "a2"],
+          ["a1", "b2"],
+          ["a2", "b1"],
+        ],
+      ),
+    );
     const above = (p: string, q: string) => (pos.get(p)?.y ?? 0) < (pos.get(q)?.y ?? 0);
     expect(above("a1", "a2")).toBe(above("b2", "b1"));
   });
 
   it("folds a long chain onto stacked bands", () => {
     const ids = Array.from({ length: BAND_LAYERS * 2 + 3 }, (_, i) => `s${i}`);
-    const pos = layeredPositions(g(ids, ids.slice(1).map((id, i) => [`s${i}`, id])));
+    const pos = layeredPositions(
+      g(
+        ids,
+        ids.slice(1).map((id, i) => [`s${i}`, id]),
+      ),
+    );
     const xs = [...pos.values()].map((p) => p.x);
     expect(Math.max(...xs)).toBe((BAND_LAYERS - 1) * GRID_X);
     expect(pos.get(`s${BAND_LAYERS}`)?.x).toBe(0);
@@ -270,7 +372,13 @@ describe("layered auto-layout", () => {
   });
 
   it("lays out a workflow that has no position at all, and leaves a partly placed one alone", () => {
-    const base = g(["a", "b", "c"], [["a", "b"], ["a", "c"]]);
+    const base = g(
+      ["a", "b", "c"],
+      [
+        ["a", "b"],
+        ["a", "c"],
+      ],
+    );
     const out = placeNewNodes(base);
     expect(out.nodes.every((x) => x.ui)).toBe(true);
     expect(out.nodes.find((x) => x.id === "b")?.ui?.x).toBe(GRID_X);
@@ -302,9 +410,15 @@ describe("SSH step", () => {
   });
 
   it("exposes the structured outputs to the following steps", () => {
-    const g = { ...emptyGraph(), nodes: [{ ...ssh({ connection: "c", id: "pose" }) }, { ...defaultNode(emptyGraph(), "action", echo), id: "suite" }], edges: [{ from: "pose", to: "suite", label: "next" }] };
+    const g = {
+      ...emptyGraph(),
+      nodes: [{ ...ssh({ connection: "c", id: "pose" }) }, { ...defaultNode(emptyGraph(), "action", echo), id: "suite" }],
+      edges: [{ from: "pose", to: "suite", label: "next" }],
+    };
     const paths = availableVariables(g, "suite", []).map((v) => v.path);
-    expect(paths).toEqual(expect.arrayContaining(["steps.pose.output.results", "steps.pose.output.status", "steps.pose.output.failed_step", "steps.pose.output.uncertain"]));
+    expect(paths).toEqual(
+      expect.arrayContaining(["steps.pose.output.results", "steps.pose.output.status", "steps.pose.output.failed_step", "steps.pose.output.uncertain"]),
+    );
   });
 });
 
@@ -315,14 +429,25 @@ describe("output variables of every step type", () => {
       if (type === "join" || type === "wait" || type === "wait_resume") continue;
       const node = { ...defaultNode(emptyGraph(), type as GraphNode["type"]), id: "x", name: "X" };
       const g = { ...emptyGraph(), nodes: [node, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "x", to: "y", label: "next" }] };
-      const paths = availableVariables(g, "y", [echo]).map((v) => v.path).filter((p) => p.startsWith("steps.x.output."));
-      expect(paths.sort(), type).toEqual(Object.keys(fields).map((k) => `steps.x.output.${k}`).sort());
+      const paths = availableVariables(g, "y", [echo])
+        .map((v) => v.path)
+        .filter((p) => p.startsWith("steps.x.output."));
+      expect(paths.sort(), type).toEqual(
+        Object.keys(fields)
+          .map((k) => `steps.x.output.${k}`)
+          .sort(),
+      );
     }
   });
 
   it("gives a wait step outputs only when it resumes by webhook or form", () => {
     const base = { ...defaultNode(emptyGraph(), "wait"), id: "w", name: "W" };
-    const at = (n: GraphNode) => availableVariables({ ...emptyGraph(), nodes: [n, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "w", to: "y", label: "next" }] }, "y", [echo]).filter((v) => v.path.startsWith("steps.w.")).length;
+    const at = (n: GraphNode) =>
+      availableVariables(
+        { ...emptyGraph(), nodes: [n, { ...defaultNode(emptyGraph(), "action", echo), id: "y" }], edges: [{ from: "w", to: "y", label: "next" }] },
+        "y",
+        [echo],
+      ).filter((v) => v.path.startsWith("steps.w.")).length;
     expect(at(base)).toBe(0);
     expect(at({ ...base, resume: "webhook" })).toBe(2);
   });
@@ -433,7 +558,19 @@ describe("suppression d'un élément dans une ligne", () => {
 });
 
 describe("liens supprimés : pas de rattachement d'office à Début ou Fin", () => {
-  const chain = (): Graph => ({ inputs: { type: "object", properties: {} }, outputs: {}, nodes: [{ id: "a", type: "wait", name: "A" }, { id: "b", type: "wait", name: "B" }, { id: "c", type: "wait", name: "C" }] as GraphNode[], edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] });
+  const chain = (): Graph => ({
+    inputs: { type: "object", properties: {} },
+    outputs: {},
+    nodes: [
+      { id: "a", type: "wait", name: "A" },
+      { id: "b", type: "wait", name: "B" },
+      { id: "c", type: "wait", name: "C" },
+    ] as GraphNode[],
+    edges: [
+      { from: "a", to: "b" },
+      { from: "b", to: "c" },
+    ],
+  });
   it("retirer l'entrée d'une étape la marque sans lien d'entrée, sans rien d'autre", () => {
     const g = disconnect(chain(), "a", "b");
     expect(g.detached).toEqual({ start: ["b"], end: ["a"] });
@@ -456,7 +593,15 @@ describe("liens supprimés : pas de rattachement d'office à Début ou Fin", () 
 });
 
 describe("liens « Début » et « Fin »", () => {
-  const two = (): Graph => ({ inputs: { type: "object", properties: {} }, outputs: {}, nodes: [{ id: "a", type: "wait", name: "A" }, { id: "b", type: "wait", name: "B" }] as GraphNode[], edges: [{ from: "a", to: "b" }] });
+  const two = (): Graph => ({
+    inputs: { type: "object", properties: {} },
+    outputs: {},
+    nodes: [
+      { id: "a", type: "wait", name: "A" },
+      { id: "b", type: "wait", name: "B" },
+    ] as GraphNode[],
+    edges: [{ from: "a", to: "b" }],
+  });
   it("supprime puis refait le lien avec Début et avec Fin", () => {
     const cut = disconnect(disconnect(two(), START_ID, "a"), "b", END_ID);
     expect(cut.detached).toEqual({ start: ["a"], end: ["b"] });
@@ -469,5 +614,53 @@ describe("liens « Début » et « Fin »", () => {
     expect(linkStart(disconnect(two(), "a", "b"), "b").detached).toEqual({ end: ["a"] }); // B n'a plus d'entrée : « Début → B » est possible, et la marque de A reste
     expect(canLinkStart(two(), "a")).toBe(true);
     expect(canLinkStart(two(), "inconnue")).toBe(false);
+  });
+});
+
+describe("étape Playbook Ansible", () => {
+  const fresh = (): GraphNode => ({ ...defaultNode(emptyGraph(), "ansible"), id: "deploy", name: "Déployer" });
+  it("démarre avec un playbook d'exemple, sans rôle, en mode vérification", () => {
+    const n = fresh();
+    expect(n.type).toBe("ansible");
+    expect(n.playbook).toContain("hosts: all");
+    expect(n.roles).toEqual([]);
+    expect(n.inputs?.check).toBe(true);
+  });
+  it("signale ce qu'il manque : playbook, étiquette de runner, inventaire, clés d'hôtes, connexion", () => {
+    const g: Graph = { ...emptyGraph(), nodes: [{ ...fresh(), playbook: "  " }] };
+    const codes = clientValidate(g, []).map((i) => i.code);
+    for (const c of ["empty_playbook", "missing_runner_tags", "bad_inventory", "missing_param", "missing_connection"]) expect(codes).toContain(c);
+    const ok: Graph = {
+      ...emptyGraph(),
+      nodes: [
+        { ...fresh(), required_tags: ["ansible"], connections: { ssh: "lab-ssh" }, inputs: { inventory_ref: "lab", known_hosts: "web1 ssh-ed25519 AAAA" } },
+      ],
+    };
+    expect(clientValidate(ok, []).filter((i) => i.level === "error")).toEqual([]);
+  });
+  it("offre à l'étape suivante les sorties du playbook et se résume en une ligne", () => {
+    const suite = { ...defaultNode(emptyGraph(), "script"), id: "suite", name: "Suite" };
+    const first = { ...fresh(), roles: [{ role: "web", version: "1.0.0" }] };
+    const g: Graph = { ...emptyGraph(), nodes: [first, suite], edges: [{ from: "deploy", to: "suite" }] };
+    const paths = availableVariables(g, "suite", []).map((v) => v.path);
+    for (const k of ["ok", "hosts", "stats", "totals", "tasks", "data"]) expect(paths).toContain(`steps.deploy.output.${k}`);
+    expect(summarize(first, [])).toMatch(/^Playbook · 1 rôle\(s\) · \[vérification\] /);
+  });
+});
+
+describe("playbook écrit par un assistant", () => {
+  it("bloque la publication tant qu'une personne ne l'a pas relu", () => {
+    const n = {
+      ...defaultNode(emptyGraph(), "ansible"),
+      id: "d",
+      name: "D",
+      ai_review: true,
+      required_tags: ["a"],
+      connections: { ssh: "x" },
+      inputs: { inventory_ref: "lab", known_hosts: "k" },
+    };
+    const review = clientValidate({ ...emptyGraph(), nodes: [n] }, []).filter((i) => i.code === "ai_review_required");
+    expect(review).toHaveLength(1);
+    expect(clientValidate({ ...emptyGraph(), nodes: [{ ...n, ai_review: false }] }, []).filter((i) => i.level === "error")).toEqual([]);
   });
 });

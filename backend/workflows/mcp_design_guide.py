@@ -64,6 +64,57 @@ ACTION_EXAMPLE = {
         "network_policy": "none",
     },
 }
+ANSIBLE_ACTION_EXAMPLE = {
+    "slug": "deployer-page-web",
+    "name": "Déployer la page web",
+    "description": "Déploie la page web sur les machines de l'inventaire choisi, avec le rôle web, en mode vérification possible.",
+    "version": {
+        "runtime": "ansible",
+        "source": '- name: Page web\n  hosts: web\n  gather_facts: false\n  roles:\n    - role: web\n      vars:\n        http_port: "{{ http_port | default(80) }}"\n',
+        "input_schema": {
+            "type": "object",
+            "required": ["inventory_ref", "known_hosts"],
+            "properties": {
+                "inventory_ref": {
+                    "type": "string",
+                    "title": "Inventaire",
+                    "description": "Identifiant de l'inventaire à cibler (list_inventories).",
+                },
+                "known_hosts": {
+                    "type": "string",
+                    "title": "Clés d'hôtes",
+                    "description": "Lignes known_hosts des machines : la connexion SSH refuse toute machine absente.",
+                },
+                "check": {
+                    "type": "boolean",
+                    "title": "Mode vérification",
+                    "description": "Vrai : Ansible dit ce qui changerait, sans rien modifier.",
+                },
+            },
+        },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "ok": {
+                    "type": "boolean",
+                    "title": "Réussi",
+                    "description": "Vrai si aucune machine n'est en échec ou injoignable.",
+                },
+                "stats": {
+                    "type": "object",
+                    "title": "Bilan par machine",
+                    "description": "Ok, modifiées, échecs et injoignables pour chaque machine.",
+                },
+            },
+        },
+        "side_effects": "external",
+        "idempotent": True,
+        "network_policy": "targets",
+        "required_tags": ["ansible"],
+        "ansible_roles": [{"role": "web", "version": "latest"}],
+        "secrets_required": [{"slot": "ssh", "env": "FLX_SSH_KEY_B64"}],
+    },
+}
 SKILL_EXAMPLE = {
     "slug": "resumer-texte",
     "name": "Résumer un texte",
@@ -272,6 +323,22 @@ OTHER_NODES = {
             {"id": "etat", "stdout": "show status\nétat simulé\n# "},
         ],
         "mode": "test",
+    },
+    "ansible (playbook écrit dans le workflow)": {
+        "id": "deployer",
+        "type": "ansible",
+        "name": "Déployer la page web",
+        "playbook": "- name: Page web\n  hosts: web\n  gather_facts: false\n  roles:\n    - role: <nom d'un rôle de list_ansible_roles>\n",
+        "roles": [{"role": "<nom d'un rôle de list_ansible_roles>", "version": "latest"}],
+        "required_tags": ["<étiquette du runner qui voit les machines, donnée par la personne>"],
+        "connections": {"ssh": "<nom d'une connexion de list_connections>"},
+        "inputs": {
+            "inventory_ref": "<identifiant d'un inventaire de list_inventories>",
+            "known_hosts": "{{ inputs.known_hosts }}",
+            "check": True,
+            "extra_vars": {"http_port": 80},
+        },
+        "timeout_seconds": 300,
     },
     "http via une intégration (Slack, Jira, GitHub…)": {
         "id": "prevenir_canal",
@@ -657,8 +724,8 @@ def guide(topic: str, workspace=None) -> dict:
             "Vous ne pouvez ni publier, ni lancer, ni activer. ESSAYEZ avant de rendre la main : start_dry_run exécute les scripts et les décisions du brouillon dans un bac à sable isolé (actions, IA et approbations simulées d'après leur contrat), puis get_dry_run donne les problèmes et les valeurs réelles ; corrigez jusqu'à zéro problème. Dites ensuite ce que l'essai ne couvre pas (code des actions, IA, effets externes). Lisez la `revision` d'un brouillon (get_*) avant de le modifier."
         ),
         "rangement": (
-            "RANGER ET RENOMMER. list_folders {kind} (kind : workflow, form, control, action ou ai_skill ; un arbre par type) AVANT de ranger ; create_folder {kind, path} crée un dossier « A/B » (et ses parents) ; "
-            "update_item_info {kind, slug, folder?, name?, description?, tags?} déplace (folder « » = racine) ou renomme un élément, SANS toucher à son contenu. Rangez ce que vous créez en passant `folder` à create_workflow / create_form / create_control / propose_action / propose_skill. "
+            "RANGER ET RENOMMER. list_folders {kind} (kind : workflow, form, control, action, ai_skill, ansible_role ou inventory ; un arbre par type) AVANT de ranger ; create_folder {kind, path} crée un dossier « A/B » (et ses parents) ; "
+            "update_item_info {kind, slug, folder?, name?, description?, tags?} déplace (folder « » = racine) ou renomme un élément, SANS toucher à son contenu (un rôle Ansible se désigne par son nom : dossier et description seulement ; un inventaire : dossier, nom et description). Rangez ce que vous créez en passant `folder` à create_workflow / create_form / create_control / propose_action / propose_skill. "
             "Le contenu se change avec update_workflow / update_form / update_control (brouillons, révision lue juste avant) ; le code d'une action existante ne se modifie pas : proposez-en une nouvelle version seulement si l'action est encore une proposition. "
             "Vous ne supprimez ni ne renommez de dossier. Un dossier privé auquel la personne n'a pas droit est refusé, au départ comme à l'arrivée."
         ),
@@ -671,7 +738,7 @@ def guide(topic: str, workspace=None) -> dict:
             "Les approbations sont essayées accordées puis refusées. TESTEZ AUSSI LE CODE de chaque action que vous proposez : start_action_test {slug, cases:[{label, inputs, expected?}]} (1 à 5 cas ; `expected` = sous-ensemble de la sortie attendue) l'exécute dans le même bac à sable (réseau coupé, aucun secret ni connexion, limites plafonnées) et contrôle la sortie contre le contrat ; get_dry_run donne le résultat. Prévoyez un cas nominal, un cas vide ou limite et un cas d'erreur. Ce test ne rend PAS l'action utilisable : elle reste « proposée » jusqu'à l'activation par une personne. Rien ne prouve que les règles métier sont les bonnes."
         ),
         "decision": (
-            "ÉLÉMENT NATIF D'ABORD. Un appel à un service externe est une étape `http` avec une connexion (list_connections) : API REST, OAuth2, webhook sortant, Slack, Jira, Microsoft 365… Même règle pour `sql` (base PostgreSQL / MySQL en lecture), `ldap`, `sftp` (fichiers), `smtp` (e-mail) et `ai`. Ces étapes sont exécutées par la plateforme, qui ajoute le jeton, renouvelle OAuth2 et contrôle l'adresse : le jeton n'apparaît jamais dans le workflow. Une ACTION ou un SCRIPT n'a AUCUN réseau (ni Internet, ni réseau interne) : ne proposez JAMAIS une action ou un script pour appeler une API, interroger une base ou envoyer un e-mail, elle serait inutilisable. Utilisez l'action pour traiter les données (avant ou après l'étape `http`, en lisant `steps.<id>.output.body`), pas pour les chercher. Si aucune connexion adaptée n'existe, ne l'inventez pas : mettez le nom attendu, dites à la personne de la créer (menu Connexions) et signalez l'erreur `unknown_connection` comme à faire. ACTION OU SCRIPT ? Réutilisez avant de créer : search_actions donne pour chaque action `used_by` (workflows et étapes qui l'utilisent). Une action existante dont le contrat convient "
+            "ÉLÉMENT NATIF D'ABORD. Un appel à un service externe est une étape `http` avec une connexion (list_connections) : API REST, OAuth2, webhook sortant, Slack, Jira, Microsoft 365… Même règle pour `sql` (base PostgreSQL / MySQL en lecture), `ldap`, `sftp` (fichiers), `smtp` (e-mail) et `ai`. Ces étapes sont exécutées par la plateforme, qui ajoute le jeton, renouvelle OAuth2 et contrôle l'adresse : le jeton n'apparaît jamais dans le workflow. Une ACTION ou un SCRIPT n'a AUCUN réseau (ni Internet, ni réseau interne ; seule exception : une action ANSIBLE atteint des machines par SSH depuis un runner dédié, voir la rubrique `ansible`) : ne proposez JAMAIS une action ou un script pour appeler une API, interroger une base ou envoyer un e-mail, elle serait inutilisable. Utilisez l'action pour traiter les données (avant ou après l'étape `http`, en lisant `steps.<id>.output.body`), pas pour les chercher. Si aucune connexion adaptée n'existe, ne l'inventez pas : mettez le nom attendu, dites à la personne de la créer (menu Connexions) et signalez l'erreur `unknown_connection` comme à faire. ACTION OU SCRIPT ? Réutilisez avant de créer : search_actions donne pour chaque action `used_by` (workflows et étapes qui l'utilisent). Une action existante dont le contrat convient "
             "se réutilise, même imparfaite ; ne dupliquez pas. CRÉEZ une action si : la logique sert (ou servira) à plusieurs étapes ou workflows ; elle a un effet externe SANS réseau (ex. écrire un fichier d'artefact) ou doit porter un secret relié par une connexion ; "
             "elle demande un autre runtime ; son contrat d'entrées/sorties mérite d'être versionné et testé ; ou le même script revient 3 fois (`hints` : duplicate_script). "
             "Restez en SCRIPT si : c'est de la colle locale propre à ce workflow (renommer, filtrer, calculer un champ), courte, sans effet externe, utilisée une seule fois. "
@@ -809,10 +876,26 @@ def guide(topic: str, workspace=None) -> dict:
         ),
         "action": (
             "ACTION (proposition). {slug, name, description (30 caractères au moins : ce que fait l'action), version:{runtime, source, input_schema, output_schema, side_effects, "
-            "idempotent, network_policy, secrets_required?}}. Runtimes : python (`def run(inputs): … return {…}`), node, typescript, shell, powershell. Entrée = `inputs` "
+            "idempotent, network_policy, secrets_required?}}. Runtimes : python (`def run(inputs): … return {…}`), node, typescript, shell, powershell, ansible (un playbook : rubrique `ansible`). Entrée = `inputs` "
             "(objet validé par `input_schema`) ; sortie = objet validé par `output_schema`. CONTRAT COMPLET OBLIGATOIRE : chaque propriété des deux schémas a `type`, `title` "
-            "et `description` (12 caractères au moins) ; sans paramètre, dites-le dans la `description` du schéma. `network_policy`: none (défaut, pas de réseau ; ne demandez jamais autre chose : pour joindre un service, utilisez l'étape `http` d'un workflow). "
+            "et `description` (12 caractères au moins) ; sans paramètre, dites-le dans la `description` du schéma. `network_policy`: none (défaut, pas de réseau ; ne demandez jamais autre chose, sauf le runtime ansible (`targets`, rubrique `ansible`) : pour joindre un service, utilisez l'étape `http` d'un workflow). "
             "`side_effects`: none ou external (alors déclarez `idempotent` honnêtement). Aucun secret dans le code : déclarez un emplacement `secrets_required:[{slot,env}]`."
+        ),
+        "ansible": (
+            "ANSIBLE (action de runtime « ansible »). Un playbook YAML (liste de jeux « - hosts: … ») joué par ansible-core dans un conteneur jetable, sur des machines atteintes par SSH ; seul `ansible.builtin` est disponible. "
+            'Proposez-le avec propose_action, version:{runtime:"ansible", source:<playbook>, input_schema, output_schema, side_effects:"external", idempotent, network_policy:"targets", required_tags:[…], ansible_roles:[{role, version}], secrets_required:[{slot:"ssh", env:"FLX_SSH_KEY_B64"}]} (exemple : examples.ansible_action). '
+            "`required_tags` (1 à 5) est OBLIGATOIRE : seuls les runners qui portent l'une de ces étiquettes jouent l'action ; ne l'inventez pas, demandez-la à la personne (le runner qui voit les machines). `network_policy: targets` = réseau de l'exploitant, réservé à ce runtime. "
+            "ENTRÉES reconnues par le runtime : `inventory_ref` (identifiant d'un inventaire de la bibliothèque : list_inventories / get_inventory) OU `inventory` (objet) ; `known_hosts` (clés d'hôtes, OBLIGATOIRE pour SSH : la connexion refuse toute machine absente) ; `user`, `check` (mode vérification), `limit`, `tags`, `become`, `timeout`, `extra_vars`, `fail_on_error`. "
+            "SORTIES : `ok`, `hosts`, `stats` (bilan par machine), `tasks`, `totals`, `data` (valeurs de set_stats). Contrat complet obligatoire comme pour toute action. "
+            "RÔLES : list_ansible_roles puis get_ansible_role AVANT d'écrire le playbook ; réutilisez un rôle existant plutôt que de réécrire ses tâches (son contrat dit à quoi il sert, ses variables, un exemple d'appel). "
+            "Déclarez chaque rôle appelé dans `ansible_roles` (version exacte, ou `latest` figée à la publication) et appelez-le par son nom (`roles:` ou `include_role`) ; ses dépendances (meta/main.yml) se déclarent aussi. "
+            "Vous ne créez, ne publiez ni ne modifiez ni rôle ni inventaire (du code et des cibles : une personne s'en charge dans l'interface) : si un rôle ou un inventaire manque, dites-le et décrivez-le (draft_role_contract aide à rédiger son contrat). "
+            "SECRETS : jamais de clé ni de mot de passe dans le playbook, l'inventaire ou les entrées ; la clé SSH passe par une connexion reliée à l'emplacement `ssh` (FLX_SSH_KEY_B64 ; FLX_SSH_PASSWORD et FLX_BECOME_PASSWORD si besoin). "
+            'ÉTAPE DE WORKFLOW « ansible » : au lieu de passer par une action, écrivez le playbook DANS le workflow, comme un script. {id, type:"ansible", name, playbook, roles:[{role, version}], required_tags:[…], connections:{ssh:<connexion>, become?:<connexion>}, auth?:"key"|"password", '
+            "inputs:{inventory_ref|inventory, known_hosts, user?, check?, limit?, tags?, become?, extra_vars?, fail_on_error?…}, timeout_seconds?, idempotent?} (exemple : examples.other_nodes). Mêmes règles que l'action : `required_tags` obligatoires, rôles existants et dépendances déclarées, `known_hosts` obligatoire, inventaire par `inventory_ref` OU `inventory` (jamais les deux). "
+            "Les rôles se figent à la PUBLICATION du workflow (`latest` devient la version exacte). Toute étape `ansible` que vous créez ou modifiez est marquée « à relire » par le serveur (`ai_review`, que vous ne pouvez pas lever) : une personne doit relire le playbook, ses rôles et sa cible avant la publication. Sortie lue par les étapes suivantes : `steps.<id>.output.ok` / `hosts` / `stats` / `totals` / `tasks` / `data` ; la sortie `error` est disponible. "
+            "ACTION OU ÉTAPE ? Une action Ansible si le playbook sert à plusieurs workflows (versionné, relu, activé par une personne) ; une étape si le playbook est propre à ce workflow. L'essai à blanc SIMULE l'étape d'après son contrat ; l'assistant ne la joue jamais (elle agit sur des machines). "
+            "ESSAI : start_action_test refuse les playbooks (bac à sable sans réseau ni connexion) ; relisez-le avec soin et dites à la personne de l'essayer dans l'éditeur de version avant de l'activer. Écrivez un playbook idempotent : une exécution interrompue est relancée en entier."
         ),
         "skill": (
             "SKILL IA (proposition). {slug, name, description, version:{instructions, input_schema, output_schema, default_provider?}}. `instructions` référence les entrées "
@@ -835,6 +918,7 @@ def guide(topic: str, workspace=None) -> dict:
             "controls": CONTROL_EXAMPLES,
             "form_rules": FORM_RULES_EXAMPLE,
             "action": ACTION_EXAMPLE,
+            "ansible_action": ANSIBLE_ACTION_EXAMPLE,
             "skill": SKILL_EXAMPLE,
         },
         "workspace": _workspace_facts(workspace),

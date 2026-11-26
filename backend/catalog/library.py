@@ -1,9 +1,7 @@
 """Library API: action authoring, versions, deprecation, comparison, rollback and reverse dependencies."""
 
-import ast
 import difflib
 import json
-import re
 
 import jsonschema
 from django.db import transaction
@@ -15,103 +13,28 @@ from rest_framework.views import APIView
 from audit.models import record
 from core.folders import clean_folder
 from core.tags import clean_tags
-from runs.runners import NETWORK_POLICIES, RUNTIMES
-from tenancy.permissions import PUBLISH, VIEW, get_workspace, require_human_session
+from runs import services
+from runs.serializers import validate_inputs_against
+from tenancy.models import Environment
+from tenancy.permissions import PUBLISH, RUN, VIEW, get_workspace, require_human_session
 from workflows import access
 from workflows.models import Workflow, WorkflowVersion
 
-from . import contract
+from . import ansible_roles, contract
 from .models import Action, ActionTestCase, ActionVersion
 from .serializers import ActionSerializer, ActionVersionSerializer
-
-TAG_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,29}")
-SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-MAX_SOURCE = 200 * 1024
-SECRET_LIKE = re.compile(
-    r"(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{10,})"
+from .versions import (  # noqa: F401 - ré-exportés : d'autres modules lisent ces noms ici
+    MAX_SOURCE,
+    SECRET_LIKE,
+    SEMVER,
+    TAG_RE,
+    TRIAL_SLUG,
+    VersionInput,
+    bump,
+    hidden_version,
+    semver_key,
+    trial_version,
 )
-
-
-def semver_key(v: str):
-    return tuple(int(x) for x in v.split("."))
-
-
-def bump(latest: str | None, kind: str) -> str:
-    if latest is None:
-        return "1.0.0"
-    a, b, c = semver_key(latest)
-    return {"major": f"{a + 1}.0.0", "minor": f"{a}.{b + 1}.0", "patch": f"{a}.{b}.{c + 1}"}[kind]
-
-
-class VersionInput(serializers.Serializer):
-    version = serializers.CharField(required=False)
-    bump = serializers.ChoiceField(choices=["patch", "minor", "major"], default="minor")
-    runtime = serializers.ChoiceField(choices=sorted(RUNTIMES), default="python")
-    entrypoint = serializers.RegexField(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$", default="run")
-    # `source` est le nom du champ du contrat d'API ; il masque l'attribut `source` de DRF `Field` (str | None), d'où l'exemption ciblée.
-    source = serializers.CharField(max_length=MAX_SOURCE, trim_whitespace=False)  # type: ignore[assignment]
-    input_schema = serializers.JSONField()
-    output_schema = serializers.JSONField()
-    license = serializers.CharField(max_length=40, default="Apache-2.0")
-    side_effects = serializers.ChoiceField(choices=["none", "external"], default="none")
-    idempotent = serializers.BooleanField(default=True)
-    network_policy = serializers.ChoiceField(choices=sorted(NETWORK_POLICIES), default="none")
-    limits = serializers.JSONField(default=dict)
-    examples = serializers.JSONField(default=list)
-    secrets_required = serializers.JSONField(default=list)
-    required_tags = serializers.JSONField(default=list)
-    changelog = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
-
-    def validate_version(self, value):
-        if not SEMVER.match(value):
-            raise serializers.ValidationError("Version sémantique attendue (ex. 1.2.0).")
-        return value
-
-    def validate_source(self, value):
-        if SECRET_LIKE.search(value):
-            raise serializers.ValidationError("Le code semble contenir un secret : utilisez une connexion.")
-        return value
-
-    def validate(self, attrs):
-        for key in ("input_schema", "output_schema"):
-            schema = attrs[key]
-            try:
-                if not isinstance(schema, dict) or schema.get("type") != "object":
-                    raise jsonschema.SchemaError("Le schéma doit décrire un objet (type: object).")
-                jsonschema.Draft202012Validator.check_schema(schema)
-            except jsonschema.SchemaError as exc:
-                raise serializers.ValidationError({key: f"Schéma invalide : {exc.message[:150]}"}) from None
-        if attrs["runtime"] == "python":
-            try:
-                ast.parse(attrs["source"])  # syntax check only; the code is never executed here
-            except SyntaxError as exc:
-                raise serializers.ValidationError(
-                    {"source": f"Erreur de syntaxe ligne {exc.lineno} : {exc.msg}"}
-                ) from None
-        limits = {"timeout_seconds": 30, "memory_mb": 128, **attrs["limits"]}
-        if not (1 <= limits["timeout_seconds"] <= 3600 and 16 <= limits["memory_mb"] <= 2048):
-            raise serializers.ValidationError({"limits": "Délai : 1 à 3600 s ; mémoire : 16 à 2048 Mo."})
-        attrs["limits"] = {k: limits[k] for k in ("timeout_seconds", "memory_mb")}
-        for slot in attrs["secrets_required"]:
-            if not (
-                isinstance(slot, dict)
-                and re.fullmatch(r"[a-z][a-z0-9_]{0,30}", str(slot.get("slot", "")))
-                and re.fullmatch(r"[A-Z][A-Z0-9_]{0,40}", str(slot.get("env", "")))
-            ):
-                raise serializers.ValidationError(
-                    {"secrets_required": "Chaque entrée : {slot: minuscules, env: MAJUSCULES}."}
-                )
-        tags = attrs["required_tags"]
-        if not (
-            isinstance(tags, list) and len(tags) <= 5 and all(isinstance(t, str) and TAG_RE.fullmatch(t) for t in tags)
-        ):
-            raise serializers.ValidationError(
-                {"required_tags": "Jusqu'à 5 étiquettes (minuscules, chiffres, - _ .), 30 caractères au plus."}
-            )
-        attrs["required_tags"] = sorted(set(tags))
-        if attrs["side_effects"] == "external" and attrs["idempotent"] and "idempotent" not in self.initial_data:
-            attrs["idempotent"] = False  # external effects are non-idempotent unless stated otherwise
-        return attrs
 
 
 def require_contract(description: str, data: dict) -> None:
@@ -148,6 +71,8 @@ def _create_version(action, data, user) -> ActionVersion:
             "changelog",
         )
     }
+    # les versions des rôles sont figées ICI : « latest » devient la plus récente publiée, et une dépendance non déclarée est refusée
+    fields["ansible_roles"] = ansible_roles.resolve_declared(action.workspace, data.get("ansible_roles"))
     return ActionVersion.objects.create(action=action, version=version, created_by=user, **fields)
 
 
@@ -218,6 +143,7 @@ class VersionDetailSerializer(ActionVersionSerializer):
             "changelog",
             "secrets_required",
             "required_tags",
+            "ansible_roles",
         ]
 
 
@@ -243,6 +169,49 @@ class ActionVersionsView(APIView):
             "action.publish", actor=request.user, workspace=ws, target=action, version=v.version, digest=v.source_digest
         )
         return Response(VersionDetailSerializer(v).data, status=201)
+
+
+class ActionTrialView(APIView):
+    """Essaie le BROUILLON d'une version dans le bac à sable (le même qu'une exécution réelle), sans rien publier ; le suivi se fait par
+    `/executions/{id}/`. Le brouillon porte les champs d'une version ; `inputs` sont les valeurs d'essai, vérifiées contre le schéma d'entrées."""
+
+    def post(self, request, workspace, slug):
+        ws = get_workspace(request.user, workspace, PUBLISH)
+        get_workspace(request.user, workspace, RUN)
+        _action(ws, slug)
+        draft = VersionInput(data=request.data.get("version"))
+        draft.is_valid(raise_exception=True)
+        inputs = request.data.get("inputs") or {}
+        if not isinstance(inputs, dict):
+            raise serializers.ValidationError({"inputs": "Les entrées doivent être un objet."})
+        problems = validate_inputs_against(draft.validated_data["input_schema"], inputs)
+        if problems:
+            raise serializers.ValidationError(problems)
+        connections = request.data.get("connections") or {}
+        if not isinstance(connections, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in connections.items()
+        ):
+            raise serializers.ValidationError({"connections": "Un objet {emplacement: connexion} est attendu."})
+        env = (
+            Environment.objects.filter(workspace=ws, kind="test").first()
+            or Environment.objects.filter(workspace=ws).exclude(kind="prod").first()
+        )
+        if env is None:
+            raise serializers.ValidationError({"environment": "Aucun environnement hors production pour tester."})
+        version = trial_version(ws, request.user, draft.validated_data)
+        ex = services.enqueue(
+            workspace=ws,
+            environment=env,
+            action_version=version,
+            user=request.user,
+            inputs=inputs,
+            connections=connections,
+            limits=draft.validated_data["limits"] or None,
+        )
+        record("action.trial", actor=request.user, workspace=ws, action=slug, runtime=version.runtime)
+        return Response(
+            {"execution_id": str(ex.id), "url": f"/api/v1/workspaces/{ws.slug}/executions/{ex.id}/"}, status=202
+        )
 
 
 class ActionMetaView(APIView):

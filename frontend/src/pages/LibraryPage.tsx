@@ -1,7 +1,9 @@
 import { DeleteDialog } from "../components/DeleteDialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { RolesPage } from "./ansible-roles/RolesPage";
+import { InventoriesPage } from "./inventories/InventoriesPage";
 import { api, apiAll, type Action, type ApiError } from "../api";
 import { Badge, EmptyRow, SearchBox, SortTh, usePaged, useSort } from "../components/AdminUi";
 import { FolderTree, inFolder, useFolders } from "../components/FolderTree";
@@ -87,12 +89,17 @@ function ActionsTab() {
 
 /** Library > Actions: executable building blocks, organised in folders like workflows, plus importable packages. */
 export function LibraryPage() {
-  const [tab, setTab] = useState("actions");
+  const [params, setParams] = useSearchParams();
+  const asked = params.get("tab");
+  const tab = ["actions", "roles", "inventories", "packages", "caches"].includes(asked ?? "") ? (asked as string) : "actions";
+  const setTab = (id: string) => setParams(id === "actions" ? {} : { tab: id }, { replace: true });
   return (
     <>
-      <PageHeader title="Actions" description="Briques exécutables réutilisables dans les workflows, rangées par dossiers, paquets importables et cache partagé entre workflows." />
+      <PageHeader title="Actions" description="Briques exécutables réutilisables dans les workflows, rangées par dossiers ; rôles et inventaires Ansible, paquets importables et cache partagé entre workflows." />
       <Tabs label="Bibliothèque d'actions" active={tab} onChange={setTab} tabs={[
         { id: "actions", label: "Actions", content: <ActionsTab /> },
+        { id: "roles", label: "Rôles Ansible", content: <RolesPage embedded /> },
+        { id: "inventories", label: "Inventaires", content: <InventoriesPage embedded /> },
         { id: "packages", label: "Paquets", content: <PackagesTab /> },
         { id: "caches", label: "Caches", content: <CachesTab /> },
       ]} />

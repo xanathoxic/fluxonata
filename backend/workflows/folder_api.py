@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from ai.models import AiSkill
 from audit.models import record
-from catalog.models import Action
+from catalog.models import Action, AnsibleRole, Inventory
 from core.folders import clean_folder
 from formbuilder.models import Control, Form
 from tenancy.models import Folder, Membership
@@ -19,12 +19,14 @@ from tenancy.permissions import ADMINISTER, EDIT, PUBLISH, VIEW, get_workspace
 from workflows import access
 from workflows.models import FolderAccess, FolderGrant, Workflow
 
-ITEMS: dict[str, tuple[type[Workflow | Action | AiSkill | Form | Control], str]] = {
+ITEMS: dict[str, tuple[type[Workflow | Action | AiSkill | Form | Control | AnsibleRole | Inventory], str]] = {
     "workflow": (Workflow, EDIT),
     "action": (Action, PUBLISH),
     "ai_skill": (AiSkill, PUBLISH),
     "form": (Form, EDIT),
     "control": (Control, EDIT),
+    "ansible_role": (AnsibleRole, PUBLISH),
+    "inventory": (Inventory, EDIT),
 }
 MAX_DEPTH = 8
 MAX_FOLDERS = 500
@@ -37,7 +39,7 @@ def _under(path: str, root: str) -> bool:
 def _kind(raw) -> str:
     if raw not in ITEMS:
         raise serializers.ValidationError(
-            {"kind": "Type de dossier inconnu (workflow, action, ai_skill, form ou control)."}
+            {"kind": "Type de dossier inconnu (workflow, action, ai_skill, form, control, ansible_role ou inventory)."}
         )
     return raw
 

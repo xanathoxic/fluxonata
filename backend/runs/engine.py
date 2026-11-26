@@ -29,6 +29,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from rest_framework import serializers
 
 from audit.models import record
 from catalog.models import ActionVersion
@@ -582,6 +583,10 @@ def _start_script(run, node, sr, ctx, steps):
     _dispatch_script(run, node, sr, ctx)
 
 
+def _start_ansible(run, node, sr, ctx, steps):
+    _dispatch_ansible(run, node, sr, ctx)
+
+
 def _start_condition(run, node, sr, ctx, steps):
     result = bool(evaluate(node["expr"], ctx))
     _succeed(run, sr, node, f"Condition « {_label(node)} » : {'oui' if result else 'non'}.", {"result": result})
@@ -861,6 +866,7 @@ _STARTERS: dict[str, Callable[..., None]] = {
     "switch": _start_switch,
     "ai": _start_ai,
     "script": _start_script,
+    "ansible": _start_ansible,
     "throw": _start_throw,
     "join": _start_join,
     "race": _start_race_step,
@@ -1014,8 +1020,47 @@ def _dispatch_script(run, node, sr, ctx):
     )
 
 
+def _dispatch_ansible(run, node, sr, ctx):
+    """« Playbook Ansible » : le playbook est dans l'étape. Ses champs deviennent une version d'action cachée (même contenu, même version), puis l'étape suit le chemin d'une action Ansible."""
+    from catalog import ansible_inline
+
+    try:
+        av = ansible_inline.inline_version(run.workspace, run.requested_by, node)
+    except serializers.ValidationError as exc:
+        raise _StepError(
+            "ANSIBLE_CONFIG",
+            f"Playbook invalide : {str(exc.detail)[:250]}",
+            "Corrigez le playbook, ses rôles ou les étiquettes de runner de l'étape.",
+        ) from None
+    inputs = resolve(coerce_inputs(node.get("inputs", {}), av.input_schema), ctx)
+    inputs = {k: v for k, v in inputs.items() if v not in ("", None)}  # un paramètre laissé vide n'est pas transmis
+    try:
+        jsonschema.validate(inputs, av.input_schema)
+    except jsonschema.ValidationError as exc:
+        raise _StepError(
+            "INPUT_INVALID", f"Paramètres du playbook invalides — {explain_validation_error(exc)}"
+        ) from None
+    pinned = _pinned_runner(run, av)
+    sr.attempt += 1
+    sr.status = S.RUNNING
+    sr.save()
+    services.enqueue(
+        workspace=run.workspace,
+        environment=run.environment,
+        action_version=av,
+        user=run.requested_by,
+        inputs=inputs,
+        step_run=sr,
+        priority=run.priority,
+        connections=node.get("connections") or {},
+        pinned_runner=pinned,
+    )
+
+
 def _dispatch_step(run, node, sr, ctx):
-    {"ai": _dispatch_ai, "script": _dispatch_script}.get(node["type"], _dispatch_action)(run, node, sr, ctx)
+    {"ai": _dispatch_ai, "script": _dispatch_script, "ansible": _dispatch_ansible}.get(node["type"], _dispatch_action)(
+        run, node, sr, ctx
+    )
 
 
 def _start_child(run, node, sr, ctx, inputs, index):
@@ -1428,6 +1473,7 @@ _POLLERS = {
     "action": _poll_action,
     "ai": _poll_action,
     "script": _poll_action,
+    "ansible": _poll_action,
     "agent": _poll_agent,
     "ssh": _poll_ssh,
     "sql": _poll_job,

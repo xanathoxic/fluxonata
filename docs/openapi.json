@@ -2919,6 +2919,46 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/actions/{slug}/trial/": {
+            "post": {
+                "operationId": "workspaces_actions_trial_create",
+                "description": "Essaie le BROUILLON d'une version dans le bac à sable (le même qu'une exécution réelle), sans rien publier ; le suivi se fait par\n`/executions/{id}/`. Le brouillon porte les champs d'une version ; `inputs` sont les valeurs d'essai, vérifiées contre le schéma d'entrées.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/actions/{slug}/usage/": {
             "get": {
                 "operationId": "workspaces_actions_usage_retrieve",
@@ -4095,6 +4135,460 @@
         "/api/v1/workspaces/{workspace}/ai/usage/": {
             "get": {
                 "operationId": "workspaces_ai_usage_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-roles/": {
+            "get": {
+                "operationId": "workspaces_ansible_roles_list",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RoleSummary"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_ansible_roles_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleCreate"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleCreate"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleSummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-roles/{name}/": {
+            "get": {
+                "operationId": "workspaces_ansible_roles_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "name",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleSummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "workspaces_ansible_roles_partial_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "name",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRoleMeta"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRoleMeta"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRoleMeta"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleSummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_ansible_roles_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "name",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-roles/{name}/versions/": {
+            "post": {
+                "operationId": "workspaces_ansible_roles_versions_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "name",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleVersionCreate"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleVersionCreate"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleVersionCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleSummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-roles/{name}/versions/{version}/": {
+            "get": {
+                "operationId": "workspaces_ansible_roles_versions_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "name",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AnsibleRoleVersionFiles"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-roles/contract-draft/": {
+            "post": {
+                "operationId": "workspaces_ansible_roles_contract_draft_create",
+                "description": "Une ébauche de contrat tirée des fichiers (variables de `defaults/main.yml`) : rien n'est enregistré.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleContractDraftIn"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleContractDraftIn"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleContractDraftIn"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleContractDraft"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/ansible-step/": {
+            "get": {
+                "operationId": "workspaces_ansible_step_retrieve",
+                "description": "Les paramètres et les sorties de l'étape « Playbook Ansible » : une seule source, que l'éditeur lit pour construire ses champs.",
                 "parameters": [
                     {
                         "in": "path",
@@ -7317,6 +7811,414 @@
                 "responses": {
                     "200": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/inventories/": {
+            "get": {
+                "operationId": "workspaces_inventories_list",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/InventorySummary"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workspaces_inventories_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryHeader"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/inventories/{slug}/": {
+            "get": {
+                "operationId": "workspaces_inventories_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryHeader"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "workspaces_inventories_update",
+                "description": "Remplace en bloc l'inventaire (nom, description, variables, groupes, machines) : le document est validé en entier avant que rien ne change.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InventoryHeader"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryHeader"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "workspaces_inventories_partial_update",
+                "description": "Range l'inventaire dans un dossier (rien d'autre ne change).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedInventoryFolder"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedInventoryFolder"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedInventoryFolder"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventorySummary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workspaces_inventories_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/inventories/{slug}/rendered/": {
+            "get": {
+                "operationId": "workspaces_inventories_rendered_retrieve",
+                "description": "L'inventaire tel que le recevra Ansible (machines désactivées absentes) : un aperçu, sans rien d'autre.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/inventories/import/": {
+            "post": {
+                "operationId": "workspaces_inventories_import_create",
+                "description": "Convertit un inventaire YAML/JSON collé en document, SANS l'enregistrer : l'écran le montre, la personne l'enregistre ensuite.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ImportInput"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -12399,6 +13301,46 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/workflows/{slug}/test-ansible/": {
+            "post": {
+                "operationId": "workspaces_workflows_test_ansible_create",
+                "description": "Essaie le playbook d'une étape avec des valeurs d'essai, sur les vraies machines désignées (même chemin qu'une exécution : runner portant les\nétiquettes, inventaire, connexions, rôles) ; suivi par /executions/{id}/. Mettre `check: true` dans les valeurs d'essai pour ne rien modifier.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "slug",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/workflows/{slug}/test-script/": {
             "post": {
                 "operationId": "workspaces_workflows_test_script_create",
@@ -13021,6 +13963,44 @@
                     "id",
                     "last_fired_at",
                     "name"
+                ]
+            },
+            "AnsibleRoleVersionFiles": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    },
+                    "changelog": {
+                        "type": "string"
+                    },
+                    "files": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "contract": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "contract_problems": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "changelog",
+                    "contract",
+                    "contract_problems",
+                    "digest",
+                    "files",
+                    "version"
                 ]
             },
             "Approval": {
@@ -15056,6 +16036,81 @@
                     "name"
                 ]
             },
+            "ImportInput": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "maxLength": 1048576
+                    }
+                },
+                "required": [
+                    "text"
+                ]
+            },
+            "InventoryHeader": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "pattern": "^[-a-zA-Z0-9_]+$"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "name",
+                    "slug"
+                ]
+            },
+            "InventorySummary": {
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "hosts": {
+                        "type": "integer"
+                    },
+                    "groups": {
+                        "type": "integer"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "description",
+                    "folder",
+                    "groups",
+                    "hosts",
+                    "name",
+                    "slug",
+                    "updated_at"
+                ]
+            },
             "Login": {
                 "type": "object",
                 "properties": {
@@ -15123,10 +16178,11 @@
             "NetworkPolicyEnum": {
                 "enum": [
                     "none",
+                    "targets",
                     "test-service"
                 ],
                 "type": "string",
-                "description": "* `none` - none\n* `test-service` - test-service"
+                "description": "* `none` - none\n* `targets` - targets\n* `test-service` - test-service"
             },
             "NullEnum": {
                 "enum": [
@@ -15709,6 +16765,15 @@
                     }
                 }
             },
+            "PatchedInventoryFolder": {
+                "type": "object",
+                "properties": {
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                }
+            },
             "PatchedMember": {
                 "type": "object",
                 "properties": {
@@ -15717,6 +16782,19 @@
                     },
                     "role": {
                         "$ref": "#/components/schemas/RoleC86Enum"
+                    }
+                }
+            },
+            "PatchedRoleMeta": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "folder": {
+                        "type": "string",
+                        "maxLength": 200
                     }
                 }
             },
@@ -16052,6 +17130,166 @@
                 "type": "string",
                 "description": "* `admin` - Administrateur\n* `space_manager` - Responsable d'espace\n* `designer` - Concepteur\n* `operator` - Opérateur\n* `approver` - Approbateur\n* `viewer` - Lecteur\n* `catalog` - Catalogue"
             },
+            "RoleContractDraft": {
+                "type": "object",
+                "properties": {
+                    "variables": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    }
+                },
+                "required": [
+                    "variables"
+                ]
+            },
+            "RoleContractDraftIn": {
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "files"
+                ]
+            },
+            "RoleCreate": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "pattern": "^[a-z][a-z0-9_]{0,49}$"
+                    },
+                    "description": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "folder": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 200
+                    },
+                    "version": {
+                        "type": "string",
+                        "default": "1.0.0",
+                        "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "files": {},
+                    "contract": {}
+                },
+                "required": [
+                    "files",
+                    "name"
+                ]
+            },
+            "RoleSummary": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "summary": {
+                        "type": "string"
+                    },
+                    "contract_ok": {
+                        "type": "boolean"
+                    },
+                    "variables": {
+                        "type": "integer"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "folder": {
+                        "type": "string"
+                    },
+                    "latest_version": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "versions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RoleVersionSummary"
+                        }
+                    },
+                    "used_by": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "contract_ok",
+                    "description",
+                    "folder",
+                    "latest_version",
+                    "name",
+                    "summary",
+                    "used_by",
+                    "variables",
+                    "versions"
+                ]
+            },
+            "RoleVersionCreate": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+                    },
+                    "changelog": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "files": {},
+                    "contract": {}
+                },
+                "required": [
+                    "files",
+                    "version"
+                ]
+            },
+            "RoleVersionSummary": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    },
+                    "changelog": {
+                        "type": "string"
+                    },
+                    "files": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "changelog",
+                    "created_at",
+                    "digest",
+                    "files",
+                    "version"
+                ]
+            },
             "Run": {
                 "type": "object",
                 "properties": {
@@ -16309,6 +17547,7 @@
             },
             "RuntimeEnum": {
                 "enum": [
+                    "ansible",
                     "node",
                     "powershell",
                     "python",
@@ -16316,7 +17555,7 @@
                     "typescript"
                 ],
                 "type": "string",
-                "description": "* `node` - node\n* `powershell` - powershell\n* `python` - python\n* `shell` - shell\n* `typescript` - typescript"
+                "description": "* `ansible` - ansible\n* `node` - node\n* `powershell` - powershell\n* `python` - python\n* `shell` - shell\n* `typescript` - typescript"
             },
             "Schedule": {
                 "type": "object",
@@ -16916,6 +18155,7 @@
                     "examples": {},
                     "secrets_required": {},
                     "required_tags": {},
+                    "ansible_roles": {},
                     "changelog": {
                         "type": "string",
                         "default": "",

@@ -30,6 +30,10 @@ services:
       ORCH_PYTHON_IMAGE: "${ORCH_PYTHON_IMAGE:?Image Python épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
       ORCH_NODE_IMAGE: "${ORCH_NODE_IMAGE:?Image Node épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
       ORCH_POWERSHELL_IMAGE: "${ORCH_POWERSHELL_IMAGE:?Image PowerShell épinglée par digest (name@sha256:…) : scripts/pin-images.sh}"
+      # Runtime « ansible » (ADR 0037), seulement si le runner de cette machine le sert : image épinglée par digest (l'agent refuse de démarrer sinon) et réseau Docker de CETTE machine
+      # vers les machines à gérer (agent-ctl.sh targets-network). Valeurs par défaut sans effet tant que le runner ne sert pas « ansible ».
+      ORCH_ANSIBLE_IMAGE: "${ORCH_ANSIBLE_IMAGE:-fluxonata-runner-ansible:local}"
+      ORCH_ANSIBLE_NETWORK: "${ORCH_ANSIBLE_NETWORK:-fluxonata-ansible-targets}"
       DOCKER_HOST: ${DOCKER_HOST_IN_CONTAINER:-unix:///var/run/docker.sock}
     volumes:
       - ${AGENT_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock

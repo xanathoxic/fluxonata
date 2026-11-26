@@ -4,7 +4,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
 import { linter, lintGutter } from "@codemirror/lint";
-import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, HighlightStyle, indentOnInput, StreamLanguage, syntaxHighlighting, type StringStream } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { Compartment, EditorState } from "@codemirror/state";
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
@@ -15,7 +15,7 @@ export interface Completion { label: string; detail?: string }
 interface Props {
   value: string;
   onChange: (value: string) => void;
-  language: "python" | "javascript" | "json" | "text";
+  language: "python" | "javascript" | "typescript" | "json" | "yaml" | "shell" | "powershell" | "text";
   completions?: Completion[];
   ariaLabel: string;
   readOnly?: boolean;
@@ -25,7 +25,52 @@ interface Props {
   onCursor?: (pos: { line: number; col: number; lines: number }) => void;
 }
 
-const languageSupport = (language: Props["language"]) => (language === "python" ? python() : language === "javascript" ? javascript() : language === "json" ? [json(), linter(jsonParseLinter()), lintGutter()] : []);
+/** Coloration légère (commentaires, chaînes, nombres, clés, variables) pour les langages sans paquet CodeMirror dédié : YAML (playbooks) et shells. */
+const SHELL_WORDS = new Set(["if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case", "esac", "function", "in", "return", "exit", "export", "local", "set", "echo", "param", "foreach", "switch", "try", "catch", "finally", "throw"]);
+function quoted(stream: StringStream, q: string): void {
+  let escaped = false;
+  for (let c = stream.next(); c != null; c = stream.next()) {
+    if (c === q && !escaped) return;
+    escaped = !escaped && c === "\\";
+  }
+}
+const yamlMode = StreamLanguage.define<null>({
+  startState: () => null,
+  token(stream) {
+    if (stream.eatSpace()) return null;
+    if (stream.match(/^#.*/)) return "comment";
+    if (stream.match(/^\{\{.*?\}\}/)) return "variableName";
+    const q = stream.peek();
+    if (q === '"' || q === "'") { stream.next(); quoted(stream, q); return "string"; }
+    if (stream.match(/^-?\d+(\.\d+)?\b/)) return "number";
+    if (stream.match(/^(true|false|yes|no|null)\b/i)) return "atom";
+    if (stream.match(/^[\w.@/-]+(?=\s*:(\s|$))/)) return "propertyName";
+    stream.next();
+    return null;
+  },
+});
+const shellMode = StreamLanguage.define<null>({
+  startState: () => null,
+  token(stream) {
+    if (stream.eatSpace()) return null;
+    if (stream.match(/^#.*/)) return "comment";
+    const q = stream.peek();
+    if (q === '"' || q === "'") { stream.next(); quoted(stream, q); return "string"; }
+    if (stream.match(/^\$\{?[\w:]+\}?/)) return "variableName";
+    if (stream.match(/^\d+\b/)) return "number";
+    if (stream.match(/^[A-Za-z_][\w-]*/)) return SHELL_WORDS.has(stream.current().toLowerCase()) ? "keyword" : null;
+    stream.next();
+    return null;
+  },
+});
+const languageSupport = (language: Props["language"]) =>
+  language === "python" ? python()
+  : language === "javascript" ? javascript()
+  : language === "typescript" ? javascript({ typescript: true })
+  : language === "json" ? [json(), linter(jsonParseLinter()), lintGutter()]
+  : language === "yaml" ? yamlMode
+  : language === "shell" || language === "powershell" ? shellMode
+  : [];
 
 export interface CodeEditorHandle { insert: (text: string) => void; focus: () => void }
 

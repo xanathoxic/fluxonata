@@ -22,7 +22,7 @@ MAX_TOTAL = 20 * 1024 * 1024
 MAX_RATIO = 100
 ALLOWED_EXT = {".json", ".py", ".mjs", ".ts", ".sh", ".ps1", ".md", ".txt"}
 ALLOWED_PREFIX = ("actions/", "workflows/", "forms/", "docs/")
-SOURCE_EXT = {"python": "py", "node": "mjs", "typescript": "ts", "shell": "sh", "powershell": "ps1"}
+SOURCE_EXT = {"python": "py", "node": "mjs", "typescript": "ts", "shell": "sh", "powershell": "ps1", "ansible": "yml"}
 
 
 class PackageError(ValueError):

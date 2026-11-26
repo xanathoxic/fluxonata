@@ -21,28 +21,49 @@ from .mcp_design_common import SLUG, _marked, _need_edit, _ok, _spec, _touched
 
 MAX_DEPTH = 8
 MAX_FOLDERS = 500
-KINDS = ("workflow", "form", "control", "action", "ai_skill")
-RIGHT = {"workflow": EDIT, "form": EDIT, "control": EDIT, "action": PUBLISH, "ai_skill": PUBLISH}
+KINDS = ("workflow", "form", "control", "action", "ai_skill", "ansible_role", "inventory")
+RIGHT = {
+    "workflow": EDIT,
+    "form": EDIT,
+    "control": EDIT,
+    "action": PUBLISH,
+    "ai_skill": PUBLISH,
+    "ansible_role": EDIT,  # ranger un rôle ne change ni ses fichiers ni ses versions ; un jeton de conception ne porte jamais « publish » (ADR 0025)
+    "inventory": EDIT,
+}
+NO_TAGS = ("ansible_role", "inventory")  # ni étiquettes ici ; le nom d'un rôle EST son identifiant
 RECORD = {
     "workflow": "workflow.update",
     "form": "form.update",
     "control": "control.update",
     "action": "action.update",
     "ai_skill": "ai_skill.update",
+    "ansible_role": "ansible_role.update",
+    "inventory": "inventory.move",
 }
 
 
 def _model(kind: str):
     from ai.models import AiSkill
-    from catalog.models import Action
+    from catalog.models import Action, AnsibleRole, Inventory
     from formbuilder.models import Control, Form
 
-    return {"workflow": None, "form": Form, "control": Control, "action": Action, "ai_skill": AiSkill}[kind]
+    return {
+        "workflow": None,
+        "form": Form,
+        "control": Control,
+        "action": Action,
+        "ai_skill": AiSkill,
+        "ansible_role": AnsibleRole,
+        "inventory": Inventory,
+    }[kind]
 
 
 def _kind(raw) -> str:
     if raw not in KINDS:
-        raise serializers.ValidationError({"kind": "Type inconnu (workflow, form, control, action ou ai_skill)."})
+        raise serializers.ValidationError(
+            {"kind": "Type inconnu (workflow, form, control, action, ai_skill, ansible_role ou inventory)."}
+        )
     return raw
 
 
@@ -103,6 +124,8 @@ def _item(ws, kind: str, slug: str):
         from .models import Workflow
 
         return Workflow.objects.select_for_update().filter(workspace=ws, slug=slug).first()
+    if kind == "ansible_role":  # un rôle se désigne par son nom
+        return _model(kind).objects.select_for_update().filter(workspace=ws, name=slug).first()
     return _model(kind).objects.select_for_update().filter(workspace=ws, slug=slug).first()
 
 
@@ -119,9 +142,15 @@ def _apply(item, kind: str, d: dict, target) -> None:
     for key in ("name", "description"):
         if key in d:
             setattr(item, key, d[key])
+    if kind in NO_TAGS:
+        return
     if "tags" in d:
         item.tags = clean_tags(d["tags"])
     item.tags = _marked(item.tags)[: 10 if kind == "action" else 20]
+
+
+def slug_of(item) -> str:
+    return getattr(item, "slug", None) or item.name
 
 
 def update_item_info(request, ws, args):
@@ -132,6 +161,10 @@ def update_item_info(request, ws, args):
     if not changes:
         raise serializers.ValidationError("Indiquez au moins un changement : name, description, folder ou tags.")
     kind = d["kind"]
+    if kind in NO_TAGS and ({"tags"} & set(d) or (kind == "ansible_role" and "name" in d)):
+        raise serializers.ValidationError(
+            "Un rôle se range et se décrit (folder, description) ; son nom est son identifiant. Un inventaire n'a pas d'étiquettes."
+        )
     _need(request, ws, kind)
     target = clean_folder(d["folder"]) if "folder" in d else None
     if target is not None and len(target.split("/")) > MAX_DEPTH:
@@ -150,15 +183,15 @@ def update_item_info(request, ws, args):
         _apply(item, kind, d, target)
         item.save()
     record(RECORD[kind], actor=request.user, workspace=ws, target=item, fields=sorted(changes))
-    _touched(request, ws, "update_item_info", item, slug=item.slug, kind=kind, fields=sorted(changes))
+    _touched(request, ws, "update_item_info", item, slug=slug_of(item), kind=kind, fields=sorted(changes))
     return _ok(
         {
             "kind": kind,
-            "slug": item.slug,
-            "name": item.name,
+            "slug": slug_of(item),
+            "name": getattr(item, "name", slug_of(item)),
             "folder": item.folder,
             "moved_from": before if target is not None and before != item.folder else None,
-            "tags": item.tags,
+            "tags": getattr(item, "tags", []),
             "status": "informations mises à jour (contenu, code et versions inchangés)",
         }
     )
@@ -170,7 +203,7 @@ def read_tools() -> dict:
             _spec(
                 "list_folders",
                 "Lister les dossiers",
-                "Arborescence de dossiers d'un type d'élément (workflow, form, control, action, ai_skill) : chemins « A/B ». À lire avant de ranger quelque chose.",
+                "Arborescence de dossiers d'un type d'élément (workflow, form, control, action, ai_skill, ansible_role, inventory) : chemins « A/B ». À lire avant de ranger quelque chose.",
                 {"kind": {"type": "string", "enum": list(KINDS)}},
                 ["kind"],
             ),
@@ -195,7 +228,7 @@ def write_tools(spec_for, txt, tags) -> dict:
             spec_for(
                 "update_item_info",
                 "Ranger ou renommer un élément",
-                "Change le dossier (`folder`, « » pour la racine), le nom, la description ou les étiquettes d'un workflow, formulaire, contrôle, action ou skill IA. "
+                "Change le dossier (`folder`, « » pour la racine), le nom, la description ou les étiquettes d'un workflow, formulaire, contrôle, action ou skill IA ; pour un rôle Ansible (désigné par son nom) : le dossier et la description ; pour un inventaire : le dossier, le nom et la description. "
                 "Le contenu (graphe, définition, code, versions) n'est PAS touché : pour cela, update_workflow / update_form / update_control / propose_action / propose_skill.",
                 {
                     "kind": {"type": "string", "enum": list(KINDS)},

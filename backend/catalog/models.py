@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 from django.conf import settings
 from django.db import models
@@ -56,6 +57,8 @@ class ActionVersion(models.Model):
     secrets_required = models.JSONField(default=list, blank=True)
     # runner tags a worker must carry to run this version (e.g. ["windows"]); empty = any worker
     required_tags = models.JSONField(default=list, blank=True)
+    # rôles Ansible (ADR 0037, lot 6) : [{"role": "web", "version": "1.2.0"}], versions EXACTES figées à la publication ; seulement pour le runtime « ansible »
+    ansible_roles = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     changelog = models.CharField(max_length=300, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
@@ -86,3 +89,97 @@ class ActionTestCase(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["action", "name"], name="uniq_action_testcase_name")]
         ordering = ["name", "id"]
+
+
+class Inventory(models.Model):
+    """Un inventaire Ansible géré par la plate-forme (ADR 0037, lot 3) : des machines, des groupes (imbriqués) et des variables.
+    Jamais d'identifiant dedans : les secrets passent par les connexions de l'action (voir `catalog.inventory.check_vars`)."""
+
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="inventories")
+    slug = models.SlugField()
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    folder = models.CharField(
+        max_length=200, blank=True, default=""
+    )  # « A/B » : le rangement dans l'arborescence des inventaires
+    variables = models.JSONField(default=dict, blank=True)  # variables communes à toutes les machines (groupe « all »)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace", "slug"], name="uniq_inventory_slug")]
+        ordering = ["name", "id"]
+
+
+class InventoryGroup(models.Model):
+    inventory = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name="groups")
+    name = models.CharField(max_length=64)
+    variables = models.JSONField(default=dict, blank=True)
+    children = models.ManyToManyField("self", symmetrical=False, related_name="parents", blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["inventory", "name"], name="uniq_inventory_group")]
+        ordering = ["name", "id"]
+
+
+class InventoryHost(models.Model):
+    inventory = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name="hosts")
+    name = models.CharField(max_length=255)
+    variables = models.JSONField(default=dict, blank=True)
+    enabled = models.BooleanField(
+        default=True
+    )  # une machine désactivée reste dans l'inventaire mais n'est jamais passée à Ansible
+    groups = models.ManyToManyField(InventoryGroup, related_name="hosts", blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["inventory", "name"], name="uniq_inventory_host")]
+        ordering = ["name", "id"]
+
+
+def files_digest(files: dict) -> str:
+    """L'empreinte d'un ensemble de fichiers de rôle : indépendante de l'ordre des fichiers."""
+    return "sha256:" + hashlib.sha256(json.dumps(files, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+class AnsibleRole(models.Model):
+    """Un rôle Ansible de la bibliothèque (ADR 0037, lot 6) : un nom que les playbooks appellent (`roles: [web]`) et des versions immuables."""
+
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="ansible_roles")
+    name = models.CharField(max_length=50)  # le nom du dossier du rôle : lettres minuscules, chiffres, soulignés
+    description = models.TextField(blank=True)
+    folder = models.CharField(
+        max_length=200, blank=True, default=""
+    )  # « A/B » : le rangement dans l'arborescence des rôles
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace", "name"], name="uniq_ansible_role_name")]
+        ordering = ["name", "id"]
+
+
+class AnsibleRoleVersion(models.Model):
+    """Version publiée, immuable, d'un rôle : ses fichiers (texte), leur empreinte et ce qui a changé."""
+
+    role = models.ForeignKey(AnsibleRole, on_delete=models.CASCADE, related_name="versions")
+    version = models.CharField(max_length=32)  # semver
+    files = models.JSONField()  # {"tasks/main.yml": "texte", …} : voir `catalog.ansible_roles.check_files`
+    digest = models.CharField(max_length=71, editable=False)
+    changelog = models.CharField(max_length=300, blank=True)
+    # le contrat d'usage du rôle (à quoi il sert, variables, résultats, exemple) : voir `catalog.ansible_roles.check_contract` ; immuable comme les fichiers
+    contract = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["role", "version"], name="uniq_ansible_role_version")]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise PermissionError("AnsibleRoleVersion is immutable once published")
+        self.digest = files_digest(self.files)
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("AnsibleRoleVersion is immutable once published")

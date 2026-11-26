@@ -271,9 +271,11 @@ class Folder(models.Model):
         AI_SKILL = "ai_skill", "Skills IA"
         FORM = "form", "Formulaires"
         CONTROL = "control", "Contrôles"
+        ANSIBLE_ROLE = "ansible_role", "Rôles Ansible"
+        INVENTORY = "inventory", "Inventaires"
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="folders")
-    kind = models.CharField(max_length=10, choices=Kind.choices)
+    kind = models.CharField(max_length=20, choices=Kind.choices)
     path = models.CharField(max_length=200)  # "A/B/C"
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -30,7 +30,7 @@ import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"  # 0.2.0 : fichiers d'appui des tâches (rôles Ansible, ADR 0037)
 log = logging.getLogger("fluxonata.runner")
 
 
@@ -293,6 +293,7 @@ class Agent:
             entrypoint=job["entrypoint"],
             limits=job["limits"],
             network_policy=job["network_policy"],
+            support_files=job.get("support_files") or {},
         )
         try:
             outcome = self.executor.run(

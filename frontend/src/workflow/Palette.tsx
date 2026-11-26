@@ -18,6 +18,7 @@ const GENERIC: { type: NodeType; hint: string; cat: StepCat }[] = [
   { type: "http", hint: "Appelle un service web via une connexion", cat: "comm" },
   { type: "smtp", hint: "Envoie un e-mail texte par un serveur SMTP (mode test par défaut)", cat: "comm" },
   { type: "ssh", hint: "Exécute des commandes sur un serveur SSH (direct ou par rebonds), ou pilote une session interactive (mode test par défaut)", cat: "comm" },
+  { type: "ansible", hint: "Écrit un playbook Ansible dans le workflow, avec des rôles de la bibliothèque, et le joue sur des machines (SSH, inventaire)", cat: "comm" },
   { type: "sftp", hint: "Liste, lit, écrit ou supprime un fichier texte sur un serveur SFTP", cat: "comm" },
   { type: "condition", hint: "Choisit une branche selon une règle", cat: "flow" },
   { type: "switch", hint: "Choisit parmi plusieurs cas (le premier qui correspond)", cat: "flow" },

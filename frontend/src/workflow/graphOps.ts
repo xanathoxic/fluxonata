@@ -48,6 +48,15 @@ export function defaultNode(graph: Graph, type: NodeType, action?: Action): Grap
   if (type === "while") Object.assign(node, { workflow: "", inputs: {}, condition: "", max_iterations: 10, delay_seconds: 0 });
   if (type === "foreach") Object.assign(node, { max_iterations: 10, concurrency: 1, item_input: "item", items: "" });
   if (type === "script") Object.assign(node, { language: "python", script: "# Écrivez votre code ici. Les entrées liées sont des variables ; déclarez vos sorties dans l'onglet Sorties.\nresultat = \"ok\"\nSystem.log(\"terminé\")\n", bindings: {}, outputs: [{ name: "resultat", type: "string" }], timeout_seconds: 60 });
+  if (type === "ansible")
+    Object.assign(node, {
+      playbook: "- name: Mon playbook\n  hosts: all\n  gather_facts: false\n  tasks:\n    - name: Qui suis-je ?\n      ansible.builtin.command: id -un\n      changed_when: false\n",
+      roles: [],
+      required_tags: [],
+      connections: {},
+      inputs: { inventory_ref: "", known_hosts: "", check: true },
+      timeout_seconds: 300,
+    });
   if (type === "throw") Object.assign(node, { code: "ERREUR", message: "" });
   if (type === "ai") Object.assign(node, { provider: "", prompt: "", output_schema: { type: "object", required: ["resultat"], properties: { resultat: { type: "string", title: "Résultat" } } } });
   return node;
@@ -419,6 +428,9 @@ const OUTPUT_LABELS: Record<string, Record<string, string>> = {
   },
 };
 const STATIC_OUTPUTS = staticOutputs as Record<string, Record<string, string | null>>;
+/** Ce que lit l'étape suivante d'un « Playbook Ansible » (les mêmes champs que le serveur, `catalog/ansible_inline.py`). */
+const ANSIBLE_OUTPUTS: Record<string, string> = { ok: "boolean", check: "boolean", hosts: "integer", stats: "object", totals: "object", tasks: "array", data: "object" };
+const ANSIBLE_OUTPUT_LABELS: Record<string, string> = { ok: "réussi", check: "mode vérification", hosts: "machines", stats: "bilan par machine", totals: "totaux", tasks: "tâches", data: "données publiées" };
 /** The useful fields first: the order of `OUTPUT_LABELS` (what people reach for), then any other field the validator knows, alphabetically. */
 const fieldsFor = (n: GraphNode, kind: string): OutputField[] => {
   const rank = Object.keys(OUTPUT_LABELS[kind] ?? {});
@@ -439,6 +451,7 @@ function fieldsOfNode(n: GraphNode, actions: Action[]): OutputField[] {
     { path: `steps.${n.id}.output.count`, label: `${n.name} → nombre`, type: "integer" },
   ];
   if (n.type === "wait") return n.resume === "webhook" || n.resume === "form" ? fieldsFor(n, "wait_resume") : [];
+  if (n.type === "ansible") return Object.entries(ANSIBLE_OUTPUTS).map(([k, t]) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${ANSIBLE_OUTPUT_LABELS[k] ?? k}`, type: t }));
   if (n.type === "script") return (n.outputs ?? []).map((o) => ({ path: `steps.${n.id}.output.${o.name}`, label: `${n.name} → ${o.name}`, type: o.type }));
   if (n.type === "ai") return Object.entries(n.output_schema?.properties ?? {}).map(([k, p]) => ({ path: `steps.${n.id}.output.${k}`, label: `${n.name} → ${p.title ?? k}`, type: p.type }));
   return fieldsFor(n, n.type);
@@ -496,6 +509,14 @@ export function clientValidate(graph: Graph, actions: Action[]): Issue[] {
         if (isEmpty(n.inputs?.[key]))
           issues.push({ node: n.id, level: "error", code: "missing_param", message: `Paramètre obligatoire manquant : ${schema?.properties?.[key]?.title ?? key}.` });
     }
+    if (n.type === "ansible") {
+      if (n.ai_review) issues.push({ node: n.id, level: "error", code: "ai_review_required", message: "Playbook écrit par un assistant : relisez le playbook, ses rôles et sa cible, puis confirmez « J'ai relu ce playbook » dans l'onglet Playbook." });
+      if (!(n.playbook ?? "").trim()) issues.push({ node: n.id, level: "error", code: "empty_playbook", message: "Le playbook est vide." });
+      if ((n.required_tags ?? []).length === 0) issues.push({ node: n.id, level: "error", code: "missing_runner_tags", message: "Indiquez au moins une étiquette de runner : seuls les runners qui la portent jouent le playbook." });
+      if (!n.connections?.ssh) issues.push({ node: n.id, level: "warning", code: "missing_connection", message: "Choisissez la connexion SSH (clé ou mot de passe) : sans elle, aucune machine distante n'est atteignable." });
+      if (isEmpty(n.inputs?.inventory_ref) && isEmpty(n.inputs?.inventory)) issues.push({ node: n.id, level: "error", code: "bad_inventory", message: "Choisissez l'inventaire des machines." });
+      if (isEmpty(n.inputs?.known_hosts)) issues.push({ node: n.id, level: "error", code: "missing_param", message: "Renseignez les clés d'hôtes (known_hosts) : la connexion SSH refuse toute machine inconnue." });
+    }
     if (n.type === "script" && !(n.script ?? "").trim()) issues.push({ node: n.id, level: "error", code: "empty_script", message: "Le script est vide." });
     if (n.type === "script" && n.ai_review) issues.push({ node: n.id, level: "error", code: "ai_review_required", message: "Script écrit par l'IA : relisez le code, testez-le, puis confirmez « J'ai relu ce code » dans l'éditeur de script." });
     if (n.type === "throw" && !(n.message ?? "").trim()) issues.push({ node: n.id, level: "warning", code: "missing_message", message: "Indiquez le message de l'exception." });
@@ -552,6 +573,7 @@ export function summarize(n: GraphNode, actions: Action[]): string {
     case "condition": return n.expr ? `Si ${n.expr}` : "Condition à définir";
     case "switch": return `${(n.cases ?? []).length} cas + sinon`;
     case "script": return `${n.language === "javascript" ? "JavaScript" : "Python"} · ${(n.script ?? "").split("\n").find((l) => l.trim() && !l.trim().startsWith("#")) ?? "script vide"}`.slice(0, 70);
+    case "ansible": return `Playbook · ${(n.roles ?? []).length} rôle(s) · ${n.inputs?.check === true ? "[vérification] " : ""}${(n.playbook ?? "").split("\n").find((l) => l.trim().startsWith("- name:"))?.replace(/^\s*- name:\s*/, "") ?? "playbook vide"}`.slice(0, 70);
     case "throw": return n.message ? `Lève : ${n.message}` : "Exception à définir";
     case "agent": return `${n.mode === "reel" ? "" : "[test] "}Agent · ${(n.tools ?? []).length} outil(s)`;
     case "smtp": return `${n.mode === "reel" ? "" : "[test] "}E-mail à ${n.to || "?"} : ${n.subject || "objet à saisir"}`.slice(0, 70);

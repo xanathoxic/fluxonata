@@ -13,6 +13,7 @@ from vault.injection import InjectionError, resolve_env
 
 from . import registry, services
 from .finalize import finalize_attempt
+from .inventory_inputs import InventoryError, effective_inputs, effective_support_files
 from .models import ServiceInstance
 from .runners import get_runner
 
@@ -63,6 +64,23 @@ def _process_claimed(execution, attempt, runner):
             error={"code": exc.code, "message": exc.message, "next_step": "Vérifiez la connexion dans « Connexions »."},
         )
         return True
+    try:
+        inputs = effective_inputs(execution)
+        version.support_files = effective_support_files(
+            execution
+        )  # rôles Ansible figés de la version d'action, déposés dans /work/roles
+    except InventoryError as exc:
+        services.complete_attempt(
+            execution.id,
+            attempt,
+            ok=False,
+            error={
+                "code": exc.code,
+                "message": exc.message,
+                "next_step": "Vérifiez l'inventaire dans « Inventaires ».",
+            },
+        )
+        return True
     stop, cancel = threading.Event(), threading.Event()
     hb = threading.Thread(target=_heartbeat_loop, args=(execution.id, attempt, stop, cancel), daemon=True)
     hb.start()
@@ -72,7 +90,7 @@ def _process_claimed(execution, attempt, runner):
         runner = AiRunner(execution)
     try:
         outcome = (runner or get_runner()).run(
-            version, execution.inputs, int(version.limits.get("timeout_seconds", 30)), cancel, env_secrets
+            version, inputs, int(version.limits.get("timeout_seconds", 30)), cancel, env_secrets
         )
     except Exception as exc:  # noqa: BLE001
         log.exception("runner crashed")

@@ -15,10 +15,31 @@ import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { TagInput, TagList } from "../components/Tags";
 import { RenameOverlay } from "../components/RenameOverlay";
+import { Overlay } from "../components/Overlay";
+import { NewVersionForm } from "./library/NewVersionForm";
 
-interface Ver { version: string; created_at: string; license: string; side_effects: string; idempotent: boolean; network_policy: string; source: string; source_digest: string; changelog: string; runtime: string }
+interface Ver { version: string; created_at: string; license: string; side_effects: string; idempotent: boolean; network_policy: string; source: string; source_digest: string; changelog: string; runtime: string; entrypoint?: string; input_schema: unknown; output_schema: unknown; limits?: Record<string, unknown>; examples?: unknown[]; secrets_required?: unknown[]; required_tags?: string[]; ansible_roles?: { role: string; version: string }[] }
 interface Cmp { changed_fields: string[]; source_diff: string; breaking: boolean }
 interface Dep { results: { workflow: string; workflow_version: string; action_versions: string[] }[] }
+
+/** Ce qu'une version d'action Ansible déclare en plus de son code : étiquettes de runner exigées et rôles figés (ADR 0037). */
+function AnsibleDeclared({ v }: { v: Ver }) {
+  if (v.runtime !== "ansible") return null;
+  const roles = v.ansible_roles ?? [];
+  const tags = v.required_tags ?? [];
+  return (
+    <section className="adm-card" aria-labelledby="ans-decl">
+      <h3 id="ans-decl">Exécution Ansible</h3>
+      <p className="hint">Étiquettes de runner exigées : {tags.length ? tags.map((t, i) => <span key={t}>{i > 0 && ", "}<code>{t}</code></span>) : "aucune"}.</p>
+      {roles.length === 0 ? <p className="hint">Aucun rôle déclaré : le playbook ne peut appeler que des rôles qu'il embarque lui-même (il n'en a pas).</p> : (
+        <>
+          <p className="hint">Rôles figés à la publication de la version {v.version}. Le playbook les appelle par leur nom (<code>roles:</code> ou <code>include_role</code>).</p>
+          <ul>{roles.map((r) => <li key={r.role}><Link to={`/library/ansible-roles/${r.role}`}>{r.role}</Link> <code>{r.version}</code></li>)}</ul>
+        </>
+      )}
+    </section>
+  );
+}
 
 export function ActionLibraryPage() {
   const { slug = "" } = useParams();
@@ -37,12 +58,14 @@ export function ActionLibraryPage() {
   const [shown, setShown] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [versioning, setVersioning] = useState(false);
   const navigate = useNavigate();
   if (a.isLoading) return <p role="status">Chargement…</p>;
   if (!a.data) return <p role="alert">Action introuvable.</p>;
   const list = versions.data?.results ?? [];
   const tab = ["contrat", "code", "versions", "usages", "gestion"].includes(params.get("onglet") ?? "") ? (params.get("onglet") as string) : "contrat";
   const setTab = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("onglet", id); return n; }, { replace: true });
+  const hasAnsible = list.some((v) => v.runtime === "ansible"); // la colonne « Rôles » n'existe que pour les actions Ansible
   const current = list.find((v) => v.version === shown) ?? list[0];
   const contract = a.data.latest_version?.contract;
   const tabs = [
@@ -51,6 +74,7 @@ export function ActionLibraryPage() {
       <>
         <div className="field src-pick"><label htmlFor="src-v">Version affichée</label>
           <select id="src-v" value={current.version} onChange={(e) => setShown(e.target.value)}>{list.map((v) => <option key={v.version} value={v.version}>{v.version}{v === list[0] ? " (dernière)" : ""}</option>)}</select></div>
+        <AnsibleDeclared v={current} />
         <SourceViewer source={current.source} runtime={current.runtime} version={current.version} digest={current.source_digest} name={a.data.slug} />
       </>) },
     { id: "versions", label: `Versions (${list.length})`, content: (
@@ -58,10 +82,10 @@ export function ActionLibraryPage() {
         <CompareBox slug={slug} versions={list.map((v) => v.version)} pair={pair} setPair={setPair} cmp={cmp} setCmp={setCmp} />
         {rollback.error && <p role="alert" className="field-error">Erreur : {errorText(rollback.error)}</p>}
       <div className="table-wrap"><table><caption className="sr-only">Versions de l'action</caption>
-        <thead><tr><th scope="col">Version</th><th scope="col">Publiée le</th><th scope="col">Effets</th><th scope="col">Réseau</th><th scope="col">Empreinte</th><th scope="col">Actions</th></tr></thead>
+        <thead><tr><th scope="col">Version</th><th scope="col">Publiée le</th><th scope="col">Effets</th><th scope="col">Réseau</th>{hasAnsible && <th scope="col">Rôles</th>}<th scope="col">Empreinte</th><th scope="col">Actions</th></tr></thead>
         <tbody>{list.map((v) => (
           <tr key={v.version}><td>{v.version}{v.changelog ? ` — ${v.changelog}` : ""}</td><td>{formatDate(v.created_at)}</td>
-            <td>{v.side_effects === "none" ? "Aucun" : `Externe${v.idempotent ? "" : " non idempotent"}`}</td><td>{v.network_policy}</td><td className="mono">{v.source_digest.slice(7, 19)}…</td>
+            <td>{v.side_effects === "none" ? "Aucun" : `Externe${v.idempotent ? "" : " non idempotent"}`}</td><td>{v.network_policy}</td>{hasAnsible && <td>{v.runtime === "ansible" ? ((v.ansible_roles ?? []).map((x) => `${x.role} ${x.version}`).join(", ") || "—") : "—"}</td>}<td className="mono">{v.source_digest.slice(7, 19)}…</td>
             <td><button type="button" onClick={() => { setShown(v.version); setTab("code"); }} aria-label={`Voir le code de la version ${v.version}`}>Voir le code</button>
               {can("publish") && v !== list[0] && <button type="button" onClick={() => rollback.mutate({ to_version: v.version })} aria-label={`Revenir à cette version (${v.version}) : la republier comme nouvelle version`}>Revenir à cette version</button>}</td></tr>))}
         </tbody></table></div>
@@ -101,7 +125,7 @@ export function ActionLibraryPage() {
   return (
     <EditorShell backTo="/library" backLabel="Retour aux bibliothèques" title={a.data.name} titleHint={a.data.description || undefined} fill={false}
       status={<StatusLine published={lv ? `v${lv.version} publiée` : "Jamais publiée"} extra={deprecated ? "Dépréciée" : isProposal ? "Proposition à relire" : undefined} />}
-      actions={<>{can("publish") && <button type="button" onClick={() => setRenaming(true)} aria-haspopup="dialog">Renommer</button>}{!deprecated && !isProposal && <Link className="button primary" to={`/library/actions/${slug}/run`}>Lancer un essai</Link>}</>}
+      actions={<>{can("publish") && !isProposal && list[0] && <button type="button" onClick={() => setVersioning(true)} aria-haspopup="dialog">Nouvelle version</button>}{can("publish") && <button type="button" onClick={() => setRenaming(true)} aria-haspopup="dialog">Renommer</button>}{!deprecated && !isProposal && <Link className="button primary" to={`/library/actions/${slug}/run`}>Lancer un essai</Link>}</>}
       tabs={<PageTabs label="Sections de l'action" active={tab} onChange={setTab} tabs={tabs.map((t) => ({ id: t.id, label: t.label }))} />}
       notices={deprecated ? <p role="note" className="notice">⚠ Action dépréciée : {a.data.deprecation_reason || "aucun motif indiqué"}.</p> : isProposal ? (
         <div role="note" className="notice">
@@ -111,6 +135,7 @@ export function ActionLibraryPage() {
         </div>) : undefined}>
       {a.data.description && <p>{a.data.description}</p>}
       <ActionTags slug={slug} tags={a.data.tags ?? []} editable={can("publish")} suggestions={[...new Set((known.data?.results ?? []).flatMap((x) => x.tags ?? []))].sort()} />
+      {versioning && list[0] && <Overlay wide variant="modal" className="overlay-version" title="Nouvelle version" description="La version publiée est immuable : une nouvelle version est créée à partir de la dernière." onClose={() => setVersioning(false)}><NewVersionForm slug={slug} base={list[0]} onDone={() => setVersioning(false)} /></Overlay>}
       {renaming && <RenameOverlay kind="action" slug={slug} name={a.data.name} onClose={() => setRenaming(false)} />}
       {deleting && <DeleteDialog kind="action" slug={slug} name={a.data.name} onClose={() => setDeleting(false)} onDeleted={() => navigate("/library/actions")} />}
       <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.id} className="tabpanel action-tabs">{tabs.find((t) => t.id === tab)?.content}</div>

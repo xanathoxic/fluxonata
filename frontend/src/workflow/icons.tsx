@@ -11,6 +11,7 @@ const PATHS: Record<string, React.ReactElement> = {
   cache: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /><path d="M16 17l2 2 3-3" /></>,
   sftp: <><path d="M4 4h10l6 6v10H4z" /><path d="M14 4v6h6M9 15h6M12 12v6" /></>,
   ssh: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M12 15h5" /></>,
+  ansible: <><path d="M5 20l7-16 7 16" /><path d="M8.2 14h7.6M12 11l-3 6" /></>,
   smtp: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>,
   ldap: <><circle cx="12" cy="5" r="2.5" /><circle cx="5" cy="19" r="2.5" /><circle cx="19" cy="19" r="2.5" /><path d="M12 7.5v4M12 11.5H5V16.5M12 11.5h7v5" /></>,
   while: <path d="M4 12a8 8 0 0 1 14-5M18 3v4h-4M20 12a8 8 0 0 1-14 5M6 21v-4h4M12 9v3l2 1.5" />,

@@ -21,7 +21,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from .runtime_config import WORKERS_DIR, settings
 
@@ -31,7 +31,8 @@ CANCEL_GRACE_SECONDS = 3
 NETWORK_POLICIES = {
     "none": "none",
     "test-service": "test-service",
-}  # "test-service" -> settings.ORCH_EGRESS_TEST_NETWORK
+    "targets": "targets",
+}  # "test-service" -> settings.ORCH_EGRESS_TEST_NETWORK ; "targets" -> settings.ORCH_ANSIBLE_NETWORK (le réseau que l'exploitant ouvre vers les machines à gérer)
 
 
 # runtime -> (source file name, harness (None = shell), image setting, command inside the container)
@@ -41,6 +42,9 @@ class _Runtime(TypedDict):
     image: str
     cmd: list[str]
     local: list[str]
+    support: NotRequired[list[str]]  # extra files or folders copied next to the harness (e.g. Ansible callback plugins)
+    memory_floor_mb: NotRequired[int]  # a runtime whose tooling cannot run in the default 128 MB
+    tmpfs_mb: NotRequired[int]
 
 
 RUNTIMES: dict[str, _Runtime] = {
@@ -72,6 +76,16 @@ RUNTIMES: dict[str, _Runtime] = {
         "cmd": ["pwsh", "-NoProfile", "-NonInteractive", "-File", "/work/action.ps1"],
         "local": ["pwsh", "-NoProfile", "-NonInteractive", "-File"],
     },
+    "ansible": {
+        "file": "playbook.yml",
+        "harness": "ansible/harness.py",
+        "image": "ORCH_ANSIBLE_IMAGE",
+        "cmd": ["python", "-I", "/work/harness.py"],
+        "local": [sys.executable, "-I"],
+        "support": ["ansible/callback_plugins"],
+        "memory_floor_mb": 256,
+        "tmpfs_mb": 64,
+    },
     "shell": {
         "file": "action.sh",
         "harness": None,
@@ -93,6 +107,18 @@ class RunOutcome:
     extra: dict = field(default_factory=dict)
 
 
+def _write_support_files(workdir: Path, files: dict) -> None:
+    """Dépose les fichiers d'appui d'une exécution (rôles Ansible : `roles/<nom>/<chemin>`) dans son répertoire de travail. Le chemin est revérifié ICI, même s'il
+    a été validé à la publication : rien ne sort jamais du répertoire de travail, quoi que contienne la tâche."""
+    root = workdir.resolve()
+    for rel, content in files.items():
+        target = (workdir / rel).resolve()
+        if not str(rel).startswith("roles/") or ".." in Path(rel).parts or root not in target.parents:
+            raise ValueError(f"Chemin de fichier d'appui refusé : {str(rel)[:80]}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+
+
 def _prepare(version, inputs) -> Path:
     spec = RUNTIMES[version.runtime]
     workdir = Path(tempfile.mkdtemp(prefix="orch-run-", dir=settings.ORCH_WORK_DIR or None))
@@ -100,9 +126,15 @@ def _prepare(version, inputs) -> Path:
     (workdir / "input.json").write_text(json.dumps({"entrypoint": version.entrypoint, "inputs": inputs}))
     if spec["harness"]:
         shutil.copy(WORKERS_DIR / spec["harness"], workdir / Path(spec["harness"]).name)
+    for extra in spec.get("support", []):
+        shutil.copytree(WORKERS_DIR / extra, workdir / Path(extra).name, ignore=shutil.ignore_patterns("__pycache__"))
+    _write_support_files(workdir, getattr(version, "support_files", None) or {})
     workdir.chmod(0o755)
-    for f in workdir.iterdir():
-        f.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IWUSR)
+    for f in workdir.rglob("*"):
+        if f.is_dir():
+            f.chmod(0o755)
+        else:
+            f.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IWUSR)
     return workdir
 
 
@@ -267,7 +299,7 @@ def build_docker_command(name, image, network, memory, workdir, env_file, spec) 
         "65534:65534",
         "--read-only",
         "--tmpfs",
-        "/tmp:rw,noexec,nosuid,size=16m",  # noqa: S108 - container-side tmpfs, not a host path
+        f"/tmp:rw,noexec,nosuid,size={spec.get('tmpfs_mb', 16)}m",  # noqa: S108 - container-side tmpfs, not a host path
         "--cap-drop",
         "ALL",
         "--security-opt",
@@ -326,13 +358,15 @@ class DockerRunner:
         network = NETWORK_POLICIES.get(version.network_policy)
         if network == "test-service":
             network = settings.ORCH_EGRESS_TEST_NETWORK
+        elif network == "targets":
+            network = settings.ORCH_ANSIBLE_NETWORK
         if network is None:
             raise ValueError(f"Politique réseau inconnue : {version.network_policy}")
         spec = RUNTIMES[version.runtime]
         workdir = _prepare(version, inputs)
         name = f"orch-{uuid.uuid4().hex[:12]}"
         env_file = _write_env_file(workdir, env or {})
-        memory = int(version.limits.get("memory_mb", 128))
+        memory = max(int(version.limits.get("memory_mb", 128)), spec.get("memory_floor_mb", 0))
         image = getattr(settings, spec["image"])
         cmd = build_docker_command(name, image, network, memory, workdir, env_file, spec)
         try:

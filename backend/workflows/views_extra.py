@@ -364,6 +364,64 @@ class ScriptTestView(APIView):
         )
 
 
+class AnsibleStepSchemaView(APIView):
+    """Les paramètres et les sorties de l'étape « Playbook Ansible » : une seule source, que l'éditeur lit pour construire ses champs."""
+
+    def get(self, request, workspace):
+        from catalog import ansible_inline
+
+        get_workspace(request.user, workspace, VIEW)
+        return Response({"input_schema": ansible_inline.INPUT_SCHEMA, "output_schema": ansible_inline.OUTPUT_SCHEMA})
+
+
+class AnsibleTestView(APIView):
+    """Essaie le playbook d'une étape avec des valeurs d'essai, sur les vraies machines désignées (même chemin qu'une exécution : runner portant les
+    étiquettes, inventaire, connexions, rôles) ; suivi par /executions/{id}/. Mettre `check: true` dans les valeurs d'essai pour ne rien modifier."""
+
+    def post(self, request, workspace, slug):
+        from catalog import ansible_inline
+
+        ws = get_workspace(request.user, workspace, EDIT)
+        get_workspace(request.user, workspace, RUN)
+        _wf(request.user, ws, slug, EDIT)
+        node = request.data.get("node")
+        inputs = request.data.get("inputs") or {}
+        connections = request.data.get("connections") or {}
+        if not isinstance(node, dict):
+            raise serializers.ValidationError({"node": "Étape Playbook attendue."})
+        if not isinstance(inputs, dict) or not isinstance(connections, dict) or len(str(request.data)) > MAX_SCRIPT * 2:
+            raise serializers.ValidationError({"inputs": "Valeurs d'essai invalides ou trop volumineuses."})
+        errors = [issue("test", code, message) for code, message in ansible_inline.problems(ws, node)]
+        if ("inventory_ref" in inputs) == ("inventory" in inputs):
+            errors.append(
+                issue("test", "bad_inventory", "Indiquez « inventory_ref » OU « inventory » dans les valeurs d'essai.")
+            )
+        if errors:
+            raise serializers.ValidationError({"issues": errors})
+        from runs.serializers import validate_inputs_against
+
+        if problems := validate_inputs_against(ansible_inline.INPUT_SCHEMA, inputs):
+            raise serializers.ValidationError(problems)
+        env = (
+            Environment.objects.filter(workspace=ws, kind="test").first()
+            or Environment.objects.filter(workspace=ws).exclude(kind="prod").first()
+        )
+        if env is None:
+            raise serializers.ValidationError({"environment": "Aucun environnement hors production pour tester."})
+        ex = services.enqueue(
+            workspace=ws,
+            environment=env,
+            action_version=ansible_inline.inline_version(ws, request.user, node),
+            user=request.user,
+            inputs=inputs,
+            connections={k: str(v) for k, v in connections.items()},
+        )
+        record("workflow.ansible_test", actor=request.user, workspace=ws, workflow=slug)
+        return Response(
+            {"execution_id": str(ex.id), "url": f"/api/v1/workspaces/{ws.slug}/executions/{ex.id}/"}, status=202
+        )
+
+
 class WorkflowDeleteView(APIView):
     """Supprime un workflow, seulement si aucun AUTRE workflow ne l'appelle (409 avec la liste). Son historique d'exécutions et ses déclencheurs
     (planifications, webhooks, formulaires publics, interrogations) le protègent, sauf demande expresse : `?with_history=1` supprime aussi

@@ -2,6 +2,29 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.20.0 — 2026-11-26
+
+**Ansible : etape Playbook dans les workflows, roles et inventaires en arborescence, contrat des roles, IDE des roles**
+
+- Ansible : actions « playbook », runner dedie, inventaires geres, roles de bibliotheque, onglet Ansible et workflow de test
+- Ansible : laboratoire de validation sur de vraies machines SSH, runner dedie, workflow de validation complet
+- Bibliotheque : Roles Ansible et Inventaires deviennent des onglets de la page Actions
+- Action Ansible : la fiche montre les etiquettes de runner et les roles figes ; panneau de proprietes aligne
+- Action : formulaire « Nouvelle version » (code, contrat, etiquettes et roles Ansible repris de la derniere version)
+- Nouvelle version : fenetre centrale a onglets, editeur avance (coloration, essai du brouillon dans le bac a sable), panneau d'essai repliable
+- Nouvelle version : contrat edite champ par champ (JSON en Avance), fenetre qui suit la taille de l'ecran
+- Nouvelle version : un onglet Entrees et un onglet Sorties
+- Nouvelle version : onglet General en cartes, roles choisis + recherche, test E2E qui nettoie ses objets
+- Nouvelle version : plus d'espace parasite entre les etiquettes et les roles (colonnes Ansible en ligne)
+- Roles d'une action : lignes alignees (nom et description, version, corbeille)
+- Roles Ansible et inventaires : arborescence de dossiers (creation, deplacement, recherche), comme les actions
+- Role Ansible : page d'edition dans l'esprit d'un editeur de code (explorateur, onglets, editeur colore, barre d'etat)
+- Roles Ansible : contrat d'usage (a quoi il sert, variables, resultats, exemple d'appel) enregistre avec la version
+- Contrat d'un role : etat en tete, edition par champs, apercu fixe, exemple dans l'editeur de code
+- MCP de conception : roles et inventaires Ansible (lecture, rangement), rubrique ansible du guide, proposition d'action Ansible
+- Etape de workflow « Playbook Ansible » : playbook ecrit dans le workflow, roles de la bibliotheque figes a la publication, essai sur les machines
+- Etape Playbook : champs alignes dans le panneau de proprietes (colonnes empilees, roles lisibles)
+
 ## v0.19.2 — 2026-11-25
 
 **Editeur : deplacer plusieurs etapes ensemble (Maj + clic, rectangle de selection)**

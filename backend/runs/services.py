@@ -113,6 +113,28 @@ def create_execution(*, workspace, environment, action_version, user, inputs, id
     return execution, True
 
 
+MIN_AGENT_FOR_SUPPORT_FILES = (
+    0,
+    2,
+    0,
+)  # première version d'agent qui dépose les fichiers d'appui d'une tâche (rôles Ansible)
+
+
+def _runnable(version, tags: set, runner) -> bool:
+    """Cette version d'action peut-elle être prise par ce worker (`runner=None`) ou cet agent, portant ces étiquettes ? Les étiquettes exigées, puis les règles d'Ansible
+    (ADR 0037) : un playbook sans étiquette n'est servi par personne, et un playbook qui utilise des rôles ne part pas sur un agent trop ancien pour les déposer."""
+    if not set(version.required_tags or []) <= tags:
+        return False
+    if version.runtime != "ansible":
+        return True
+    if not version.required_tags:
+        return False
+    if runner is not None and version.ansible_roles:
+        reported = tuple(int(x) if x.isdigit() else 0 for x in (runner.agent_version or "0").split(".")[:3])
+        return reported >= MIN_AGENT_FOR_SUPPORT_FILES
+    return True
+
+
 @transaction.atomic
 def claim_next(worker_id: str, runner=None, runtimes=None):
     """Claim one queued execution (SKIP LOCKED). Returns (execution, attempt_number) or None.
@@ -172,7 +194,7 @@ def claim_next(worker_id: str, runner=None, runtimes=None):
         .select_related("action_version__action")
         .filter(pk__in=list(ranked), status=S.QUEUED)
         .order_by("-priority", "created_at")
-        if set(c.action_version.required_tags or []) <= tags
+        if _runnable(c.action_version, tags, runner)
     ]
     if not candidates:
         return None

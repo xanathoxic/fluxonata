@@ -133,6 +133,8 @@ ALLOWED_ENV = {
     "ORCH_PYTHON_IMAGE",
     "ORCH_NODE_IMAGE",
     "ORCH_POWERSHELL_IMAGE",
+    "ORCH_ANSIBLE_IMAGE",
+    "ORCH_ANSIBLE_NETWORK",
     "DOCKER_HOST",
 }
 
@@ -159,6 +161,10 @@ def test_the_standalone_agent_requires_pinned_images_and_enforces_it():
     for var in ("ORCH_PYTHON_IMAGE", "ORCH_NODE_IMAGE", "ORCH_POWERSHELL_IMAGE"):
         assert ":?" in services[var], f"{var} doit être exigée (sans valeur par défaut flottante)"
     assert services["ORCH_REQUIRE_IMAGE_DIGEST"].endswith(":-1}")  # exigé par défaut
+    # le runtime « ansible » est facultatif : une valeur par défaut flottante est acceptable PARCE QUE l'agent refuse de démarrer, avec l'empreinte exigée, si son runner sert « ansible » sans image épinglée
+    assert (
+        "fluxonata-runner-ansible" in services["ORCH_ANSIBLE_IMAGE"] and "@sha256" not in services["ORCH_ANSIBLE_IMAGE"]
+    )
 
 
 def test_nothing_of_the_control_plane_is_referenced_by_the_agent_kit():

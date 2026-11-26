@@ -17,7 +17,6 @@
   "bundles/management/commands/artifacts_migrate.py::handle": 12,
   "bundles/service.py::export_package": 11,
   "catalog/integrations/__init__.py::render": 13,
-  "catalog/library.py::validate": 11,
   "catalog/management/commands/seed_showcase.py::handle": 19,
   "runs/analysis.py::filter_runs": 13,
   "runs/engine.py::_activation": 11,

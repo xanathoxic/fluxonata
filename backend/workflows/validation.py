@@ -93,6 +93,7 @@ NODE_TYPES = {
     "sftp",
     "smtp",
     "ssh",
+    "ansible",
     "transform",
     "cache",
     "schedule",
@@ -202,6 +203,7 @@ ERROR_CAPABLE = {
     "sftp",
     "smtp",
     "ssh",
+    "ansible",
 }
 
 
@@ -546,6 +548,58 @@ class _Scan:
 
 def _cfg_action(s: _Scan, n: dict) -> None:
     _validate_action(n, s.workspace, s.issues, s.out_types, s.declared_inputs)
+
+
+ANSIBLE_SLOTS = ("ssh", "become")
+
+
+def _validate_ansible(s: _Scan, n: dict) -> None:
+    """Étape « Playbook Ansible » : le playbook et les rôles passent par les contrôles d'une version d'action ; les connexions, l'inventaire et les paramètres comme une action."""
+    from catalog import ansible_inline
+
+    nid, given = n["id"], n.get("inputs") or {}
+    if n.get("ai_review"):
+        s.issues.append(
+            issue(
+                nid,
+                "ai_review_required",
+                "Playbook écrit par un assistant : relisez le playbook, ses rôles et sa cible, puis confirmez « J'ai relu ce playbook » dans l'éditeur de playbook.",
+            )
+        )
+    for code, message in ansible_inline.problems(s.workspace, n):
+        s.issues.append(issue(nid, code, message))
+    conns = n.get("connections") or {}
+    for slot, cname in conns.items():
+        if slot not in ANSIBLE_SLOTS:
+            s.issues.append(
+                issue(
+                    nid,
+                    "unknown_slot",
+                    f"Connexion « {slot} » inconnue : « ssh » (accès aux machines) ou « become » (élévation).",
+                )
+            )
+        elif not Connection.objects.filter(workspace=s.workspace, name=cname).exists():
+            s.issues.append(issue(nid, "unknown_connection", f"Connexion introuvable : {cname}."))
+    if "ssh" not in conns:
+        s.issues.append(
+            issue(
+                nid,
+                "missing_connection",
+                "Choisissez la connexion SSH (clé ou mot de passe) : sans elle, aucune machine distante n'est atteignable.",
+                "warning",
+            )
+        )
+    has_ref, has_obj = bool(given.get("inventory_ref")), bool(given.get("inventory"))
+    if has_ref == has_obj:
+        s.issues.append(
+            issue(
+                nid,
+                "bad_inventory",
+                "Indiquez l'inventaire : un identifiant de la bibliothèque (inventory_ref) OU un inventaire en objet (inventory), pas les deux.",
+            )
+        )
+    _validate_params(nid, ansible_inline.INPUT_SCHEMA, given, "le playbook", s.issues, s.out_types, s.declared_inputs)
+    s.out_types[nid] = ansible_inline.OUTPUT_SCHEMA["properties"]
 
 
 def _cfg_condition(s: _Scan, n: dict) -> None:
@@ -1287,6 +1341,7 @@ _EXPRESSIONS_AFTER_INPUTS = {
         for e in template_expressions(n.get(key) or "")
     ],
     "script": _tp("bindings"),
+    "ansible": _tp("inputs"),
     "ai": lambda n: template_expressions(n.get("prompt") or ""),
 }
 
@@ -2075,6 +2130,12 @@ def pin_graph(graph: dict, workspace) -> dict:
             if comp:
                 _, cv = resolve_action_version(workspace, comp["action"], comp.get("version"))
                 comp["version"] = cv.version
+        elif n["type"] == "ansible" and n.get("roles"):
+            from catalog import ansible_inline
+
+            n["roles"] = ansible_inline.pin_roles(
+                workspace, n
+            )  # « latest » devient la version exacte : le workflow publié ne change plus
         elif n["type"] in ("subworkflow", "foreach", "while"):
             if n.get("version") == LATEST:
                 continue  # suivre la dernière version : rien n'est figé, l'exécution la résout à chaque lancement
@@ -2114,6 +2175,7 @@ _NODE_CHECKS = {
     "model": _cfg_model,
     "approval": _cfg_approval,
     "script": _cfg_script,
+    "ansible": _validate_ansible,
     "throw": _cfg_throw,
     "ai": _cfg_ai,
     "join": _cfg_join,

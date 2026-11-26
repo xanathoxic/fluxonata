@@ -20,6 +20,8 @@ _DEFAULTS = {
     "ORCH_PYTHON_IMAGE": "python:3.13-slim",
     "ORCH_NODE_IMAGE": "node:22-slim",
     "ORCH_POWERSHELL_IMAGE": "mcr.microsoft.com/powershell:lts-debian-12",
+    "ORCH_ANSIBLE_IMAGE": "fluxonata-runner-ansible:local",
+    "ORCH_ANSIBLE_NETWORK": "fluxonata-ansible-targets",
     "ORCH_MAX_LOG_BYTES": 64 * 1024,
     "ORCH_MAX_RESULT_BYTES": 1024 * 1024,
 }

@@ -44,6 +44,8 @@ const TriggersPage = lazyPage(() => import("./pages/TriggersPage"), "TriggersPag
 const FormsPage = lazyPage(() => import("./pages/forms/FormsPage"), "FormsPage");
 const FormPage = lazyPage(() => import("./pages/forms/FormPage"), "FormPage");
 const ControlsPage = lazyPage(() => import("./pages/controls/ControlsPage"), "ControlsPage");
+const RolePage = lazyPage(() => import("./pages/ansible-roles/RolePage"), "RolePage");
+const InventoryPage = lazyPage(() => import("./pages/inventories/InventoryPage"), "InventoryPage");
 const ControlPage = lazyPage(() => import("./pages/controls/ControlPage"), "ControlPage");
 const WorkflowRunPage = lazyPage(() => import("./pages/WorkflowRunPage"), "WorkflowRunPage");
 const WorkflowsPage = lazyPage(() => import("./pages/WorkflowsPage"), "WorkflowsPage");
@@ -263,6 +265,10 @@ export function App() {
             <Route path="/triggers" element={<TriggersPage />} />
             <Route path="/library/forms" element={<FormsPage />} />
             <Route path="/library/forms/:slug/:tab?" element={<FormPage />} />
+            <Route path="/library/ansible-roles" element={<Navigate to="/library/actions?tab=roles" replace />} />
+            <Route path="/library/ansible-roles/:name" element={<RolePage />} />
+            <Route path="/library/inventories" element={<Navigate to="/library/actions?tab=inventories" replace />} />
+            <Route path="/library/inventories/:slug" element={<InventoryPage />} />
             <Route path="/library/controls" element={<ControlsPage />} />
             <Route path="/library/controls/:slug/:tab?" element={<ControlPage />} />
             <Route path="/forms" element={<Navigate to="/library/forms" replace />} />

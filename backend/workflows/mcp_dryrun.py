@@ -352,6 +352,20 @@ def _isolated_runner():
     return runner
 
 
+ANSIBLE_NOT_TESTABLE = (
+    "Un playbook Ansible ne s'essaie pas ici : le bac à sable n'a ni réseau ni connexion, et un playbook agit sur des machines. "
+    "Relisez-le (get_ansible_role pour les rôles qu'il appelle) ; une personne l'essaie dans l'éditeur de version (« Essayer dans le bac à sable »)."
+)
+
+
+def _version_to_test(action, wanted):
+    """(version, None) ou (None, pourquoi on ne peut pas la tester) : une version absente, ou un playbook Ansible (agit sur des machines)."""
+    version = action.versions.filter(version=wanted).first() if wanted else action.latest_version()
+    if version is None:
+        return None, "Cette action n'a pas de version à tester."
+    return (None, ANSIBLE_NOT_TESTABLE) if version.runtime == "ansible" else (version, None)
+
+
 def start_action_test(request, ws, args):
     from ai import service
     from ai.models import AiJob
@@ -375,9 +389,9 @@ def start_action_test(request, ws, args):
     action = Action.objects.filter(workspace=ws, slug=d["slug"]).first()
     if action is None or (action.status == Action.Status.PROPOSED and not has_perm(request.user, ws, EDIT)):
         raise Http404()
-    version = action.versions.filter(version=d["version"]).first() if d.get("version") else action.latest_version()
-    if version is None:
-        return _err("Cette action n'a pas de version à tester.")
+    version, problem = _version_to_test(action, d.get("version"))
+    if problem:
+        return _err(problem)
     import jsonschema
 
     errors = {}

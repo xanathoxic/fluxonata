@@ -262,7 +262,6 @@
   "src/workflow/WorkflowPreview.tsx",
   "src/workflow/edgeRoute.test.ts",
   "src/workflow/edgeRoute.ts",
-  "src/workflow/graphOps.test.ts",
   "src/workflow/graphOps.ts",
   "src/workflow/icons.tsx",
   "src/workflow/paneLayout.ts",

@@ -14,6 +14,7 @@ import { useApp } from "../context";
 import { formatDate, t } from "../i18n";
 import { HelpTip } from "../components/HelpTip";
 import { ReadRegion } from "../components/ReadRegion";
+import { AnsibleTab, hasAnsibleLog } from "./AnsibleLog";
 import { RunDeliverables, sizeLabel, type RunFileRow } from "./RunDeliverables";
 
 const ACTIVE = ["queued", "running", "compensating"];
@@ -161,7 +162,7 @@ function RunSteps({ steps }: { steps: StepRun[] }) {
                 {s.error && <p className="field-error">{s.error.message}{s.error.next_step ? ` — ${s.error.next_step}` : ""}</p>}
                 {s.status === "waiting" && s.available_at && <p className="hint">Reprise prévue le {formatDate(s.available_at)}.</p>}
                 {s.child_run_ids.length > 0 && <p>{s.child_run_ids.map((c, i) => <span key={c}><Link to={`/runs/${c}`}>Itération / sous-exécution {i + 1}</Link>{" "}</span>)}</p>}
-                {s.output && s.status === "succeeded" && Object.keys(s.output).length > 0 && ["action", "script", "ai"].includes(s.node_type) && <details><summary>Résultat de l'étape</summary><Fields data={s.output} /></details>}
+                {s.output && s.status === "succeeded" && Object.keys(s.output).length > 0 && ["action", "script", "ai", "ansible"].includes(s.node_type) && <details><summary>Résultat de l'étape</summary><Fields data={s.output} /></details>}
               </td>
             </tr>
           ))}
@@ -222,12 +223,14 @@ function RunTabs({ run, explain }: { run: WorkflowRun; explain: ReactNode }) {
   const files = useQuery({ queryKey: ["run-files", run.id, run.status], queryFn: () => api<RunFileRow[]>(`/workspaces/${workspace.slug}/workflow-runs/${run.id}/files/`) });
   const steps = run.steps ?? [];
   const logs = steps.filter((s) => s.logs);
+  const ansible = steps.filter(hasAnsibleLog);
   return (
     <Tabs label="Détail de l'exécution" className="run-tabs" active={tab} onChange={setTab} tabs={[
       { id: "summary", label: "Résumé", content: <><RunFacts run={run} /><RunDeliverables rows={files.data ?? []} slug={workspace.slug} runId={run.id} /><RunSummary run={run} />{explain}</> },
       { id: "schema", label: "Graphe", content: <RunSchemaView run={run} fill /> },
       { id: "steps", label: `Étapes (${steps.length})`, content: <ScrollBlock label="Étapes de l'exécution"><RunSteps steps={steps} /></ScrollBlock> },
       ...((files.data?.length ?? 0) > 0 ? [{ id: "files", label: `Fichiers (${files.data?.length ?? 0})`, content: <RunFiles rows={files.data ?? []} slug={workspace.slug} /> }] : []),
+      ...(ansible.length > 0 ? [{ id: "ansible", label: "Ansible", content: <AnsibleTab steps={steps} /> }] : []),
       { id: "logs", label: "Journaux", content: logs.length === 0 ? <p className="hint">Aucun journal : les étapes n'ont rien écrit (utilisez <code>System.log</code> dans un script).</p> : logs.map((s) => <section key={s.node_id}><h3>{s.name}</h3><ReadRegion label={`Journal de ${s.name}`}>{s.logs}</ReadRegion></section>) },
       { id: "io", label: "Entrées/Sorties", content: (
         <div className="run-io-tab">

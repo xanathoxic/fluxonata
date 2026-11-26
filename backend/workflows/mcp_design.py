@@ -509,6 +509,7 @@ TOOLS = {
                         "fichiers",
                         "modeles",
                         "action",
+                        "ansible",
                         "skill",
                     ],
                     "description": "Rubrique (défaut : all).",
@@ -722,8 +723,9 @@ class McpDesignView(McpServerView):
 
 def _register_controls() -> None:
     """Les outils de lecture des contrôles personnalisés rejoignent la table (le module les décrit avec les aides ci-dessus)."""
-    from . import mcp_design_controls, mcp_design_organize
+    from . import mcp_design_ansible, mcp_design_controls, mcp_design_organize
 
+    TOOLS.update(mcp_design_ansible.read_tools())
     TOOLS.update(mcp_design_controls.read_tools())
     TOOLS.update(mcp_design_organize.read_tools())
 

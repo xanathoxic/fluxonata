@@ -126,6 +126,12 @@ def _contract_outputs(node: dict, workspace) -> dict:
             _, sv = resolve_skill_version(workspace, node["skill"], node.get("skill_version"))
             schema = (sv.output_schema if sv else None) or {}
         return synth({"type": "object", **schema}) if schema.get("properties") else {}
+    if (
+        t == "ansible"
+    ):  # un playbook agit sur de vraies machines : jamais joué ici, simulé d'après le contrat fixe de l'étape
+        from catalog.ansible_inline import OUTPUT_SCHEMA
+
+        return synth({"type": "object", **OUTPUT_SCHEMA})
     if t == "subworkflow":
         _, v = resolve_workflow_version(workspace, node.get("workflow"), node.get("version"))
         return {k: synth({}, "nominal", k) for k in ((v.graph or {}).get("outputs") or {})} if v else {}
@@ -146,7 +152,9 @@ def prepare(graph: dict, workspace, cache: dict | None = None) -> dict:
             for lang in {n["language"] for n in nodes if n["type"] == "script"}
         },
         "contracts": {
-            n["id"]: _contract_outputs(n, workspace) for n in nodes if n["type"] in ("action", "ai", "subworkflow")
+            n["id"]: _contract_outputs(n, workspace)
+            for n in nodes
+            if n["type"] in ("action", "ai", "subworkflow", "ansible")
         },
         "loops": {
             n["id"]: _contract_outputs(
@@ -494,7 +502,13 @@ class _Walk:
 
     def step(self, nid, node):
         kind = node["type"]
-        if nid in self.fails and kind in ("action", "subworkflow", "ai", "foreach"):  # (SSH handles `fails` itself)
+        if nid in self.fails and kind in (
+            "action",
+            "subworkflow",
+            "ai",
+            "foreach",
+            "ansible",
+        ):  # (SSH handles `fails` itself)
             self.failed(
                 nid, "simulated", "Échec simulé : on suit la sortie d'erreur."
             )  # the scenario is about the error exit
@@ -666,6 +680,7 @@ _STEP_METHODS = {
     "approval": "approval",
     "foreach": "foreach",
     "action": "call",
+    "ansible": "call",
     "subworkflow": "call",
     "ai": "call",
     "transform": "transform",
@@ -690,7 +705,9 @@ AWAITED = re.compile(
 def _awaited_values(graph: dict) -> list[tuple]:
     """(step, field, value, text shown) for every decision that waits for a given value from a SIMULATED step: simulated
     outputs are typical values, so without this the branch such a decision opens is never walked."""
-    simulated = {n["id"] for n in graph.get("nodes", []) if n["type"] in ("action", "subworkflow", "ai", "cache")}
+    simulated = {
+        n["id"] for n in graph.get("nodes", []) if n["type"] in ("action", "subworkflow", "ai", "cache", "ansible")
+    }
     found, seen = [], set()
     for n in graph.get("nodes", []):
         if n["type"] != "condition":
@@ -732,7 +749,7 @@ def _scenario_plan(graph: dict, samples: list[dict]) -> list[_PlanEntry]:
     failing = [
         n["id"]
         for n in graph.get("nodes", [])
-        if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh")
+        if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh", "ansible")
         and any(e["from"] == n["id"] and e.get("label") == "error" for e in graph.get("edges", []))
     ][:MAX_FAILURE_SCENARIOS]
     awaited = _awaited_values(graph)
@@ -749,7 +766,7 @@ def _scenario_plan(graph: dict, samples: list[dict]) -> list[_PlanEntry]:
         every = [
             n["id"]
             for n in graph.get("nodes", [])
-            if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh")
+            if n["type"] in ("action", "subworkflow", "foreach", "ai", "ssh", "ansible")
             and any(e["from"] == n["id"] and e.get("label") == "error" for e in graph.get("edges", []))
         ]
         if len(every) >= 2:  # a chain of recoveries (retry after retry) is only walked when each link fails in turn

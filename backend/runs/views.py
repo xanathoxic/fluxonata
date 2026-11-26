@@ -23,8 +23,10 @@ class ExecutionListCreateView(ListAPIView):
 
     def get_queryset(self):
         ws = get_workspace(self.request.user, self.kwargs["workspace"], VIEW)
-        qs = Execution.objects.filter(workspace=ws, step_run__isnull=True).select_related(
-            "action_version__action", "environment", "requested_by", "runner"
+        qs = (
+            Execution.objects.filter(workspace=ws, step_run__isnull=True)
+            .exclude(action_version__action__slug="__essai__")
+            .select_related("action_version__action", "environment", "requested_by", "runner")
         )
         if status := self.request.query_params.get("status"):
             qs = qs.filter(status=status)

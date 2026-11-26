@@ -113,6 +113,38 @@ def _ssh_refusal(message: str):
     return serializers.ValidationError({"graph": message})
 
 
+ANSIBLE_REVIEWED_KEYS = (
+    "playbook",
+    "roles",
+    "required_tags",
+    "connections",
+    "auth",
+    "inputs",
+    "timeout_seconds",
+    "idempotent",
+)
+
+
+def _guard_ansible(current: dict | None, incoming: dict) -> dict:
+    """Un playbook écrit par un assistant est du code qui agira sur des machines : toute étape `ansible` créée ou modifiée par lui est marquée `ai_review`
+    (la publication reste bloquée tant qu'une personne ne l'a pas relue et confirmée dans l'éditeur de playbook). Une étape renvoyée telle qu'elle était
+    garde son état (relue ou non) : l'assistant ne peut ni lever la marque ni la reposer sur ce qu'une personne a relu."""
+    before = {
+        n["id"]: n
+        for n in (current or {}).get("nodes", [])
+        if isinstance(n, dict) and n.get("type") == "ansible" and isinstance(n.get("id"), str)
+    }
+    nodes = []
+    for n in incoming.get("nodes", []):
+        if not (isinstance(n, dict) and n.get("type") == "ansible"):
+            nodes.append(n)
+            continue
+        old = before.get(n.get("id"))
+        same = old is not None and all(old.get(k) == n.get(k) for k in ANSIBLE_REVIEWED_KEYS)
+        nodes.append({**n, "ai_review": bool(old.get("ai_review")) if same and old is not None else True})
+    return {**incoming, "nodes": nodes}
+
+
 def _guard_ssh(ws, current: dict | None, incoming: dict) -> dict:
     """What an assistant may do with SSH steps, checked on the SERVER at every write (never trusting an earlier list_connections):
     - a step it was shown and sends back unchanged (or as the redacted view it read) is kept exactly as stored;
@@ -176,7 +208,7 @@ def create_workflow(request, ws, args):
     graph = d.get("graph")
     if graph is not None:
         _check_graph(graph)
-        graph = _guard_ssh(ws, None, graph)
+        graph = _guard_ansible(None, _guard_ssh(ws, None, graph))
     if Workflow.objects.filter(workspace=ws, slug=d["slug"]).exists():
         raise serializers.ValidationError({"slug": "Cet identifiant existe déjà dans l'espace."})
     try:
@@ -219,7 +251,7 @@ def update_workflow(request, ws, args):
         access.require(request.user, ws, wf.folder, EDIT)
         if wf.draft_revision != d["revision"]:
             raise _conflict(wf.draft_revision)
-        wf.draft_graph = _guard_ssh(ws, wf.draft_graph, d["graph"])
+        wf.draft_graph = _guard_ansible(wf.draft_graph, _guard_ssh(ws, wf.draft_graph, d["graph"]))
         wf.draft_revision += 1
         wf.tags = _marked(wf.tags)
         wf.save()
