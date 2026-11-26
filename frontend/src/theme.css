@@ -1086,3 +1086,15 @@ main.login .login-sso-error { margin-top: 12px; }
 .role-row .role-id small { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .role-row select { width: 100%; box-sizing: border-box; }
 .ans-fields .role-list li.role-row { flex-wrap: nowrap; }
+/* code d'une action ouvert depuis le schéma (lecture seule) */
+.overlay-modal.overlay-wide.action-code .overlay-panel { width: min(96vw, 2200px); max-height: min(94vh, 94dvh); }
+.action-code .src-view .cm-editor { min-height: 60vh; }
+.action-code-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 10px; }
+.action-code-ver { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-sm); }
+@media (max-width: 720px) {
+  .overlay-modal.overlay-wide.action-code .overlay-panel { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  .action-code .src-view .cm-editor { min-height: 45vh; }
+  .action-code .src-bar { flex-wrap: wrap; }
+  .action-code-ver { margin-left: 0; width: 100%; }
+  .action-code-ver select { flex: 1; min-width: 0; }
+}

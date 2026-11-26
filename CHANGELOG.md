@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.22.0 — 2026-11-27
+
+**Mise à jour**
+
+- Schema : un double clic sur une etape Action ouvre son code en lecture seule dans une fenetre centrale (version appelee, autres versions consultables, adaptee aux petits ecrans)
+
 ## v0.21.0 — 2026-11-26
 
 **MCP : suivi des executions et demande de lancement confirmee par une personne ; suppression d'une action ne dependant plus que d'anciennes versions**

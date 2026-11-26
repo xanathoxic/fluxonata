@@ -20,6 +20,7 @@ import { NoteConfig } from "../NoteConfig";
 import { Menu } from "../../components/Menu";
 import { Overlay } from "../../components/Overlay";
 import { StepFinder } from "../StepFinder";
+import { ActionCodeDialog } from "../ActionCodeDialog";
 import { WorkflowPreview } from "../WorkflowPreview";
 import { keyed } from "../../components/keyed";
 
@@ -41,6 +42,7 @@ export function SchemaTab() {
   const [view, setView] = useState<"canvas" | "list">(readView);
   const [scriptOpen, setScriptOpen] = useState<string | null>(null);
   const ansibleSchema = useAnsibleSchema();
+  const [codeOf, setCodeOf] = useState<string | null>(null); // l'étape « action » dont le code est affiché en lecture seule
   const [previewSlug, setPreviewSlug] = useState<string | null>(null); // the called workflow shown in an overlay
   const [showIssues, setShowIssues] = useState(false);
   const [finder, setFinder] = useState(false);
@@ -118,6 +120,7 @@ export function SchemaTab() {
     if (notes.size) g = { ...g, notes: (g.notes ?? []).map((n) => (notes.has(n.id) ? { ...n, ui: { ...n.ui, x: (notes.get(n.id) as { x: number }).x, y: (notes.get(n.id) as { y: number }).y } } : n)) };
     setGraph(g);
   };
+  const codeNode = graph.nodes.find((n) => n.id === codeOf && n.type === "action") ?? null;
   const scriptNode = graph.nodes.find((n) => n.id === scriptOpen) ?? null;
 
   return (
@@ -164,6 +167,7 @@ export function SchemaTab() {
                 const n = graph.nodes.find((x) => x.id === id);
                 if (n?.type === "script" || n?.type === "ansible") setScriptOpen(id);
                 else if (n?.type === "subworkflow" && n.workflow) setPreviewSlug(n.workflow);
+                else if (n?.type === "action" && n.action) setCodeOf(id);
               }}
               onMove={(moves) => editable && moves.length > 0 && move(moves)}
               onRouteEdge={(f, t, route) => editable && setGraph(setEdgeRoute(graph, f, t, route))}
@@ -234,6 +238,7 @@ export function SchemaTab() {
           )}
         </Overlay>
       )}
+      {codeNode && <ActionCodeDialog node={codeNode} action={actions.find((a) => a.slug === codeNode.action)} onClose={() => setCodeOf(null)} />}
       {previewSlug && <WorkflowPreview slug={previewSlug} onClose={() => setPreviewSlug(null)} />}
       {finder && <StepFinder graph={graph} onPick={(id) => { setSelectedId(id); setFocus({ id, seq: Date.now() }); setLayout((l) => ({ ...l, panOpen: true })); setFinder(false); }} onClose={() => setFinder(false)} />}
       {scriptNode?.type === "ansible" && <AnsiblePlaybookDialog node={scriptNode} slug={d.slug} schema={ansibleSchema.data} editable={editable} onUpdate={(p) => setGraph((g) => updateNode(g, scriptNode.id, p))} onClose={() => setScriptOpen(null)} />}

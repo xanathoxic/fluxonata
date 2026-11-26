@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Badge } from "./AdminUi";
 import { LazyCodeEditor as CodeEditor } from "./LazyCodeEditor";
 
-const LANGUAGE: Record<string, { label: string; editor: "python" | "javascript" | "text" }> = {
+const LANGUAGE: Record<string, { label: string; editor: "python" | "javascript" | "yaml" | "text" }> = {
   python: { label: "Python", editor: "python" },
   node: { label: "Node.js", editor: "javascript" },
   typescript: { label: "TypeScript", editor: "javascript" },
+  ansible: { label: "Ansible (YAML)", editor: "yaml" },
   shell: { label: "Shell", editor: "text" },
   powershell: { label: "PowerShell", editor: "text" },
 };
