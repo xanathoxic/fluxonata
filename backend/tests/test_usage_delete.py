@@ -37,6 +37,7 @@ def test_an_unused_action_is_deleted_and_audited(ws, c):
         "used_by": [],
         "hidden": 0,
         "total": 0,
+        "older_versions": [],
         "executions": 0,
         "running": 0,
         "triggers": {},
@@ -61,6 +62,50 @@ def test_an_action_called_by_a_draft_or_a_published_version_lists_them_and_stays
     assert used["publie"] == ["v1.0.0"]  # le brouillon de « publie » est vide : seule la version publiée l'appelle
     assert Action.objects.filter(workspace=ws, slug="echo").exists()
     assert c.get(f"{WS}/actions/echo/usage/").json()["total"] == 2
+
+
+def test_an_action_only_called_by_a_replaced_version_can_be_deleted(ws, world, c):
+    """Seul l'usage courant protège : le brouillon et la DERNIÈRE version. Une version plus ancienne, remplacée depuis, ne bloque plus."""
+    Action.objects.filter(workspace=ws, slug="log").update(name="Journal")
+    publish(ws, "w", [echo()], [], user=world["designer"])  # v1.0.0 appelle « echo »
+    publish(
+        ws, "w", [node("l", action="log", inputs={"path": "/tmp/x", "label": "x"})], [], user=world["designer"]
+    )  # v1.1.0 : plus « echo »
+    Workflow.objects.filter(slug="w").update(draft_graph={"inputs": schema(), "nodes": [], "edges": [], "outputs": {}})
+    usage = c.get(f"{WS}/actions/echo/usage/").json()
+    assert usage["total"] == 0 and usage["used_by"] == []
+    assert usage["older_versions"] == [
+        {"slug": "w", "name": "w", "versions": ["v1.0.0"]}
+    ]  # dit ce qui ne s'exécutera plus
+    assert c.delete(f"{WS}/actions/echo/delete/").status_code == 204
+    assert not Action.objects.filter(workspace=ws, slug="echo").exists()
+    assert Action.objects.filter(
+        workspace=ws, slug="log"
+    ).exists()  # l'action de la version courante, elle, reste protégée
+    assert c.delete(f"{WS}/actions/log/delete/").status_code == 409
+
+
+def test_the_latest_version_still_protects_and_an_old_version_cannot_start_once_its_action_is_gone(ws, world, c):
+    from rest_framework.exceptions import ValidationError
+
+    from runs import engine
+    from tenancy.models import Environment
+
+    old = publish(ws, "w", [echo()], [], user=world["designer"])
+    publish(ws, "w", [node("l", action="log", inputs={"path": "/tmp/x", "label": "x"})], [], user=world["designer"])
+    Workflow.objects.filter(slug="w").update(draft_graph={"inputs": schema(), "nodes": [], "edges": [], "outputs": {}})
+    assert c.delete(f"{WS}/actions/echo/delete/").status_code == 204
+    with pytest.raises(ValidationError) as exc:
+        engine.start_run(
+            workspace=ws,
+            environment=Environment.objects.get(workspace=ws, kind="test"),
+            workflow_version=old,
+            user=world["designer"],
+            inputs={},
+        )
+    assert "n'existe plus" in str(exc.value.detail) and "echo" in str(
+        exc.value.detail
+    )  # une erreur claire, pas une erreur interne
 
 
 def test_an_agent_tool_and_a_compensation_count_as_uses(ws, c):

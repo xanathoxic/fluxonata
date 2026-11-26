@@ -22,6 +22,7 @@ from workflows.models import FolderAccess, FolderGrant, Workflow
 
 URL = "/api/v1/workspaces/team-a/mcp/design/"
 WRITE_TOOLS_ALL = {
+    "request_run",
     "create_workflow",
     "update_workflow",
     "validate_workflow",
@@ -43,6 +44,10 @@ WRITE_TOOLS_ALL = {
 }
 RUN_URL = "/api/v1/workspaces/team-a/mcp/"
 READ_TOOLS = {
+    "list_runs",
+    "get_run",
+    "list_run_requests",
+    "get_run_request",
     "list_controls",
     "list_folders",
     "get_control",
@@ -135,12 +140,26 @@ def test_handshake_and_the_tool_list(ws, world):
         "connection",
         "trigger",
     )
-    # exceptions : list_connections (noms seulement) et l'essai à blanc (« dry_run » : bac à sable isolé, jamais un vrai lancement)
+    # exceptions : list_connections (noms seulement), l'essai à blanc (« dry_run » : bac à sable isolé, jamais un vrai lancement) et le suivi des exécutions :
+    # lecture seule (list_runs, get_run, list_run_requests, get_run_request) + request_run, qui ne lance RIEN (il dépose une demande qu'une personne confirme :
+    # voir test_mcp_design_runs.py, qui prouve qu'aucun run n'est créé sans confirmation humaine)
     assert [
         n
         for n in by
         if any(w in n for w in forbidden)
-        and n not in {"list_connections", "list_triggers", "start_dry_run", "get_dry_run", "start_action_test"}
+        and n
+        not in {
+            "list_connections",
+            "list_triggers",
+            "start_dry_run",
+            "get_dry_run",
+            "start_action_test",
+            "list_runs",
+            "get_run",
+            "list_run_requests",
+            "get_run_request",
+            "request_run",
+        }
     ] == []
 
 
@@ -240,6 +259,10 @@ def test_no_tool_output_ever_contains_a_secret(ws, world):
         ("draft_role_contract", {"files": {}}),
         ("list_inventories", {}),
         ("get_inventory", {"slug": "absent"}),
+        ("list_runs", {}),
+        ("get_run", {"run_id": "00000000-0000-0000-0000-000000000000"}),
+        ("list_run_requests", {}),
+        ("get_run_request", {"request_id": "00000000-0000-0000-0000-000000000000"}),
     ]
     assert {n for n, _ in calls} == READ_TOOLS  # aucun outil oublié
     for name, args in calls:

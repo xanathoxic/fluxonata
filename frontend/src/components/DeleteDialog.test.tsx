@@ -68,6 +68,19 @@ describe("Suppression d'une action ou d'un workflow", () => {
     expect(deletes()[0]?.[0]).toBe("/workspaces/team-a/actions/ping/delete/");
   });
 
+  it("une action appelée seulement par d'anciennes versions : suppression permise, avec la liste de ce qui ne s'exécutera plus", async () => {
+    const OLD: Usage = { ...FREE, older_versions: [{ slug: "parent", name: "Parent", versions: ["v1.0.0", "v1.1.0"] }] };
+    api.mockImplementation(async (_path: string, opts?: { method?: string }) => (opts?.method === "DELETE" ? undefined : OLD));
+    const { onDeleted } = show({ kind: "action", slug: "ping", name: "Ping" });
+    const note = await screen.findByRole("note", { name: "Anciennes versions concernées" });
+    expect(note).toHaveTextContent("ne pourront plus s'exécuter");
+    expect(note).toHaveTextContent("Parent");
+    expect(note).toHaveTextContent("v1.0.0, v1.1.0");
+    expect(deletes()).toHaveLength(0);
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Supprimer" }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
   it("devenu utilisé entre-temps (409) : la liste s'affiche à la place, rien n'est supprimé", async () => {
     let calls = 0;
     api.mockImplementation(async (_path: string, opts?: { method?: string }) => {

@@ -11,6 +11,8 @@ export interface Usage {
   used_by: { slug: string; name: string; where: string[] }[];
   hidden: number;
   total: number;
+  /** Action seulement : anciennes versions de workflow (remplacées depuis) qui l'appellent encore ; elles ne protègent pas l'action mais ne pourront plus s'exécuter. */
+  older_versions?: { slug: string; name: string; versions: string[] }[];
   /** Exécutions qui partiraient avec l'élément (exécutions de workflow, ou d'action), dont celles encore en cours. */
   executions?: number;
   running?: number;
@@ -121,7 +123,11 @@ export function DeleteDialog({
           </button>
         }
       >
-        <p>Retirez ou remplacez {NOUN[kind]} dans ces workflows (brouillon et versions publiées), puis recommencez.</p>
+        <p>
+          Retirez ou remplacez {NOUN[kind]} dans ces workflows ({kind === "action" ? "brouillon ou dernière version publiée" : "brouillon et versions publiées"}
+          ), puis recommencez.
+          {kind === "action" && " Les anciennes versions déjà remplacées ne comptent pas."}
+        </p>
         <ul aria-label="Workflows qui l'utilisent" className="usage-list">
           {u.used_by.map((w) => (
             <li key={w.slug}>
@@ -176,6 +182,19 @@ export function DeleteDialog({
           </>
         )}
       </p>
+      {(u?.older_versions?.length ?? 0) > 0 && (
+        <div role="note" className="hint" aria-label="Anciennes versions concernées">
+          D'anciennes versions de workflow appellent encore {NOUN[kind]} : elles ne pourront plus s'exécuter après sa suppression (leur dernière version
+          publiée, elle, n'en dépend pas).
+          <ul className="usage-list">
+            {u?.older_versions?.map((w) => (
+              <li key={w.slug}>
+                {w.name} <span className="hint">({w.versions.join(", ")})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {executions > 0 && (
         <div className="field field-inline">
           <input id="del-history" type="checkbox" checked={withHistory} onChange={(e) => setWithHistory(e.target.checked)} />

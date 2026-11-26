@@ -440,3 +440,39 @@ class ScheduledLaunch(models.Model):
             )
         ]
         indexes = [models.Index(fields=["status", "run_at"], name="launch_due_idx")]
+
+
+class RunRequest(models.Model):
+    """Demande de lancement déposée par un ASSISTANT externe (MCP de conception, ADR 0025 amendement du 2026-11-26).
+
+    L'assistant ne lance jamais : il dépose cette demande (workflow, version, environnement dev ou recette, entrées) ; une PERSONNE connectée
+    la confirme ou la refuse dans l'interface. Seule la confirmation crée le run, au nom de la personne qui confirme. Une demande expire."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente de confirmation"
+        LAUNCHED = "launched", "Confirmée et lancée"
+        REFUSED = "refused", "Refusée"
+        EXPIRED = "expired", "Expirée"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey("tenancy.Workspace", on_delete=models.CASCADE, related_name="run_requests")
+    workflow_version = models.ForeignKey("workflows.WorkflowVersion", on_delete=models.CASCADE, related_name="+")
+    environment = models.ForeignKey("tenancy.Environment", on_delete=models.CASCADE, related_name="+")
+    inputs = models.JSONField(default=dict)
+    reason = models.CharField(
+        max_length=300, blank=True
+    )  # pourquoi l'assistant demande ce lancement (montré à la personne)
+    client = models.CharField(max_length=120, blank=True)  # client MCP annoncé
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    expires_at = models.DateTimeField()
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    comment = models.CharField(max_length=300, blank=True)
+    run = models.ForeignKey(WorkflowRun, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

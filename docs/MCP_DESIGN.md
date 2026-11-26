@@ -1,7 +1,7 @@
 # Connecter un assistant (MCP de conception)
 
 Le **MCP de conception** laisse un assistant externe (Claude Code, ou tout client MCP compatible) lire ce que contient un espace et y **préparer** des
-brouillons et des propositions : workflows, formulaires, actions, skills IA. Il ne publie, ne lance et n'active **rien** : une personne relit et décide.
+brouillons et des propositions : workflows, formulaires, actions, skills IA. Il ne publie, n'active et ne lance **rien** : une personne relit et décide. Il peut **suivre** les exécutions et **demander** un lancement en développement ou en recette, que seule une personne confirme (§ 3 bis).
 Décision et limites : `docs/DECISIONS/0025-mcp-de-conception.md`. Le MCP d'**exécution** (lancer des workflows déjà publiés) reste séparé : `/mcp/`.
 
 ## 1. Créer un jeton de conception
@@ -51,7 +51,16 @@ Une demande en langage courant, sans invite, suffit donc aussi ; les invites don
 
 **Formulaires : accès complet.** `create_form` / `update_form` portent toute la définition de l'éditeur : champs, grille de 12 colonnes, règles, valeurs calculées, listes dynamiques (`source`), contrôles personnalisés, `style` et `css` (le serveur normalise le CSS et refuse `url()`, `@import`, `position: fixed`, `!important`… avec la ligne en faute). Format et exemples validés : `get_authoring_guide` (rubriques `form`, `listes`, `controles`).
 
-Aucun outil pour publier (formulaires et contrôles compris), promouvoir, lancer, activer, approuver, supprimer, ni pour les connexions et secrets : il n'existe pas. **Rôles et inventaires Ansible : aucun outil de création ni de modification** (un rôle est du code joué sur des machines et une version publiée ne change plus ; un inventaire décide quelles machines un playbook atteint) : l'assistant les décrit, une personne les crée. Un contrôle créé par l'assistant reste un brouillon `assistant-externe` : une personne le publie (Bibliothèques → Contrôles) pour qu'il soit proposé dans l'éditeur de formulaires.
+### 3 bis. Suivre les exécutions et demander un lancement (dev et recette)
+| Outil | Effet |
+|---|---|
+| `list_runs`, `get_run` | **suivre** : exécutions récentes (filtres workflow, état, environnement) ; détail d'une exécution : entrées, sorties, erreur, et pour chaque étape son état, sa sortie (tronquée, entière avec `step`), son erreur et la fin de ses journaux, puis les derniers événements. Mêmes droits que l'interface (dossiers privés) ; jamais l'adresse de reprise d'une attente |
+| `request_run` | **demander** le lancement de la dernière version publiée (ou d'une version donnée) en `dev` ou `test` (recette) avec des entrées et un motif. **Il ne lance rien** : une demande est déposée, **une personne connectée la confirme ou la refuse** dans Approbations › « Lancements demandés par un assistant » (workflow, version, environnement, entrées et motif sous les yeux) |
+| `list_run_requests`, `get_run_request` | l'état d'une demande (en attente, lancée avec son `run_id`, refusée, expirée) ; une fois lancée, on la suit avec `get_run` |
+
+Garde-fous tenus par le serveur : **production refusée** (à la demande et à la confirmation) ; la personne dont le jeton dépose la demande doit pouvoir lancer ce workflow par son rôle ; **confirmer ou refuser exige une session humaine** (un jeton, donc un assistant, reçoit un refus) ; le run est créé **au nom de la personne qui confirme**, avec les entrées montrées, la gouvernance de l'espace et l'audit habituels ; une confirmation rejouée ne crée pas un second run ; une demande **expire** après 15 minutes (`ORCH_RUN_REQUEST_TTL_MINUTES`) ; 5 demandes en attente au plus par personne ; audit `run_request.create` / `confirm` / `refuse`. Le jeton reste `view` + `edit` : il ne porte toujours ni `run` ni `publish`.
+
+Aucun outil pour publier (formulaires et contrôles compris), promouvoir, **lancer sans confirmation**, activer, approuver, supprimer, ni pour les connexions et secrets : il n'existe pas. **Rôles et inventaires Ansible : aucun outil de création ni de modification** (un rôle est du code joué sur des machines et une version publiée ne change plus ; un inventaire décide quelles machines un playbook atteint) : l'assistant les décrit, une personne les crée. Un contrôle créé par l'assistant reste un brouillon `assistant-externe` : une personne le publie (Bibliothèques → Contrôles) pour qu'il soit proposé dans l'éditeur de formulaires.
 Tout ce qui est écrit porte l'étiquette `assistant-externe`. Quota : 60 écritures par heure et par personne (`ORCH_MCP_DESIGN_WRITES_PER_HOUR`).
 
 ## 3 bis. Le bac à sable : pourquoi l'assistant ne devine plus l'exécution

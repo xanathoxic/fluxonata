@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.21.0 — 2026-11-26
+
+**MCP : suivi des executions et demande de lancement confirmee par une personne ; suppression d'une action ne dependant plus que d'anciennes versions**
+
+- Suppression d'une action : seul l'usage courant la protege (brouillon et derniere version publiee), les anciennes versions remplacees sont listees et ne s'executent plus avec une erreur claire
+- MCP de conception : suivre les executions et demander un lancement en dev ou recette, confirme par une personne dans Approbations
+
 ## v0.20.0 — 2026-11-26
 
 **Ansible : etape Playbook dans les workflows, roles et inventaires en arborescence, contrat des roles, IDE des roles**

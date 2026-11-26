@@ -2,9 +2,13 @@ from django.urls import path
 
 from . import cache_views, catalog_views, launch_views, ops_views, run_views, runner_api, views
 from . import platform_views as pf
+from . import run_request_views as rr_views
 from . import runner_admin as ra
 
 urlpatterns = [
+    path("workspaces/<slug:workspace>/run-requests/", rr_views.RunRequestListView.as_view()),
+    path("workspaces/<slug:workspace>/run-requests/<uuid:pk>/confirm/", rr_views.RunRequestConfirmView.as_view()),
+    path("workspaces/<slug:workspace>/run-requests/<uuid:pk>/refuse/", rr_views.RunRequestRefuseView.as_view()),
     path("workspaces/<slug:workspace>/scheduled-launches/", launch_views.ScheduledLaunchListView.as_view()),
     path("workspaces/<slug:workspace>/scheduled-launches/<uuid:pk>/", launch_views.ScheduledLaunchDetailView.as_view()),
     path("workspaces/<slug:workspace>/caches/", cache_views.CacheListView.as_view()),

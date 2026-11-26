@@ -148,6 +148,18 @@ def _image_digest(image):
 
 
 # ----------------------------------------------------------------------------- start
+def _pinned_version(workspace, slug, version):
+    """La version d'action figée dans le graphe ; si l'action a été supprimée depuis, une erreur claire (jamais une erreur interne)."""
+    av = ActionVersion.objects.filter(action__workspace=workspace, action__slug=slug, version=version).first()
+    if av is None:
+        raise serializers.ValidationError(
+            {
+                "detail": f"L'action « {slug} » (version {version}) n'existe plus : cette version du workflow ne peut plus s'exécuter. Republiez le workflow sans elle."
+            }
+        )
+    return av
+
+
 @transaction.atomic
 def start_run(
     *,
@@ -184,14 +196,10 @@ def start_run(
     pins = {}
     for n in graph["nodes"]:
         if n["type"] == "action":
-            av = ActionVersion.objects.get(action__workspace=workspace, action__slug=n["action"], version=n["version"])
+            av = _pinned_version(workspace, n["action"], n["version"])
             pins[n["id"]] = {"action_version_id": av.id, "source_digest": av.source_digest}
             if n.get("compensation"):
-                cv = ActionVersion.objects.get(
-                    action__workspace=workspace,
-                    action__slug=n["compensation"]["action"],
-                    version=n["compensation"]["version"],
-                )
+                cv = _pinned_version(workspace, n["compensation"]["action"], n["compensation"]["version"])
                 pins[f"comp_{n['id']}"] = {"action_version_id": cv.id, "source_digest": cv.source_digest}
     for n in graph["nodes"]:
         if n["type"] == "agent":

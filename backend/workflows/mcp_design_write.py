@@ -694,4 +694,7 @@ WRITE_TOOLS.update(_controls.write_tools(_w, OBJ, TXT, TAGS, REV))
 from . import mcp_design_organize as _organize  # noqa: E402
 
 WRITE_TOOLS.update(_organize.write_tools(_w, TXT, TAGS))
+from . import mcp_design_runs as _runs  # noqa: E402
+
+WRITE_TOOLS.update(_runs.write_tools())
 WRITE_NAMES = set(WRITE_TOOLS) - {"validate_workflow", "get_dry_run", "validate_control", "validate_form"}

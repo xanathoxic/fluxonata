@@ -12,6 +12,7 @@ import { formatDate } from "../i18n";
 import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { HelpTip } from "../components/HelpTip";
 import { Markdown } from "../components/Markdown";
+import { RunRequests } from "./RunRequests";
 
 /** The request itself: who asks, about what, and the body its author wrote in Markdown. */
 function RequestTab({ ap }: { ap: Approval }) {
@@ -162,6 +163,7 @@ export function ApprovalsPage() {
         { id: "pending", label: "À traiter", content },
         { id: "done", label: "Historique", content },
       ]} />
+      <RunRequests />
       <Promotions canReview={can("approve")} />
     </>
   );

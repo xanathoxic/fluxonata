@@ -9970,6 +9970,177 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/run-requests/": {
+            "get": {
+                "operationId": "workspaces_run_requests_list",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AssistantRunRequest"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/run-requests/{id}/confirm/": {
+            "post": {
+                "operationId": "workspaces_run_requests_confirm_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssistantRunRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{workspace}/run-requests/{id}/refuse/": {
+            "post": {
+                "operationId": "workspaces_run_requests_refuse_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssistantRunDecision"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssistantRunRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/runner-choices/": {
             "get": {
                 "operationId": "workspaces_runner_choices_retrieve",
@@ -14144,6 +14315,102 @@
                     "sha256",
                     "size"
                 ]
+            },
+            "AssistantRunDecision": {
+                "type": "object",
+                "properties": {
+                    "comment": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    }
+                }
+            },
+            "AssistantRunRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "workflow": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "readOnly": true
+                    },
+                    "environment": {
+                        "type": "string"
+                    },
+                    "inputs": {},
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "client": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/AssistantRunRequestStatusEnum"
+                    },
+                    "status_label": {
+                        "type": "string"
+                    },
+                    "requested_by": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "decided_by": {
+                        "type": "string"
+                    },
+                    "decided_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "comment": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "run_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "can_decide": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "can_decide",
+                    "created_at",
+                    "environment",
+                    "expires_at",
+                    "id",
+                    "run_id",
+                    "status_label",
+                    "workflow"
+                ]
+            },
+            "AssistantRunRequestStatusEnum": {
+                "enum": [
+                    "pending",
+                    "launched",
+                    "refused",
+                    "expired"
+                ],
+                "type": "string",
+                "description": "* `pending` - En attente de confirmation\n* `launched` - Confirmée et lancée\n* `refused` - Refusée\n* `expired` - Expirée"
             },
             "Attempt": {
                 "type": "object",
