@@ -7,6 +7,7 @@ from . import runner_admin as ra
 
 urlpatterns = [
     path("workspaces/<slug:workspace>/run-requests/", rr_views.RunRequestListView.as_view()),
+    path("workspaces/<slug:workspace>/run-requests/auto/", rr_views.AutoRunView.as_view()),
     path("workspaces/<slug:workspace>/run-requests/<uuid:pk>/confirm/", rr_views.RunRequestConfirmView.as_view()),
     path("workspaces/<slug:workspace>/run-requests/<uuid:pk>/refuse/", rr_views.RunRequestRefuseView.as_view()),
     path("workspaces/<slug:workspace>/scheduled-launches/", launch_views.ScheduledLaunchListView.as_view()),

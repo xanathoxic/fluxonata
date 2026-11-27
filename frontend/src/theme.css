@@ -1098,3 +1098,10 @@ main.login .login-sso-error { margin-top: 12px; }
   .action-code-ver { margin-left: 0; width: 100%; }
   .action-code-ver select { flex: 1; min-width: 0; }
 }
+/* Lancements demandés par un assistant : validation automatique */
+.rr-auto { margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.rr-auto-label { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.rr-auto-label input { width: 18px; height: 18px; flex: none; }
+.rr-auto .hint { margin: 4px 0 0 28px; }
+.rr-warning { background: var(--warn-bg); color: #92400e; border: 1px solid #d97706; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.rr-warning-list { margin: 0 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }

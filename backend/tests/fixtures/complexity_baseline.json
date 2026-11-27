@@ -51,7 +51,6 @@
   "workflows/folder_api.py::patch": 13,
   "workflows/gitsync.py::call": 12,
   "workflows/mcp.py::_call": 12,
-  "workflows/mcp_design_write.py::_guard_ssh": 11,
   "workflows/transforms.py::expressions": 11,
   "workflows/validation.py::_validate_action": 12,
   "workflows/validation.py::_validate_agent": 11,

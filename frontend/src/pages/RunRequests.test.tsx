@@ -23,8 +23,13 @@ const REQ = {
   can_decide: true,
 };
 
-function show(over: object = {}, can = true) {
-  api.mockImplementation(async (_path: string, opts?: { method?: string }) => (opts?.method === "POST" ? {} : [{ ...REQ, ...over }]));
+const AUTO_OFF = { enabled: false, enabled_by: null, enabled_at: null, can_change: true };
+
+function show(over: object = {}, can = true, auto: object = AUTO_OFF) {
+  api.mockImplementation(async (path: string, opts?: { method?: string }) => {
+    if (String(path).endsWith("/run-requests/auto/")) return opts?.method === "PUT" ? { ...AUTO_OFF, enabled: true } : auto;
+    return opts?.method === "POST" ? {} : [{ ...REQ, ...over }];
+  });
   const ctx = { workspace: { slug: "team-a" }, can: () => can } as unknown as Ctx;
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -37,6 +42,7 @@ function show(over: object = {}, can = true) {
   );
 }
 const posts = () => api.mock.calls.filter((c) => c[1]?.method === "POST").map((c) => String(c[0]));
+const puts = () => api.mock.calls.filter((c) => c[1]?.method === "PUT").map((c) => [String(c[0]), c[1]?.json]);
 
 describe("Lancements demandés par un assistant", () => {
   beforeEach(() => api.mockReset());
@@ -73,5 +79,47 @@ describe("Lancements demandés par un assistant", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Examiner le lancement de Saluer" }));
     expect(await screen.findByRole("button", { name: "Confirmer et lancer en recette" })).toBeDisabled();
+  });
+
+  describe("validation automatique", () => {
+    const box = () => screen.findByRole("checkbox", { name: "Valider automatiquement les lancements demandés par un assistant" });
+
+    it("est désactivée par défaut et n'envoie rien tant qu'on ne confirme pas l'avertissement", async () => {
+      show();
+      const user = userEvent.setup();
+      expect(await box()).not.toBeChecked();
+      await user.click(await box());
+      const d = within(await screen.findByRole("dialog", { name: "Activer la validation automatique ?" }));
+      expect(d.getByText(/plus aucune confirmation humaine/i)).toBeInTheDocument();
+      expect(d.getByText(/production reste toujours refusée/i)).toBeInTheDocument();
+      expect(puts()).toEqual([]);
+      await user.click(d.getByRole("button", { name: "Annuler" }));
+      expect(puts()).toEqual([]);
+      expect(await box()).not.toBeChecked();
+    });
+
+    it("s'active après avoir confirmé l'avertissement", async () => {
+      show();
+      const user = userEvent.setup();
+      await user.click(await box());
+      await user.click(await screen.findByRole("button", { name: "Activer la validation automatique" }));
+      expect(puts().map((p) => p[0])).toEqual(["/workspaces/team-a/run-requests/auto/"]);
+      expect(puts()[0]?.[1]).toEqual({ enabled: true });
+    });
+
+    it("se désactive d'un clic, sans avertissement", async () => {
+      show({}, true, { ...AUTO_OFF, enabled: true, enabled_by: "adele", enabled_at: "2026-11-27T09:00:00Z" });
+      const user = userEvent.setup();
+      expect(await screen.findByText(/Activée par adele/)).toBeInTheDocument();
+      await user.click(await box());
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(puts()[0]?.[1]).toEqual({ enabled: false });
+    });
+
+    it("est inutilisable sans le droit d'administrer l'espace", async () => {
+      show({}, true, { ...AUTO_OFF, can_change: false });
+      expect(await box()).toBeDisabled();
+      expect(screen.getByText(/Seul un administrateur de l'espace/)).toBeInTheDocument();
+    });
   });
 });

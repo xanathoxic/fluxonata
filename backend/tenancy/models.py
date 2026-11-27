@@ -21,6 +21,13 @@ class Workspace(models.Model):
     use_shared_runners = models.BooleanField(default=True)
     # Finished runs older than this many days are deleted by the worker (null = keep). Audit events are never deleted here.
     retention_days = models.PositiveIntegerField(null=True, blank=True)
+    # Validation automatique des lancements demandés par un assistant externe (dev et recette seulement) : activée par un administrateur de l'espace,
+    # elle remplace la confirmation d'une personne ; qui l'a activée et quand reste affiché et audité.
+    assistant_auto_run = models.BooleanField(default=False)
+    assistant_auto_run_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    assistant_auto_run_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         # URLs address a workspace by slug alone, so the slug must be unique across organizations

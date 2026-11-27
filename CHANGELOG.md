@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.24.0 — 2026-11-27
+
+**Mise à jour**
+
+- MCP de conception : validation automatique des lancements demandes (option d'espace, dev et recette), etapes SSH en mode reel modifiables, corps Markdown d'une Interaction utilisateur
+
 ## v0.23.0 — 2026-11-27
 
 **Mise à jour**

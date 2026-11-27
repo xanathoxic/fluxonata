@@ -73,6 +73,7 @@
   "tenancy/0016_branding",
   "tenancy/0017_branding_menus",
   "tenancy/0018_folders",
+  "tenancy/0019_assistant_auto_run",
   "triggers/0001_initial",
   "triggers/0002_public_forms",
   "triggers/0003_poll_triggers",

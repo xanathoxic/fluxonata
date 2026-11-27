@@ -239,3 +239,72 @@ def test_another_person_does_not_see_my_requests(ws, world, version, c):
     assert call(co, "list_run_requests")[1]["count"] == 0
     assert call(co, "get_run_request", {"request_id": str(RunRequest.objects.get().id)})[0]["isError"] is True
     del other._token
+
+
+# ---- validation automatique (activée par un administrateur de l'espace)
+def auto_url(ws):
+    return f"/api/v1/workspaces/{ws.slug}/run-requests/auto/"
+
+
+@pytest.fixture
+def admin(world, ws):
+    return make_user("adele", ws, Role.ADMIN)
+
+
+def enable(ws, admin_user):
+    r = human(admin_user).put(auto_url(ws), {"enabled": True}, format="json")
+    assert r.status_code == 200, r.content
+    return r
+
+
+def test_the_automatic_validation_is_off_by_default_and_a_request_still_waits(ws, world, version, c):
+    assert human(world["designer"]).get(auto_url(ws)).json() == {
+        "enabled": False,
+        "enabled_by": None,
+        "enabled_at": None,
+        "can_change": False,
+    }
+    _, out = ask(c)
+    assert out["status"] == "pending" and "automatic" not in out and WorkflowRun.objects.count() == 0
+
+
+def test_only_an_administrator_with_a_human_session_can_change_it(ws, world, version, c, admin):
+    for user in (world["designer"], world["viewer"]):
+        assert human(user).put(auto_url(ws), {"enabled": True}, format="json").status_code == 403
+    c_token = token_client(admin, ws, scopes=("view", "edit", "administer"))
+    assert c_token.put(auto_url(ws), {"enabled": True}, format="json").status_code == 403  # un jeton ne l'active jamais
+    ws.refresh_from_db()
+    assert ws.assistant_auto_run is False
+
+
+def test_when_enabled_a_valid_request_is_launched_at_once_in_the_name_of_the_token_owner(ws, world, version, c, admin):
+    r = enable(ws, admin)
+    assert r.json()["enabled"] is True and r.json()["enabled_by"] == admin.username
+    _, out = ask(c)
+    assert out["status"] == "launched" and out["automatic"] is True and out["run_id"]
+    run = WorkflowRun.objects.get(pk=out["run_id"])
+    assert run.requested_by == world["designer"] and run.environment.kind == "test"
+    ev = AuditEvent.objects.get(action="run_request.auto_confirm")
+    assert ev.data["automatic"] is True and ev.data["enabled_by"] == admin.username
+    assert AuditEvent.objects.filter(action="run_request.auto_setting").exists()
+
+
+def test_the_production_is_still_refused_when_enabled(ws, world, version, c, admin):
+    enable(ws, admin)
+    res, out = ask(c, env="prod")
+    assert res["isError"] and WorkflowRun.objects.count() == 0 and RunRequest.objects.count() == 0
+
+
+def test_a_token_owner_who_may_not_run_is_still_refused_when_enabled(ws, world, version, admin):
+    enable(ws, admin)
+    viewer = world["viewer"]
+    res, _ = ask(token_client(viewer, ws))
+    assert res["isError"] and WorkflowRun.objects.count() == 0
+
+
+def test_switching_it_off_goes_back_to_waiting_for_a_person(ws, world, version, c, admin):
+    enable(ws, admin)
+    off = human(admin).put(auto_url(ws), {"enabled": False}, format="json").json()
+    assert off["enabled"] is False and off["enabled_by"] is None
+    _, out = ask(c)
+    assert out["status"] == "pending" and WorkflowRun.objects.count() == 0

@@ -1,7 +1,7 @@
 # Connecter un assistant (MCP de conception)
 
 Le **MCP de conception** laisse un assistant externe (Claude Code, ou tout client MCP compatible) lire ce que contient un espace et y **préparer** des
-brouillons et des propositions : workflows, formulaires, actions, skills IA. Il ne publie, n'active et ne lance **rien** : une personne relit et décide. Il peut **suivre** les exécutions et **demander** un lancement en développement ou en recette, que seule une personne confirme (§ 3 bis).
+brouillons et des propositions : workflows, formulaires, actions, skills IA. Il ne publie ni n'active **rien** : une personne relit et décide. Il peut **suivre** les exécutions et **demander** un lancement en développement ou en recette, que seule une personne confirme (sauf si un administrateur a activé la validation automatique de l'espace, § 3 bis).
 Décision et limites : `docs/DECISIONS/0025-mcp-de-conception.md`. Le MCP d'**exécution** (lancer des workflows déjà publiés) reste séparé : `/mcp/`.
 
 ## 1. Créer un jeton de conception
@@ -55,7 +55,7 @@ Une demande en langage courant, sans invite, suffit donc aussi ; les invites don
 | Outil | Effet |
 |---|---|
 | `list_runs`, `get_run` | **suivre** : exécutions récentes (filtres workflow, état, environnement) ; détail d'une exécution : entrées, sorties, erreur, et pour chaque étape son état, sa sortie (tronquée, entière avec `step`), son erreur et la fin de ses journaux, puis les derniers événements. Mêmes droits que l'interface (dossiers privés) ; jamais l'adresse de reprise d'une attente |
-| `request_run` | **demander** le lancement de la dernière version publiée (ou d'une version donnée) en `dev` ou `test` (recette) avec des entrées et un motif. **Il ne lance rien** : une demande est déposée, **une personne connectée la confirme ou la refuse** dans Approbations › « Lancements demandés par un assistant » (workflow, version, environnement, entrées et motif sous les yeux) |
+| `request_run` | **demander** le lancement de la dernière version publiée (ou d'une version donnée) en `dev` ou `test` (recette) avec des entrées et un motif. **Il ne lance pas lui-même** : une demande est déposée, **une personne connectée la confirme ou la refuse** dans Approbations › « Lancements demandés par un assistant » (workflow, version, environnement, entrées et motif sous les yeux). **Exception, désactivée par défaut** : si un administrateur de l'espace a coché « Valider automatiquement les lancements demandés par un assistant » (avertissement en fenêtre à l'activation), la demande valide est lancée tout de suite, au nom du propriétaire du jeton, toujours en dev ou recette ; la réponse porte `automatic: true` et le `run_id` |
 | `list_run_requests`, `get_run_request` | l'état d'une demande (en attente, lancée avec son `run_id`, refusée, expirée) ; une fois lancée, on la suit avec `get_run` |
 
 Garde-fous tenus par le serveur : **production refusée** (à la demande et à la confirmation) ; la personne dont le jeton dépose la demande doit pouvoir lancer ce workflow par son rôle ; **confirmer ou refuser exige une session humaine** (un jeton, donc un assistant, reçoit un refus) ; le run est créé **au nom de la personne qui confirme**, avec les entrées montrées, la gouvernance de l'espace et l'audit habituels ; une confirmation rejouée ne crée pas un second run ; une demande **expire** après 15 minutes (`ORCH_RUN_REQUEST_TTL_MINUTES`) ; 5 demandes en attente au plus par personne ; audit `run_request.create` / `confirm` / `refuse`. Le jeton reste `view` + `edit` : il ne porte toujours ni `run` ni `publish`.
@@ -91,3 +91,8 @@ Garde-fous :
 - **Lecture** : `list_caches` ne renvoie jamais une valeur (une valeur peut être une donnée métier), et exige le droit de modifier, comme la page « Caches ». `get_workflow` montre le réglage de publication automatique (`cache`).
 - **Publication automatique** (« Publier le résultat dans le cache ») : réglage **humain** dans l'éditeur ; un assistant ne peut ni le régler ni le modifier (il agirait sur des exécutions déjà publiées, sans relecture). Aucun outil d'invalidation.
 
+
+### Étapes SSH réelles, corps d'une approbation, validation automatique (2026-11-27)
+- **Étapes SSH :** le MCP peut créer, modifier et retirer une étape SSH en mode `test` **ou** `reel` ; les contrôles du serveur restent (connexions SSH de l'espace, aucun secret, aucun champ inconnu, aucune valeur masquée réécrite). L'essai à blanc simule toujours ; l'étape n'agit réellement qu'après publication et lancement par une personne (ou validation automatique en dev/recette).
+- **Interaction utilisateur :** `subject` (objet) et `body` (corps en Markdown, 20 000 caractères, expressions `{{ … }}` permises) sont documentés dans `get_authoring_guide`.
+- **Validation automatique :** réglage d'espace réservé aux administrateurs, en session humaine, désactivé par défaut ; voir l'ADR 0025 (amendement du 2026-11-27) pour le risque accepté.

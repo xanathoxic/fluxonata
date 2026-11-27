@@ -584,7 +584,7 @@ class McpDesignView(McpServerView):
         "AVANT TOUTE CRÉATION, appelez get_authoring_guide (formats exacts, méthode, décision « action ou script »), puis cherchez ce qui existe. "
         "Serveur de conception : consultez les actions, skills, formulaires, workflows et connexions existants avant d'en créer. "
         "Vous préparez des BROUILLONS et des PROPOSITIONS : rien n'est publié ni activé par vous, une personne le fait après relecture. "
-        "Vous pouvez SUIVRE les exécutions (list_runs, get_run) et DEMANDER le lancement d'un workflow en dev ou recette (request_run) : vous ne lancez jamais, une personne confirme dans l'application, sinon la demande expire. "
+        "Vous pouvez SUIVRE les exécutions (list_runs, get_run) et DEMANDER le lancement d'un workflow en dev ou recette (request_run) : vous ne lancez pas vous-même : une personne confirme dans l'application (sinon la demande expire), sauf si l'espace a activé la validation automatique. "
         "Cherchez toujours ce qui existe avant de créer, lisez la révision d'un brouillon avant de le modifier, et corrigez les erreurs renvoyées."
     )
 

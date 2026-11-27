@@ -22,6 +22,13 @@ export interface RunRequest {
   can_decide: boolean;
 }
 
+interface AutoRun {
+  enabled: boolean;
+  enabled_by: string | null;
+  enabled_at: string | null;
+  can_change: boolean;
+}
+
 const ENV: Record<string, string> = { dev: "Développement", test: "Recette", prod: "Production" };
 
 function Row({ req }: { req: RunRequest }) {
@@ -113,6 +120,82 @@ function Row({ req }: { req: RunRequest }) {
   );
 }
 
+/** Validation automatique : l'assistant n'attend plus une confirmation ; seulement dev et recette ; réservée aux administrateurs de l'espace. */
+function AutoRunSwitch() {
+  const q = useWsQuery<AutoRun>("run-requests-auto", "/run-requests/auto/");
+  const set = useWsMutation<{ enabled: boolean }>("PUT", "/run-requests/auto/", ["run-requests-auto"]);
+  const [asking, setAsking] = useState(false);
+  const auto = q.data && !Array.isArray(q.data) ? q.data : null;
+  const enabled = auto?.enabled ?? false;
+  const canChange = auto?.can_change ?? false;
+  return (
+    <div className="rr-auto">
+      <label className="rr-auto-label">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={!canChange || set.isPending}
+          onChange={(e) => (e.target.checked ? setAsking(true) : set.mutate({ enabled: false }))}
+        />
+        <span>Valider automatiquement les lancements demandés par un assistant</span>
+      </label>
+      <p className="hint">
+        {enabled
+          ? `Activée${auto?.enabled_by ? ` par ${auto.enabled_by}` : ""}${auto?.enabled_at ? ` le ${formatDate(auto.enabled_at)}` : ""} : les demandes en développement et en recette partent sans confirmation.`
+          : canChange
+            ? "Désactivée : chaque demande attend votre confirmation."
+            : "Désactivée. Seul un administrateur de l'espace peut l'activer."}
+      </p>
+      {set.error && (
+        <p role="alert" className="field-error">
+          Erreur : {errorText(set.error)}
+        </p>
+      )}
+      {asking && (
+        <Overlay
+          variant="modal"
+          title="Activer la validation automatique ?"
+          description="Un assistant pourra lancer des workflows sans qu'une personne les confirme."
+          onClose={() => setAsking(false)}
+          footer={
+            <>
+              <button type="button" onClick={() => setAsking(false)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={set.isPending}
+                onClick={() => set.mutate({ enabled: true }, { onSuccess: () => setAsking(false) })}
+              >
+                Activer la validation automatique
+              </button>
+            </>
+          }
+        >
+          <div role="alert" className="rr-warning">
+            <strong>Attention : plus aucune confirmation humaine.</strong>
+          </div>
+          <ul className="rr-warning-list">
+            <li>
+              Toute demande valide d'un assistant est <strong>lancée immédiatement</strong>, sans que vous ayez examiné les entrées.
+            </li>
+            <li>
+              Elle s'exécute au nom du <strong>propriétaire du jeton</strong> de l'assistant, avec ses droits.
+            </li>
+            <li>
+              Seuls le <strong>développement</strong> et la <strong>recette</strong> sont concernés : la production reste toujours refusée.
+            </li>
+            <li>Les actions et étapes du workflow s'exécutent réellement (SSH, HTTP, messages…), selon le mode de chaque étape.</li>
+            <li>Chaque lancement automatique est inscrit à l'audit, avec votre nom comme personne qui a activé l'option.</li>
+          </ul>
+          <p className="hint">Vous pouvez la désactiver à tout moment depuis cette page.</p>
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
 /** Les lancements qu'un assistant (MCP) a DEMANDÉS : rien ne part sans qu'une personne les confirme ici. */
 export function RunRequests() {
   const { can } = useApp();
@@ -126,9 +209,10 @@ export function RunRequests() {
         Lancements demandés par un assistant{" "}
         <HelpTip>
           Un assistant connecté par MCP peut demander de lancer un workflow en développement ou en recette. Il ne lance jamais lui-même : vous vérifiez les
-          entrées puis confirmez, ou refusez.
+          entrées puis confirmez, ou refusez. Un administrateur peut activer la validation automatique : les demandes partent alors sans confirmation.
         </HelpTip>
       </h2>
+      <AutoRunSwitch />
       {rows.length === 0 && <p>Aucune demande en attente.</p>}
       <ul className="approval-list">
         {paged.slice.map((r) => (

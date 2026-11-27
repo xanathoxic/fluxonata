@@ -10141,6 +10141,102 @@
                 }
             }
         },
+        "/api/v1/workspaces/{workspace}/run-requests/auto/": {
+            "get": {
+                "operationId": "workspaces_run_requests_auto_retrieve",
+                "description": "Validation automatique des lancements demandés par un assistant : lue par qui peut voir l'espace, changée par un administrateur de l'espace\n(session humaine). Seuls dev et recette sont concernés, jamais la production.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoRun"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "workspaces_run_requests_auto_update",
+                "description": "Validation automatique des lancements demandés par un assistant : lue par qui peut voir l'espace, changée par un administrateur de l'espace\n(session humaine). Seuls dev et recette sont concernés, jamais la production.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workspace",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "workspaces"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoRun"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoRun"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoRun"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerToken": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutoRun"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{workspace}/runner-choices/": {
             "get": {
                 "operationId": "workspaces_runner_choices_retrieve",
@@ -14492,6 +14588,35 @@
                     "action",
                     "created_at",
                     "id"
+                ]
+            },
+            "AutoRun": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "enabled_by": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "enabled_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "can_change": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "can_change",
+                    "enabled",
+                    "enabled_at",
+                    "enabled_by"
                 ]
             },
             "BumpEnum": {

@@ -7,7 +7,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tenancy.permissions import RUN, VIEW, get_workspace, has_perm, require_human_session
+from tenancy.permissions import ADMINISTER, RUN, VIEW, get_workspace, has_perm, require_human_session
 from workflows import access
 
 from . import run_requests
@@ -99,3 +99,30 @@ class RunRequestConfirmView(_DecideView):
 
 class RunRequestRefuseView(_DecideView):
     decide = staticmethod(run_requests.refuse)
+
+
+class AutoRunSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField()
+    enabled_by = serializers.CharField(allow_null=True, read_only=True)
+    enabled_at = serializers.DateTimeField(allow_null=True, read_only=True)
+    can_change = serializers.BooleanField(read_only=True)
+
+
+class AutoRunView(APIView):
+    """Validation automatique des lancements demandés par un assistant : lue par qui peut voir l'espace, changée par un administrateur de l'espace
+    (session humaine). Seuls dev et recette sont concernés, jamais la production."""
+
+    serializer_class = AutoRunSerializer
+
+    @extend_schema(responses={200: AutoRunSerializer})
+    def get(self, request, workspace):
+        ws = get_workspace(request.user, workspace, VIEW)
+        return Response(run_requests.auto_setting(ws) | {"can_change": has_perm(request.user, ws, ADMINISTER)})
+
+    @extend_schema(responses={200: AutoRunSerializer})
+    def put(self, request, workspace):
+        require_human_session(request)
+        ws = get_workspace(request.user, workspace, ADMINISTER)
+        ser = AutoRunSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        return Response(run_requests.set_auto(ws, request.user, ser.validated_data["enabled"]) | {"can_change": True})

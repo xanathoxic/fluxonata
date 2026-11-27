@@ -152,28 +152,23 @@ def _guard_ansible(current: dict | None, incoming: dict) -> dict:
 def _guard_ssh(ws, current: dict | None, incoming: dict) -> dict:
     """What an assistant may do with SSH steps, checked on the SERVER at every write (never trusting an earlier list_connections):
     - a step it was shown and sends back unchanged (or as the redacted view it read) is kept exactly as stored;
-    - a step it creates or changes must stay in TEST mode (an explicit `reel` is refused, not corrected), may only name SSH connections of
-      this workspace (target and every jump), carries no secret reference and no field the step does not define, and no masked placeholder;
-    - a stored step in real mode, or any step it removes, is not for an assistant to touch.
+    - a step it creates or changes may be in TEST or REAL mode (the mode it names, else the one the step had, else test: a stored real step is
+      never downgraded silently). The run itself stays a person's decision: publishing and launching are never available to an assistant, and
+      its dry run always simulates;
+    - such a step may only name SSH connections of this workspace (target and every jump), carries no secret reference and no field the step
+      does not define, and no masked placeholder (the hidden text of a sensitive command can be kept by sending the step back unchanged, not rewritten);
+    - it may remove an SSH step (the draft keeps its history).
     Errors name the step and the rule, never a parameter of a connection."""
     before = ssh_node.ssh_nodes(current)
     after = ssh_node.ssh_nodes(incoming)
-    if set(before) - set(after):
-        raise _ssh_refusal(
-            "Une étape SSH existante ne peut pas être retirée par un assistant : renvoyez-la telle que lue."
-        )
     kept: dict[str, dict] = {}
     for nid, n in after.items():
         old = before.get(nid)
         if old is not None and (n == old or n == ssh_node.redact_node(old)):
             kept[nid] = old  # untouched: the stored step wins over the redacted view
             continue
-        if old is not None and old.get("mode") == "reel":
-            raise _ssh_refusal(f"L'étape SSH « {nid} » est en mode réel : elle n'est pas modifiable par un assistant.")
-        if n.get("mode") not in (None, "test"):
-            raise _ssh_refusal(
-                f"Étape SSH « {nid} » : seul le mode « test » est permis dans ce parcours (mode réel refusé)."
-            )
+        if n.get("mode") not in (None, "test", "reel"):
+            raise _ssh_refusal(f"Étape SSH « {nid} » : le mode est « test » ou « reel ».")
         if n.get("secrets") or "send_secret" in json.dumps(n):
             raise _ssh_refusal(
                 f"Étape SSH « {nid} » : les références à des secrets ne sont pas permises dans ce parcours."
@@ -190,7 +185,7 @@ def _guard_ssh(ws, current: dict | None, incoming: dict) -> dict:
                 f"Étape SSH « {nid} » : une connexion (cible ou rebond) n'existe pas, n'est pas de type SSH ou n'est pas disponible dans cet espace. "
                 "Prenez des noms de connexions de type « ssh » dans list_connections."
             )
-        kept[nid] = {**n, "mode": "test"}
+        kept[nid] = {**n, "mode": n.get("mode") or (old or {}).get("mode") or "test"}
     if not kept:
         return incoming
     return {

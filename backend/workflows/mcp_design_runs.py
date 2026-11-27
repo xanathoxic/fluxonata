@@ -3,8 +3,9 @@
 Lecture : `list_runs`, `get_run` (étapes, sorties, erreurs, événements), `list_run_requests`, `get_run_request`. Mêmes droits que l'interface :
 dossiers privés respectés, aucun jeton de reprise d'une attente, journaux déjà masqués par les workers.
 
-Lancement : `request_run` ne lance RIEN. Il dépose une demande (dev ou recette seulement) qu'une personne connectée confirme dans l'interface
-(Approbations › Lancements demandés par un assistant) ; sans confirmation, elle expire. Voir `runs/run_requests.py` pour les garde-fous."""
+Lancement : `request_run` dépose une demande (dev ou recette seulement) qu'une personne connectée confirme dans l'interface
+(Approbations › Lancements demandés par un assistant) ; sans confirmation, elle expire. Seule exception : si un administrateur a activé la « validation
+automatique » de l'espace, la demande est lancée tout de suite au nom du propriétaire du jeton. Voir `runs/run_requests.py` pour les garde-fous."""
 
 import json
 
@@ -173,7 +174,7 @@ def get_run_request(request, ws, args):
 
 
 def request_run(request, ws, args):
-    """Dépose une demande de lancement. Ne lance rien : une personne doit la confirmer."""
+    """Dépose une demande de lancement : une personne la confirme, sauf si l'espace a activé la validation automatique (dev et recette)."""
     wf = access.visible(Workflow.objects.filter(workspace=ws, slug=str(args.get("slug", ""))), request.user, ws).first()
     if wf is None:
         raise Http404()
@@ -196,10 +197,21 @@ def request_run(request, ws, args):
         environment=req.environment.kind,
         external_assistant=True,
     )
+    req, waiting = run_requests.auto_launch(
+        ws, req
+    )  # vide si l'espace a activé la validation automatique et que la demande est partie
+    if not waiting:
+        return _ok(
+            _request_row(req)
+            | {
+                "automatic": True,
+                "next": "Lancé automatiquement (validation automatique activée dans cet espace). Suivez avec get_run(run_id).",
+            }
+        )
     return _ok(
         _request_row(req)
         | {
-            "next": "Rien n'est lancé. Une personne doit confirmer dans l'application (Approbations › Lancements demandés par un assistant). "
+            "next": f"{waiting} Rien n'est lancé tant qu'une personne n'a pas confirmé dans l'application (Approbations › Lancements demandés par un assistant). "
             "Appelez get_run_request(request_id) pour savoir si elle a confirmé, puis get_run(run_id) pour suivre.",
         }
     )
@@ -260,10 +272,10 @@ def read_tools() -> dict:
 def write_tools() -> dict:
     spec = _spec(
         "request_run",
-        "Demander le lancement d'un workflow (confirmation humaine obligatoire)",
+        "Demander le lancement d'un workflow (confirmation humaine, sauf validation automatique)",
         "DEMANDE le lancement de la dernière version publiée d'un workflow en développement (dev) ou en recette (test) ; la production est refusée. "
-        "Vous ne lancez rien : une personne connectée examine la demande (workflow, version, environnement, entrées, votre motif) et la confirme ou la refuse dans l'application, "
-        "sinon elle expire. Donnez des entrées réalistes et un motif clair. Puis suivez avec get_run_request et get_run. Une seule demande par besoin : ne la répétez pas.",
+        "Vous ne lancez pas vous-même : une personne connectée examine la demande (workflow, version, environnement, entrées, votre motif) et la confirme ou la refuse dans l'application, "
+        "sinon elle expire ; SAUF si un administrateur a activé la validation automatique de l'espace : la réponse indique alors `automatic: true` et un run_id à suivre. Donnez des entrées réalistes et un motif clair. Puis suivez avec get_run_request et get_run. Une seule demande par besoin : ne la répétez pas.",
         {
             "slug": SLUG,
             "environment": {"type": "string", "enum": list(run_requests.ASSISTANT_ENVIRONMENTS)},

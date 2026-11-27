@@ -8,6 +8,9 @@ Garde-fous tenus ici, côté serveur :
 - la personne dont le jeton dépose la demande doit avoir, par son rôle, le droit de lancer ce workflow (dossiers privés compris) ;
 - la version et les entrées montrées à la personne sont celles qui sont lancées (figées dans la demande, relues au moment de confirmer) ;
 - confirmer ou refuser exige une session humaine : un jeton, donc un assistant, ne le peut pas ; chaque étape est auditée ;
+- exception voulue et explicite : si un administrateur de l'espace a activé la « validation automatique » (`Workspace.assistant_auto_run`, avertissement
+  affiché à l'activation), une demande valide est lancée tout de suite, AU NOM de la personne propriétaire du jeton de l'assistant (ses droits et la gouvernance
+  s'appliquent), toujours en dev ou en recette seulement ; l'audit dit « validation automatique » et qui l'a activée ;
 - au plus `MAX_PENDING` demandes en attente par personne ; une demande expire après `ORCH_RUN_REQUEST_TTL_MINUTES` (15 par défaut)."""
 
 from datetime import timedelta
@@ -120,7 +123,7 @@ def confirm(workspace, pk, user, comment="") -> RunRequest:
 
 
 @transaction.atomic
-def _confirm(workspace, pk, user, comment) -> RunRequest:
+def _confirm(workspace, pk, user, comment, auto=False) -> RunRequest:
     req = _locked(workspace, pk)
     wf = req.workflow_version.workflow
     access.require(user, workspace, wf.folder, RUN)  # 404 si le dossier est caché, 403 si le niveau est insuffisant
@@ -145,14 +148,14 @@ def _confirm(workspace, pk, user, comment) -> RunRequest:
         user=user,
         inputs=req.inputs,
         idempotency_key=f"run-request-{req.pk}",
-        trigger="assistant-confirmed",
+        trigger="assistant-auto" if auto else "assistant-confirmed",
     )
     req.status = RunRequest.Status.LAUNCHED
     req.decided_by, req.decided_at, req.run = user, timezone.now(), run
     req.comment = str(comment or "")[:300]
     req.save(update_fields=["status", "decided_by", "decided_at", "run", "comment"])
     record(
-        "run_request.confirm",
+        "run_request.auto_confirm" if auto else "run_request.confirm",
         actor=user,
         workspace=workspace,
         target=req,
@@ -161,8 +164,61 @@ def _confirm(workspace, pk, user, comment) -> RunRequest:
         workflow=wf.slug,
         requested_by=getattr(req.requested_by, "username", ""),
         external_assistant=True,
+        **({"automatic": True, "enabled_by": getattr(workspace.assistant_auto_run_by, "username", "")} if auto else {}),
     )
     return req
+
+
+def auto_launch(workspace, req) -> tuple[RunRequest, str]:
+    """Validation automatique : si l'espace l'a activée, lance la demande au nom de la personne propriétaire du jeton. Renvoie (demande, message) ;
+    le message n'est vide que si la demande a été lancée. En cas de refus (gouvernance, droit retiré…), la demande reste EN ATTENTE pour une personne."""
+    from django.contrib.auth import get_user_model
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    from tenancy.models import Workspace
+
+    ws = Workspace.objects.select_related("assistant_auto_run_by").get(
+        pk=workspace.pk
+    )  # l'état lu maintenant, pas celui du début de la requête
+    if not ws.assistant_auto_run:
+        return req, "En attente de confirmation par une personne."
+    owner = (
+        get_user_model().objects.filter(pk=req.requested_by_id).first()
+    )  # sans le jeton : le droit de lancer se lit dans le RÔLE
+    if owner is None:
+        return req, "En attente de confirmation par une personne."
+    try:
+        launched = _confirm(ws, req.pk, owner, "Validation automatique", auto=True)
+    except (serializers.ValidationError, PermissionDenied, DjangoValidationError) as exc:
+        detail = getattr(exc, "detail", None) or str(exc)
+        return RunRequest.objects.get(
+            pk=req.pk
+        ), f"Validation automatique refusée ({str(detail)[:200]}) : une personne doit confirmer."
+    return launched, ""
+
+
+def auto_setting(workspace) -> dict:
+    by = workspace.assistant_auto_run_by
+    return {
+        "enabled": workspace.assistant_auto_run,
+        "enabled_by": getattr(by, "username", None),
+        "enabled_at": workspace.assistant_auto_run_at,
+    }
+
+
+def set_auto(workspace, user, enabled: bool) -> dict:
+    workspace.assistant_auto_run = enabled
+    workspace.assistant_auto_run_by = user if enabled else None
+    workspace.assistant_auto_run_at = timezone.now() if enabled else None
+    workspace.save(update_fields=["assistant_auto_run", "assistant_auto_run_by", "assistant_auto_run_at"])
+    record(
+        "run_request.auto_setting",
+        actor=user,
+        workspace=workspace,
+        enabled=enabled,
+        environments=list(ASSISTANT_ENVIRONMENTS),
+    )
+    return auto_setting(workspace)
 
 
 @transaction.atomic

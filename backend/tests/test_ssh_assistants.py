@@ -104,26 +104,38 @@ def test_an_assistant_creates_an_ssh_step_in_test_mode_with_explicit_connections
 
 
 @pytest.mark.parametrize("where", ["create", "update"])
-def test_an_explicit_real_mode_is_refused_clearly_and_nothing_is_stored(ws, world, where):
+def test_an_assistant_may_write_an_ssh_step_in_real_mode_with_the_same_checks(ws, world, where):
     c = client_for(world["designer"])
     if where == "create":
-        res, _ = create(c, graph_of(ssh_step(mode="reel")))
-        assert not Workflow.objects.filter(slug="w").exists()
+        res, out = create(c, graph_of(ssh_step(mode="reel")))
     else:
         call(c, "create_workflow", {"slug": "w", "name": "W"})
-        res, _ = update(c, graph_of(ssh_step(mode="reel")), 1)
-        assert stored(ws).draft_revision == 1
-    assert "mode « test »" in error_text(res) and "réel" in error_text(res)
+        res, out = update(c, graph_of(ssh_step(mode="reel")), 1)
+    assert out["status"] == "brouillon", error_text(res)
+    assert stored(ws).draft_graph["nodes"][0]["mode"] == "reel"
+    # the other rules stay: an unknown mode, a foreign connection and a secret reference are still refused
+    bad = [
+        ssh_step(mode="reel", connection="etrangere"),
+        ssh_step(mode="reel", secrets={"x": "y"}),
+        ssh_step(mode="live"),
+    ]
+    for step in bad:
+        res, _ = update(c, graph_of(step), stored(ws).draft_revision)
+        assert error_text(res) and stored(ws).draft_graph["nodes"][0]["connection"] == "equip"
 
 
-def test_switching_a_stored_test_step_to_real_mode_is_refused_too(ws, world):
+def test_switching_a_stored_step_to_real_mode_and_back_is_allowed_and_never_downgraded_silently(ws, world):
     c = client_for(world["designer"])
     create(c, graph_of(ssh_step(mode="test")))
     _, read = call(c, "get_workflow", {"slug": "w"})
     g = read["draft_graph"]
     g["nodes"][0]["mode"] = "reel"
-    res, _ = update(c, g, read["draft_revision"])
-    assert "mode « test »" in error_text(res) and stored(ws).draft_graph["nodes"][0]["mode"] == "test"
+    _, out = update(c, g, read["draft_revision"])
+    assert out["status"] == "brouillon" and stored(ws).draft_graph["nodes"][0]["mode"] == "reel"
+    g["nodes"][0].pop("mode")  # an edit that does not say the mode keeps the one the step had
+    g["nodes"][0]["commands"] = ["show clock"]
+    update(c, g, stored(ws).draft_revision)
+    assert stored(ws).draft_graph["nodes"][0]["mode"] == "reel"
 
 
 @pytest.mark.parametrize(
@@ -232,7 +244,7 @@ def test_an_assistant_reads_the_step_without_the_text_of_sensitive_items(ws, wor
     assert SENSITIVE_TEXT in repr(stored(ws).draft_graph)  # the stored step is untouched
 
 
-def test_sending_back_what_was_read_keeps_the_real_step_even_when_it_is_in_real_mode(ws, world):
+def test_sending_back_what_was_read_keeps_the_real_step_and_an_assistant_may_edit_or_remove_it(ws, world):
     Workflow.objects.create(
         workspace=ws,
         owner=world["designer"],
@@ -252,13 +264,15 @@ def test_sending_back_what_was_read_keeps_the_real_step_even_when_it_is_in_real_
     assert out["status"] == "brouillon"
     ssh_stored = next(n for n in stored(ws).draft_graph["nodes"] if n["id"] == "s")
     assert ssh_stored["mode"] == "reel" and ssh_stored["commands"][0]["run"] == f"echo {SENSITIVE_TEXT}"
-    # ...but it cannot modify that real step, nor remove it
+    # a real step is editable like any other, except for the hidden text of its sensitive items (never rewritten from a masked view)...
     g["nodes"][1]["commands"].append("rm -rf /tmp/x")
     res, _ = update(c, g, stored(ws).draft_revision)
-    assert "mode réel" in error_text(res)
+    assert "valeur masquée" in error_text(res)
+    assert SENSITIVE_TEXT in repr(stored(ws).draft_graph)
+    # ...and it can be removed
     g["nodes"] = [n for n in g["nodes"] if n["id"] != "s"]
-    res, _ = update(c, g, stored(ws).draft_revision)
-    assert "retirée" in error_text(res) and any(n["id"] == "s" for n in stored(ws).draft_graph["nodes"])
+    _, out = update(c, g, stored(ws).draft_revision)
+    assert out["status"] == "brouillon" and not any(n["id"] == "s" for n in stored(ws).draft_graph["nodes"])
 
 
 def test_the_ai_assistant_sees_an_ssh_step_only_as_a_locked_placeholder_and_cannot_touch_it(db):
