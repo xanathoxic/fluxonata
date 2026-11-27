@@ -1074,16 +1074,15 @@ def _dispatch_step(run, node, sr, ctx):
 def _start_child(run, node, sr, ctx, inputs, index):
     from workflows.validation import resolve_workflow_version
 
+    from .serializers import first_problem, validate_inputs_against, with_defaults
+
     depth = run.definition.get("depth", 0) + 1
     if depth > MAX_DEPTH:
         raise _StepError("DEPTH_EXCEEDED", f"Profondeur maximale de sous-workflows atteinte ({MAX_DEPTH}).")
     _, version = resolve_workflow_version(run.workspace, node["workflow"], node["version"])
-    try:
-        jsonschema.validate(inputs, version.input_schema)
-    except jsonschema.ValidationError as exc:
-        raise _StepError(
-            "INPUT_INVALID", f"Entrées du sous-workflow invalides — {explain_validation_error(exc)}"
-        ) from None
+    inputs = with_defaults(version.input_schema, inputs)  # un champ facultatif à null est un champ omis
+    if problems := validate_inputs_against(version.input_schema, inputs):
+        raise _StepError("INPUT_INVALID", f"Entrées du sous-workflow invalides — {first_problem(problems)}")
     start_run(
         workspace=run.workspace,
         environment=run.environment,

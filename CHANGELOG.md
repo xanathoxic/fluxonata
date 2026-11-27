@@ -2,6 +2,12 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.23.0 — 2026-11-27
+
+**Mise à jour**
+
+- Entrees de workflow : un champ facultatif a null est un champ omis (sous-workflow, boucles, lancement, declencheur, formulaire, API) ; un champ obligatoire a null reste refuse ; inputs donne comme une expression est refuse clairement avant toute ecriture ; un schema nullable est compatible avec un champ de formulaire
+
 ## v0.22.0 — 2026-11-27
 
 **Mise à jour**

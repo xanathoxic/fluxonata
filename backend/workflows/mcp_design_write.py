@@ -29,7 +29,7 @@ from .mcp_design_common import ASSISTANT_TAG as ASSISTANT_TAG  # noqa: PLC0414 -
 from .mcp_design_common import SLUG, _conflict, _marked, _need_edit, _ok, _spec, _touched
 from .mcp_design_hints import design_hints
 from .models import Workflow
-from .validation import validate
+from .validation import inputs_shape_issues, validate
 
 MAX_GRAPH_BYTES = 512 * 1024
 
@@ -107,6 +107,10 @@ class ValidateIn(serializers.Serializer):
 def _check_graph(graph) -> None:
     if not isinstance(graph, dict) or len(json.dumps(graph)) > MAX_GRAPH_BYTES:
         raise serializers.ValidationError({"graph": "Graphe trop volumineux ou invalide."})
+    if bad := inputs_shape_issues(
+        graph
+    ):  # refusé AVANT toute écriture : aucune révision du brouillon n'est enregistrée
+        raise serializers.ValidationError({"graph": [f"Étape « {i['node']} » : {i['message']}" for i in bad]})
 
 
 def _ssh_refusal(message: str):

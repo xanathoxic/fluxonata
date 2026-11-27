@@ -595,6 +595,19 @@ def input_source(mapping: dict | None, name: str, keys) -> str | None:
     return name if name in keys else None
 
 
+def _wanted_type(declared):
+    """The type(s) a workflow input accepts, « null » left out: a field left empty is omitted, which is what null means for an optional input."""
+    if not isinstance(declared, list):
+        return declared
+    kept = [t for t in declared if t != "null"] or None
+    return kept[0] if kept and len(kept) == 1 else kept
+
+
+def _type_fits(want, have: str) -> bool:
+    accepted = {want} if isinstance(want, str) else set(want or [have])
+    return have in accepted or ("integer" in accepted and have == "number")
+
+
 def check_against_inputs(definition: dict, input_schema: dict, mapping: dict | None = None) -> dict[str, str]:
     """The link with the workflow: every input is fed by a field of compatible type (the field of the same name, or the one chosen
     in the correspondence `mapping`); every required input is asked for, and never behind a visibility rule (a hidden required
@@ -624,11 +637,11 @@ def check_against_inputs(definition: dict, input_schema: dict, mapping: dict | N
         if field is None:
             problems[name] = f"Le champ « {key} » n'existe pas dans le formulaire."
             continue
-        want = prop.get("type")
         have = (
             formcontrols.produces(field["control"]["spec"]) if field["type"] == "custom" else FIELD_TYPES[field["type"]]
         )
-        if want and want != have and not (want == "integer" and have == "number"):
+        want = _wanted_type(prop.get("type"))
+        if not _type_fits(want, have):
             problems[name] = f"Le workflow attend « {want} » ; le champ « {key} » produit « {have} »."
         if name in required and (field.get("visible_if") or formrules.can_hide(field)):
             problems[name] = "Une entrée obligatoire du workflow ne peut pas être masquée par une règle."

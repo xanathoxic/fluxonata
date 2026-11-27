@@ -2107,7 +2107,24 @@ def _runner_issues(graph: dict, workspace, slug: str | None) -> list[dict]:
     return out
 
 
+def inputs_shape_issues(graph) -> list[dict]:
+    """`inputs` d'une étape doit être un objet {paramètre: valeur} : une expression « {{ … }} » à la place n'est pas (encore) comprise par le moteur."""
+    nodes = graph.get("nodes") if isinstance(graph, dict) else None
+    return [
+        issue(
+            n.get("id"),
+            "bad_inputs_shape",
+            "« inputs » doit être un objet {paramètre: valeur} ; une expression qui produit un objet n'est pas acceptée "
+            "(donnez chaque paramètre, ou construisez les entrées dans un script).",
+        )
+        for n in (nodes if isinstance(nodes, list) else [])
+        if isinstance(n, dict) and n.get("inputs") and not isinstance(n.get("inputs"), dict)
+    ]
+
+
 def validate_graph(graph: dict, workspace, current_workflow_slug: str | None = None) -> list[dict]:
+    if bad := inputs_shape_issues(graph):  # le reste de la validation lit `inputs` comme un objet
+        return bad
     issues = _validate_graph_core(graph, workspace, current_workflow_slug)
     if isinstance(graph, dict) and not any(i["level"] == "error" for i in issues):
         issues += _runner_issues(graph, workspace, current_workflow_slug)

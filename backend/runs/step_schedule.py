@@ -4,7 +4,6 @@ S'exécute dans l'orchestrateur, comme « Cache » : de la base de données seul
 rien : elle crée une ligne `ScheduledLaunch`, que `runs.scheduled_launch.fire_due` démarre à l'heure dite, avec l'identité de la personne qui
 avait lancé le run (et en revérifiant son droit à ce moment-là). Rejouer l'étape ne programme jamais deux fois (contrainte d'unicité)."""
 
-import jsonschema
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
@@ -13,7 +12,7 @@ from audit.models import record
 from tenancy import governance
 from workflows import schedule_spec as spec
 from workflows.expressions import ExpressionError, resolve
-from workflows.validation import explain_validation_error, resolve_workflow_version
+from workflows.validation import resolve_workflow_version
 
 from .models import ScheduledLaunch
 
@@ -71,16 +70,15 @@ def _target(run, node, ctx):
     if wf.pk == run.workflow_version.workflow_id:
         raise ScheduleStepError("SCHEDULE_TARGET", "Un workflow ne peut pas programmer son propre lancement.")
     try:
-        from .serializers import with_defaults
+        from .serializers import first_problem, validate_inputs_against, with_defaults
 
         inputs = with_defaults(version.input_schema, resolve(node.get("inputs") or {}, ctx))
-        jsonschema.validate(inputs, version.input_schema)
     except ExpressionError as exc:
         raise ScheduleStepError("SCHEDULE_INPUTS", str(exc)) from None
-    except jsonschema.ValidationError as exc:
+    if problems := validate_inputs_against(version.input_schema, inputs):
         raise ScheduleStepError(
-            "SCHEDULE_INPUTS", f"Entrées du workflow programmé invalides — {explain_validation_error(exc)}"
-        ) from None
+            "SCHEDULE_INPUTS", f"Entrées du workflow programmé invalides — {first_problem(problems)}"
+        )
     return wf, version, inputs
 
 
