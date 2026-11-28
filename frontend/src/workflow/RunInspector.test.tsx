@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { StepRun, WorkflowRun } from "../api";
 import { RunInspectorPanel } from "./RunInspector";
@@ -15,20 +16,28 @@ const run = {
 } as unknown as WorkflowRun;
 
 describe("inspecteur d'exécution : journal de l'étape sélectionnée", () => {
-  it("affiche le journal de l'étape sélectionnée, associé à son nom", () => {
+  it("affiche le journal de l'étape sélectionnée dans un onglet « Journal », associé à son nom", async () => {
     render(<RunInspectorPanel run={run} selectedId="a" />);
+    expect(screen.getByRole("tab", { name: "Variables", selected: true })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Journal de Etape_A")).toBeNull(); // les variables d'abord, le journal sur demande
+    await userEvent.click(screen.getByRole("tab", { name: "Journal" }));
     expect(screen.getByLabelText("Journal de Etape_A")).toHaveTextContent("journal de A");
+    expect(screen.queryByText("sortie Etape_A")).toBeNull();
   });
-  it("ne montre jamais le journal d'une autre étape quand la sélection change", () => {
+  it("ne montre jamais le journal d'une autre étape quand la sélection change (et revient sur Variables)", async () => {
     const { rerender } = render(<RunInspectorPanel run={run} selectedId="a" />);
+    await userEvent.click(screen.getByRole("tab", { name: "Journal" }));
     rerender(<RunInspectorPanel run={run} selectedId="b" />);
+    expect(screen.getByRole("tab", { name: "Variables", selected: true })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Journal" }));
     expect(screen.getByLabelText("Journal de Etape_B")).toHaveTextContent("journal de B");
     expect(screen.queryByLabelText("Journal de Etape_A")).toBeNull();
     expect(screen.queryByText(/journal de A/)).toBeNull();
   });
-  it("n'affiche aucun journal pour une étape sans journal, ni pour Début et Fin", () => {
+  it("n'affiche aucun onglet Journal pour une étape sans journal, ni pour Début et Fin", () => {
     const { rerender } = render(<RunInspectorPanel run={run} selectedId="c" />);
     expect(screen.queryByLabelText(/Journal de/)).toBeNull();
+    expect(screen.queryByRole("tab")).toBeNull();
     rerender(<RunInspectorPanel run={run} selectedId="__start__" />);
     expect(screen.queryByLabelText(/Journal de/)).toBeNull();
     rerender(<RunInspectorPanel run={run} selectedId="__end__" />);

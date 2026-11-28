@@ -41,7 +41,7 @@ export function SkillsPage() {
   const all = q.data?.results ?? [];
   const folders = useMemo(() => all.map((s) => s.folder), [all]);
   const created = useFolders("ai_skill").data?.results ?? [];
-  const shown = all.filter((s) => inFolder(s.folder, folder, !!search.trim()) && (!tagF || (s.tags ?? []).includes(tagF)) && (!search || `${s.name} ${s.description} ${(s.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
+  const shown = all.filter((s) => inFolder(s.folder, folder, !!search.trim()) && (!tagF || (s.tags ?? []).includes(tagF)) && (!search || `${s.name} ${s.slug} ${s.description} ${(s.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
   const { sorted, sort, toggle } = useSort(shown, { name: (s) => s.name, folder: (s) => s.folder, version: (s) => s.latest_version?.version ?? "", status: (s) => s.status }, { key: "name", dir: "asc" });
   const paged = usePaged(sorted, 25);
   return (
@@ -54,7 +54,7 @@ export function SkillsPage() {
         <FolderTree label="Dossiers de skills" kind="ai_skill" canEdit={can("publish")} folders={folders} current={folder} onPick={setFolder} />
         <section className="adm-card lst-main">
           <div className="adm-filters">
-            <SearchBox label="Rechercher un skill" value={search} onChange={setSearch} placeholder="Nom, description ou étiquette" />
+            <SearchBox label="Rechercher un skill" value={search} onChange={setSearch} placeholder="Nom, identifiant, description ou étiquette" />
             <TagFilter lists={all.map((s) => s.tags)} value={tagF} onChange={setTagF} />
             <span className="lst-count" role="status">{shown.length} skill(s)</span>
             <span style={{ flex: 1 }} />

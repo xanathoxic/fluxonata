@@ -2,6 +2,13 @@
 
 Changements notables de Fluxonata, du plus récent au plus ancien.
 
+## v0.25.0 — 2026-11-28
+
+**Mise à jour**
+
+- MCP de conception : « debridage total » (option d'espace, avec la validation automatique) : l'assistant publie et active lui-meme workflows, formulaires, controles, actions et skills en dev et recette ; jamais la production
+- Interface : fiche du catalogue avec en-tete soigne ; Suivi et schema d'execution a la hauteur de la fenetre ; onglet Journal dans l'inspecteur ; page Informations d'un workflow en trois onglets (Informations, Enchainements, Environnement) avec export dans le menu Plus ; recherche globale (nom ou identifiant) dans toutes les listes a arborescence
+
 ## v0.24.0 — 2026-11-27
 
 **Mise à jour**

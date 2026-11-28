@@ -158,9 +158,23 @@ function CatalogRun({ data }: { data: Detail }) {
   const none = Object.keys(data.input_schema.properties ?? {}).length === 0;
   return (
     <>
-      <nav aria-label={t("breadcrumb")} className="breadcrumb"><Link to="/catalog">{t("nav.catalog")}</Link> / <span aria-current="page">{data.name}</span></nav>
-      <PageHeader title={data.name} description={data.description} />
-      <p className="hint">Environnement : <strong>{t(`env.${environment}` as never)}</strong></p>
+      <header className="run-hero">
+        <nav aria-label={t("breadcrumb")} className="breadcrumb"><Link to="/catalog">{t("nav.catalog")}</Link> / <span aria-current="page">{data.name}</span></nav>
+        <div className="run-hero-main">
+          <span className="run-hero-av"><Avatar name={data.name} /></span>
+          <div className="run-hero-text">
+            <h1>{data.name}</h1>
+            {data.description && <p className="run-hero-desc">{data.description}</p>}
+          </div>
+        </div>
+        <ul className="run-chips" aria-label="Informations sur l'automatisation">
+          <li className={`run-chip run-env run-env-${environment}`}><span className="run-chip-dot" aria-hidden="true" />Environnement : <strong>{t(`env.${environment}` as never)}</strong></li>
+          <li className="run-chip">{t("catalog.version")} <strong>{data.version}</strong></li>
+          {data.folder && <li className="run-chip">Dossier : <strong>{data.folder}</strong></li>}
+          <li className="run-chip">Publiée le {formatDate(data.published_at)}</li>
+        </ul>
+        {data.changelog && <p className="run-hero-log">{data.changelog}</p>}
+      </header>
       {prefill?.prefill && <p role="note" className="notice">Formulaire pré-rempli avec les données d'une exécution précédente : modifiez ce que vous voulez, puis lancez.{(prefill.masked ?? []).length > 0 && ` Ressaisissez ${(prefill.masked ?? []).join(", ")} (masqué${(prefill.masked ?? []).length > 1 ? "s" : ""}).`}</p>}
       {none && <p>Cette automatisation ne demande aucune information : lancez-la directement.</p>}
       {data.input_form ? (
@@ -171,7 +185,6 @@ function CatalogRun({ data }: { data: Detail }) {
           busy={run.isPending} onSubmit={() => run.mutate(values)} />
       )}
       {!data.can_run && <p id="no-run" className="hint">{t("action.noRunRight")}</p>}
-      <p className="meta">{t("catalog.version")} {data.version} · publiée le {formatDate(data.published_at)}{data.changelog ? ` — ${data.changelog}` : ""}{data.folder ? ` · ${data.folder}` : ""}</p>
     </>
   );
 }

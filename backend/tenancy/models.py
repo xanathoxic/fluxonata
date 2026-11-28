@@ -28,6 +28,9 @@ class Workspace(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     assistant_auto_run_at = models.DateTimeField(null=True, blank=True)
+    # « Débridage total » (suppose la validation automatique) : l'assistant publie et active lui-même (workflow, action, formulaire, contrôle, skill) et
+    # enchaîne conception, publication et essais en dev et recette. Jamais la production, jamais une décision humaine d'approbation.
+    assistant_unrestricted = models.BooleanField(default=False)
 
     class Meta:
         # URLs address a workspace by slug alone, so the slug must be unique across organizations

@@ -194,6 +194,7 @@ test("assistant de lancement par étapes, schéma d'exécution coloré et journa
   await expect(page.getByText("L'exécution s'est terminée avec succès.")).toBeVisible({ timeout: 90_000 });
   await expect(page.locator(".flow-node.state-succeeded")).toHaveCount(1);
   await page.locator(".flow-node").click();
+  await page.getByRole("tab", { name: "Journal", exact: true }).click(); // le journal de l'étape est un onglet de l'inspecteur
   await expect(page.getByLabel(/Journal de Reboot_script/)).toContainText("redémarrage simulé");
   await expect(page.getByText(/1\/1 étape\(s\) terminée\(s\)/)).toBeVisible();
   await page.getByRole("link", { name: /Détail complet/ }).click();

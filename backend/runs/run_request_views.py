@@ -103,6 +103,7 @@ class RunRequestRefuseView(_DecideView):
 
 class AutoRunSerializer(serializers.Serializer):
     enabled = serializers.BooleanField()
+    unrestricted = serializers.BooleanField(required=False, default=False)
     enabled_by = serializers.CharField(allow_null=True, read_only=True)
     enabled_at = serializers.DateTimeField(allow_null=True, read_only=True)
     can_change = serializers.BooleanField(read_only=True)
@@ -125,4 +126,7 @@ class AutoRunView(APIView):
         ws = get_workspace(request.user, workspace, ADMINISTER)
         ser = AutoRunSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        return Response(run_requests.set_auto(ws, request.user, ser.validated_data["enabled"]) | {"can_change": True})
+        return Response(
+            run_requests.set_auto(ws, request.user, ser.validated_data["enabled"], ser.validated_data["unrestricted"])
+            | {"can_change": True}
+        )

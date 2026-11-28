@@ -23,7 +23,7 @@ const REQ = {
   can_decide: true,
 };
 
-const AUTO_OFF = { enabled: false, enabled_by: null, enabled_at: null, can_change: true };
+const AUTO_OFF = { enabled: false, unrestricted: false, enabled_by: null, enabled_at: null, can_change: true };
 
 function show(over: object = {}, can = true, auto: object = AUTO_OFF) {
   api.mockImplementation(async (path: string, opts?: { method?: string }) => {
@@ -104,7 +104,35 @@ describe("Lancements demandés par un assistant", () => {
       await user.click(await box());
       await user.click(await screen.findByRole("button", { name: "Activer la validation automatique" }));
       expect(puts().map((p) => p[0])).toEqual(["/workspaces/team-a/run-requests/auto/"]);
-      expect(puts()[0]?.[1]).toEqual({ enabled: true });
+      expect(puts()[0]?.[1]).toEqual({ enabled: true, unrestricted: false });
+    });
+
+    it("propose le débridage total, décoché par défaut, avec un avertissement renforcé quand on le coche", async () => {
+      show();
+      const user = userEvent.setup();
+      await user.click(await box());
+      const d = within(await screen.findByRole("dialog", { name: "Activer la validation automatique ?" }));
+      const full = d.getByRole("checkbox", { name: "Débridage total" });
+      expect(full).not.toBeChecked();
+      expect(d.getByText(/publie lui-même/)).toBeInTheDocument();
+      expect(d.getByText(/Reste interdit/)).toBeInTheDocument();
+      expect(d.queryByText(/sans que personne ne l'ait lu/)).toBeNull();
+      await user.click(full);
+      expect(d.getByText(/sans que\s+personne ne l'ait lu|sans que personne ne l'ait lu/)).toBeInTheDocument();
+      await user.click(d.getByRole("button", { name: "Activer avec débridage total" }));
+      expect(puts()[0]?.[1]).toEqual({ enabled: true, unrestricted: true });
+    });
+
+    it("affiche le débridage total actif et permet de changer le niveau", async () => {
+      show({}, true, { ...AUTO_OFF, enabled: true, unrestricted: true, enabled_by: "adele", enabled_at: "2026-11-28T09:00:00Z" });
+      const user = userEvent.setup();
+      expect(await screen.findByText(/Débridage total actif/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Changer le niveau d'autonomie" }));
+      const d = within(await screen.findByRole("dialog", { name: "Niveau d'autonomie de l'assistant" }));
+      expect(d.getByRole("checkbox", { name: "Débridage total" })).toBeChecked();
+      await user.click(d.getByRole("checkbox", { name: "Débridage total" }));
+      await user.click(d.getByRole("button", { name: "Activer la validation automatique" }));
+      expect(puts()[0]?.[1]).toEqual({ enabled: true, unrestricted: false });
     });
 
     it("se désactive d'un clic, sans avertissement", async () => {

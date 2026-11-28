@@ -260,6 +260,7 @@ def enable(ws, admin_user):
 def test_the_automatic_validation_is_off_by_default_and_a_request_still_waits(ws, world, version, c):
     assert human(world["designer"]).get(auto_url(ws)).json() == {
         "enabled": False,
+        "unrestricted": False,
         "enabled_by": None,
         "enabled_at": None,
         "can_change": False,

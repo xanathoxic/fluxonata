@@ -274,7 +274,6 @@
   "src/workflow/tabs/LibraryPicker.tsx",
   "src/workflow/tabs/RunsTab.tsx",
   "src/workflow/tabs/SchemaTab.tsx",
-  "src/workflow/tabs/SummaryTab.tsx",
   "src/workflow/tabs/VariablesTab.tsx",
   "src/workflow/tabs/VersionsTab.tsx",
   "src/workflow/testDraft.tsx",

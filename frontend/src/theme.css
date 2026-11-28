@@ -1105,3 +1105,30 @@ main.login .login-sso-error { margin-top: 12px; }
 .rr-auto .hint { margin: 4px 0 0 28px; }
 .rr-warning { background: var(--warn-bg); color: #92400e; border: 1px solid #d97706; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
 .rr-warning-list { margin: 0 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+/* Fiche d'une automatisation du catalogue : en-tête (carte légère) */
+.run-hero { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 12px 18px 14px; margin-bottom: 16px; }
+.run-hero .breadcrumb { margin-bottom: 8px; }
+.run-hero-main { display: flex; align-items: center; gap: 14px; }
+.run-hero-av .adm-av { width: 40px; height: 40px; border-radius: 10px; font-size: var(--fs-sm); }
+.run-hero-text { min-width: 0; }
+.run-hero-text h1 { margin: 0 0 2px; overflow-wrap: anywhere; }
+.run-hero-desc { margin: 0; color: var(--muted); max-width: 80ch; font-size: var(--fs-sm); }
+.run-chips { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: var(--fs-xs); color: var(--muted); }
+.run-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+.run-chip strong { color: var(--fg); font-weight: 600; }
+.run-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.run-env-dev .run-chip-dot { background: #64748b; } .run-env-test .run-chip-dot { background: #0e7490; } .run-env-prod .run-chip-dot { background: #d97706; }
+.run-env-prod { background: var(--warn-bg); border-color: #d97706; }
+.run-hero-log { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--muted); border-left: 2px solid var(--border-mid); padding-left: 8px; }
+@media (max-width: 600px) { .run-hero { padding: 10px 12px 12px; } .run-hero-main { align-items: flex-start; } }
+/* inspecteur d'exécution : onglets Variables / Journal d'une étape */
+.insp-tabs { margin-top: 4px; }
+.insp-tabs .tabpanel { padding-top: 10px; }
+/* Informations d'un workflow : sous-onglets Informations / Enchaînements / Environnement */
+.sum-page .tabpanel { padding-top: 14px; }
+.sum-grid.sum-one { grid-template-columns: minmax(340px, 720px); }
+.rr-full { border: 1px solid var(--border-mid); border-radius: 8px; padding: 10px 12px; margin: 12px 0 8px; }
+.rr-full.on { border-color: #b91c1c; background: var(--err-soft); }
+.rr-full .rr-auto-label { font-weight: 700; }
+.rr-full .hint { margin: 2px 0 8px 28px; }
+.rr-full .rr-warning { margin: 8px 0 0; background: var(--err-soft); color: #7f1d1d; border-color: #b91c1c; }

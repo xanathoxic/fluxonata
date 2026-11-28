@@ -60,8 +60,8 @@ function Branch({ node, current, onPick, counts, locked, fold }: { node: Node; c
   );
 }
 
-/** Les éléments d'un dossier : ceux de CE dossier seulement, pas ceux de ses sous-dossiers (qui s'ouvrent en les choisissant). La racine (chemin vide, « Root ») ne montre que ce qui n'est rangé dans aucun dossier ; sauf quand un texte est recherché (`searching`) : à la racine, la recherche porte sur tous les dossiers (sinon un élément rangé serait introuvable par son nom). Dans un dossier, elle reste limitée à ce dossier. */
-export const inFolder = (itemFolder: string, current: string, searching = false) => itemFolder === current || (searching && !current);
+/** Les éléments d'un dossier (SANS recherche) : ceux de CE dossier seulement, pas ceux de ses sous-dossiers (qui s'ouvrent en les choisissant). La racine (chemin vide, « Root ») ne montre que ce qui n'est rangé dans aucun dossier ; sauf quand un texte est recherché (`searching`) : à la racine, la recherche porte sur tous les dossiers (sinon un élément rangé serait introuvable par son nom). Dans un dossier, elle reste limitée à ce dossier. */
+export const inFolder = (itemFolder: string, current: string, searching = false) => itemFolder === current || searching;
 
 export type FolderKind = "workflow" | "action" | "ai_skill" | "form" | "control" | "ansible_role" | "inventory";
 const parentOf = (p: string) => p.split("/").slice(0, -1).join("/");

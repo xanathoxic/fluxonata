@@ -21,11 +21,13 @@ describe("dossiers : seuls les éléments du dossier choisi s'affichent", () => 
     for (const folder of ["A", "A/B", "A/B/C"]) expect(inFolder(folder, "")).toBe(false);
   });
 
-  it("à la racine, une recherche porte sur tous les dossiers ; dans un dossier, elle reste limitée à ce dossier", () => {
+  it("une recherche porte sur tous les dossiers, quel que soit le dossier choisi dans l'arbre", () => {
     expect(inFolder("A/B", "", true)).toBe(true);
     expect(inFolder("", "", true)).toBe(true);
-    expect(inFolder("A/B", "A", true)).toBe(false);
+    expect(inFolder("A/B", "A", true)).toBe(true);
+    expect(inFolder("Autre", "A", true)).toBe(true);
     expect(inFolder("A", "A", true)).toBe(true);
+    expect(inFolder("Autre", "A", false)).toBe(false); // sans recherche, le dossier choisi limite toujours la liste
   });
 
   it("l'arborescence annonce, pour chaque dossier, le nombre d'éléments de CE dossier (ce que la liste affichera), et « Root » ceux qui n'ont pas de dossier", async () => {

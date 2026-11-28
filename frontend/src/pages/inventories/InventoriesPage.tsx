@@ -38,7 +38,9 @@ export function InventoriesPage({ embedded = false }: { embedded?: boolean }) {
   const folders = useMemo(() => all.map((x) => x.folder), [all]);
   const created = useFolders("inventory").data?.results ?? [];
   const shown = all.filter(
-    (x) => inFolder(x.folder, folder, !!search.trim()) && (!search.trim() || `${x.name} ${x.description}`.toLowerCase().includes(search.trim().toLowerCase())),
+    (x) =>
+      inFolder(x.folder, folder, !!search.trim()) &&
+      (!search.trim() || `${x.name} ${x.slug} ${x.description}`.toLowerCase().includes(search.trim().toLowerCase())),
   );
   const del = useMutation<unknown, ApiError, string>({
     mutationFn: (slug) => api(`/workspaces/${workspace.slug}/inventories/${slug}/`, { method: "DELETE" }),

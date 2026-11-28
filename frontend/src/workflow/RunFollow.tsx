@@ -88,7 +88,7 @@ export function SingleRunFollow({ id }: { id: string }) {
         </div>
       </div>
       <RunSummary run={run} />
-      <RunSchemaView run={run} />
+      <RunSchemaView run={run} fill />
       {confirming && (
         <ConfirmDialog title={`Annuler l'exécution de « ${run.workflow.name ?? run.workflow.slug} »`} confirmLabel="Annuler l'exécution" cancelLabel="Laisser se poursuivre" busy={cancel.isPending} onConfirm={() => { cancel.mutate(); setConfirming(false); }} onCancel={() => setConfirming(false)}>
           <p>Les étapes en cours sont arrêtées, mais les effets déjà réalisés ne sont pas annulés.</p>

@@ -47,7 +47,7 @@ def check_budget(request, ws) -> None:
         actor=request.user,
         workspace=ws,
         created_at__gte=since,
-        data__tool__in=sorted(WRITE_NAMES),
+        data__tool__in=sorted(WRITE_NAMES | _unrestricted.NAMES),
     ).count()
     if used > limit:  # l'appel en cours est déjà compté
         raise Throttled(f"Limite atteinte : {limit} écritures par heure. Réessayez plus tard.")
@@ -694,6 +694,7 @@ from . import mcp_design_organize as _organize  # noqa: E402
 
 WRITE_TOOLS.update(_organize.write_tools(_w, TXT, TAGS))
 from . import mcp_design_runs as _runs  # noqa: E402
+from . import mcp_design_unrestricted as _unrestricted  # noqa: E402
 
 WRITE_TOOLS.update(_runs.write_tools())
 WRITE_NAMES = set(WRITE_TOOLS) - {"validate_workflow", "get_dry_run", "validate_control", "validate_form"}

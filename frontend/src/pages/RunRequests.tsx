@@ -24,6 +24,7 @@ export interface RunRequest {
 
 interface AutoRun {
   enabled: boolean;
+  unrestricted: boolean;
   enabled_by: string | null;
   enabled_at: string | null;
   can_change: boolean;
@@ -123,11 +124,17 @@ function Row({ req }: { req: RunRequest }) {
 /** Validation automatique : l'assistant n'attend plus une confirmation ; seulement dev et recette ; réservée aux administrateurs de l'espace. */
 function AutoRunSwitch() {
   const q = useWsQuery<AutoRun>("run-requests-auto", "/run-requests/auto/");
-  const set = useWsMutation<{ enabled: boolean }>("PUT", "/run-requests/auto/", ["run-requests-auto"]);
+  const set = useWsMutation<{ enabled: boolean; unrestricted?: boolean }>("PUT", "/run-requests/auto/", ["run-requests-auto"]);
   const [asking, setAsking] = useState(false);
+  const [full, setFull] = useState(false); // « débridage total » choisi dans la fenêtre d'avertissement
   const auto = q.data && !Array.isArray(q.data) ? q.data : null;
   const enabled = auto?.enabled ?? false;
   const canChange = auto?.can_change ?? false;
+  const unrestricted = enabled && (auto?.unrestricted ?? false);
+  const ask = () => {
+    setFull(unrestricted);
+    setAsking(true);
+  };
   return (
     <div className="rr-auto">
       <label className="rr-auto-label">
@@ -135,17 +142,24 @@ function AutoRunSwitch() {
           type="checkbox"
           checked={enabled}
           disabled={!canChange || set.isPending}
-          onChange={(e) => (e.target.checked ? setAsking(true) : set.mutate({ enabled: false }))}
+          onChange={(e) => (e.target.checked ? ask() : set.mutate({ enabled: false }))}
         />
         <span>Valider automatiquement les lancements demandés par un assistant</span>
       </label>
       <p className="hint">
         {enabled
-          ? `Activée${auto?.enabled_by ? ` par ${auto.enabled_by}` : ""}${auto?.enabled_at ? ` le ${formatDate(auto.enabled_at)}` : ""} : les demandes en développement et en recette partent sans confirmation.`
+          ? `Activée${auto?.enabled_by ? ` par ${auto.enabled_by}` : ""}${auto?.enabled_at ? ` le ${formatDate(auto.enabled_at)}` : ""} : les demandes en développement et en recette partent sans confirmation.${unrestricted ? " Débridage total actif : l'assistant publie et active lui-même." : ""}`
           : canChange
             ? "Désactivée : chaque demande attend votre confirmation."
             : "Désactivée. Seul un administrateur de l'espace peut l'activer."}
       </p>
+      {enabled && canChange && (
+        <p className="hint">
+          <button type="button" className="linklike" onClick={ask}>
+            Changer le niveau d'autonomie
+          </button>
+        </p>
+      )}
       {set.error && (
         <p role="alert" className="field-error">
           Erreur : {errorText(set.error)}
@@ -154,7 +168,7 @@ function AutoRunSwitch() {
       {asking && (
         <Overlay
           variant="modal"
-          title="Activer la validation automatique ?"
+          title={enabled ? "Niveau d'autonomie de l'assistant" : "Activer la validation automatique ?"}
           description="Un assistant pourra lancer des workflows sans qu'une personne les confirme."
           onClose={() => setAsking(false)}
           footer={
@@ -166,9 +180,9 @@ function AutoRunSwitch() {
                 type="button"
                 className="danger"
                 disabled={set.isPending}
-                onClick={() => set.mutate({ enabled: true }, { onSuccess: () => setAsking(false) })}
+                onClick={() => set.mutate({ enabled: true, unrestricted: full }, { onSuccess: () => setAsking(false) })}
               >
-                Activer la validation automatique
+                {full ? "Activer avec débridage total" : "Activer la validation automatique"}
               </button>
             </>
           }
@@ -189,6 +203,32 @@ function AutoRunSwitch() {
             <li>Les actions et étapes du workflow s'exécutent réellement (SSH, HTTP, messages…), selon le mode de chaque étape.</li>
             <li>Chaque lancement automatique est inscrit à l'audit, avec votre nom comme personne qui a activé l'option.</li>
           </ul>
+          <div className={`rr-full${full ? " on" : ""}`}>
+            <label className="rr-auto-label">
+              <input type="checkbox" checked={full} onChange={(e) => setFull(e.target.checked)} />
+              <span>Débridage total</span>
+            </label>
+            <p className="hint">L'assistant devient autonome sur le développement et les tests d'un workflow dans son ensemble.</p>
+            <ul className="rr-warning-list">
+              <li>
+                Il <strong>publie lui-même</strong> les workflows, actions, formulaires, contrôles et skills : chaque version est utilisable tout de suite.
+              </li>
+              <li>
+                Il <strong>active ses propres propositions</strong> et considère comme relues les étapes qu'il a écrites (scripts, playbooks).
+              </li>
+              <li>Il enchaîne conception, publication, lancements et essais en développement et en recette, sans aucune relecture humaine.</li>
+              <li>
+                Reste interdit : la <strong>production</strong> et les promotions, les décisions d'approbation, les suppressions, les connexions, les secrets et
+                les utilisateurs.
+              </li>
+            </ul>
+            {full && (
+              <p role="alert" className="rr-warning">
+                <strong>Débridage total :</strong> du code écrit par l'assistant peut être publié et exécuté sur de vraies machines de développement et de
+                recette sans que personne ne l'ait lu.
+              </p>
+            )}
+          </div>
           <p className="hint">Vous pouvez la désactiver à tout moment depuis cette page.</p>
         </Overlay>
       )}

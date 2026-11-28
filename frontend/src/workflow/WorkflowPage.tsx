@@ -9,7 +9,7 @@ import { PageTabs } from "../components/PageTabs";
 import { StatusLine } from "../components/StatusLine";
 import { DeleteDialog } from "../components/DeleteDialog";
 import { useApp } from "../context";
-import { errorText, useWsQuery } from "../lib";
+import { errorText, useWsMutation, useWsQuery } from "../lib";
 import { DraftProvider, useDraft } from "./DraftContext";
 import { PublishDialog } from "./PublishDialog";
 import { AuditTab } from "./tabs/AuditTab";
@@ -54,6 +54,15 @@ function useHeaderParts() {
   const published = d.wf.latest_version !== null;
   const [inCatalog, setInCatalog] = useState(!!d.wf.in_catalog);
   const [catalogError, setCatalogError] = useState("");
+  const saveTpl = useWsMutation<{ name: string }>("POST", `/workflows/${d.slug}/save-as-template/`, ["workflow-templates"]);
+  const exportJson = () => { // téléchargement du JSON du workflow (même adresse qu'avant, ouverte depuis le menu)
+    const a = document.createElement("a");
+    a.href = `/api/v1/workspaces/${workspace.slug}/workflows/${d.slug}/export/`;
+    a.download = `${d.slug}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
   const toggleCatalog = async () => {
     setCatalogError("");
     try {
@@ -66,6 +75,10 @@ function useHeaderParts() {
     { kind: "heading", label: "Diffusion" },
     ...(can("publish") && published ? [{ label: inCatalog ? "Retirer du catalogue" : "Publier au catalogue", hint: inCatalog ? "Proposé à toutes les personnes de l'espace" : "Le proposer dans le catalogue d'automatisations", onSelect: () => void toggleCatalog() }] : []),
     ...(can("publish") ? [{ label: "Planifier", hint: "Lancer automatiquement (horaire, webhook)", onSelect: () => navigate("/triggers", { state: { workflow: d.slug } }) }] : []),
+    { kind: "separator" },
+    { kind: "heading", label: "Exporter et réutiliser" },
+    { label: "Exporter (JSON)", hint: "Télécharger le workflow", onSelect: exportJson },
+    ...(can("edit") ? [{ label: "Enregistrer comme modèle", hint: "Le garder comme point de départ", onSelect: () => saveTpl.mutate({ name: d.wf.name }) }] : []),
     { kind: "separator" },
     { kind: "heading", label: "Suivi et analyse" },
     { label: "Toutes les exécutions", onSelect: () => navigate(`/workflows/${d.slug}/runs`) },
@@ -92,6 +105,8 @@ function useHeaderParts() {
     <>
       {validation && <p role="status" className="notice">{validation}</p>}
       {catalogError && <p role="alert" className="field-error">Erreur : {catalogError}</p>}
+      {saveTpl.isSuccess && <p role="status" className="notice">✔ Modèle enregistré (visible dans « Partir d'un modèle », section « Mes modèles »).</p>}
+      {saveTpl.error && <p role="alert" className="field-error">Erreur : {errorText(saveTpl.error)}</p>}
       {(d.saveState === "invalid" || d.saveState === "error") && d.saveMessage && (
         <p role="alert" className="field-error">{d.saveMessage} {d.saveState === "error" && <button type="button" onClick={() => void d.reload()}>Recharger la version du serveur</button>}</p>
       )}

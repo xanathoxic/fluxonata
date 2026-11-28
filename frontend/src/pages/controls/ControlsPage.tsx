@@ -32,7 +32,7 @@ export function ControlsPage() {
   const [toDelete, setToDelete] = useState<ControlCard | null>(null);
   const list = useQuery({ queryKey: ["control-library", workspace.slug], refetchOnMount: "always", queryFn: () => api<{ results: ControlCard[] }>(`/workspaces/${workspace.slug}/control-library/`) });
   const all = list.data?.results ?? [];
-  const shown = useMemo(() => all.filter((c) => inFolder(c.folder, folder, !!q.trim()) && (!tagF || c.tags.includes(tagF)) && (!q || `${c.name} ${c.description} ${c.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, folder, q, tagF]);
+  const shown = useMemo(() => all.filter((c) => inFolder(c.folder, folder, !!q.trim()) && (!tagF || c.tags.includes(tagF)) && (!q || `${c.name} ${c.slug} ${c.description} ${c.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, folder, q, tagF]);
   const { sorted, sort, toggle } = useSort(shown, { name: (c) => c.name, folder: (c) => c.folder, mode: (c) => c.mode ?? "", used: (c) => c.used_by ?? 0, updated: (c) => Date.parse(c.updated_at) || 0 }, { key: "updated", dir: "desc" });
   const paged = usePaged(sorted, 25);
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["control-library"] }); void qc.invalidateQueries({ queryKey: ["control-library-published"] }); };
@@ -52,7 +52,7 @@ export function ControlsPage() {
       <FolderTree label="Dossiers de contrôles" kind="control" canEdit={can("edit")} folders={all.map((c) => c.folder)} current={folder} onPick={setFolder} />
       <section className="adm-card lst-main">
         <div className="adm-filters">
-          <SearchBox label="Rechercher un contrôle" value={q} onChange={setQ} placeholder="Nom, description ou étiquette" />
+          <SearchBox label="Rechercher un contrôle" value={q} onChange={setQ} placeholder="Nom, identifiant, description ou étiquette" />
           <TagFilter lists={all.map((c) => c.tags)} value={tagF} onChange={setTagF} />
           <span className="lst-count" role="status">{shown.length} résultat(s)</span>
           <span style={{ flex: 1 }} />

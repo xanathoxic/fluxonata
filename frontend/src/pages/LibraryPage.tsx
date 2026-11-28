@@ -43,7 +43,7 @@ function ActionsTab() {
   const all = q.data?.results ?? [];
   const folders = useMemo(() => all.map((a) => a.folder), [all]);
   const created = useFolders("action").data?.results ?? [];
-  const shown = all.filter((a) => inFolder(a.folder, folder, !!search.trim()) && (!tagF || (a.tags ?? []).includes(tagF)) && (!search || `${a.name} ${a.description} ${a.domain} ${(a.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
+  const shown = all.filter((a) => inFolder(a.folder, folder, !!search.trim()) && (!tagF || (a.tags ?? []).includes(tagF)) && (!search || `${a.name} ${a.slug} ${a.description} ${a.domain} ${(a.tags ?? []).join(" ")}`.toLowerCase().includes(search.toLowerCase())));
   const { sorted, sort, toggle } = useSort(shown, { name: (a) => a.name, folder: (a) => a.folder, domain: (a) => a.domain, version: (a) => a.latest_version?.version ?? "", status: (a) => a.status }, { key: "name", dir: "asc" });
   const paged = usePaged(sorted, 25);
   return (
@@ -53,7 +53,7 @@ function ActionsTab() {
       <FolderTree label="Dossiers d'actions" kind="action" canEdit={can("publish")} folders={folders} current={folder} onPick={setFolder} />
       <section className="adm-card lst-main">
         <div className="adm-filters">
-          <SearchBox label="Rechercher une action" value={search} onChange={setSearch} placeholder="Nom, description, domaine ou étiquette" />
+          <SearchBox label="Rechercher une action" value={search} onChange={setSearch} placeholder="Nom, identifiant, description, domaine ou étiquette" />
             <TagFilter lists={all.map((a) => a.tags)} value={tagF} onChange={setTagF} />
           <span className="lst-count" role="status">{shown.length} action(s)</span>
           <span style={{ flex: 1 }} />

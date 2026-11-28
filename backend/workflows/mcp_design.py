@@ -584,7 +584,7 @@ class McpDesignView(McpServerView):
         "AVANT TOUTE CRÉATION, appelez get_authoring_guide (formats exacts, méthode, décision « action ou script »), puis cherchez ce qui existe. "
         "Serveur de conception : consultez les actions, skills, formulaires, workflows et connexions existants avant d'en créer. "
         "Vous préparez des BROUILLONS et des PROPOSITIONS : rien n'est publié ni activé par vous, une personne le fait après relecture. "
-        "Vous pouvez SUIVRE les exécutions (list_runs, get_run) et DEMANDER le lancement d'un workflow en dev ou recette (request_run) : vous ne lancez pas vous-même : une personne confirme dans l'application (sinon la demande expire), sauf si l'espace a activé la validation automatique. "
+        "Vous pouvez SUIVRE les exécutions (list_runs, get_run) et DEMANDER le lancement d'un workflow en dev ou recette (request_run) : vous ne lancez pas vous-même : une personne confirme dans l'application (sinon la demande expire), sauf si l'espace a activé la validation automatique. Si les outils publish_workflow, publish_form, publish_control, activate_action, new_action_version et activate_skill figurent dans votre liste, l'administrateur a activé le « débridage total » de l'espace : vous publiez et activez vous-même, en dev et recette ; sinon ils n'existent pas, ne les demandez pas. "
         "Cherchez toujours ce qui existe avant de créer, lisez la révision d'un brouillon avant de le modifier, et corrigez les erreurs renvoyées."
     )
 
@@ -661,11 +661,30 @@ class McpDesignView(McpServerView):
         return None
 
     def list_tools(self, request, ws) -> list:
-        return [spec for spec, _ in all_tools().values()]
+        from . import mcp_design_unrestricted as unrestricted
+
+        specs = [spec for spec, _ in all_tools().values()]
+        if unrestricted.enabled(ws):  # sans débridage, ces outils n'existent pas pour l'assistant
+            specs += [spec for spec, _ in unrestricted.tools().values()]
+        return specs
+
+    @staticmethod
+    def _entry(ws, name):
+        """L'outil demandé : ceux de la table, ou ceux du débridage total quand l'espace l'a activé (sinon ils n'existent pas)."""
+        from . import mcp_design_unrestricted as unrestricted
+
+        if not isinstance(name, str):
+            return None
+        entry = all_tools().get(name)
+        if entry is None and name in unrestricted.NAMES and unrestricted.enabled(ws):
+            return unrestricted.tools()[name]
+        return entry
 
     def call_tool(self, request, ws, params) -> dict:
+        from . import mcp_design_unrestricted as unrestricted
+
         name, args = params.get("name"), params.get("arguments") or {}
-        entry = all_tools().get(name) if isinstance(name, str) else None
+        entry = self._entry(ws, name)
         if entry is None:
             # un assistant qui demande « publish_workflow » ou « run_workflow » est un signal à garder : l'outil n'existe pas, la tentative est tracée
             record(
@@ -693,7 +712,7 @@ class McpDesignView(McpServerView):
         from . import mcp_design_write as w
 
         try:
-            if name in w.WRITE_NAMES:
+            if name in w.WRITE_NAMES or name in unrestricted.NAMES:
                 w.check_budget(request, ws)
             result = entry[1](request, ws, args)
             if result.get("isError"):
@@ -702,7 +721,12 @@ class McpDesignView(McpServerView):
         except Http404:  # inexistant ou caché : même réponse (aucune fuite d'existence)
             return self._fail(request, ws, name, _err("Introuvable."))
         except PermissionDenied as exc:
-            return self._fail(request, ws, name, _err(str(exc.detail) if name in w.WRITE_TOOLS else "Introuvable."))
+            return self._fail(
+                request,
+                ws,
+                name,
+                _err(str(exc.detail) if name in w.WRITE_TOOLS or name in unrestricted.NAMES else "Introuvable."),
+            )
         except w.Throttled as exc:
             return self._fail(request, ws, name, _err(str(exc)))
         except serializers.ValidationError as exc:  # erreurs structurées : l'assistant se corrige seul

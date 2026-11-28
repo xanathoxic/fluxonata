@@ -68,7 +68,7 @@ export function WorkflowsPage() {
         (w) =>
           inFolder(w.folder, folder, !!q.trim()) &&
           (!tagF || (w.tags ?? []).includes(tagF)) &&
-          (!q || `${w.name} ${w.description} ${(w.tags ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase())),
+          (!q || `${w.name} ${w.slug} ${w.description} ${(w.tags ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase())),
       ),
     [all, folder, q, tagF],
   );
@@ -96,10 +96,10 @@ export function WorkflowsPage() {
         <FolderTree label="Dossiers de workflows" kind="workflow" canEdit={can("edit")} folders={folders} current={folder} onPick={setFolder} />
         <section className="adm-card lst-main">
           <div className="adm-filters">
-            <SearchBox label="Rechercher un workflow" value={q} onChange={setQ} placeholder="Nom, description ou étiquette" />
+            <SearchBox label="Rechercher un workflow" value={q} onChange={setQ} placeholder="Nom, identifiant, description ou étiquette" />
             <TagFilter lists={all.map((w) => w.tags)} value={tagF} onChange={setTagF} />
             <span className="lst-count" role="status">
-              {filtered.length} résultat(s){folder ? ` dans « ${folder} »` : ""}
+              {filtered.length} résultat(s){folder && !q.trim() ? ` dans « ${folder} »` : q.trim() ? " (tous dossiers)" : ""}
             </span>
             <span style={{ flex: 1 }} />
             {ai.enabled && can("edit") && (

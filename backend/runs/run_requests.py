@@ -201,21 +201,28 @@ def auto_setting(workspace) -> dict:
     by = workspace.assistant_auto_run_by
     return {
         "enabled": workspace.assistant_auto_run,
+        "unrestricted": workspace.assistant_auto_run and workspace.assistant_unrestricted,
         "enabled_by": getattr(by, "username", None),
         "enabled_at": workspace.assistant_auto_run_at,
     }
 
 
-def set_auto(workspace, user, enabled: bool) -> dict:
+def set_auto(workspace, user, enabled: bool, unrestricted: bool = False) -> dict:
+    """Active ou coupe la validation automatique ; le débridage total n'existe qu'avec elle (la couper le coupe aussi)."""
+    unrestricted = bool(enabled and unrestricted)
     workspace.assistant_auto_run = enabled
+    workspace.assistant_unrestricted = unrestricted
     workspace.assistant_auto_run_by = user if enabled else None
     workspace.assistant_auto_run_at = timezone.now() if enabled else None
-    workspace.save(update_fields=["assistant_auto_run", "assistant_auto_run_by", "assistant_auto_run_at"])
+    workspace.save(
+        update_fields=["assistant_auto_run", "assistant_unrestricted", "assistant_auto_run_by", "assistant_auto_run_at"]
+    )
     record(
         "run_request.auto_setting",
         actor=user,
         workspace=workspace,
         enabled=enabled,
+        unrestricted=unrestricted,
         environments=list(ASSISTANT_ENVIRONMENTS),
     )
     return auto_setting(workspace)

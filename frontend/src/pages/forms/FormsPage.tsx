@@ -33,7 +33,7 @@ export function FormsPage() {
   const list = useQuery({ queryKey: ["form-library", workspace.slug], refetchOnMount: "always", queryFn: () => api<{ results: FormCard[] }>(`/workspaces/${workspace.slug}/form-library/`) });
   const all = list.data?.results ?? [];
   const wantTemplates = tab === "templates";
-  const shown = useMemo(() => all.filter((f) => f.is_template === wantTemplates && inFolder(f.folder, folder, !!q.trim()) && (!tagF || f.tags.includes(tagF)) && (!q || `${f.name} ${f.description} ${f.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, wantTemplates, folder, tagF, q]);
+  const shown = useMemo(() => all.filter((f) => f.is_template === wantTemplates && inFolder(f.folder, folder, !!q.trim()) && (!tagF || f.tags.includes(tagF)) && (!q || `${f.name} ${f.slug} ${f.description} ${f.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()))), [all, wantTemplates, folder, tagF, q]);
   const { sorted, sort, toggle } = useSort(shown, { name: (f) => f.name, folder: (f) => f.folder, updated: (f) => Date.parse(f.updated_at) || 0 }, { key: "updated", dir: "desc" });
   const paged = usePaged(sorted, 25);
   const del = useMutation<unknown, ApiError, string>({
@@ -83,7 +83,7 @@ export function FormsPage() {
             { id: "templates", label: <IconLabel icon="section">Modèles</IconLabel>, content: null },
           ]} />
           <div className="adm-filters">
-            <SearchBox label="Rechercher un formulaire" value={q} onChange={setQ} placeholder="Nom, description ou étiquette" />
+            <SearchBox label="Rechercher un formulaire" value={q} onChange={setQ} placeholder="Nom, identifiant, description ou étiquette" />
             <TagFilter lists={all.map((f) => f.tags)} value={tagF} onChange={setTagF} />
             <span className="lst-count" role="status">{shown.length} résultat(s){folder ? ` dans « ${folder} »` : ""}</span>
             <span style={{ flex: 1 }} />
